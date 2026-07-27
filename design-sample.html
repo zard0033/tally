@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Tally — 決策樣張 v1（➊ 階段）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: oklch(89% 0.002 0); }
+body {
+  font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  padding: 32px; color: oklch(25% 0.005 0);
+}
+.page-head { max-width: 1100px; margin: 0 auto 30px; }
+.page-head h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+.page-head p { font-size: 0.9rem; color: oklch(44% 0.005 0); max-width: 80ch; line-height: 1.65; }
+.page-head p + p { margin-top: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 48px; justify-content: center; align-items: flex-start; max-width: 1100px; margin: 0 auto; }
+.col { width: 390px; }
+.col-head { margin-bottom: 12px; font-size: 1rem; font-weight: 700; }
+.col-head span { font-weight: 400; font-size: 0.82rem; color: oklch(46% 0.005 0); margin-left: 8px; }
+.frame { width: 390px; height: 844px; border-radius: 30px; overflow: hidden; border: 1px solid oklch(78% 0.005 0); }
+.spec { max-width: 1100px; margin: 40px auto 0; font-size: 0.8rem; line-height: 1.85; color: oklch(38% 0.005 0); }
+.spec h2 { font-size: 0.95rem; font-weight: 700; color: oklch(22% 0.005 0); margin-bottom: 8px; }
+.spec table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+.spec td { padding: 5px 14px 5px 0; vertical-align: top; border-bottom: 1px solid oklch(84% 0.003 0); }
+.spec td:first-child { width: 130px; font-weight: 600; color: oklch(25% 0.005 0); white-space: nowrap; }
+.spec code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.94em; }
+.sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid oklch(0% 0 0 / 0.14); }
+
+/* ══════════════ TOKENS ══════════════ */
+.screen {
+  /* 字階 · 1.25 major third，16px base */
+  --t-xs: 0.72rem;  --t-sm: 0.8rem;   --t-base: 0.875rem;
+  --t-md: 1rem;     --t-lg: 1.25rem;  --t-hero: 2.75rem;
+  /* 間距 · 4pt */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px;
+  /* 圓角 */
+  --r-btn: 16px; --r-card: 20px; --r-pill: 999px;
+  /* 動效 */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1); --dur: 160ms;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  background: var(--paper); color: var(--ink);
+  height: 100%; display: flex; flex-direction: column;
+  font-size: var(--t-base);
+}
+/* 亮 · 陶 */
+.light {
+  --paper: oklch(97% 0.008 60);
+  --card: oklch(99% 0.005 60);
+  --rule: oklch(88% 0.008 55);
+  --ink: oklch(20% 0.010 45);
+  --muted: oklch(47% 0.009 48);
+  --accent: oklch(50% 0.15 40);
+  --on-accent: oklch(98% 0.008 60);
+  --focus: oklch(56% 0.17 40);
+}
+/* 暗 · 暮色 */
+.dark {
+  --paper: oklch(16% 0.012 45);
+  --card: oklch(21% 0.013 45);
+  --rule: oklch(31% 0.012 45);
+  --ink: oklch(93% 0.008 60);
+  --muted: oklch(67% 0.010 55);
+  --accent: oklch(70% 0.14 40);
+  --on-accent: oklch(18% 0.020 40);
+  --focus: oklch(76% 0.15 40);
+}
+.screen svg { stroke: currentColor; fill: none; stroke-width: 1.6; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ── 日期列 ── */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: var(--s-4) var(--s-5) var(--s-2); font-weight: 700; font-size: var(--t-md); }
+.topbar .arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-radius: var(--r-pill); }
+.topbar .arrow svg { width: 16px; height: 16px; }
+
+/* ── 熱量量尺 ── */
+.gauge { padding: var(--s-1) var(--s-5) var(--s-4); }
+.gauge-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: var(--s-3); }
+.gauge-lead { font-size: var(--t-sm); color: var(--muted); margin-bottom: 2px; }
+.gauge-num { font-family: var(--mono); font-size: var(--t-hero); font-weight: 600; letter-spacing: -0.025em; line-height: 0.95; }
+.gauge-unit { font-size: var(--t-sm); color: var(--muted); margin-left: var(--s-1); }
+.gauge-side { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); text-align: right; line-height: 1.7; }
+.bar { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; }
+.bar .eaten { height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* ── 三大營養素 ── */
+.macros { display: flex; gap: var(--s-4); padding: 0 var(--s-5) var(--s-4); }
+.macro { flex: 1; min-width: 0; }
+.macro .lbl { font-size: var(--t-xs); color: var(--muted); margin-bottom: var(--s-1); white-space: nowrap; }
+.macro .track { height: 3px; border-radius: 2px; background: var(--rule); }
+.macro .fill { height: 100%; border-radius: 2px; background: var(--accent); }
+.macro .val { font-family: var(--mono); font-size: var(--t-xs); color: var(--muted); margin-top: var(--s-1); }
+
+.rule-line { height: 1px; background: var(--rule); margin: 0 var(--s-5); }
+
+/* ── 時間軸 ── */
+.timeline { flex: 1; overflow-y: auto; padding: var(--s-4) var(--s-5) var(--s-2); }
+.node { display: grid; grid-template-columns: 18px 1fr; gap: var(--s-3); }
+.rail { display: flex; flex-direction: column; align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+.dot.todo { background: transparent; border: 1.5px solid var(--rule); }
+.line { width: 1px; flex: 1; background: var(--rule); margin: var(--s-1) 0; }
+.line.todo { background: repeating-linear-gradient(to bottom, var(--rule) 0 3px, transparent 3px 7px); }
+.node-body { padding-bottom: var(--s-4); min-width: 0; }
+.node-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
+.node-name { font-weight: 700; font-size: var(--t-md); }
+.node-kcal { font-family: var(--mono); font-size: var(--t-base); }
+.node-kcal.dim { color: var(--muted); font-weight: 400; }
+.item { display: flex; justify-content: space-between; gap: var(--s-3); font-size: var(--t-base); padding: var(--s-1) 0 0; }
+.item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .kc { font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
+
+/* 待記錄餐次：整行可點 */
+.todo-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  min-height: 44px; width: 100%; margin-top: 2px; padding: 0;
+  background: none; border: none; cursor: pointer; text-align: left;
+  font-family: inherit; color: inherit;
+  transition: opacity var(--dur) var(--ease);
+}
+.todo-row:hover { opacity: 0.68; }
+.todo-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--s-2); }
+.todo-budget { font-size: var(--t-sm); color: var(--muted); }
+.todo-budget b { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+.todo-row .chev { width: 14px; height: 14px; color: var(--rule); flex-shrink: 0; }
+
+/* ── 主 CTA（拇指區） ── */
+.cta-wrap { padding: var(--s-2) var(--s-5) var(--s-2); }
+.cta {
+  display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  width: 100%; min-height: 52px; border: none; border-radius: var(--r-btn); cursor: pointer;
+  background: var(--accent); color: var(--on-accent);
+  font-family: inherit; font-size: var(--t-md); font-weight: 700;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.cta:hover { opacity: 0.9; }
+.cta:active { transform: translateY(1px); }
+.cta:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.cta svg { width: 18px; height: 18px; stroke-width: 2.4; }
+
+/* ── 分頁列 ── */
+.tabbar-wrap { padding: var(--s-2) var(--s-5) var(--s-5); }
+.tabbar { display: flex; gap: var(--s-1); padding: var(--s-1); background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-btn); }
+.tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 44px; border-radius: var(--s-3); font-size: var(--t-sm); font-weight: 600; color: var(--muted); white-space: nowrap; }
+.tab.active { background: var(--paper); color: var(--accent); }
+.tab svg { width: 16px; height: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cta, .todo-row { transition-duration: 0.01ms; }
+  .cta:active { transform: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Tally — 決策樣張 v1（➊ 設計決策）</h1>
+  <p><b>骨架＝L1 ＋ L2 合併。</b>時間軸的節點語言（已吃實心／待記錄虛線）＋剩餘額度預分配，全部收在一屏內不捲；主動作「記一筆」固定拇指區。已吃的餐次品項全展開，典型一天約 640–730px，390×844 裝得下；品項特別多的日子才會捲。</p>
+  <p><b>亮暗不是二選一。</b>B「陶」是亮色模式、C「暮色」是暗色模式，同一組 token 兩套值，跟隨系統 <code>prefers-color-scheme</code> 切換。兩邊 accent 錨定同一色相（hue 40），只動明度與彩度——換模式時色相漂移是常見的破綻。</p>
+</div>
+
+<div class="row">
+  <div class="col">
+    <div class="col-head">亮色<span>prefers-color-scheme: light</span></div>
+    <div class="frame">
+      <div class="screen light">
+        <div class="topbar">
+          <div class="arrow"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+          <div>今天</div>
+          <div class="arrow"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-top">
+            <div>
+              <div class="gauge-lead">還能吃</div>
+              <div><span class="gauge-num">957</span><span class="gauge-unit">kcal</span></div>
+            </div>
+            <div class="gauge-side">已吃 903<br>目標 1860</div>
+          </div>
+          <div class="bar"><div class="eaten" style="width:48.5%"></div></div>
+        </div>
+        <div class="macros">
+          <div class="macro"><div class="lbl">蛋白質</div><div class="track"><div class="fill" style="width:48%"></div></div><div class="val">60.5/126</div></div>
+          <div class="macro"><div class="lbl">脂肪</div><div class="track"><div class="fill" style="width:73%"></div></div><div class="val">40.9/56</div></div>
+          <div class="macro"><div class="lbl">碳水</div><div class="track"><div class="fill" style="width:34%"></div></div><div class="val">73.0/214</div></div>
+        </div>
+        <div class="rule-line"></div>
+        <div class="timeline">
+          <div class="node">
+            <div class="rail"><div class="dot"></div><div class="line"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">早餐</span><span class="node-kcal">293</span></div>
+              <div class="item"><span class="nm">乳清（1匙）</span><span class="kc">103</span></div>
+              <div class="item"><span class="nm">燕麥片（5匙）</span><span class="kc">120</span></div>
+              <div class="item"><span class="nm">茶葉蛋</span><span class="kc">70</span></div>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot"></div><div class="line"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">午餐</span><span class="node-kcal">610</span></div>
+              <div class="item"><span class="nm">培根起司軟法</span><span class="kc">610</span></div>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot todo"></div><div class="line todo"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">晚餐</span><span class="node-kcal dim">—</span></div>
+              <button class="todo-row">
+                <span class="todo-budget">大約還可以吃 <b>670</b></span>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </button>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot todo"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">點心</span><span class="node-kcal dim">—</span></div>
+              <button class="todo-row">
+                <span class="todo-budget">大約還可以吃 <b>287</b></span>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="cta-wrap">
+          <button class="cta"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>記一筆</button>
+        </div>
+        <div class="tabbar-wrap">
+          <div class="tabbar">
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 4v16"/></svg>日記</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>設定</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col-head">暗色<span>prefers-color-scheme: dark</span></div>
+    <div class="frame">
+      <div class="screen dark">
+        <div class="topbar">
+          <div class="arrow"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+          <div>今天</div>
+          <div class="arrow"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-top">
+            <div>
+              <div class="gauge-lead">還能吃</div>
+              <div><span class="gauge-num">957</span><span class="gauge-unit">kcal</span></div>
+            </div>
+            <div class="gauge-side">已吃 903<br>目標 1860</div>
+          </div>
+          <div class="bar"><div class="eaten" style="width:48.5%"></div></div>
+        </div>
+        <div class="macros">
+          <div class="macro"><div class="lbl">蛋白質</div><div class="track"><div class="fill" style="width:48%"></div></div><div class="val">60.5/126</div></div>
+          <div class="macro"><div class="lbl">脂肪</div><div class="track"><div class="fill" style="width:73%"></div></div><div class="val">40.9/56</div></div>
+          <div class="macro"><div class="lbl">碳水</div><div class="track"><div class="fill" style="width:34%"></div></div><div class="val">73.0/214</div></div>
+        </div>
+        <div class="rule-line"></div>
+        <div class="timeline">
+          <div class="node">
+            <div class="rail"><div class="dot"></div><div class="line"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">早餐</span><span class="node-kcal">293</span></div>
+              <div class="item"><span class="nm">乳清（1匙）</span><span class="kc">103</span></div>
+              <div class="item"><span class="nm">燕麥片（5匙）</span><span class="kc">120</span></div>
+              <div class="item"><span class="nm">茶葉蛋</span><span class="kc">70</span></div>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot"></div><div class="line"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">午餐</span><span class="node-kcal">610</span></div>
+              <div class="item"><span class="nm">培根起司軟法</span><span class="kc">610</span></div>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot todo"></div><div class="line todo"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">晚餐</span><span class="node-kcal dim">—</span></div>
+              <button class="todo-row">
+                <span class="todo-budget">大約還可以吃 <b>670</b></span>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </button>
+            </div>
+          </div>
+          <div class="node">
+            <div class="rail"><div class="dot todo"></div></div>
+            <div class="node-body">
+              <div class="node-head"><span class="node-name">點心</span><span class="node-kcal dim">—</span></div>
+              <button class="todo-row">
+                <span class="todo-budget">大約還可以吃 <b>287</b></span>
+                <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="cta-wrap">
+          <button class="cta"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>記一筆</button>
+        </div>
+        <div class="tabbar-wrap">
+          <div class="tabbar">
+            <div class="tab active"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 4v16"/></svg>日記</div>
+            <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>設定</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="spec">
+  <h2>樣張上的決定（核可後寫進 DESIGN.md）</h2>
+  <table>
+    <tr>
+      <td>色彩</td>
+      <td>
+        錨定色相 <code>hue 40</code>（暖磚紅），亮暗共用、不漂移。<br>
+        亮：<span class="sw" style="background:oklch(97% .008 60)"></span><code>paper oklch(97% .008 60)</code>
+        <span class="sw" style="background:oklch(20% .01 45)"></span><code>ink oklch(20% .010 45)</code>
+        <span class="sw" style="background:oklch(50% .15 40)"></span><code>accent oklch(50% .15 40)</code><br>
+        暗：<span class="sw" style="background:oklch(16% .012 45)"></span><code>paper oklch(16% .012 45)</code>
+        <span class="sw" style="background:oklch(93% .008 60)"></span><code>ink oklch(93% .008 60)</code>
+        <span class="sw" style="background:oklch(70% .14 40)"></span><code>accent oklch(70% .14 40)</code><br>
+        無純黑純白；中性色帶錨定色相的微量彩度；accent 只出現在進度填色、CTA、分頁選中態、預分配數字。
+      </td>
+    </tr>
+    <tr><td>字體</td><td>系統字堆疊（<code>-apple-system, PingFang TC, Noto Sans TC, Microsoft JhengHei</code>）＋等寬字專責所有數字（<code>ui-monospace, SF Mono, Menlo</code>）。零 webfont — 呼應專案零外部請求的架構限制。數字一律 <code>tabular-nums</code> 對齊。</td></tr>
+    <tr><td>字階</td><td>1.25 major third：<code>11.5 / 12.8 / 14 / 16 / 20 / 44px</code>。主數字 44px/600，內文 14px，標籤 11.5–12.8px。全頁六級以內。</td></tr>
+    <tr><td>間距</td><td>4pt 制：<code>4 / 8 / 12 / 16 / 20 / 24 / 32</code>。水平邊距固定 20px。</td></tr>
+    <tr><td>圓角</td><td>按鈕與分頁列 16px、內層分頁 12px、圓形節點 999px。無卡片陰影 — 亮色靠底色明度差、暗色靠面板提亮分層。</td></tr>
+    <tr><td>觸控</td><td>所有可點元素 ≥44×44px：日期箭頭、待記錄餐次整行、主 CTA 52px、分頁 44px。</td></tr>
+    <tr><td>動效</td><td>僅 <code>opacity</code> 與 <code>transform</code>，160ms <code>cubic-bezier(.4,0,.2,1)</code>。CTA 按下位移 1px。<code>prefers-reduced-motion</code> 全部降到 0.01ms。焦點環不做過場動畫。</td></tr>
+    <tr><td>時間軸</td><td>已吃＝實心節點＋實線；待記錄＝空心節點＋虛線。待記錄整行可點，直接進該餐別。</td></tr>
+    <tr><td>預分配</td><td>剩餘 957 依 晚餐 70% / 點心 30% 拆成 670 / 287。<b>此為新功能，第一版可先不做</b>，位置留著即可。</td></tr>
+    <tr><td>禁止事項</td><td>CJK 不用 italic（用字重與 accent 表達強調）；不用環圈（「填滿＝好」的語義對飲食是反的）；暗色不用陰影分層；不用 emoji 當圖示（全 inline SVG，統一 1.6 stroke）。</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

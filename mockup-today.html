@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Tally 視覺方向樣張</title>
+<style>
+  :root{
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:#E4E4E1; color:#1F1D1B;}
+  body{padding:32px; display:flex; flex-direction:column; gap:24px;}
+
+  .page-title{font-size:20px; font-weight:700;}
+  .page-sub{font-size:13px; color:#5A5854;}
+
+  .row{display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start;}
+
+  .col{display:flex; flex-direction:column; align-items:flex-start; gap:10px;}
+  .variant-title{font-size:16px; font-weight:700;}
+  .variant-note{font-size:12px; color:#5A5854; max-width:390px;}
+
+  /* ---------- phone chrome (page furniture, not part of the app UI) ---------- */
+  .phone-frame{
+    width:390px;
+    border:1px solid #D6D4D0;
+    border-radius:40px;
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .screen{
+    width:100%;
+    position:relative;
+    background:var(--bg);
+    font-family:inherit;
+    color:var(--text);
+  }
+
+  /* ---------- shared app structure ---------- */
+  .app-scroll{
+    padding:22px 18px 96px 18px;
+    display:flex; flex-direction:column;
+    gap:var(--card-gap, 16px);
+  }
+  .datebar{
+    display:flex; align-items:center; justify-content:center; gap:18px;
+    padding:8px 0 4px 0;
+  }
+  .datebar button{
+    all:unset;
+    width:44px; height:44px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--muted);
+    font-size:18px;
+    cursor:default;
+  }
+  .datebar .today{font-size:16px; font-weight:700; color:var(--text);}
+
+  .card{
+    background:var(--card-bg);
+    border:var(--card-border, none);
+    border-radius:var(--radius);
+    padding:var(--card-pad, 20px);
+  }
+
+  .summary-top{display:flex; flex-direction:column; align-items:center; gap:18px;}
+  .macros{width:100%; display:flex; flex-direction:row; gap:14px;}
+  .macro-row{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;}
+  .macro-name{font-size:12px; color:var(--muted); font-weight:600;}
+  .macro-val{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .track{width:100%; height:6px; border-radius:6px; background:var(--track);}
+  .fill{height:100%; border-radius:6px; background:var(--taupe);}
+
+  .ring-wrap{position:relative; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .ring-center{
+    position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+  }
+  .ring-kcal-num{font-variant-numeric:tabular-nums; font-weight:800; color:var(--text); line-height:1;}
+  .ring-kcal-label{color:var(--muted); font-weight:600;}
+  .ring-kcal-unit{color:var(--muted); font-weight:600; font-size:11px; margin-top:1px;}
+  .ring-secondary{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; margin-top:8px; display:flex; flex-direction:column; gap:2px; align-items:center;}
+
+  .meal-card{display:flex; flex-direction:column; gap:12px;}
+  .meal-head{display:flex; align-items:center; justify-content:space-between;}
+  .meal-title-wrap{display:flex; align-items:center; gap:10px;}
+  .meal-icon{width:22px; height:22px; color:var(--taupe); flex-shrink:0;}
+  .meal-name{font-size:15px; font-weight:700; color:var(--text);}
+  .meal-kcal{font-size:15px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
+  .meal-kcal.zero{color:var(--muted); font-weight:600;}
+  .food-row{display:flex; justify-content:space-between; align-items:baseline; font-size:13px;}
+  .food-name{color:var(--text);}
+  .food-kcal{color:var(--muted); font-variant-numeric:tabular-nums;}
+  .empty-state{font-size:13px; color:var(--muted); padding:4px 0;}
+  .add-btn{
+    all:unset;
+    display:flex; align-items:center; justify-content:center;
+    width:100%; min-height:44px;
+    background:var(--taupe);
+    color:#2A2521;
+    font-size:13px; font-weight:700;
+    border-radius:999px;
+    cursor:default;
+  }
+
+  .tabbar{
+    position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+    display:flex; flex-wrap:nowrap; gap:6px;
+    background:#FFFFFF;
+    border-radius:999px;
+    padding:6px;
+    z-index:10;
+  }
+  .tab{
+    all:unset;
+    box-sizing:border-box;
+    display:flex; flex-shrink:0; align-items:center; justify-content:center; gap:6px;
+    padding:0 18px;
+    height:44px;
+    min-width:max-content;
+    border-radius:999px;
+    font-size:12px; font-weight:700;
+    color:var(--muted);
+    white-space:nowrap;
+    cursor:default;
+  }
+  .tab svg{width:18px; height:18px; flex-shrink:0;}
+  .tab.active{background:var(--taupe); color:#2A2521;}
+
+  .icon{width:100%; height:100%; display:block;}
+
+  /* ---------- token notes ---------- */
+  .tokens{
+    width:390px;
+    font-size:12px;
+    color:#3A3936;
+    background:#F0EFED;
+    border:1px solid #D8D6D2;
+    border-radius:10px;
+    padding:12px 14px;
+    line-height:1.65;
+  }
+  .tokens b{font-weight:700;}
+  .swatch{display:inline-block; width:10px; height:10px; border-radius:3px; vertical-align:-1px; margin-right:4px; border:1px solid rgba(0,0,0,0.15);}
+
+  /* ================= VARIANT A — 忠實 ================= */
+  .phone.a{
+    --bg:#F5EFE6; --card-bg:#FFFFFF; --taupe:#B5A08C; --track:#E8E8E8;
+    --text:#2A2521; --muted:#6B6660; --radius:22px; --card-pad:20px; --card-gap:16px;
+  }
+  .a .ring-progress{stroke-width:14; stroke-linecap:butt;}
+  .a .ring-track{stroke-width:14;}
+  .a .ring-kcal-num{font-size:34px;}
+  .a .ring-kcal-label{font-size:11px;}
+
+  /* ================= VARIANT B — 精緻 ================= */
+  .phone.b{
+    --bg:#F2EDE4; --card-bg:#FFFFFF; --taupe:#AC9781; --track:#E8E8E8;
+    --text:#221F1B; --muted:#6B6660; --radius:24px; --card-pad:22px; --card-gap:20px;
+  }
+  .b .ring-progress{stroke-width:8; stroke-linecap:round;}
+  .b .ring-track{stroke-width:8;}
+  .b .ring-kcal-num{font-size:38px; font-weight:800; letter-spacing:-0.5px;}
+  .b .ring-kcal-label{font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase;}
+  .b .meal-name{font-size:14px; font-weight:700;}
+  .b .macro-name{font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;}
+  .b .track{height:5px;}
+  .b .food-row{font-size:12.5px;}
+  .b .add-btn{font-weight:800; letter-spacing:0.3px;}
+
+  /* ================= VARIANT C — 焦點強化 ================= */
+  .phone.c{
+    --bg:#F5EFE6; --card-bg:rgba(255,255,255,0.55); --card-border:1px solid rgba(181,160,140,0.28);
+    --taupe:#A89078; --track:#E9E4DC;
+    --text:#2A2521; --muted:#6E6A64; --radius:28px; --card-pad:18px; --card-gap:22px;
+  }
+  .c .ring-progress{stroke-width:16; stroke-linecap:round;}
+  .c .ring-track{stroke-width:16;}
+  .c .ring-kcal-num{font-size:46px;}
+  .c .ring-kcal-label{font-size:11px;}
+  .c .macro-name{font-size:9px;}
+  .c .macro-val{font-size:9px;}
+  .c .track{height:4px;}
+  .c .meal-card{gap:10px;}
+  .c .card{padding:16px;}
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="icon-breakfast" viewBox="0 0 24 24">
+      <path d="M12 3v4M4.2 9.5l1.8 1.8M19.8 9.5l-1.8 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M5 15a7 7 0 0114 0" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <line x1="2" y1="18" x2="22" y2="18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-lunch" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8" fill="none"/>
+      <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/>
+        <line x1="4.9" y1="4.9" x2="6.6" y2="6.6"/><line x1="17.4" y1="17.4" x2="19.1" y2="19.1"/>
+        <line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/>
+      </g>
+    </symbol>
+    <symbol id="icon-dinner" viewBox="0 0 24 24">
+      <path d="M20 14.5A8.5 8.5 0 119.5 4a7 7 0 1010.5 10.5z" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-snack" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+      <circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="14" cy="9" r="1" fill="currentColor"/>
+      <circle cx="14.5" cy="14.5" r="1" fill="currentColor"/><circle cx="9.5" cy="15" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-diary" viewBox="0 0 24 24">
+      <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+      <line x1="8" y1="8" x2="16" y2="8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="8" y1="16" x2="13" y2="16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.6" fill="none"/>
+      <path d="M12 2.5v2.6M12 18.9v2.6M4.2 6.3l1.9 1.9M17.9 15.8l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.2 17.7l1.9-1.9M17.9 8.2l1.9-1.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div>
+  <div class="page-title">Tally — 視覺方向樣張（今日頁）</div>
+  <div class="page-sub">三個變體同一調性下的質感梯度，純視覺、無互動邏輯、無資料綁定。挑一個方向後才開始實作。</div>
+</div>
+
+<div class="row">
+
+  <!-- ================= VARIANT A ================= -->
+  <div class="col">
+    <div class="variant-title">A — 忠實</div>
+    <div class="variant-note">貼著「小資算熱量」原樣落地，最安全的一版，不做任何工藝加分。</div>
+    <div class="phone-frame">
+      <div class="screen phone a">
+        <div class="app-scroll">
+
+          <div class="datebar">
+            <button aria-hidden="true">‹</button>
+            <span class="today">今天</span>
+            <button aria-hidden="true">›</button>
+          </div>
+
+          <div class="card summary-top">
+            <div class="ring-wrap">
+              <svg width="170" height="170" viewBox="0 0 170 170">
+                <circle class="ring-track" cx="85" cy="85" r="70" fill="none" stroke="#E8E8E8"/>
+                <circle class="ring-progress" cx="85" cy="85" r="70" fill="none" stroke="#B5A08C"
+                  stroke-dasharray="439.823" stroke-dashoffset="226.296"
+                  transform="rotate(-90 85 85)"/>
+              </svg>
+              <div class="ring-center">
+                <span class="ring-kcal-label">剩餘</span>
+                <span class="ring-kcal-num">957</span>
+                <span class="ring-kcal-unit">kcal</span>
+                <div class="ring-secondary"><span>已攝取 903</span><span>目標 1860</span></div>
+              </div>
+            </div>
+            <div class="macros">
+              <div class="macro-row">
+                <span class="macro-name">蛋白質</span>
+                <div class="track"><div class="fill" style="width:48.016%"></div></div>
+                <span class="macro-val">60.5 / 126 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">脂肪</span>
+                <div class="track"><div class="fill" style="width:73.036%"></div></div>
+                <span class="macro-val">40.9 / 56 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">碳水</span>
+                <div class="track"><div class="fill" style="width:34.112%"></div></div>
+                <span class="macro-val">73.0 / 214 g</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-breakfast"/></svg><span class="meal-name">早餐</span></div>
+              <span class="meal-kcal">293 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">乳清（1匙）</span><span class="food-kcal">103</span></div>
+            <div class="food-row"><span class="food-name">燕麥片（5匙）</span><span class="food-kcal">120</span></div>
+            <div class="food-row"><span class="food-name">茶葉蛋</span><span class="food-kcal">70</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-lunch"/></svg><span class="meal-name">午餐</span></div>
+              <span class="meal-kcal">610 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">培根起司軟法</span><span class="food-kcal">610</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-dinner"/></svg><span class="meal-name">晚餐</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-snack"/></svg><span class="meal-name">點心</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab active"><svg><use href="#icon-diary"/></svg>日記</div>
+          <div class="tab"><svg><use href="#icon-settings"/></svg>設定</div>
+        </div>
+      </div>
+    </div>
+    <div class="tokens">
+      <b>背景</b> <span class="swatch" style="background:#F5EFE6"></span>#F5EFE6
+      <b>卡片</b> <span class="swatch" style="background:#FFFFFF"></span>#FFFFFF<br>
+      <b>主色</b> <span class="swatch" style="background:#B5A08C"></span>#B5A08C
+      <b>圓角</b> 22px<br>
+      <b>字階</b> 數字 34px/800　標籤 11px/600　卡片內文 15px/700
+    </div>
+  </div>
+
+  <!-- ================= VARIANT B ================= -->
+  <div class="col">
+    <div class="variant-title">B — 精緻</div>
+    <div class="variant-note">同一套語言拉高工藝：環圈變細、端點圓頭、字階層次拉開、數字對齊，看得出更貴但不改調性。</div>
+    <div class="phone-frame">
+      <div class="screen phone b">
+        <div class="app-scroll">
+
+          <div class="datebar">
+            <button aria-hidden="true">‹</button>
+            <span class="today">今天</span>
+            <button aria-hidden="true">›</button>
+          </div>
+
+          <div class="card summary-top">
+            <div class="ring-wrap">
+              <svg width="170" height="170" viewBox="0 0 170 170">
+                <circle class="ring-track" cx="85" cy="85" r="78" fill="none" stroke="#E8E8E8"/>
+                <circle class="ring-progress" cx="85" cy="85" r="78" fill="none" stroke="#AC9781"
+                  stroke-dasharray="490.088" stroke-dashoffset="252.158"
+                  transform="rotate(-90 85 85)"/>
+              </svg>
+              <div class="ring-center">
+                <span class="ring-kcal-label">剩餘</span>
+                <span class="ring-kcal-num">957</span>
+                <span class="ring-kcal-unit">KCAL</span>
+                <div class="ring-secondary"><span>已攝取 903</span><span>目標 1860</span></div>
+              </div>
+            </div>
+            <div class="macros">
+              <div class="macro-row">
+                <span class="macro-name">蛋白質</span>
+                <div class="track"><div class="fill" style="width:48.016%"></div></div>
+                <span class="macro-val">60.5 / 126 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">脂肪</span>
+                <div class="track"><div class="fill" style="width:73.036%"></div></div>
+                <span class="macro-val">40.9 / 56 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">碳水</span>
+                <div class="track"><div class="fill" style="width:34.112%"></div></div>
+                <span class="macro-val">73.0 / 214 g</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-breakfast"/></svg><span class="meal-name">早餐</span></div>
+              <span class="meal-kcal">293 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">乳清（1匙）</span><span class="food-kcal">103</span></div>
+            <div class="food-row"><span class="food-name">燕麥片（5匙）</span><span class="food-kcal">120</span></div>
+            <div class="food-row"><span class="food-name">茶葉蛋</span><span class="food-kcal">70</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-lunch"/></svg><span class="meal-name">午餐</span></div>
+              <span class="meal-kcal">610 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">培根起司軟法</span><span class="food-kcal">610</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-dinner"/></svg><span class="meal-name">晚餐</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-snack"/></svg><span class="meal-name">點心</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab active"><svg><use href="#icon-diary"/></svg>日記</div>
+          <div class="tab"><svg><use href="#icon-settings"/></svg>設定</div>
+        </div>
+      </div>
+    </div>
+    <div class="tokens">
+      <b>背景</b> <span class="swatch" style="background:#F2EDE4"></span>#F2EDE4
+      <b>卡片</b> <span class="swatch" style="background:#FFFFFF"></span>#FFFFFF<br>
+      <b>主色</b> <span class="swatch" style="background:#AC9781"></span>#AC9781
+      <b>圓角</b> 24px<br>
+      <b>字階</b> 數字 38px/800（緊排）　標籤 10px/700 大寫加letter-spacing　卡片內文 14px/700、tabular-nums
+    </div>
+  </div>
+
+  <!-- ================= VARIANT C ================= -->
+  <div class="col">
+    <div class="variant-title">C — 焦點強化</div>
+    <div class="variant-note">環圈放大成絕對主角，三大營養素壓縮成一列，卡片邊界弱化融入底色，視線集中在數字上。</div>
+    <div class="phone-frame">
+      <div class="screen phone c">
+        <div class="app-scroll">
+
+          <div class="datebar">
+            <button aria-hidden="true">‹</button>
+            <span class="today">今天</span>
+            <button aria-hidden="true">›</button>
+          </div>
+
+          <div class="card summary-top">
+            <div class="ring-wrap">
+              <svg width="230" height="230" viewBox="0 0 230 230">
+                <circle class="ring-track" cx="115" cy="115" r="104" fill="none" stroke="#E9E4DC"/>
+                <circle class="ring-progress" cx="115" cy="115" r="104" fill="none" stroke="#A89078"
+                  stroke-dasharray="653.451" stroke-dashoffset="336.211"
+                  transform="rotate(-90 115 115)"/>
+              </svg>
+              <div class="ring-center">
+                <span class="ring-kcal-label">剩餘</span>
+                <span class="ring-kcal-num">957</span>
+                <span class="ring-kcal-unit">kcal</span>
+                <div class="ring-secondary"><span>已攝取 903</span><span>目標 1860</span></div>
+              </div>
+            </div>
+            <div class="macros">
+              <div class="macro-row">
+                <span class="macro-name">蛋白質</span>
+                <div class="track"><div class="fill" style="width:48.016%"></div></div>
+                <span class="macro-val">60.5 / 126 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">脂肪</span>
+                <div class="track"><div class="fill" style="width:73.036%"></div></div>
+                <span class="macro-val">40.9 / 56 g</span>
+              </div>
+              <div class="macro-row">
+                <span class="macro-name">碳水</span>
+                <div class="track"><div class="fill" style="width:34.112%"></div></div>
+                <span class="macro-val">73.0 / 214 g</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-breakfast"/></svg><span class="meal-name">早餐</span></div>
+              <span class="meal-kcal">293 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">乳清（1匙）</span><span class="food-kcal">103</span></div>
+            <div class="food-row"><span class="food-name">燕麥片（5匙）</span><span class="food-kcal">120</span></div>
+            <div class="food-row"><span class="food-name">茶葉蛋</span><span class="food-kcal">70</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-lunch"/></svg><span class="meal-name">午餐</span></div>
+              <span class="meal-kcal">610 kcal</span>
+            </div>
+            <div class="food-row"><span class="food-name">培根起司軟法</span><span class="food-kcal">610</span></div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-dinner"/></svg><span class="meal-name">晚餐</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+          <div class="card meal-card">
+            <div class="meal-head">
+              <div class="meal-title-wrap"><svg class="meal-icon"><use href="#icon-snack"/></svg><span class="meal-name">點心</span></div>
+              <span class="meal-kcal zero">0 kcal</span>
+            </div>
+            <div class="empty-state">尚無項目</div>
+            <button class="add-btn">＋ 加入食品</button>
+          </div>
+
+        </div>
+        <div class="tabbar">
+          <div class="tab active"><svg><use href="#icon-diary"/></svg>日記</div>
+          <div class="tab"><svg><use href="#icon-settings"/></svg>設定</div>
+        </div>
+      </div>
+    </div>
+    <div class="tokens">
+      <b>背景</b> <span class="swatch" style="background:#F5EFE6"></span>#F5EFE6
+      <b>卡片</b> <span class="swatch" style="background:#FFFFFF"></span>rgba(255,255,255,.55)<br>
+      <b>主色</b> <span class="swatch" style="background:#A89078"></span>#A89078
+      <b>圓角</b> 28px<br>
+      <b>字階</b> 數字 46px/800　標籤 11px/600　營養素壓縮為 9px 單行
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
