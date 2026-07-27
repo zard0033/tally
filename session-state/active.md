@@ -12,6 +12,7 @@
 - **repo 已轉 public**（`gh repo view` 確認 PUBLIC）。前端只有 anon key，隱私靠 Auth + RLS。
 - **Google OAuth 已設定**：GCP client 已建、Supabase provider 已啟用、Redirect URLs 已加 `http://localhost:5500/**` 與 `https://zard0033.github.io/tally/**`。
 - **設計流程 ⓪→➊→➋ 已走完**，`DESIGN.md` 已產出。定案骨架與色系見該檔。
+- **首次 push 已完成**（2026-07-27）。precommit-review（deep，runId `wf_f4ffe4a0-4a0`）抓到 `seed.sql` 含真實個資且 repo public、schema/seed 不同步、`activity_factor` 精度不足三個 confirmed，已修正。**`seed.sql` 已從全部歷史用 `git filter-branch` 清除**（原本在 `0c42c19` 引入），gc 後本機 blob 亦不可達；遠端核對 `contents/seed.sql` 回 404。`seed.sql` 實體檔案留在本機、`.gitignore` 排除，是遷移唯一副本，**不要再次 `git add`**。分支已改名 `master` → `main` 對齊遠端預設分支。
 
 ## 未解失敗
 
@@ -37,13 +38,11 @@
 - **飲食紀錄有 4 筆刻意未遷移**（07-23 早餐重複 ×2、07-25 晚餐空、07-27 午餐空），使用者表示之後在新 app 自行補。
 - **本機開發用 `python -m http.server 5500`**（Supabase redirect URL 白名單已對應這個 port）。playwright MCP 擋 `file://`，一定要走 http。
 
-### 設計過程檔案（決策已固化進 DESIGN.md，可考慮清理）
+### 設計過程檔案（現存，決策已固化進 DESIGN.md）
+
+過程樣張已清過一輪（`mockup-today` / `concept-today` / `concept-layout` / `design-sample` v1 已刪，見 commit `e850506`）。剩：
 
 | 檔案 | 狀態 |
 | --- | --- |
-| `mockup-today.html` | **已否決** — 照抄錨點的版本，可刪 |
-| `concept-today.html` | ⓪ 概念探索三方向（材質） |
-| `concept-layout.html` | ⓪ 佈局挑戰三方向 — L1+L2 勝出 |
-| `design-sample.html` | ➊ v1 — 已被 v2 取代 |
-| `design-sample-v2.html` | ➊ v2 — 階層／狀態色／共用額度定案 |
+| `design-sample-v2.html` | ➊ v2 — 階層／狀態色／共用額度定案，破表狀態參考 |
 | `palette-options.html` | 配色定案，**E 欄（Gambit cream+jade）勝出** |
