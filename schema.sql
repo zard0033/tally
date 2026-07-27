@@ -5,7 +5,6 @@ create table foods (
   id         bigint generated always as identity primary key,
   user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name       text not null,
-  serving    text,
   kcal       numeric(7,2) not null,
   protein    numeric(6,2) not null,
   fat        numeric(6,2) not null,
@@ -28,13 +27,18 @@ create table intake (
 );
 create index intake_user_date_idx on intake (user_id, eaten_on);
 
+-- 體重／體脂直接存體脂計讀數，不做校正。固定偏移不改變趨勢斜率，
+-- 對目標熱量的影響約 20 kcal（<1%），小於食品標示本身容許的誤差。
 create table weight (
-  id          bigint generated always as identity primary key,
-  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  measured_on date not null,
-  weight_kg   numeric(5,2) not null check (weight_kg > 0),
-  body_fat    numeric(4,1),
-  created_at  timestamptz not null default now(),
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  measured_on  date not null,
+  weight_kg    numeric(5,2) not null check (weight_kg > 0),
+  body_fat_pct numeric(4,1),
+  muscle_pct   numeric(4,1),
+  waist_cm     numeric(5,1),
+  hip_cm       numeric(5,1),
+  created_at   timestamptz not null default now(),
   unique (user_id, measured_on)
 );
 
