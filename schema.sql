@@ -47,7 +47,7 @@ create table profile (
   sex             text not null check (sex in ('male','female')),
   birth_date      date not null,
   height_cm       numeric(5,1) not null,
-  activity_factor numeric(3,2) not null default 1.375,
+  activity_factor numeric(4,3) not null default 1.375,
   goal            text not null check (goal in ('cut','maintain','bulk'))
 );
 

@@ -5,3 +5,9 @@ client_secret*.json
 *_pw.txt
 *.pem
 *.key
+
+# 含真實個人健康資料，repo 是 public，永遠不進版控
+seed.sql
+
+# 本機 Claude Code agent 狀態，非專案內容
+.claude/
