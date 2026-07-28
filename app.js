@@ -270,7 +270,11 @@ function pct(cur, target) {
 
 function renderMacro(name, cur, target) {
   const box = document.querySelector(`.macro[data-macro="${name}"]`);
-  const over = Math.round(cur) > Math.round(target);   // `>` 才算破表，"超出 0" 看起來像 bug
+  /* `>` 才算破表（"超出 0" 看起來像 bug），但判定要跟顯示同一個粒度：
+     營養素顯示一位小數，用整數判會出現 126.4/126 明明超了卻不變紅。
+     熱量那邊顯示整數，所以那裡用整數判是對的 */
+  const r1 = (n) => Math.round(n * 10) / 10;
+  const over = r1(cur) > r1(target);
   box.classList.toggle('over', over);
   box.querySelector('.fill').style.width = pct(cur, target) + '%';
 
@@ -369,6 +373,10 @@ function renderToday(targets, rows) {
   renderMacro('fat',     eaten.fat,     targets.fat);
   renderMacro('carb',    eaten.carb,    targets.carb);
   renderTimeline(rows);
+  /* 畫面已經渲染成功，錯誤旗標要跟著解除。只在 load() 成功時清會漏掉 loadDay()
+     這條路——切日期或刪除失敗後按「回今天」都走 loadDay，資料明明正常，
+     分頁卻被鎖在陳舊的錯誤畫面上，只能重新整理 */
+  state.failed = false;
   showPane(state.tab);
 }
 
@@ -1057,7 +1065,10 @@ function onSheetClick(e) {
       if (c === chip) c.setAttribute('aria-current', 'true');
       else c.removeAttribute('aria-current');
     });
-    document.querySelector('.sheet-title').textContent = mealLabel(s.meal);
+    /* 清單屏沒有 .sheet-title（v1.10 拿掉了），這裡只更新 dialog 的無障礙名稱。
+       曾經在這裡改 .sheet-title.textContent，而 chip 只存在於清單屏——
+       querySelector 必定回 null，整個 handler 被 TypeError 中斷，
+       chip 的選中態變了、清單卻還停在舊餐別 */
     document.querySelector('.sheet').setAttribute('aria-label', mealLabel(s.meal));
     return renderList();
   }
@@ -1264,10 +1275,13 @@ function submitWeight() {
   if (fat !== null && !Number.isFinite(fat)) { s.err = '體脂要填數字或留空'; return renderSheet(); }
 
   return withBusy(async () => {
-    /* 同一天再記一次是覆蓋，不是新增一筆——schema 有 unique(user_id, measured_on) */
-    await db('weight', {
+    /* 同一天再記一次是覆蓋，不是新增一筆——schema 有 unique(user_id, measured_on)。
+       `on_conflict` 不可省：PostgREST 的 merge-duplicates 預設把衝突目標綁在主鍵上，
+       而這張表的主鍵是 identity id、body 又沒帶 id，ON CONFLICT (id) 永遠不命中，
+       接著就撞上那條 unique 約束報 23505。user_id 顯式帶上當衝突欄位 */
+    await db('weight?on_conflict=user_id,measured_on', {
       method: 'POST',
-      body: { measured_on: on, weight_kg: kg, body_fat_pct: fat },
+      body: { user_id: state.profile.user_id, measured_on: on, weight_kg: kg, body_fat_pct: fat },
       prefer: 'resolution=merge-duplicates',
     });
     closeSheet();
@@ -1293,11 +1307,19 @@ function submitProfile() {
   if (!Number.isFinite(p.activity_factor) || p.activity_factor <= 0) {
     s.err = '活動係數要填數字'; return renderSheet();
   }
-  const pcts = [p.protein_pct, p.fat_pct, p.carb_pct];
-  if (pcts.some((n) => !Number.isFinite(n) || n < 0)) { s.err = '三大比例要填數字'; return renderSheet(); }
-  /* schema 有 check 相加 = 100，前端先擋才不會按了儲存才被 DB 退回 */
-  if (Math.round(pcts.reduce((a, b) => a + b, 0) * 10) / 10 !== 100) {
-    s.err = `三大比例相加要等於 100（目前 ${pcts.reduce((a, b) => a + b, 0)}）`;
+  if ([p.protein_pct, p.fat_pct, p.carb_pct].some((n) => !Number.isFinite(n) || n < 0)) {
+    s.err = '三大比例要填數字'; return renderSheet();
+  }
+  /* 欄位是 numeric(4,1)，DB 會先把每個值各自捨入到一位小數再檢查相加＝100。
+     前端要用同一個粒度驗，否則 33.33/33.33/33.34 在前端加起來剛好 100、
+     存進去卻變成 33.3×3 = 99.9 被 check 退回。順便把捨入後的值寫回去，
+     省得畫面顯示的和實際存的不同 */
+  p.protein_pct = Math.round(p.protein_pct * 10) / 10;
+  p.fat_pct = Math.round(p.fat_pct * 10) / 10;
+  p.carb_pct = Math.round(p.carb_pct * 10) / 10;
+  const sum = p.protein_pct + p.fat_pct + p.carb_pct;
+  if (Math.abs(sum - 100) > 1e-9) {
+    s.err = `三大比例相加要等於 100（目前 ${Math.round(sum * 10) / 10}）`;
     return renderSheet();
   }
 
@@ -1353,6 +1375,19 @@ function check() {
   for (const [input, want] of [['', 1], ['0', 1], ['-2', 1], ['abc', 1], ['1.5', 1.5], ['2', 2]]) {
     if (normalizeQty(input) !== want) fail.push(`normalizeQty(${input}): got ${normalizeQty(input)}`);
   }
+
+  /* 三大比例：DB 欄位是 numeric(4,1)，會先各自捨入再檢查和＝100。
+     33.33 三份在未捨入時剛好 100，捨入後是 99.9——前端必須用同一個粒度判，
+     否則前端放行、DB 退回 */
+  const r1 = (n) => Math.round(n * 10) / 10;
+  const sum1 = (a, b, c) => r1(a) + r1(b) + r1(c);
+  if (Math.abs(sum1(33.33, 33.33, 33.34) - 100) < 1e-9) fail.push('比例捨入：33.33×3 應該被擋下');
+  if (Math.abs(sum1(27, 27, 46) - 100) > 1e-9) fail.push('比例捨入：27/27/46 應該通過');
+  if (Math.abs(sum1(30.5, 24.5, 45) - 100) > 1e-9) fail.push('比例捨入：一位小數應該通過');
+
+  /* 營養素破表判定要跟顯示同粒度（一位小數），否則 126.4/126 超了卻不變紅 */
+  if (!(r1(126.4) > r1(126))) fail.push('營養素破表：126.4 對 126 應判破表');
+  if (r1(126.04) > r1(126)) fail.push('營養素破表：126.04 捨入後相等，不該判破表');
 
   console[fail.length ? 'error' : 'log'](
     fail.length ? `self-check FAIL\n${fail.join('\n')}` : 'self-check PASS');

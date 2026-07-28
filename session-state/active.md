@@ -131,6 +131,22 @@ intake insert 缺四個 not null 新欄。從零重建 DB 的流程實質斷掉�
   約束寫進 prompt 不等於守得住。
 - 一個 agent 自己又轉包子 agent，然後卡在等下線、不交報告，得 SendMessage 叫它直接交。
 
+### precommit deep review（2026-07-28，runId `wf_4853e631-62d`）
+
+3 條 confirmed 全修並實測，另外自行採納 2 條未確認的 minor（判斷是真的）。
+
+**最重的一條是我自己驗漏的**：v1.10 拿掉清單屏標題後，`onSheetClick` 的 chip 分支還在
+`document.querySelector('.sheet-title').textContent = ...`，而 chip 只存在於清單屏——
+必定拿到 null 丟 TypeError，handler 被中斷，chip 選中態變了、清單卻停在舊餐別。
+我當時「用真實點擊驗過」，但**沒有點過 chip**。新規則（禁用合成事件）只解決了「怎麼點」，
+沒解決「該點哪些」——**改動影響到的每一條路徑都要走一遍**，這條要記住。
+
+其餘：`state.failed` 只在 `load()` 成功時清，走 `loadDay()` 恢復的路徑會把分頁永久鎖在
+錯誤畫面；記體重的 upsert 缺 `on_conflict`（PostgREST 的 merge-duplicates 預設綁主鍵，
+而 PK 是 identity id，永遠不命中 → 撞 unique 約束報 23505，同一天改不了體重）。
+自行採納的兩條：三大比例前端用未捨入的和驗、DB 卻先各自捨入到一位小數（33.33×3 會前端過、
+DB 退）；營養素破表判定用整數、畫面卻顯示一位小數（126.4/126 超了不變紅）。
+
 ### 真正的下次續點
 
 1. **真機（iPhone Safari）走一遍完整流程**——這是唯一還沒做的驗證。特別看：
