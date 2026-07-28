@@ -879,9 +879,12 @@ function foodFormHtml() {
     + `<div class="field-row">${field('f-name', `品名${REQ}`, { value: s.q.trim() })}`
     + `${field('f-vendor', '店家（選填）')}</div>`
     + field('f-kcal', `熱量（卡）${REQ}`, { numeric: true })
-    + `<div class="field-row">${field('f-protein', `蛋白質 g${REQ}`, { numeric: true })}`
-    + `${field('f-fat', `脂肪 g${REQ}`, { numeric: true })}`
-    + `${field('f-carb', `碳水 g${REQ}`, { numeric: true })}</div>`
+    /* 三大營養素留空＝0：無糖飲料的蛋白質與脂肪本來就是 0，不該逼人打三個零。
+       熱量仍必填——它是這裡唯一的核心數字，忘了填那筆等於沒記 */
+    + `<div class="field-row">${field('f-protein', '蛋白質 g', { numeric: true })}`
+    + `${field('f-fat', '脂肪 g', { numeric: true })}`
+    + `${field('f-carb', '碳水 g', { numeric: true })}</div>`
+    + '<p class="note">營養素留空當 0。</p>'
     + '</div>'
     + '<div class="confirm-wrap">'
     + (s.err ? `<p class="sheet-error" role="alert">${esc(s.err)}</p>` : '')
@@ -957,9 +960,14 @@ function renderSheet() {
 
   let body;
   if (s.view === 'list') {
-    body = `<div class="chiprow" aria-label="餐別">`
+    /* 清單這一屏沒有標題文字：chip 列的選中態已經說了是哪一餐，再寫一次是同一個資訊講兩遍。
+       關閉鈕併進 chip 列同一行——省下的 52px 在 745px 的畫面裡是多看到一整列食物。
+       三張表單保留標題（它們沒有 chip 給情境，拿掉就不知道自己在哪） */
+    body = '<div class="chip-bar"><div class="chiprow" aria-label="餐別">'
       + MEALS.map((m) => `<button class="chip" type="button" data-chip="${m.key}"`
         + `${m.key === s.meal ? ' aria-current="true"' : ''}>${m.label}</button>`).join('')
+      + '</div>'
+      + `<button class="icon-btn" type="button" data-close aria-label="關閉">${svg(ICON.close)}</button>`
       + '</div>'
       /* 切餐別不重置搜尋字，清單用新餐別重新比對 */
       + `<div class="search-wrap"><div class="search-box">${svg(ICON.search)}`
@@ -979,9 +987,12 @@ function renderSheet() {
   $('sheet-root').innerHTML = '<button class="scrim" type="button" data-close aria-label="關閉"></button>'
     + `<div class="sheet${opening}" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">`
     + '<div class="handle" aria-hidden="true"></div>'
-    + `<div class="sheet-head"><span class="sheet-title">${esc(title)}</span>`
-    + `<button class="icon-btn" type="button" data-close aria-label="關閉">${svg(ICON.close)}</button>`
-    + `</div>${body}</div>`;
+    /* 清單屏的關閉鈕在 chip 列那行，不另起一行標題列 */
+    + (s.view === 'list' ? ''
+      : `<div class="sheet-head"><span class="sheet-title">${esc(title)}</span>`
+        + `<button class="icon-btn" type="button" data-close aria-label="關閉">${svg(ICON.close)}</button>`
+        + '</div>')
+    + `${body}</div>`;
 
   s.renderedView = s.view;
   restoreFields();
@@ -1144,6 +1155,12 @@ function reqNum(id) {
   return v === '' ? NaN : Number(v);
 }
 
+/* 選填數值：留空當 0。無糖飲料的蛋白質與脂肪就是 0，不必逼人打出來 */
+function optNum(id) {
+  const v = val(id);
+  return v === '' ? 0 : Number(v);
+}
+
 async function withBusy(fn) {
   const s = state.sheet;
   s.busy = true;
@@ -1205,10 +1222,13 @@ function submitFood() {
      之後再讀就是讀新畫面的空值（vendor 曾因此靜默存成 null） */
   const name = val('f-name');
   const vendor = val('f-vendor') || null;
-  const nums = { kcal: reqNum('f-kcal'), protein: reqNum('f-protein'), fat: reqNum('f-fat'), carb: reqNum('f-carb') };
+  /* 營養素留空當 0（schema 是 not null，沒有第三態）；熱量沒有這個待遇 */
+  const nums = { kcal: reqNum('f-kcal'), protein: optNum('f-protein'),
+                 fat: optNum('f-fat'), carb: optNum('f-carb') };
   if (!name) { s.err = '品名要填'; return renderSheet(); }
-  if (Object.values(nums).some((n) => !Number.isFinite(n) || n < 0)) {
-    s.err = '熱量與三大營養素都要填數字（0 也可以）';
+  if (!Number.isFinite(nums.kcal) || nums.kcal < 0) { s.err = '熱量要填數字'; return renderSheet(); }
+  if ([nums.protein, nums.fat, nums.carb].some((n) => !Number.isFinite(n) || n < 0)) {
+    s.err = '營養素要填數字或留空';
     return renderSheet();
   }
   return withBusy(async () => {
