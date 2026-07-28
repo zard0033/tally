@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tally — 今日頁決策樣張 v2</title>
+<style>
+/* ═══════════════════════════════════════════════════
+   決策樣張：日期區／左滑刪除／動效。token 全部複製自 DESIGN.md，
+   本檔不影響 index.html / app.css / app.js。
+   ═══════════════════════════════════════════════════ */
+:root {
+  /* 表面 */
+  --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
+  --rule: #E0D3BD; --rule-subtle: #ECE1CD;
+  /* 文字 */
+  --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
+  /* 主色 jade */
+  --accent: #1C7059; --accent-dark: #155747; --accent-soft: #CFE9E0; --on-accent: #FFFFFF;
+  /* 破表（本樣張只借用 --over-fill / --over 畫刪除鈕，不新增顏色） */
+  --over: #9A4330; --over-fill: #B8533A;
+
+  --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+
+  --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-hero: 2.75rem;
+  --track-hero: -.022em; --track-md: -.008em; --track-base: 0; --track-xs: .015em;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+  --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
+
+  /* 既有兩支緩動曲線，沿用不新增 */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  /* 這組是本樣張要驗證的新時長階梯 */
+  --dur-fast: 100ms; --dur-base: 160ms; --dur-mid: 220ms; --dur-sheet: 280ms;
+}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ── 展示台（非 app 一部分） ── */
+body { margin: 0; background: var(--rule-subtle); color: var(--ink); font-family: var(--font-body);
+  font-size: var(--t-base); line-height: 1.55; padding: var(--s-6) var(--s-5) 80px; }
+.page-head { max-width: 74ch; margin-bottom: var(--s-6); }
+.page-head h1 { font-size: 1.5rem; margin: 0 0 var(--s-2); }
+.page-head p { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-2); }
+.page-head code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .95em; }
+section.group { margin-bottom: 56px; }
+.group > h2 { font-size: 1.2rem; margin: 0 0 var(--s-1); }
+.group > .lead { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-4); max-width: 74ch; }
+.row { display: flex; gap: var(--s-6); flex-wrap: wrap; align-items: flex-start; }
+.col-head { max-width: 390px; margin-bottom: var(--s-3); }
+.col-head .nm { font-weight: 700; font-size: var(--t-md); }
+.col-head .nm .num { color: var(--accent); }
+.col-head .ds { color: var(--ink-muted); font-size: var(--t-sm); margin-top: 2px; }
+
+.frame { width: 340px; border-radius: 22px; overflow: hidden; border: 1px solid var(--rule);
+  background: var(--paper); }
+.screen { background: var(--paper); color: var(--ink); font-size: var(--t-base); }
+.screen svg { stroke: currentColor; fill: none; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+button { font: inherit; }
+
+/* ═══════════ 共用：頂欄 topbar（沿用 index.html 版面骨架） ═══════════ */
+.topbar { padding: var(--s-4) var(--s-5); display: flex; align-items: center;
+  justify-content: space-between; border-bottom: 1px solid var(--rule-subtle); }
+.topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md); margin: 0; }
+.mini-main { padding: var(--s-5); color: var(--ink-muted); font-size: var(--t-xs); }
+
+/* ═══════════ 第一組：日期區 ═══════════ */
+.date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--ink-muted); cursor: pointer; flex-shrink: 0;
+  border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.date-arrow svg { width: 18px; height: 18px; }
+.date-arrow:active { opacity: .5; }
+.date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.date-arrow:disabled { opacity: .3; cursor: default; }
+
+/* V1 · 精簡放大：一行字放大＋粗體，回今天靠顏色/字重差異（無額外元素） */
+.dv1 { display: flex; align-items: center; gap: var(--s-1); }
+.dv1 .datetext { min-height: 44px; padding: 0 var(--s-3); border: none; background: var(--raised);
+  border-radius: var(--r-tab); font-family: inherit; cursor: pointer;
+  font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.dv1[data-state="past"] .datetext { color: var(--ink); }
+.dv1 .datetext:active { opacity: .6; }
+.dv1 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* V2 · 大數字日曆式：小標籤＋ hero 級數字，回今天靠明確 chip */
+.dv2 { display: flex; align-items: center; gap: var(--s-2); }
+.dv2 .datetext { display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  min-height: 44px; padding: 2px var(--s-2); border: none; background: none;
+  font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.dv2 .datetext:active { opacity: .6; }
+.dv2 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--s-1); }
+.dv2 .lb { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); line-height: 1; }
+.dv2 .num { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
+  line-height: .8; font-variant-numeric: tabular-nums; }
+.dv2 .today-chip { font-size: var(--t-xs); color: var(--accent); background: var(--accent-soft);
+  border: none; border-radius: var(--r-pill); padding: var(--s-1) var(--s-2);
+  min-height: 44px; display: none; align-items: center; cursor: pointer; font-family: inherit;
+  letter-spacing: var(--track-xs); -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.dv2[data-state="past"] .today-chip { display: inline-flex; }
+.dv2 .today-chip:active { opacity: .6; }
+.dv2 .today-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* V3 · 週間格式＋回今天圓點徽章 */
+.dv3 { display: flex; align-items: center; gap: var(--s-1); }
+.dv3 .datetext { position: relative; min-height: 44px; padding: 0 var(--s-4) 0 var(--s-3);
+  border: none; background: var(--raised); border-radius: var(--r-pill); font-family: inherit;
+  cursor: pointer; font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
+  color: var(--ink); font-variant-numeric: tabular-nums; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.dv3 .datetext:active { opacity: .6; }
+.dv3 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dv3 .badge { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
+  border-radius: var(--r-pill); background: var(--accent); display: none; }
+.dv3[data-state="past"] .badge { display: block; }
+
+.state-tag { display: inline-block; font-size: var(--t-xs); color: var(--ink-muted);
+  letter-spacing: var(--track-xs); margin-bottom: var(--s-2); }
+
+/* ═══════════ 第二組：左滑刪除（覆蓋式） ═══════════ */
+.ov-list { list-style: none; margin: 0; padding: var(--s-4) var(--s-5); }
+.ov-item + .ov-item { margin-top: var(--s-2); }
+/* 固定高度（非 min-height）：.ov-content 移出捲動流、用 inset:0 疊圖，
+   需要 track 本身有「definite」高度，行內元素的百分比／inset 才解得出來 */
+.ov-track { position: relative; overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+  border-radius: var(--r-tab); cursor: grab; height: 52px; }
+.ov-track::-webkit-scrollbar { display: none; }
+.ov-track:active { cursor: grabbing; }
+.ov-row { display: flex; height: 100%; }
+/* .ov-spacer 撐出「與可視區等寬」的捲動距離（寬度由 JS 量測 track 實際寬度寫入，
+   避免依賴 flex-basis:100% 在有 min-content 的情況下可能被壓縮的不確定性）。
+   .ov-content 整個移出 row、用 position:absolute 疊在 track 上方，捲動時視覺上完全不動；
+   刪除鈕留在 row 的捲動流裡，隨捲動從右側自然進入視窗，正好蓋在內容右側（熱量數字）上面 */
+.ov-spacer { flex: 0 0 auto; scroll-snap-align: start; }
+.ov-content { position: absolute; inset: 0; z-index: 0;
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
+  min-height: 52px; padding: var(--s-2) 0; border: none; background: var(--card);
+  font-family: inherit; font-size: var(--t-base); color: inherit; text-align: left;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  transition: opacity var(--dur-base) var(--ease); }
+.ov-content:active { opacity: .6; }
+.ov-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
+.ov-content .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-content .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; }
+.ov-delete { flex: 0 0 auto; scroll-snap-align: end; position: relative; z-index: 1;
+  align-self: stretch; display: flex; align-items: center; justify-content: center;
+  border: none; color: var(--on-accent); font-family: inherit; cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.ov-delete:active { opacity: .8; }
+
+/* 變體 A：56px 全高色塊，圓角只留在露出側（左緣） */
+.ov-delete.style-a { width: 64px; background: var(--over-fill);
+  border-radius: var(--r-tab) 0 0 var(--r-tab); }
+.ov-delete.style-a svg { width: 18px; height: 18px; }
+
+/* 變體 B：底維持 --card，露出區只放一顆置中圓形按鈕，紅色收斂成點狀 */
+.ov-delete.style-b { width: 76px; background: var(--card); }
+.ov-delete.style-b .btn-face { width: 44px; height: 44px; border-radius: var(--r-pill);
+  background: var(--over-fill); display: flex; align-items: center; justify-content: center; }
+.ov-delete.style-b svg { width: 20px; height: 20px; }
+
+/* 變體 C：窄版膠囊，貼右緣留一點呼吸，寬度最小 */
+.ov-delete.style-c { width: 48px; background: var(--card); padding-right: var(--s-1); }
+.ov-delete.style-c .btn-face { width: 44px; height: 44px; border-radius: var(--r-pill);
+  background: var(--over-fill); display: flex; align-items: center; justify-content: center; }
+.ov-delete.style-c svg { width: 16px; height: 16px; }
+
+.ov-hint { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 0 var(--s-2); }
+
+/* ═══════════ 第三組：動效 demo ═══════════ */
+.demo-card { background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-btn);
+  padding: var(--s-4) var(--s-5); width: 340px; }
+.demo-card h3 { font-size: var(--t-md); margin: 0 0 var(--s-1); }
+.demo-card .dur-tag { display: inline-block; font-size: var(--t-xs); color: var(--accent);
+  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px var(--s-2);
+  margin-bottom: var(--s-3); letter-spacing: var(--track-xs); font-variant-numeric: tabular-nums; }
+.demo-card .lead { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-3); }
+.demo-btn { min-height: 44px; padding: 0 var(--s-4); border: none; border-radius: var(--r-tab);
+  background: var(--accent); color: var(--on-accent); font-family: inherit; font-weight: 600;
+  font-size: var(--t-sm); cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.demo-btn:active { opacity: .7; }
+.demo-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.demo-btn.ghost { background: none; color: var(--accent); border: 1px solid var(--rule); }
+.demo-btn + .demo-btn { margin-left: var(--s-2); }
+
+.tl-list { list-style: none; margin: var(--s-3) 0; padding: 0; }
+.tl-item { border-bottom: 1px solid var(--rule-subtle); }
+.tl-item + .tl-item { margin-top: var(--s-2); }
+
+/* sheet demo */
+.sheet-demo-scrim { position: absolute; inset: 0; background: rgba(61,34,16,.32);
+  opacity: 0; pointer-events: none; }
+.sheet-stage { position: relative; height: 220px; border-radius: var(--r-tab); overflow: hidden;
+  background: var(--raised); margin-top: var(--s-3); }
+.sheet-demo-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card);
+  border-radius: var(--r-btn) var(--r-btn) 0 0; padding: var(--s-4) var(--s-5);
+  transform: translateY(100%); }
+.sheet-demo-sheet h4 { margin: 0 0 var(--s-2); font-size: var(--t-md); }
+@keyframes sheet-demo-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-demo-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.sheet-stage.open .sheet-demo-scrim { opacity: 1; pointer-events: auto;
+  animation: sheet-demo-scrim-in var(--dur-sheet) var(--ease-sheet) both; }
+.sheet-stage.open .sheet-demo-sheet.entering { animation: sheet-demo-in var(--dur-sheet) var(--ease-sheet) both; }
+.sheet-stage.open .sheet-demo-sheet.shown { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>今日頁決策樣張 v2</h1>
+  <p>實機測試後三處回饋的具體選項：日期區太小、左滑刪除鈕不好看、關閉另一列時沒有過場。
+    每組變體有編號，挑好後告訴我編號即可定案，我會回寫 <code>DESIGN.md</code> 與實作。</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="group">
+  <h2>第一組・日期區</h2>
+  <p class="lead">拿掉原生 <code>input type="date"</code>，只留左右箭頭；日期文字放大且可點回今天；
+    右箭頭在「今天」停用。三個變體各示範「今天」與「歷史日」兩種狀態，點日期文字可切換體驗。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">V1</span> 精簡放大</div>
+        <div class="ds">一行字放大＋粗體＋淺底觸控墊；回今天靠顏色深淺與字重差異，不加額外元素</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <header class="topbar">
+          <h1 class="today">今天</h1>
+          <div class="dv1" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dv1-prev>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <button class="datetext" type="button" aria-label="回到今天" data-dv1-text>2026/07/28</button>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dv1-next disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="mini-main">點左箭頭看歷史日狀態；歷史日時點日期文字回今天。</div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">V2</span> 大數字日曆式</div>
+        <div class="ds">小標籤＋ hero 級數字（44px）；回今天靠明確的「今天」chip，只在歷史日出現</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <header class="topbar">
+          <h1 class="today">今天</h1>
+          <div class="dv2" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dv2-prev>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <button class="datetext" type="button" aria-label="檢視日期，點擊查看" data-dv2-text>
+              <span class="lb">7 月</span><span class="num">28</span>
+            </button>
+            <button class="today-chip" type="button" data-dv2-today>回今天</button>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dv2-next disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="mini-main">點左箭頭看歷史日狀態；出現的「回今天」chip 是獨立可點元素。</div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">V3</span> 週間格式＋圓點徽章</div>
+        <div class="ds">「週二 7/28」膠囊按鈕；回今天靠右上角一顆 jade 圓點徽章，不佔額外版面</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <header class="topbar">
+          <h1 class="today">今天</h1>
+          <div class="dv3" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dv3-prev>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <button class="datetext" type="button" aria-label="回到今天" data-dv3-text>
+              週二 7/28<span class="badge" aria-hidden="true"></span>
+            </button>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dv3-next disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="mini-main">點左箭頭看歷史日狀態；右上角圓點在歷史日才出現。</div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="group">
+  <h2>第二組・左滑刪除（覆蓋式）</h2>
+  <p class="lead">列本身不動，刪除鈕從右邊滑進來蓋在熱量數字上。仍是 CSS <code>scroll-snap</code>，
+    無 touch 事件 JS；滑鼠拖曳或觸控都能操作（本機用滑鼠：直接在品項上左右拖曳）。
+    點品項內容一樣會露出刪除鈕（鍵盤路徑）。三個刪除鈕視覺變體只用 <code>--over-fill</code> / <code>--over</code>。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">D1</span> 色塊覆蓋，圓角只留露出側</div>
+        <div class="ds">寬 64px、全高紅底，圓角只在左緣（露出的那一側）</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <p class="ov-hint">拖曳或點下方品項</p>
+        <ul class="ov-list" data-ov-group="a">
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除乳清這一筆">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">乳清 <span style="color:var(--ink-muted)">×1</span></span><span class="kc">103</span></button>
+          </div></li>
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除燕麥片這一筆">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">燕麥片 <span style="color:var(--ink-muted)">×5</span></span><span class="kc">120</span></button>
+          </div></li>
+        </ul>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">D2</span> 圓形按鈕，露出區維持卡面色</div>
+        <div class="ds">露出區底色與列相同（<code>--card</code>），紅色收斂成一顆 44px 圓形按鈕</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <p class="ov-hint">拖曳或點下方品項</p>
+        <ul class="ov-list" data-ov-group="b">
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-b" type="button" aria-label="刪除茶葉蛋這一筆">
+              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">茶葉蛋</span><span class="kc">70</span></button>
+          </div></li>
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-b" type="button" aria-label="刪除培根起司軟法這一筆">
+              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">培根起司軟法</span><span class="kc">610</span></button>
+          </div></li>
+        </ul>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">D3</span> 窄版膠囊，貼右緣</div>
+        <div class="ds">露出寬度最小（48px），按鈕本身仍是 44px 圓形，貼右緣留呼吸空間</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <p class="ov-hint">拖曳或點下方品項</p>
+        <ul class="ov-list" data-ov-group="c">
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-c" type="button" aria-label="刪除滷肉飯（大）這一筆">
+              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">滷肉飯（大）</span><span class="kc">620</span></button>
+          </div></li>
+          <li class="ov-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-c" type="button" aria-label="刪除貢丸湯這一筆">
+              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">貢丸湯</span><span class="kc">150</span></button>
+          </div></li>
+        </ul>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="group">
+  <h2>第三組・動效</h2>
+  <p class="lead">新時長階梯：<code>--dur-fast 100ms</code> / <code>--dur-base 160ms</code> /
+    <code>--dur-mid 220ms</code> / <code>--dur-sheet 280ms</code>。緩動沿用既有的 <code>--ease</code> 與
+    <code>--ease-sheet</code>，不新增曲線。每個 demo 可反覆點「播放」。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">M1</span> 現況：關閉另一列時瞬間跳掉</div>
+        <div class="ds">開 A，再開 B，A 直接 <code>scrollLeft = 0</code>，沒有過場</div>
+      </div>
+      <div class="demo-card">
+        <span class="dur-tag">無過場（現況 bug）</span>
+        <p class="lead">點「播放」：開 A → 開 B → A 瞬間關閉。也可自己手動點兩列比較。</p>
+        <ul class="tl-list" data-m1-group="jump">
+          <li class="tl-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除 A"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span></button>
+          </div></li>
+          <li class="tl-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除 B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">B：燙青菜</span><span class="kc">92</span></button>
+          </div></li>
+        </ul>
+        <button class="demo-btn" type="button" data-m1-play="jump">播放示範</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">M2</span> 修正版：帶過場的平滑關閉</div>
+        <div class="ds">同樣「開 A、再開 B」，這次 A 用 220ms 緩動滑回去</div>
+      </div>
+      <div class="demo-card">
+        <span class="dur-tag">--dur-mid · 220ms</span>
+        <p class="lead">點「播放」：開 A → 開 B → A 平滑關閉。也可自己手動點兩列比較。</p>
+        <ul class="tl-list" data-m1-group="smooth">
+          <li class="tl-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除 A"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span></button>
+          </div></li>
+          <li class="tl-item"><div class="ov-track"><div class="ov-row">
+            <div class="ov-spacer" aria-hidden="true"></div>
+            <button class="ov-delete style-a" type="button" aria-label="刪除 B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+          </div>
+            <button class="ov-content" type="button"><span class="nm">B：燙青菜</span><span class="kc">92</span></button>
+          </div></li>
+        </ul>
+        <button class="demo-btn" type="button" data-m1-play="smooth">播放示範</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">M3</span> sheet 進退場時長比較</div>
+        <div class="ds">進場固定 280ms；退場兩顆按鈕分別是現況 200ms 與新階梯 220ms，當場比</div>
+      </div>
+      <div class="demo-card">
+        <span class="dur-tag">進場 --dur-sheet · 280ms</span>
+        <p class="lead">點「開啟 sheet」，再分別試兩顆退場按鈕的手感差異。</p>
+        <button class="demo-btn" type="button" data-sheet-open>開啟 sheet</button>
+        <div class="sheet-stage" data-sheet-stage>
+          <div class="sheet-demo-scrim"></div>
+          <div class="sheet-demo-sheet" data-sheet-panel>
+            <h4>示範 sheet</h4>
+            <p class="lead" style="margin-bottom:var(--s-3)">退場時長比較：</p>
+            <button class="demo-btn ghost" type="button" data-sheet-close="200">關閉（200ms）</button>
+            <button class="demo-btn ghost" type="button" data-sheet-close="mid">關閉（220ms・--dur-mid）</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+'use strict';
+
+/* ── 共用：eased scrollLeft 動畫（非 touch 事件，只用來做「關閉另一列」的平滑過場） ── */
+function animateScrollTo(el, target, duration) {
+  const start = el.scrollLeft;
+  const delta = target - start;
+  if (delta === 0) return;
+  const t0 = performance.now();
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) { el.scrollLeft = target; return; }
+  function ease(t) { return 1 - Math.pow(1 - t, 3); } /* 貼近 cubic-bezier(.4,0,.2,1) 的視覺手感 */
+  function step(now) {
+    const t = Math.min((now - t0) / duration, 1);
+    el.scrollLeft = start + delta * ease(t);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── 共用：滑鼠拖曳捲動（觸控本身走原生手勢，這段只補桌機滑鼠可測） ── */
+function enableDragScroll(track) {
+  let dragging = false, startX = 0, startLeft = 0;
+  track.addEventListener('mousedown', (e) => {
+    dragging = true; startX = e.clientX; startLeft = track.scrollLeft;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    track.scrollLeft = startLeft - (e.clientX - startX);
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+}
+
+/* ── 覆蓋式左滑：點內容露出／收回刪除鈕；開一列自動收其他列 ── */
+function revealWidthOf(track) {
+  const btn = track.querySelector('.ov-delete');
+  return btn ? btn.getBoundingClientRect().width : 64;
+}
+/* 只收同一份清單（同一個變體 demo）裡的其他列，避免 D1/D2/D3 這種各自獨立的
+   展示欄互相干擾——這是樣張並排比較的需要，跟單一 app 畫面裡「一個清單」的情境不同 */
+function closeOtherOvTracks(except, smooth) {
+  const scope = except.closest('ul') || document;
+  scope.querySelectorAll('.ov-track').forEach((t) => {
+    if (t !== except && t.scrollLeft > 2) {
+      if (smooth) animateScrollTo(t, 0, 220); else t.scrollLeft = 0;
+    }
+  });
+}
+/* .ov-spacer 寬度＝track 可視寬度，讓總捲動寬度精準等於「可視寬 ＋ 刪除鈕寬」，
+   不依賴 flex-basis:100% 在有 min-content 內容時可能被壓縮的不確定行為 */
+function sizeSpacer(track) {
+  const spacer = track.querySelector('.ov-spacer');
+  if (spacer) spacer.style.width = track.clientWidth + 'px';
+}
+document.querySelectorAll('.ov-track').forEach(sizeSpacer);
+window.addEventListener('resize', () => document.querySelectorAll('.ov-track').forEach(sizeSpacer));
+
+document.querySelectorAll('.ov-track').forEach((track) => {
+  enableDragScroll(track);
+  const content = track.querySelector('.ov-content');
+  const del = track.querySelector('.ov-delete');
+  content.addEventListener('click', () => {
+    const open = track.scrollLeft > 2;
+    closeOtherOvTracks(track, true);
+    animateScrollTo(track, open ? 0 : revealWidthOf(track), 220);
+  });
+  /* 示範用：刪除鈕點下去收回（真的刪除是 app 的事，這裡只驗證覆蓋視覺與可點性） */
+  del.addEventListener('click', () => animateScrollTo(track, 0, 160));
+});
+
+/* ── 第一組：日期區三個變體的今天／歷史日切換 ── */
+function wireDateVariant(prefix) {
+  const root = document.querySelector(`.${prefix}`);
+  const prev = root.querySelector(`[data-${prefix}-prev]`);
+  const next = root.querySelector(`[data-${prefix}-next]`);
+  const text = root.querySelector(`[data-${prefix}-text]`);
+  function setToday(isToday) {
+    root.dataset.state = isToday ? 'today' : 'past';
+    next.disabled = isToday;
+  }
+  prev.addEventListener('click', () => setToday(false));
+  next.addEventListener('click', () => setToday(true));
+  text.addEventListener('click', () => setToday(true));
+  const todayChip = root.querySelector(`[data-${prefix}-today]`);
+  if (todayChip) todayChip.addEventListener('click', () => setToday(true));
+}
+['dv1', 'dv2', 'dv3'].forEach(wireDateVariant);
+
+/* ── 第三組 M1/M2：播放示範（開 A → 開 B，比較關閉手感） ── */
+document.querySelectorAll('[data-m1-play]').forEach((btn) => {
+  const mode = btn.dataset.m1Play; // 'jump' | 'smooth'
+  const group = document.querySelector(`[data-m1-group="${mode}"]`);
+  const tracks = [...group.querySelectorAll('.ov-track')];
+  btn.addEventListener('click', () => {
+    tracks.forEach((t) => { t.scrollLeft = 0; });
+    const w = revealWidthOf(tracks[0]);
+    setTimeout(() => animateScrollTo(tracks[0], w, 220), 150);
+    setTimeout(() => {
+      if (mode === 'jump') { tracks[0].scrollLeft = 0; }
+      else { animateScrollTo(tracks[0], 0, 220); }
+      animateScrollTo(tracks[1], w, 220);
+    }, 900);
+  });
+});
+
+/* ── 第三組 M3：sheet 進退場時長比較 ── */
+(function () {
+  const stage = document.querySelector('[data-sheet-stage]');
+  const panel = document.querySelector('[data-sheet-panel]');
+  const openBtn = document.querySelector('[data-sheet-open]');
+  openBtn.addEventListener('click', () => {
+    stage.classList.add('open');
+    panel.classList.remove('shown');
+    panel.classList.add('entering');
+  });
+  panel.addEventListener('animationend', (e) => {
+    if (e.animationName === 'sheet-demo-in') {
+      panel.classList.remove('entering');
+      panel.classList.add('shown');
+    }
+  });
+  document.querySelectorAll('[data-sheet-close]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dur = btn.dataset.sheetClose === 'mid' ? 220 : 200;
+      panel.classList.remove('shown', 'entering');
+      panel.style.transition = `transform ${dur}ms var(--ease-sheet)`;
+      panel.style.transform = 'translateY(100%)';
+      stage.querySelector('.sheet-demo-scrim').style.transition = `opacity ${dur}ms var(--ease-sheet)`;
+      stage.querySelector('.sheet-demo-scrim').style.opacity = '0';
+      setTimeout(() => {
+        stage.classList.remove('open');
+        panel.style.transition = '';
+        panel.style.transform = '';
+        stage.querySelector('.sheet-demo-scrim').style.transition = '';
+      }, dur);
+    });
+  });
+})();
+</script>
+</body>
+</html>

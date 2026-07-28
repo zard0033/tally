@@ -11,10 +11,15 @@
   BMR 1691 → TDEE 2325 → 目標 1860 kcal / P126 / F56 / C214。**app 實際跑出的值已與此一致。**
 - **體重存體脂計原始讀數，不做校正**。校正（−1.85kg／−2.5pp）為固定偏移，不改變趨勢斜率，對目標熱量僅影響約 20 kcal。
 - **repo 已轉 public**（`gh repo view` 確認 PUBLIC）。前端只有 anon key，隱私靠 Auth + RLS。
+- **GitHub Pages 已上線**（2026-07-28）：`https://zard0033.github.io/tally/`，三檔實測皆 200。
+  原本 `build_type` 是 `workflow`（等一個不存在的 Actions 部署 workflow，所以永遠不會上線），
+  已改 `legacy` 直接發 `main` 根目錄，往後 push 自動重 build。
+  `app.js:46` 的 redirect 組出 `origin + pathname` = `https://zard0033.github.io/tally/`，
+  落在白名單 `.../tally/**` 內。真機測試走這個網址，不用 LAN。
 - **Google OAuth 已設定**：GCP client 已建、Supabase provider 已啟用、Redirect URLs 已加 `http://localhost:5500/**` 與 `https://zard0033.github.io/tally/**`。
 - **設計流程 ⓪→➊→➋ 已走完**，`DESIGN.md` 已產出。定案骨架與色系見該檔。
 - **破表狀態已細琢（2026-07-28，DESIGN.md v1.1）**：斜紋改「`--over-fill` 打底 + 22% 白細紋疊層」（原實色亮條在 cream 上像斑馬線）；並補掉 v1 的無障礙漏洞——3px 營養素條上斜紋會糊成純紅，改由**破表時 3px → 6px 的高度差**當主要非顏色訊號，紋理退為第二層（紋理內部對比僅 1.47:1，WCAG 公式實算，撐不起單獨辨識）。`--over-fill` 對 paper 4.50:1 過圖形 3:1 門檻。六變體樣張見 `over-stripe-options.html`，定案＝C + F。
-- **首次 push 已完成**（2026-07-27）。precommit-review（deep，runId `wf_f4ffe4a0-4a0`）抓到 `seed.sql` 含真實個資且 repo public、schema/seed 不同步、`activity_factor` 精度不足三個 confirmed，已修正。**`seed.sql` 已從全部歷史用 `git filter-branch` 清除**（原本在 `0c42c19` 引入），gc 後本機 blob 亦不可達；遠端核對 `contents/seed.sql` 回 404。`seed.sql` 實體檔案留在本機、`.gitignore` 排除，是遷移唯一副本，**不要再次 `git add`**。分支已改名 `master` → `main` 對齊遠端預設分支。
+- **首次 push 已完成**（2026-07-27）。precommit-review（deep，runId `wf_f4ffe4a0-4a0`）抓到 `seed.sql` 含真實個資且 repo public、schema/seed 不同步、`activity_factor` 精度不足三個 confirmed，已修正。**`seed.sql` 已從全部歷史用 `git filter-branch` 清除**（原本在 `0c42c19` 引入），gc 後本機 blob 亦不可達；遠端核對 `contents/seed.sql` 回 404。**`seed.sql` 與 `migrate-v2.sql` 本機實體檔案也已不存在**（2026-07-28 確認，repo 內只剩 `schema.sql`）——遷移是一次性的、活資料在 Supabase、原始資料 Notion 還在，不需要保留。`schema.sql` 已是 v2 完整版（無 `category`、有 `vendor`、intake 四個快照欄、profile 三個 pct 欄、`activity_factor numeric(4,3)`），單獨貼進 SQL Editor 就能重建出與線上一致的結構。分支已改名 `master` → `main` 對齊遠端預設分支。
 
 - **前端骨架 ＋ 今日頁 ＋ 設定頁已上線並實測**（2026-07-28）。`index.html` / `app.css` / `app.js` 三檔，
   無框架無 build。**不用 supabase-js**——CDN 載法違反 `DESIGN.md`；vendor 進 repo 則是本專案無 npm 無
@@ -32,6 +37,31 @@
   **教訓：改了 migration 檔不等於改了線上資料。**
 - **`app.js` 有 self-check**：開 `?check` 跑公式鏈、`pct` 的 clamp 與 NaN、未捨入加總、
   跨時區日期、生日邊界，結果進 console。改計算邏輯後跑一次。
+
+- **真機（iPhone Safari）首次實測完成（2026-07-28）**，走 GitHub Pages 正式網址。11 條發現，
+  其中 6 條當場修掉（見下方「軌一」），5 條進設計流程（見「軌二」）。三個根因值得記住：
+  - **tap 遲鈍與可手指縮放是同一個根因**：`app.css` 全站沒有 `touch-action`。iOS Safari
+    **即使 viewport 是 `width=device-width` 仍保留 double-tap-to-zoom**（這點與 Chrome/Android
+    不同——那邊 device-width 就會取消），於是每個 tap 都要等約 300ms 確認不是第二下，
+    加減鈕與餐別列因此都像卡頓。`touch-action: manipulation` 一行同時解決兩者。
+    **不走 `user-scalable=no`**：它違反 WCAG 1.4.4，且 iOS 10 起 Safari 直接忽略，寫了也沒用。
+  - **左滑「閃關」是同檔兩套寫法**：`revealDelete` 自己開的時候用
+    `scrollTo({ behavior: 'smooth' })`，但 `closeOtherTracks` 關別列用 `t.scrollLeft = 0` 直接賦值。
+    開有動畫、關沒有。**尚未修**（併入軌二一起做）。
+  - **sheet 退場動畫其實存在**（`sheet-out` 200ms，`app.css`），不是漏做。使用者感覺不到是因為
+    200ms 套在 650px 位移上太快，只有進場 280ms 的七成。這是調參不是 bug。
+
+- **軌一（純技術修）已完成並用 playwright 實測過畫面（2026-07-28）**：
+  - `touch-action: manipulation` 加在 `body`（理由見上）。
+  - 新增食物表單拿掉「營養素留空當 0」說明；**選填標記統一成「只標必填 `*`」**，
+    連帶拿掉店家與體脂的「（選填）」——原本 `*` 與「（選填）」兩套標記法並存是冗餘，
+    且三欄並排的營養素塞不下「（選填）」。使用者原話是要「三大營養素也標選填」，
+    我改成反向統一，**他尚未對這個反向決定表態**，不同意就把三處改回加「（選填）」。
+  - 錯誤訊息六處改 actionable：`網路沒回應，請確認連線是否正常`、
+    `連不上網路，請確認 Wi-Fi 或行動網路`、`連不上 Supabase` → `讀不到你的資料`、
+    `請檢查 profile 表` 這類叫使用者去看資料庫的話全部改掉。
+    **表單驗證那批沒動**（「品名要填」本來就已經在講下一步）。
+    刻意不寫「請再試一次」——重試按鈕就在旁邊，重複講佔一行卻沒新資訊。
 
 - **「記一筆」設計已定案（2026-07-28，`DESIGN.md` v1.7）**。走了八輪決策樣張，定稿＝`sample-log-entry.html`
   七屏。骨架：同頁 sheet（不做獨立頁）／清單多選（使用者平日早餐固定三樣，逐一新增要走三趟）／
@@ -54,10 +84,6 @@
 ## 未解失敗
 
 尚未有。
-
-**待處理（非阻塞）**：`seed.sql` 與變更後的 `schema.sql` 已不相容——seed 的 foods insert 仍列 `category`、
-intake insert 缺四個 not null 新欄。從零重建 DB 的流程實質斷掉。seed 是一次性歷史文件、真要重建時
-補跑 `migrate-v2.sql` 即可，優先度低，但別以為那組合還跑得起來。
 
 ## 下次續點
 
@@ -147,11 +173,71 @@ intake insert 缺四個 not null 新欄。從零重建 DB 的流程實質斷掉�
 自行採納的兩條：三大比例前端用未捨入的和驗、DB 卻先各自捨入到一位小數（33.33×3 會前端過、
 DB 退）；營養素破表判定用整數、畫面卻顯示一位小數（126.4/126 超了不變紅）。
 
-### 真正的下次續點
+### 第二版 UI 打磨（軌二）——2026-07-28 進行到 ➊，明天從這裡接
 
-1. **真機（iPhone Safari）走一遍完整流程**——這是唯一還沒做的驗證。特別看：
-   floating label 的 AutoFill 行為（程式裡標了 `ponytail:`）、左滑手感、
-   sheet 進出場動畫的實際觀感（headless 的動畫時鐘不推進，只驗過起訖值與曲線）、
-   `100dvh` 在有網址列時的表現
-2. `review-findings.md` 剩 4 條，都不擋上線
-3. 尚未 push（本地 commit 而已）
+走 `ui-design-flow` 五階段。**⓪ 跳過**（方向已定：沿用 `DESIGN.md` v1.10 的視覺語言，
+這不是新視覺案，不需要 hallmark 產新方向）。目前卡在 **➊ 決策樣張的使用者 checkpoint**。
+
+#### 已定案（使用者已拍板，明天直接實作，不要再問一次）
+
+| 項目 | 決定 |
+| --- | --- |
+| 左滑刪除的視覺 | 改**覆蓋式**——列本身不動，刪除鈕從右滑進來蓋住熱量數字。現況是「整列左移、品名 sticky、數字被推出視野」，要換掉。品名不動這點使用者明確說「很好」，保留 |
+| 日期切換 | **拿掉原生 `input type="date"`**（使用者說系統日曆看起來突兀），只留左右箭頭；日期文字**放大**且**可點＝回到今天**。不做自製月曆——使用者自己說 YAGNI，記帳只會往回翻幾天 |
+| 手指縮放 | **不做 `user-scalable=no`**。`touch-action: manipulation`（已做）擋掉 double-tap 誤觸就夠；pinch 保留。使用者原本要「誤觸後自動縮回」，被說服先看 `touch-action` 夠不夠，**還沒回報實測結果** |
+| App icon | 要做 `apple-touch-icon`。使用者可能自己拿 prompt 去 GPT 產一版，跟 SVG 版並排比 |
+
+#### 動效 token 階梯（我提的方案，使用者核准派工時一併認可，尚未寫進 DESIGN.md）
+
+```css
+--dur-fast:  100ms;  /* 即時回饋：:active、色變、勾選 */
+--dur-base:  160ms;  /* 按鈕級狀態變化（現有，不動） */
+--dur-mid:   220ms;  /* 中等位移：列展開收合、確認列、高亮 */
+--dur-sheet: 280ms;  /* 抽屜進場（現有，不動） */
+```
+
+退場一律降一級（sheet 退場改 220ms，取代現在的 200ms）。緩動曲線沿用既有兩支，不新增。
+**動這一節的動機**：現在只有 160ms 與 280ms 兩級，中間沒東西，所以每遇到新元件就臨場硬編一個
+200ms——檔案裡現有三處各自寫死的 200ms 就是這麼來的。使用者評語「有功能但很簡陋」的來源。
+
+#### 樣張現況
+
+- **`sample-v2-login-icon.html` 已產出**，可直接開。已驗：單檔自足、無外部資源、`lang` 正確、
+  無 italic、硬編 hex 只在 token 定義區且值與 DESIGN.md 一致。內容：
+  - 登入頁變體 1 極簡＋安靜背景層／2 品牌圖形＋兩行文案／3 不對稱配置＋量尺背景
+  - icon 方向 1 計數刻痕／2 橫向量尺／3 幾何 T，各有 1024／180／**60px** 三尺寸並排
+  - **我的初評（使用者尚未表態）**：登入頁三個變體只有 2 真的回應了「太陽春」——1 幾乎等於現況
+    （`--card` 對 `--paper` 明度差本來就極小，那層背景看不出來），3 標題貼頂 CTA 落底反而**更空曠**。
+    icon 的 60px 那格才是真驗收點：方向 3 最清楚，方向 1 概念最貼題（Tally 就是計數）但 60px 下
+    數不出五劃，方向 2 縮小後沒有特徵、偏弱。
+- **`sample-v2-today.html` 已產出**。三組、每組三個變體，都有編號：
+  - **第一組 日期區**：`V1` 精簡放大（一行字放大＋粗體＋淺底觸控墊）／`V2` 大數字日曆式
+    （小標籤＋44px hero 級數字，回今天靠明確的「回今天」chip，只在歷史日出現）／
+    `V3` 週間格式＋圓點徽章（「週二 7/28」膠囊鈕，回今天靠右上角一顆 jade 圓點）。
+    三個都示範「今天」與「歷史日」兩種狀態。
+  - **第二組 左滑刪除（已改覆蓋式）**：`D1` 色塊覆蓋、圓角只留露出側（寬 64px 全高紅底）／
+    `D2` 圓形按鈕、露出區維持卡面色（紅色收斂成一顆 44px 圓鈕）／`D3` 窄版膠囊貼右緣（48px）。
+  - **第三組 動效**：`M1` 現況（關另一列瞬間跳掉）／`M2` 修正版（`--dur-mid` 220ms 平滑關閉）／
+    `M3` sheet 進退場時長比較（進場固定 280ms，退場兩顆按鈕分別是現況 200ms 與新階梯 220ms）。
+  - **驗證程度**：靜態渲染與左滑互動我實測過（點品項後 `scrollLeft` 由 0 變 64，刪除鈕確實露出）。
+    **動效三個 demo 的播放按鈕沒有逐一點過**——產樣張的 agent 正在自我重測時被我中止（使用者要收尾），
+    哪個 demo 不動是已知風險，明天開起來就知道。
+
+#### 明天的順序
+
+1. 起 `python -m http.server 5500`，開兩份樣張給使用者挑編號
+   （`sample-v2-today.html` 的 V／D／M 三組、`sample-v2-login-icon.html` 的登入頁與 icon）
+2. 挑完把定案寫進 `DESIGN.md`（動效 token 階梯、左滑覆蓋式、日期區、icon、登入頁）
+3. 實作。**其中一條是一行的事、已診斷完可直接動**：`app.js` 的 `closeOtherTracks` 把
+   `t.scrollLeft = 0` 改成 `scrollTo({ left: 0, behavior: reduceMotion() ? 'auto' : 'smooth' })`
+   ——「閃關」的根因，同檔 `revealDelete` 早就這樣寫了
+4. 走 ➍＋➎ 並行評審（`hallmark` 快篩／`impeccable` 深評／`web-design-guidelines` 合規）
+5. 交付時補 `design-flow：` 申報行
+
+#### 其他未結
+
+- `review-findings.md` 剩 6 條（該檔標題寫 6、之前 active.md 誤記為 4），都不擋上線
+- 選填標記我做了**反向統一**（只標必填 `*`，拿掉店家與體脂的「（選填）」），與使用者原話
+  「三大營養素也標選填」相反，**他尚未表態**。要改回來就是三處加「（選填）」
+- 真機還沒回報：`touch-action` 後還會不會誤觸縮放、floating label 的 iOS AutoFill 行為
+  （程式裡標了 `ponytail:`，仍未驗證）

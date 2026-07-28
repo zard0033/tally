@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tally — 登入頁與 App Icon 決策樣張</title>
+<style>
+/* ═══════════════════════════════════════════════════
+   決策樣張 · token 定義複製自 DESIGN.md（單獨開啟也能正常顯示）
+   ═══════════════════════════════════════════════════ */
+:root {
+  /* 表面 */
+  --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
+  --rule: #E0D3BD; --rule-subtle: #ECE1CD;
+  /* 文字 */
+  --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
+  /* 主色 jade */
+  --accent: #1C7059; --accent-dark: #155747; --accent-soft: #CFE9E0; --on-accent: #FFFFFF;
+
+  --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+
+  --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-hero: 2.75rem;
+  --track-hero: -.022em; --track-md: -.008em; --track-base: 0; --track-xs: .015em;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+  --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
+  --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
+}
+* { box-sizing: border-box; }
+
+/* ── 展示台（非 app 本體） ── */
+body { margin: 0; background: var(--raised); color: var(--ink); font-family: var(--font-body);
+  font-size: var(--t-base); line-height: 1.55; padding: var(--s-6) var(--s-5) 64px; }
+.doc-head { max-width: 66ch; margin-bottom: var(--s-6); }
+.doc-head h1 { font-size: 1.6rem; margin: 0 0 var(--s-2); letter-spacing: var(--track-md); }
+.doc-head p { color: var(--ink-muted); font-size: var(--t-sm); margin: 0; }
+section.group { margin-bottom: 56px; }
+section.group > h2 { font-size: 1.25rem; margin: 0 0 var(--s-2); border-bottom: 1px solid var(--rule);
+  padding-bottom: var(--s-3); }
+section.group > p.intro { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-5); max-width: 66ch; }
+
+.row { display: flex; gap: var(--s-6); flex-wrap: wrap; align-items: flex-start; }
+.col-head { max-width: 390px; margin-bottom: var(--s-3); }
+.col-head .nm { font-weight: 700; font-size: var(--t-md); }
+.col-head .ds { color: var(--ink-muted); font-size: var(--t-sm); margin-top: 2px; }
+
+/* 745px＝iPhone 14 Pro 在 Safari 有網址列時的可視高度，不是 844 螢幕高度 */
+.frame { width: 390px; height: 745px; border-radius: 30px; overflow: hidden;
+  border: 1px solid var(--rule); background: var(--paper); }
+@media (max-width: 440px) {
+  body { padding: var(--s-4) 0 var(--s-6); }
+  .doc-head, .col-head, section.group > p.intro { padding: 0 var(--s-4); }
+}
+
+/* ═══════════ 登入頁本體（沿用 index.html 結構） ═══════════ */
+.screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+.login { flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: var(--s-6) var(--s-5); box-sizing: border-box; }
+.login h1 { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
+  line-height: .95; color: var(--accent); margin: 0 0 var(--s-3); }
+.login p.tagline { font-size: var(--t-base); color: var(--ink-muted); margin: 0 0 var(--s-6);
+  text-align: center; max-width: 280px; }
+.login .cta { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  width: 100%; max-width: 320px; min-height: 52px; border: 0; border-radius: var(--r-btn);
+  background: var(--accent); color: var(--on-accent); font: inherit; font-size: var(--t-md);
+  font-weight: 600; letter-spacing: var(--track-md); cursor: pointer; }
+@media (hover: hover) { .login .cta:hover { background: var(--accent-dark); } }
+.login .cta:active { transform: translateY(1px); }
+.login .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.login .mark { color: var(--accent); }
+
+/* 變體 A：現況＋呼吸感——只調整節奏與一層安靜背景，不加圖形／文案 */
+.login-a { justify-content: center; position: relative; overflow: hidden; }
+.login-a::before { content: ""; position: absolute; inset: auto 0 0 0; height: 42%;
+  background: var(--card); z-index: 0; }
+.login-a h1, .login-a p, .login-a .cta { position: relative; z-index: 1; }
+.login-a h1 { margin-bottom: var(--s-4); }
+.login-a p.tagline { margin-bottom: var(--s-6); }
+
+/* 變體 B：品牌圖形＋說明文案——上方加刻痕記號、文案加一句情境說明 */
+.login-b { justify-content: center; }
+.login-b .mark { margin-bottom: var(--s-5); }
+.login-b h1 { margin-bottom: var(--s-2); }
+.login-b p.tagline { margin-bottom: var(--s-2); }
+.login-b p.sub { font-size: var(--t-sm); color: var(--ink-faint); margin: 0 0 var(--s-6);
+  text-align: center; max-width: 280px; }
+
+/* 變體 C：量尺留白——不對稱配置，標題貼上、CTA 落在下段，量尺當安靜背景層 */
+.login-c { justify-content: flex-start; padding-top: 15%; position: relative; }
+.login-c h1 { margin-bottom: var(--s-2); }
+.login-c .ruler-bg { margin: var(--s-2) 0 auto; opacity: .55; }
+.login-c .cta { margin-top: var(--s-6); }
+
+/* ═══════════ App icon 本體 ═══════════ */
+.icon-block { margin-bottom: var(--s-6); }
+.icon-block .col-head { max-width: 66ch; }
+.icon-sizes { display: flex; align-items: flex-end; gap: var(--s-6); flex-wrap: wrap; }
+.icon-cell { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
+.icon-cell .lbl { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.icon-cell svg { display: block; border-radius: 22%; }
+</style>
+</head>
+<body>
+
+<div class="doc-head">
+  <h1>Tally 決策樣張 — 登入頁 × App Icon</h1>
+  <p>登入頁 3 個變體、App icon 3 個方向。用編號指名要哪個即可。所有顏色來自 DESIGN.md token，未硬編色值。</p>
+</div>
+
+<!-- ══════ 登入頁 ══════ -->
+<section class="group">
+  <h2>一、登入頁變體</h2>
+  <p class="intro">現況只有 hero 標題＋一行說明＋CTA，太空。三個變體在「品牌圖形有無」「留白節奏」「說明文字有無」「背景層次」四個面向上分歧，皆保留真 button、focus-visible、lang、單一 h1。不放 Google 彩色 logo（DESIGN.md 已否決）。</p>
+
+  <div class="row">
+
+    <!-- 變體 1 -->
+    <div>
+      <div class="col-head">
+        <div class="nm">變體 1 · 維持極簡，加安靜背景層</div>
+        <div class="ds">元素不變（標題／說明／CTA），只用 --card 鋪出下半層次，讓畫面有前後景之分。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-a">
+            <h1>Tally</h1>
+            <p class="tagline">記錄今天吃了什麼</p>
+            <button class="cta" type="button">用 Google 登入</button>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- 變體 2 -->
+    <div>
+      <div class="col-head">
+        <div class="nm">變體 2 · 品牌圖形＋兩行文案</div>
+        <div class="ds">標題上方加刻痕記號（呼應 icon 方向 1），文案分兩層：標語＋一句更安靜的補充說明。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-b">
+            <svg class="mark" width="56" height="56" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+              <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+              <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+              <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+              <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
+            </svg>
+            <h1>Tally</h1>
+            <p class="tagline">記錄今天吃了什麼</p>
+            <p class="sub">一天開五次、三秒看完，不用想</p>
+            <button class="cta" type="button">用 Google 登入</button>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- 變體 3 -->
+    <div>
+      <div class="col-head">
+        <div class="nm">變體 3 · 不對稱配置＋量尺背景</div>
+        <div class="ds">標題貼上、CTA 落在下段，中間留白拉開；用一條安靜的橫向量尺當背景層，不寫說明文字。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-c">
+            <h1>Tally</h1>
+            <svg class="ruler-bg" width="200" height="24" viewBox="0 0 1024 120" aria-hidden="true">
+              <rect x="0" y="30" width="1024" height="60" rx="30" style="fill:var(--rule-subtle)"/>
+              <rect x="0" y="30" width="620" height="60" rx="30" style="fill:var(--accent-soft)"/>
+            </svg>
+            <button class="cta" type="button">用 Google 登入</button>
+          </main>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════ App Icon ══════ -->
+<section class="group">
+  <h2>二、App Icon 方向</h2>
+  <p class="intro">用途是 apple-touch-icon（加到 iOS 主畫面／書籤）。配色只用 --card 當底、--accent 當主體。60px 是最重要的驗收點——縮到那麼小還認得出來才算成立。</p>
+
+  <!-- Icon 1 -->
+  <div class="icon-block">
+    <div class="col-head">
+      <div class="nm">方向 1 · 計數刻痕（正字標記）</div>
+      <div class="ds">四道粗刻痕＋一道斜線收尾，呼應「Tally／計數」的字面意義，圖形本身無方向性、縮小不糊。</div>
+    </div>
+    <div class="icon-sizes">
+      <div class="icon-cell">
+        <svg width="128" height="128" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
+        </svg>
+        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="180" height="180" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
+        </svg>
+        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="60" height="60" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
+          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
+        </svg>
+        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Icon 2 -->
+  <div class="icon-block">
+    <div class="col-head">
+      <div class="nm">方向 2 · 橫向量尺</div>
+      <div class="ds">呼應 app 主視覺「不用環圈、用橫向量尺」的決定；一段填色軌道，形狀簡單，縮到 60px 仍是清楚的一條粗槓。</div>
+    </div>
+    <div class="icon-sizes">
+      <div class="icon-cell">
+        <svg width="128" height="128" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
+          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="180" height="180" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
+          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="60" height="60" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
+          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Icon 3 -->
+  <div class="icon-block">
+    <div class="col-head">
+      <div class="nm">方向 3 · 幾何 T</div>
+      <div class="ds">App 名稱首字母做粗體幾何處理，圓角比照 --r-btn／--r-pill 的圓潤感，是三個方向裡最抽象、最像傳統 app icon 的一個。</div>
+    </div>
+    <div class="icon-sizes">
+      <div class="icon-cell">
+        <svg width="128" height="128" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="180" height="180" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="60" height="60" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</body>
+</html>

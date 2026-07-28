@@ -140,10 +140,11 @@ async function db(path, opts = {}) {
     });
   } catch (e) {
     /* 原始訊息（'Failed to fetch'、'signal timed out'）對使用者沒有意義，換成看得懂的話。
-       這裡只講「網路怎麼了」，不講「所以哪件事沒成」——呼叫端才知道自己在讀還是在寫
-       （記一筆的錯誤列已經有「存不進去：」前綴） */
-    if (e.name === 'TimeoutError') throw new Error('網路沒回應');
-    if (e.name === 'TypeError') throw new Error('連不上網路');
+       這裡只講「網路怎麼了」＋「該去檢查什麼」，不講「所以哪件事沒成」——呼叫端才知道
+       自己在讀還是在寫（記一筆的錯誤列已經有「存不進去：」前綴）。
+       不寫「請再試一次」：重試按鈕就在旁邊，重複講等於佔掉一行卻沒給新資訊 */
+    if (e.name === 'TimeoutError') throw new Error('網路沒回應，請確認連線是否正常');
+    if (e.name === 'TypeError') throw new Error('連不上網路，請確認 Wi-Fi 或行動網路');
     throw e;
   }
   /* RLS 擋下的讀取回的是 200 ＋ []，不是錯誤。真正的「沒有 session」只會是 401，
@@ -476,7 +477,7 @@ async function load() {
     ]);
   } catch (e) {
     if (e instanceof AuthError) return showLogin('登入已過期，請重新登入');
-    return notice('連不上 Supabase', e.message, { label: '重試', onClick: load });
+    return notice('讀不到你的資料', e.message, { label: '重試', onClick: load });
   }
 
   /* 目標算不出來時走降級畫面，不讓 NaN 進 DOM。
@@ -485,15 +486,15 @@ async function load() {
   if (!p || !w) {
     return notice(
       '還沒有身體參數',
-      !p && !w ? '這個帳號的 profile 與體重都是空的。若之前用另一組帳號登入過，資料可能掛在別的 user id 下。'
-        : !p ? '缺 profile 資料，算不出目標熱量。'
-        : '缺體重紀錄，算不出目標熱量。',
+      !p && !w ? '這個帳號的身體參數與體重紀錄都是空的。若之前用另一組帳號登入過，資料可能掛在那組帳號下——請確認登入的是同一個 Google 帳號。'
+        : !p ? '還沒有身高、生日這些身體參數，算不出目標熱量。'
+        : '還沒有任何體重紀錄，算不出目標熱量。',
       { label: '重新載入', onClick: load });
   }
 
   const targets = computeTargets(p, num(w.weight_kg));
   if (!Number.isFinite(targets.kcal)) {
-    return notice('目標熱量算不出來', '身體參數有缺漏或格式不對，請檢查 profile 表。',
+    return notice('目標熱量算不出來', '身體參數有缺漏或格式不對，算出來的目標不是有效數字。',
       { label: '重新載入', onClick: load });
   }
 
@@ -589,7 +590,9 @@ function init() {
   }
 
   const redirect = consumeAuthRedirect();
-  if (redirect?.error) return showLogin(`登入失敗：${redirect.error}`);
+  /* OAuth 回的 error_description 是英文代碼，單獨顯示等於把人留在死路上——補一句下一步。
+     登入頁沒有重試按鈕，「再按一次登入」是這裡唯一的出路，得明講 */
+  if (redirect?.error) return showLogin(`登入失敗：${redirect.error}。請確認網路連線後，再按一次登入。`);
   if (redirect?.session) session.set(redirect.session);
 
   if (session.get()) showApp();
@@ -885,14 +888,13 @@ function foodFormHtml() {
     + `${svg(ICON.back)}返回搜尋</button></div>`
     + '<div class="form-wrap">'
     + `<div class="field-row">${field('f-name', `品名${REQ}`, { value: s.q.trim() })}`
-    + `${field('f-vendor', '店家（選填）')}</div>`
+    + `${field('f-vendor', '店家')}</div>`
     + field('f-kcal', `熱量（卡）${REQ}`, { numeric: true })
     /* 三大營養素留空＝0：無糖飲料的蛋白質與脂肪本來就是 0，不該逼人打三個零。
        熱量仍必填——它是這裡唯一的核心數字，忘了填那筆等於沒記 */
     + `<div class="field-row">${field('f-protein', '蛋白質 g', { numeric: true })}`
     + `${field('f-fat', '脂肪 g', { numeric: true })}`
     + `${field('f-carb', '碳水 g', { numeric: true })}</div>`
-    + '<p class="note">營養素留空當 0。</p>'
     + '</div>'
     + '<div class="confirm-wrap">'
     + (s.err ? `<p class="sheet-error" role="alert">${esc(s.err)}</p>` : '')
@@ -906,7 +908,7 @@ function weightFormHtml() {
     + `<div class="field-float"><input id="w-date" type="date" value="${localDate()}">`
     + '<label for="w-date">量測日</label></div>'
     + field('w-kg', `體重 kg${REQ}`, { numeric: true })
-    + field('w-fat', '體脂 %（選填）', { numeric: true })
+    + field('w-fat', '體脂 %', { numeric: true })
     + '<p class="note">存體脂計原始讀數，不做校正。同一天再記一次會覆蓋當天那筆。</p>'
     + '</div><div class="confirm-wrap">'
     + (s.err ? `<p class="sheet-error" role="alert">${esc(s.err)}</p>` : '')

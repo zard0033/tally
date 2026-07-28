@@ -39,6 +39,11 @@ body {
   /* iOS Safari 的工具列會吃掉 100vh，一律用 dvh */
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
+  /* iOS Safari 即使 viewport 是 device-width 仍保留 double-tap-to-zoom，於是每個 tap
+     都要等 ~300ms 確認不是第二下——實機上加減鈕與餐別列因此都像卡頓。manipulation
+     等於 pan-x pan-y pinch-zoom：關掉 double-tap 縮放，捲動與雙指縮放都留著
+     （user-scalable=no 違反 WCAG 1.4.4，且 iOS 10 起直接忽略，不走那條） */
+  touch-action: manipulation;
 }
 .screen { height: 100dvh; display: flex; flex-direction: column; }
 .screen svg { stroke: currentColor; fill: none; stroke-width: 1.6;
