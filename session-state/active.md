@@ -116,13 +116,26 @@ intake insert 缺四個 not null 新欄。從零重建 DB 的流程實質斷掉�
 
 現存唯一樣張＝**`mockup.html`**：今日頁常態＋破表兩屏，實作以它為準。已是完整 HTML 文件（含 `lang`、landmark、`button`、`ul`），可直接照抄語意結構。畫框 745px＝真機可視高度。
 
-### 真正的下次續點（2026-07-28 收工時）
+### 設計流程 ➍ 已跑完（2026-07-28）
 
-第一版功能齊了，但**沒在真機跑過**，也**沒跑過設計流程 ➍ 精修**。建議順序：
+四路並行評審：`hallmark` 快篩、`web-design-guidelines` 合規、`impeccable` 深評、
+`emil-design-eng` polish 審表。去重後 19 條，全數處理，`DESIGN.md` v1.9。
 
-1. 跑 ➍ 精修（`emil-design-eng`／`impeccable` polish／`hallmark` audit）審新的 sheet 與三張表單
-   ——這是全新的互動介面，從樣張直接落地，沒經過任何 polish 審視
-2. 真機（iPhone Safari）走一遍完整流程：floating label 的 AutoFill、左滑手感、
+**最貴的兩條都是「看起來成功、其實沒有」**：`db()` 沒有逾時（收訊差時 fetch 永遠不 reject，
+按鈕停在「加入中…」，使用者以為記好了）；載入失敗後點設定進到空殼分頁且回不去重試。
+兩條都不是靠看畫面找得到的，是有人把失敗路徑逐條走過才浮出來。
+
+**評審過程的兩個教訓**：
+
+- 有 agent 刪掉了我給評審看的截圖目錄，而 prompt 裡明確寫了「唯讀、不准修改任何檔案」。
+  約束寫進 prompt 不等於守得住。
+- 一個 agent 自己又轉包子 agent，然後卡在等下線、不交報告，得 SendMessage 叫它直接交。
+
+### 真正的下次續點
+
+1. **真機（iPhone Safari）走一遍完整流程**——這是唯一還沒做的驗證。特別看：
+   floating label 的 AutoFill 行為（程式裡標了 `ponytail:`）、左滑手感、
+   sheet 進出場動畫的實際觀感（headless 的動畫時鐘不推進，只驗過起訖值與曲線）、
    `100dvh` 在有網址列時的表現
-3. `review-findings.md` 剩 5 條未處理
-4. 第二版才做的：編輯（非刪重記）、趨勢分析、「常吃一鍵」「複製前一天」
+2. `review-findings.md` 剩 4 條，都不擋上線
+3. 尚未 push（本地 commit 而已）

@@ -112,6 +112,12 @@ async function validToken() {
 /* ═══════════ Supabase REST ═══════════ */
 class AuthError extends Error {}
 
+/* 逾時是這支 app 的必要件，不是保險：記錄發生在美食街、地下室，那裡的失敗形態
+   通常不是「連線被拒」而是「連上了但不回」。fetch 對後者永遠不 reject——沒有這道
+   逾時，按鈕會停在「加入中…」直到使用者收起手機，他會以為那餐記好了。
+   DESIGN.md 不做離線佇列是對的，但「失敗要當場看得見」得先讓失敗真的發生。 */
+const DB_TIMEOUT = 8000;
+
 async function db(path, opts = {}) {
   const token = await validToken();
   if (!token) throw new AuthError('no session');
@@ -124,11 +130,22 @@ async function db(path, opts = {}) {
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.prefer) headers.Prefer = opts.prefer;
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: opts.method || 'GET',
-    headers,
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  });
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method: opts.method || 'GET',
+      headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      signal: AbortSignal.timeout(DB_TIMEOUT),
+    });
+  } catch (e) {
+    /* 原始訊息（'Failed to fetch'、'signal timed out'）對使用者沒有意義，換成看得懂的話。
+       這裡只講「網路怎麼了」，不講「所以哪件事沒成」——呼叫端才知道自己在讀還是在寫
+       （記一筆的錯誤列已經有「存不進去：」前綴） */
+    if (e.name === 'TimeoutError') throw new Error('網路沒回應');
+    if (e.name === 'TypeError') throw new Error('連不上網路');
+    throw e;
+  }
   /* RLS 擋下的讀取回的是 200 ＋ []，不是錯誤。真正的「沒有 session」只會是 401，
      兩者必須分開——否則 token 過期時今日頁會安靜地長成「今天什麼都沒吃」。 */
   if (res.status === 401 || res.status === 403) { session.clear(); throw new AuthError('expired'); }
@@ -203,6 +220,7 @@ const state = {
   recent: null,          // 各餐別的常吃排序（food_id → 次數統計後的陣列）
   sheet: null,           // 開著的覆蓋層，null = 沒開
   tab: 'today',          // 重新載入後要回到的分頁（在設定頁存檔不該被丟回今日頁）
+  failed: false,         // 載入失敗中：分頁是空殼，不能讓使用者切過去
 };
 
 const isToday = () => state.date === localDate();
@@ -239,6 +257,8 @@ function notice(headline, detail, action) {
     b.onclick = action.onClick;
     el.appendChild(b);
   }
+  /* 記住「現在是壞的」，switchTab 才知道不能把使用者放到空殼分頁上 */
+  state.failed = true;
   showPane('notice');
 }
 
@@ -268,6 +288,15 @@ function renderTimeline(rows) {
   const byMeal = new Map(MEALS.map((m) => [m.key, []]));
   for (const r of rows) byMeal.get(r.meal)?.push(r);
 
+  /* 食品庫有三筆完全同名的「雞胸餐盒」，只靠店家區分。今日頁常態不顯示店家
+     （多一行會吃掉「一屏不捲」的餘裕），但同一天出現兩筆同名時就非顯示不可——
+     否則回頭核對或刪除都是盲的 */
+  const nameCount = new Map();
+  for (const r of rows) {
+    const n = r.foods?.name;
+    if (n) nameCount.set(n, (nameCount.get(n) || 0) + 1);
+  }
+
   const html = MEALS.map((meal, i) => {
     const items = byMeal.get(meal.key);
     const done = items.length > 0;
@@ -282,11 +311,13 @@ function renderTimeline(rows) {
       const lis = items.map((r) => {
         const q = num(r.qty);
         const name = r.foods?.name || '（食物已刪除）';
+        const dup = nameCount.get(name) > 1 && r.foods?.vendor;
+        const vendor = dup ? ` <span class="vendor">${esc(r.foods.vendor)}</span>` : '';
         const qty = q === 1 ? '' : ` <span class="qty">×${String(q)}</span>`;
         /* 左滑或點擊都會露出刪除鈕：內容與刪除鈕是同一個橫向 scroll-snap 容器的兩個 snap 點 */
         return `<li class="item" data-row="${r.id}"><div class="item-track"><div class="item-track-row">`
           + `<button class="item-content" type="button" data-del="${r.id}">`
-          + `<span class="nm">${esc(name)}${qty}</span>`
+          + `<span class="nm">${esc(name)}${vendor}${qty}</span>`
           + `<span class="kc">${Math.round(num(r.kcal) * q)}</span></button>`
           + `<button class="item-delete" type="button" data-del-go="${r.id}"`
           + ` aria-label="刪除 ${esc(name)} 這一筆">`
@@ -387,12 +418,15 @@ function switchTab(tab) {
     else b.removeAttribute('aria-current');
   });
   renderHeader();
-  showPane(tab);
+  /* 載入失敗時兩個分頁都是空殼——設定頁的 innerHTML 只有 load() 成功才會寫，
+     切過去是一片空白，切回來重試按鈕也不見了，只剩重新整理一途（而那正是網路最差的時候）。
+     這種時候留在提示畫面上，重試按鈕才一直在手邊 */
+  showPane(state.failed ? 'notice' : tab);
 }
 
 /* 營養值取 intake 的快照欄；foods 只 embed 品名，拿來顯示 */
 const intakeQuery = (d) => `intake?eaten_on=eq.${d}`
-  + `&select=id,meal,qty,kcal,protein,fat,carb,foods(name)&order=created_at.asc`;
+  + `&select=id,meal,qty,kcal,protein,fat,carb,foods(name,vendor)&order=created_at.asc`;
 
 /* 標題與日期列由同一個函式管——分成兩處寫過一次，載入完成時 renderDate
    會把設定頁的標題蓋回「今天」 */
@@ -459,6 +493,7 @@ async function load() {
   state.weight = w;
   state.targets = targets;
   state.rows = rows;
+  state.failed = false;
 
   renderToday(targets, rows);
   renderSettings(targets, p, w);
@@ -608,15 +643,27 @@ const mealLabel = (k) => MEALS.find((m) => m.key === k)?.label || '';
 const foodById = (id) => state.foods?.find((f) => f.id === id);
 const byName = (a, b) => a.name.localeCompare(b.name, 'zh-Hant');
 
-/* 常吃＝該餐別歷史出現次數。撈最近 400 筆就夠排出前五名，不必全表掃 */
+/* 常吃＝該餐別歷史出現次數；順便記住每樣最近一次的份量。
+   查詢已按 eaten_on 由新到舊，所以第一次看到的那筆就是最近的一筆。
+   茶葉蛋天天 ×2，每天都要多按一次加號的話，一年就是三百多下 */
 function tallyRecent(rows) {
   const byMeal = new Map(MEALS.map((m) => [m.key, new Map()]));
+  const lastQty = new Map();
   for (const r of rows) {
+    const key = `${r.meal}:${r.food_id}`;
+    if (!lastQty.has(key)) lastQty.set(key, num(r.qty));
     const c = byMeal.get(r.meal);
     if (c) c.set(r.food_id, (c.get(r.food_id) || 0) + 1);
   }
+  state.lastQty = lastQty;
   return new Map([...byMeal].map(([k, counts]) =>
     [k, [...counts].sort((a, b) => b[1] - a[1]).map(([id]) => id)]));
+}
+
+/* 選取時的預設份量：這一餐上次吃這樣東西是多少，沒記錄過才回 1 */
+function defaultQty(meal, foodId) {
+  const q = state.lastQty?.get(`${meal}:${foodId}`);
+  return Number.isFinite(q) && q > 0 ? q : 1;
 }
 
 function setBackgroundInert(on) {
@@ -636,32 +683,53 @@ async function openSheet(kind) {
     err: null,
     opener: document.activeElement,
   };
+  /* 上一個 sheet 的退場可能還在跑，殘留的 .closing 會讓新的這個一開場就往下滑走 */
+  $('sheet-root').classList.remove('closing');
   setBackgroundInert(true);
   renderSheet();
+  if (isMeal && !state.foods) await loadFoodLibrary();
+}
 
-  if (isMeal && !state.foods) {
-    try {
-      const [foods, hist] = await Promise.all([
-        db('foods?select=id,name,vendor,kcal,protein,fat,carb'),
-        db('intake?select=meal,food_id&order=eaten_on.desc&limit=400'),
-      ]);
-      state.foods = foods.sort(byName);
-      state.recent = tallyRecent(hist);
-    } catch (e) {
-      if (e instanceof AuthError) { closeSheet(); return showLogin('登入已過期，請重新登入'); }
-      /* 撈到一半使用者把 sheet 關掉了，state.sheet 已是 null */
-      if (state.sheet) state.sheet.err = e.message;
-    }
-    if (state.sheet) renderSheet();
+async function loadFoodLibrary() {
+  try {
+    /* 常吃只要排出每餐前五名，120 筆綽綽有餘。這支查詢卡在「按下記一筆」到
+       「清單可點」之間，是整個流程最容易在弱訊號下卡住的一步，別讓它比需要的更重 */
+    const [foods, hist] = await Promise.all([
+      db('foods?select=id,name,vendor,kcal,protein,fat,carb'),
+      db('intake?select=meal,food_id,qty&order=eaten_on.desc&limit=120'),
+    ]);
+    state.foods = foods.sort(byName);
+    state.recent = tallyRecent(hist);
+    if (state.sheet) state.sheet.err = null;
+  } catch (e) {
+    if (e instanceof AuthError) { closeSheet(); return showLogin('登入已過期，請重新登入'); }
+    /* 撈到一半使用者把 sheet 關掉了，state.sheet 已是 null */
+    if (state.sheet) state.sheet.err = e.message;
   }
+  /* 只換清單，不重建外殼——外殼重建會把進場動畫的 class 一起換掉，
+     sheet 才滑到一半就被打斷 */
+  if (state.sheet) renderList();
 }
 
 function closeSheet() {
   const opener = state.sheet?.opener;
+  const root = $('sheet-root');
+  if (!root.firstChild) return;
   state.sheet = null;
   setBackgroundInert(false);
-  $('sheet-root').innerHTML = '';
+
+  /* 退場要等動畫跑完才清空 DOM。焦點先還回去（不然這 200ms 內焦點懸在
+     即將消失的元素上），清空用 animationend；動畫被停用時 fallback 計時器接手 */
   if (opener?.isConnected) opener.focus();
+  root.classList.add('closing');
+  const done = () => {
+    root.classList.remove('closing');
+    if (!state.sheet) root.innerHTML = '';   // 這期間又開了新的就不要清掉
+  };
+  const sheet = root.querySelector('.sheet');
+  if (!sheet) return done();
+  sheet.addEventListener('animationend', done, { once: true });
+  setTimeout(done, 400);
 }
 
 /* ── sheet 內容 ── */
@@ -688,11 +756,12 @@ function foodRow(f, picked) {
 
   /* 選取後熱量欄換成加減鈕組。input 巢在 button 裡不可聚焦，所以兩者並排而非包住 */
   const qty = state.sheet.picks.get(f.id);
-  const step = (dir, label, icon) =>
+  const step = (dir, label, icon, off) =>
     `<button class="qty-btn" type="button" data-qty="${dir}" data-id="${f.id}"`
-    + ` aria-label="${label} ${esc(f.name)} 的份量">${svg(icon)}</button>`;
+    + `${off ? ' disabled' : ''} aria-label="${label} ${esc(f.name)} 的份量">${svg(icon)}</button>`;
   return `<li><div class="food-item selected"><div class="food-line">${btn}`
-    + `<div class="qty-stepper">${step('minus', '減少', ICON.minus)}`
+    /* 份量下限是 1；減到底就把減號停用，不要讓「按了沒事」看起來像壞掉 */
+    + `<div class="qty-stepper">${step('minus', '減少', ICON.minus, qty <= 1)}`
     + `<input class="qty-value" type="text" inputmode="decimal" data-qty-input="${f.id}"`
     + ` value="${String(qty)}" aria-label="${esc(f.name)} 份量">`
     + `${step('plus', '增加', ICON.plus)}</div></div></div></li>`;
@@ -700,7 +769,11 @@ function foodRow(f, picked) {
 
 function sheetListHtml() {
   const s = state.sheet;
-  if (s.err && !state.foods) return `<p class="muted">讀不到食品庫：${esc(s.err)}</p>`;
+  /* 讀不到食品庫時要給得出下一步。只印錯誤訊息等於把人留在死路上 */
+  if (s.err && !state.foods) {
+    return `<p class="muted">讀不到食品庫：${esc(s.err)}</p>`
+      + '<div class="retry-wrap"><button class="pick-bar-btn" type="button" data-reload-foods>重試</button></div>';
+  }
   if (!state.foods) return '<p class="muted">載入中…</p>';
 
   const list = (items) => `<ul class="food-list">${items.join('')}</ul>`;
@@ -760,18 +833,27 @@ function remainingAfterPicks(picksKcal) {
   return Math.round(num(state.targets?.kcal)) - Math.round(eaten + picksKcal);
 }
 
+/* 補記過去某天時「剩 479」是錯的語意——那天已經過完了，沒有「剩」可言。
+   跟主數字同一套邏輯：歷史日看的是加進去之後那天總共吃了多少 */
+function pickBarRight(picksKcal) {
+  if (!isToday()) {
+    return { text: `共 ${Math.round(sumIntake(state.rows).kcal + picksKcal)}`, over: false };
+  }
+  const left = remainingAfterPicks(picksKcal);
+  return { text: left < 0 ? `超出 ${-left}` : `剩 ${left}`, over: left < 0 };
+}
+
 function pickBarHtml() {
   const s = state.sheet;
   if (!s.picks.size) return '';
   const t = pickTotals();
-  const left = remainingAfterPicks(t.kcal);
-  const over = left < 0;
+  const right = pickBarRight(t.kcal);
   const label = s.busy ? '加入中…' : s.err ? '重試' : '加入';
   /* 剩餘不用正負號——「+594」會被讀成「多攝取 594」 */
-  return `<div class="pick-bar${over ? ' is-over' : ''}">`
+  return `<div class="pick-bar${right.over ? ' is-over' : ''}">`
     + (s.err ? `<p class="sheet-error" role="alert">存不進去：${esc(s.err)}</p>` : '')
     + `<div class="pick-line"><span class="sub">${t.n} 樣 · ${Math.round(t.kcal)} 卡</span>`
-    + `<span class="remain">${over ? `超出 ${-left}` : `剩 ${left}`}</span></div>`
+    + `<span class="remain">${right.text}</span></div>`
     + `<button class="pick-bar-btn" type="button" data-submit-picks`
     + `${s.busy ? ' disabled' : ''}>${label}</button></div>`;
 }
@@ -891,8 +973,11 @@ function renderSheet() {
 
   /* 遮罩是真 button（可點的東西一律 button）。它在 aria-modal 的 dialog 之外，
      輔助技術會略過，不會多讀一次「關閉」 */
+  /* 進場動畫只掛在真正開啟那一次。切 view、busy 重繪都會走到這裡，
+     每次都帶 .opening 的話 sheet 會反覆從底部彈一次 */
+  const opening = s.renderedView === undefined ? ' opening' : '';
   $('sheet-root').innerHTML = '<button class="scrim" type="button" data-close aria-label="關閉"></button>'
-    + `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">`
+    + `<div class="sheet${opening}" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">`
     + '<div class="handle" aria-hidden="true"></div>'
     + `<div class="sheet-head"><span class="sheet-title">${esc(title)}</span>`
     + `<button class="icon-btn" type="button" data-close aria-label="關閉">${svg(ICON.close)}</button>`
@@ -927,13 +1012,19 @@ function syncPickBar() {
   if (!bar) { sheet.insertAdjacentHTML('beforeend', pickBarHtml()); return; }
 
   const t = pickTotals();
-  const left = remainingAfterPicks(t.kcal);
-  bar.classList.toggle('is-over', left < 0);
+  const right = pickBarRight(t.kcal);
+  bar.classList.toggle('is-over', right.over);
   bar.querySelector('.sub').textContent = `${t.n} 樣 · ${Math.round(t.kcal)} 卡`;
-  bar.querySelector('.remain').textContent = left < 0 ? `超出 ${-left}` : `剩 ${left}`;
+  bar.querySelector('.remain').textContent = right.text;
 }
 
 /* ── sheet 事件 ── */
+/* 加減鈕走的是不重繪的路徑（重繪會把按鈕本身換掉），所以停用狀態得手動跟著份量走 */
+function syncMinus(id, qty) {
+  const btn = document.querySelector(`[data-qty="minus"][data-id="${id}"]`);
+  if (btn) btn.disabled = qty <= 1;
+}
+
 function normalizeQty(v) {
   const n = Number(String(v).trim());
   /* 空白或非正數一律回 1：schema 有 check (qty > 0) 擋底，但前端先擋掉才不會
@@ -964,9 +1055,12 @@ function onSheetClick(e) {
   if (pick) {
     const id = Number(pick.dataset.pick);
     if (s.picks.has(id)) s.picks.delete(id);
-    else s.picks.set(id, 1);
+    else s.picks.set(id, defaultQty(s.meal, id));
     s.err = null;
-    return renderList();
+    renderList();
+    /* 重建清單會把剛按的那顆按鈕連同焦點一起換掉，鍵盤使用者會被丟回 body。
+       sheet 是 aria-modal，這是清單裡唯一的導覽路徑，斷了就出不去 */
+    return document.querySelector(`[data-pick="${id}"]`)?.focus();
   }
 
   /* 加減鈕只改那一格的值——重繪清單會把按鈕本身換掉，連按第二下就落空 */
@@ -978,7 +1072,14 @@ function onSheetClick(e) {
     s.picks.set(id, next);
     const box = document.querySelector(`[data-qty-input="${id}"]`);
     if (box) box.value = String(next);
+    syncMinus(id, next);
     return syncPickBar();
+  }
+
+  if (e.target.closest('[data-reload-foods]')) {
+    s.err = null;
+    renderList();
+    return loadFoodLibrary();
   }
 
   if (e.target.closest('[data-add-food]')) {
@@ -1012,7 +1113,9 @@ function onSheetInput(e) {
   if (box) {
     const n = Number(box.value.trim());
     if (Number.isFinite(n) && n > 0) {
-      s.picks.set(Number(box.dataset.qtyInput), n);
+      const id = Number(box.dataset.qtyInput);
+      s.picks.set(id, n);
+      syncMinus(id, n);
       syncPickBar();
     }
   }
@@ -1024,8 +1127,10 @@ function onSheetChange(e) {
   const box = e.target.closest('[data-qty-input]');
   if (box) {
     const n = normalizeQty(box.value);
-    s.picks.set(Number(box.dataset.qtyInput), n);
+    const id = Number(box.dataset.qtyInput);
+    s.picks.set(id, n);
     box.value = String(n);
+    syncMinus(id, n);
     syncPickBar();
   }
 }

@@ -6,6 +6,10 @@
   /* 表面 */
   --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
   --rule: #E0D3BD; --rule-subtle: #ECE1CD;
+  /* 輸入框邊界專用：--rule 對 paper 只有 1.37:1，而輸入框的底色 --paper 對
+     sheet 底 --card 幾乎沒有色差，邊框是唯一的邊界線索，WCAG 1.4.11 要 3:1。
+     此色對 paper 實算 3.22:1（不是目測）。只用於輸入框，分隔線仍用 --rule */
+  --rule-field:   #9F8570;
   /* 文字 */
   --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
   /* 主色 jade */
@@ -22,6 +26,9 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
   --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
   --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
+  /* sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
+     的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
+  --dur-sheet: 280ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
 }
 * { box-sizing: border-box; }
 
@@ -115,8 +122,11 @@ body {
 .timeline .muted { color: var(--ink-muted); margin: 0; }
 
 /* 餐別標題列同時是「追加這一餐」的入口，所以是原生 button */
-.node-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2);
-  width: 100%; padding: 0 0 var(--s-2); border: none; border-bottom: 1px solid var(--rule);
+/* min-height 44：它是「追加這一餐」的入口，且緊貼下方同樣 44px 的品項列，
+   原本只有約 27px，單手大拇指很容易按成隔壁那條 */
+.node-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-2);
+  width: 100%; min-height: 44px; padding: 0 0 var(--s-2); border: none;
+  border-bottom: 1px solid var(--rule);
   background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
   -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
 @media (hover: hover) { .node-head:hover { opacity: .68; } }
@@ -133,8 +143,9 @@ body {
    .item-track 是橫向 scroll-snap 容器，內容與刪除鈕兩個 snap 點。左滑走原生捲動，
    不寫 touchstart/touchmove。手勢對鍵盤與螢幕閱讀器是死路，所以內容本身也是原生
    button——點它由 JS 把捲動位置帶到刪除鈕，兩條路都通。 */
+/* overscroll-behavior：滑到底時不要把手勢鏈給頁面或瀏覽器的邊緣返回 */
 .item-track { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  -webkit-overflow-scrolling: touch; }
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .item-track::-webkit-scrollbar { display: none; }
 .item-track-row { display: flex; }
 .item-content { flex: 0 0 100%; width: 100%; scroll-snap-align: start;
@@ -142,10 +153,18 @@ body {
   min-height: 44px; padding: var(--s-1) 0; border: none; background: none; text-align: left;
   font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
   letter-spacing: var(--track-base); cursor: pointer;
-  -webkit-appearance: none; appearance: none; position: relative; }
+  -webkit-appearance: none; appearance: none; position: relative;
+  transition: opacity var(--dur) var(--ease); }
+/* 全域關掉了 tap highlight，沒有這行的話點品項是全站唯一零回饋的可點元素 */
+.item-content:active { opacity: .6; }
 .item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
-.item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
+/* sticky 讓品名在滑開時停在捲動容器的左緣，不跟著整列被推出視野。
+   被推走的是右邊的熱量數字——刪除確認面上該留下的是「刪的是哪一筆」，不是它幾卡。
+   內容區必須維持 100% 寬（才有捲動空間），所以不能改用 calc 把刪除鈕讓出來 */
+.item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: sticky; left: 0; }
 .item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
@@ -158,16 +177,21 @@ body {
   border: none; background: var(--over-fill); color: var(--on-accent);
   font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .item-delete svg { width: 18px; height: 18px; }
+.item-delete { transition: opacity var(--dur) var(--ease); }
 .item-delete:active { opacity: .8; }
+/* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
+.item-delete:disabled { opacity: .6; cursor: default; }
 
 /* 加入成功的短暫高亮：疊一層 --accent-soft 只動 opacity，不動 layout */
 /* inset 不外擴——這一列在橫向 scroll container 裡，往外長會多撐出捲動寬度 */
 .item-content::before { content: ''; position: absolute; inset: 0;
   border-radius: var(--s-1); background: var(--accent-soft); opacity: 0; pointer-events: none; }
-/* 1.4s 不是 --dur 的過場，是「看得到又不礙事」的停留時間：--dur(160ms) 太快，
-   回到今日頁時高亮已經消失，等於沒有確認訊號 */
-.item.just-added .item-content::before { animation: flash 1.4s var(--ease) forwards; }
-@keyframes flash { 0% { opacity: .9; } 100% { opacity: 0; } }
+/* 1.2s 不是 --dur 的過場，是「看得到又不礙事」的停留時間：--dur(160ms) 太快，
+   回到今日頁時高亮已經消失，等於沒有確認訊號。
+   前 25% 先停住不動再開始衰減——沒有這段 hold，透明度一開始就往下掉，
+   真正「看得見」的時間比帳面短，尾巴又在 .05 以下白拖 */
+.item.just-added .item-content::before { animation: flash 1.2s cubic-bezier(.4, 0, 1, 1) forwards; }
+@keyframes flash { 0%, 25% { opacity: .9; } 100% { opacity: 0; } }
 
 /* ── 待記錄餐次（整行可點） ── */
 .todo-row { display: flex; align-items: center; justify-content: space-between;
@@ -289,13 +313,24 @@ body {
 /* ═══════════ 記一筆 sheet ═══════════ */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
-  -webkit-appearance: none; appearance: none; }
+  -webkit-appearance: none; appearance: none;
+  animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
   display: flex; flex-direction: column; min-height: 0; }
+/* 只有真正開啟那一次帶 .opening；renderSheet 因為切 view／busy 重繪時不帶，
+   否則每次重畫都會重播一次進場 */
+.sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
+#sheet-root.closing .sheet { animation: sheet-out 200ms var(--ease-sheet) both; }
+#sheet-root.closing .scrim { animation: scrim-out 200ms var(--ease-sheet) both; }
+
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
 .sheet svg { stroke: currentColor; fill: none; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 /* 純裝飾的 sheet 把手，尺寸沿用 iOS 慣例（36×4），不對應任何 token */
@@ -330,30 +365,36 @@ body {
 /* 搜尋框是模式切換器：一有輸入，搜尋結果取代整段清單，同時只存在一段 */
 .search-wrap { padding: var(--s-3) var(--s-5); flex-shrink: 0; }
 .search-box { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
-  padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--r-tab);
+  padding: 0 var(--s-3); border: 1px solid var(--rule-field); border-radius: var(--r-tab);
   background: var(--paper); }
 .search-box svg { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
 .search-box input { border: none; background: none; font-family: inherit;
   font-size: var(--t-base); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
-.search-box input::placeholder { color: var(--ink-faint); }
+/* placeholder 也是文字，要過 4.5:1。--ink-faint 只有 2.92:1 */
+.search-box input::placeholder { color: var(--ink-muted); }
 .search-box:focus-within { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
 
 /* 唯一捲動區 */
-.food-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.food-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none;
+  overscroll-behavior: contain; }
 .food-scroll::-webkit-scrollbar { display: none; }
 .food-list { margin: 0; padding: 0 var(--s-5); list-style: none; }
 .food-list li { border-bottom: 1px solid var(--rule-subtle); }
 .food-list li:last-child { border-bottom: none; }
 .food-scroll .muted { color: var(--ink-muted); padding: var(--s-4) var(--s-5); margin: 0; }
+.retry-wrap { padding: 0 var(--s-5); }
 
 .food-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 44px;
   padding: var(--s-2) 0; border: none; background: none; text-align: left;
   font-family: inherit; color: inherit; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
+.food-row { transition: opacity var(--dur) var(--ease); }
 .food-row:active { opacity: .6; }
 .food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
-.food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-faint); }
+/* 未勾選的圈是「這份清單可以多選」唯一的視覺訊號，圖形元素要 3:1。
+   --ink-faint 實算 2.99:1，差一點——DESIGN.md 逼 chevron 改色的同一條理由 */
+.food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-muted); }
 .food-row[aria-pressed="true"] .chk { color: var(--accent); }
 .food-row .nm-wrap { min-width: 0; flex: 1; }
 /* 店家那一行不可截斷或省略——它是區分同名品項的唯一資訊 */
@@ -368,17 +409,22 @@ body {
 .food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
   padding: var(--s-1) 0; }
 .food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
-.qty-stepper { display: flex; align-items: center; gap: var(--s-1); flex-shrink: 0; }
+.qty-stepper { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
 .qty-btn { width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: var(--r-tab);
   background: var(--card); color: var(--ink); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
-  -webkit-appearance: none; appearance: none; }
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur) var(--ease); }
 .qty-btn svg { width: 16px; height: 16px; }
 .qty-btn:active { opacity: .6; }
+/* 份量下限是 1，減到底時把減號停用。原本按下去完全沒反應——「按了什麼都沒發生」
+   永遠會被讀成壞掉 */
+.qty-btn:disabled { opacity: .35; cursor: default; }
 .qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 34px 是被算出來的：加減鈕 44＋44、間距 4＋4，整組要壓在 130px 上限內（DESIGN.md），
-   剩下就是這個寬度。高度仍是 44px，觸控區沒有變小 */
-.qty-value { width: 34px; min-height: 44px; border: 1px solid var(--rule);
+/* 42px：把加減鈕之間的間距收成 0，44＋42＋44 剛好 130px 上限，數字框從 34 長到 42。
+   「觸控區 ≥44」與「整組上限 130px」兩條規則原本互不相容，程式默默選了後者；
+   拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
+.qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule);
   border-radius: var(--r-tab); background: var(--paper); font-family: inherit;
   font-size: var(--t-sm); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
@@ -394,13 +440,22 @@ body {
   cursor: pointer; -webkit-appearance: none; appearance: none; }
 .add-food-row svg { width: 16px; height: 16px; flex-shrink: 0; }
 .add-food-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-food-row { transition: opacity var(--dur) var(--ease); }
 .add-food-row:active { opacity: .6; }
 .add-food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* 底部確認列：小計靠左（會變動、要盯的）、剩餘靠右（固定參考值），不加標籤字 */
+/* 動畫只在元素被插入那一次跑（syncPickBar 的增量更新不換元素，所以不會重播）。
+   200ms 除了讓它「長出來」而不是「彈出來」，也隔開了誤觸窗口——手指剛離開的位置
+   會立刻長出一顆 52px 的加入鈕 */
 .pick-bar { flex-shrink: 0; display: flex; flex-direction: column; gap: var(--s-2);
   padding: var(--s-3) var(--s-5); border-top: 1px solid var(--rule); background: var(--card);
-  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom));
+  animation: bar-in 200ms var(--ease) both; }
+@keyframes bar-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 /* 不叫 .line——時間軸的連接線已經佔了這個名字（width: 1px），撞到會被壓成直排 */
 .pick-bar .pick-line { display: flex; align-items: baseline; justify-content: space-between;
   gap: var(--s-3); }
@@ -432,6 +487,7 @@ body {
   font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
 .back-btn svg { width: 16px; height: 16px; }
+.back-btn { transition: opacity var(--dur) var(--ease); }
 .back-btn:active { opacity: .5; }
 .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .confirm-wrap { flex-shrink: 0; padding: var(--s-4) var(--s-5);
@@ -449,21 +505,24 @@ body {
 /* 高度與上內距是一組的：label 浮起後佔 8–19.5px，輸入文字從 26px 起，中間留 6.5px。
    樣張的 52/18/13 這組會讓兩者重疊，字擠在一起 */
 .field-float input, .field-float select { width: 100%; min-height: 60px;
-  border: 1px solid var(--rule); border-radius: var(--r-tab); background: var(--paper);
+  border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--paper);
   font-family: inherit; font-size: var(--t-base); color: var(--ink);
   padding: 26px var(--s-3) 6px; -webkit-appearance: none; appearance: none; }
 .field-float input:focus, .field-float select:focus { outline: none;
   border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.field-float label { position: absolute; left: var(--s-3); top: 50%; transform: translateY(-50%);
-  font-size: var(--t-base); color: var(--ink-faint); pointer-events: none;
-  transition: top var(--dur) var(--ease), font-size var(--dur) var(--ease),
-    color var(--dur) var(--ease); }
-/* line-height 1 讓浮起的 label 只佔字高，行盒不再往下吃掉輸入文字的空間 */
+/* 過場只動 transform 與 color，不動 top／font-size——後兩者是 layout 屬性，
+   DESIGN.md 明訂只准動 opacity 與 transform。縮放用 scale 達成：
+   .82 × 14px（--t-base）＝ 11.5px，正好是 --t-xs，字級階梯沒有被繞過。
+   起點 translateY(19px) 是 60px 高度的垂直置中位置（(60-14×1.55)/2 ≈ 19），
+   終點 8px 與 26px 的上內距搭成一組（見上方 input 的註解） */
+.field-float label { position: absolute; left: var(--s-3); top: 0; line-height: 1;
+  transform: translateY(19px); transform-origin: left top;
+  font-size: var(--t-base); color: var(--ink-muted); pointer-events: none;
+  transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
 .field-float input:focus + label,
 .field-float input:not(:placeholder-shown) + label,
 .field-float select + label {
-  top: var(--s-2); transform: translateY(0); line-height: 1;
-  font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  transform: translateY(var(--s-2)) scale(.82); letter-spacing: var(--track-xs); }
 .field-float .req { color: var(--over); margin-left: .15em; }
 .form-wrap .note { font-size: var(--t-xs); color: var(--ink-muted); margin: 0;
   line-height: 1.5; letter-spacing: var(--track-xs); }
@@ -480,7 +539,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .cta, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
-  .chip, .icon-btn, .date-arrow, .pick-bar-btn, .field-float label { transition-duration: .01ms; }
+  .chip, .icon-btn, .date-arrow, .pick-bar-btn, .field-float label,
+  .food-row, .add-food-row, .back-btn, .item-content, .item-delete,
+  .qty-btn { transition-duration: .01ms; }
   .cta:active, .pick-bar-btn:active { transform: none; }
-  .item.just-added .item-content::before { animation-duration: .01ms; }
+  .item.just-added .item-content::before,
+  .sheet.opening, .scrim, .pick-bar,
+  #sheet-root.closing .sheet, #sheet-root.closing .scrim { animation-duration: .01ms; }
 }
