@@ -66,21 +66,42 @@ intake insert 缺四個 not null 新欄。從零重建 DB 的流程實質斷掉�
 1. ~~前端骨架：登入頁（Google OAuth）→ 今日頁~~ ✅
 2. ~~今日頁實作~~ ✅ 五屏都驗過
 3. ~~「記一筆」決策樣張~~ ✅ 八輪迭代，定稿七屏
-4. **← 下一步，使用者手動**：把 `migrate-v2.sql` 貼進 Supabase SQL Editor 執行。**尚未執行。**
-   已過 verifier 驗收（第一版抓到三筆品名沒切掉店家後綴，已修）。執行前先確認線上 foods 仍是 23 筆
-   未被手動改過，否則 `where name =` 比對不到會靜默略過。跑完用檔尾註解掉的三段 select 核對。
-5. 實作「記一筆」sheet（多選、已選置頂、搜尋、新增食物、加減按鈕、寫入失敗回饋）
-6. 實作今日頁刪除（scroll-snap 左滑 ＋ 點擊雙路徑）
-7. 實作日期切換（原生 `input type=date`、歷史日主數字改攝取量、右箭頭在今天停用）
-8. 實作設定頁編輯 ＋ 記體重入口
+4. ~~`migrate-v2.sql` 執行~~ ✅ **2026-07-28 已執行並驗證**。schema 三項變更用 PostgREST 探測確認
+   （`foods.category` 回 42703 已砍；`vendor`、intake 四欄、profile 三個 pct 欄皆 200）。
+   因整份包在單一 transaction，`set not null` 與 `check (相加=100)` 通過即證明 intake backfill 無 null、
+   profile 已灌 27/27/46。foods 23 筆品名／店家清洗由使用者跑 select 貼回逐筆核對通過
+   （無 `|`／`｜`／emoji 殘留，5 筆雞胸餐盒中 3 筆完全同名、全靠 vendor 區分）。
+5. ~~實作「記一筆」sheet~~ ✅
+6. ~~實作今日頁刪除~~ ✅
+7. ~~實作日期切換~~ ✅
+8. ~~實作設定頁編輯 ＋ 記體重入口~~ ✅
 
-**接上實作時要一起解開的**（程式裡都標了 `ponytail:`）：`app.js` 的 `$('btn-add').disabled`、
-`renderTimeline` 裡待記錄行的 `disabled`，兩處都是等記錄流程就緒才放行。
-另外 `app.js` 寫死的 27/27/46 要改讀 `profile` 的三個新欄位。
+**第一版功能已全部完成（2026-07-28，`DESIGN.md` v1.8）。** 兩處 `ponytail:` disabled 已解開，
+寫死的 27/27/46 改讀 `profile` 三個新欄位。
 
-**實作階段才決定的三件**（樣張沒回答）：切餐別後份量欄的邊界驗證（0 或空白時加入該不該 disable，
-schema 有 `check (qty > 0)` 擋底但前端該先擋）；左滑列開一列要不要自動關其他；
-floating label 在 iOS AutoFill 時 `:placeholder-shown` 會不會正確觸發（要真機測）。
+**實作階段才決定的三件**（樣張沒回答，已定案）：
+
+- 份量 0／空白／負數／非數字 → `normalizeQty` 一律回 1。不 disable 按鈕（不留死路）；
+  **打字途中不正規化**，留到失焦才做——否則「1.」這種中間狀態會被改成 1、游標跳走
+- 左滑開一列**自動關其他**（同時開兩列沒有意義，誤觸風險加倍）
+- floating label 的 **iOS AutoFill 行為仍未驗證**（程式裡標了 `ponytail:`）。真機若看到標籤壓字，
+  改用 `input` 事件加 class 判斷，別靠 `:placeholder-shown`
+
+**實作時修掉的五個坑**（都是樣張／規範沒寫、實跑才撞到的，改動前先讀 `DESIGN.md` v1.8 版本紀錄）：
+
+1. **sheet 不可以整塊重繪**。`renderSheet()` 換掉 `innerHTML` 會咬掉兩件事——點「加入」時
+   份量框先失焦觸發重繪，mousedown 的目標離開 DOM，**click 根本不派送**（填完份量按加入沒反應）；
+   搜尋框每打一字被換掉，**中文注音組字會被打斷**。清單與確認列一律走增量
+   （`renderList()` / `syncPickBar()`），只有開啟與切 view 才 `renderSheet()`。
+2. **表單欄位一律在 `withBusy` 之前讀完**。`withBusy` 會先重繪，之後再讀就是空值——
+   `vendor` 曾因此靜默存成 null。
+3. floating label 的 52/18/13 會讓標籤與輸入文字**重疊 4.7px**，改 60/26/8 ＋ `line-height: 1`。
+4. 品項寬度是分數值（320.4px），刪除鈕左緣落在裁切邊的同一個分數像素上，**未滑開時沿右緣露一條紅線**。
+5. class 撞名：確認列的 `.line` 撞到時間軸連接線的 `.line`（`width: 1px`），整列被壓成直排。
+
+**驗收方式（下次要驗同樣的東西照這個做）**：登入走 Google OAuth，agent 進不去。
+做法是 stub `window.fetch` ＋ 塞 `localStorage` 的 `tally.session`，再直接呼叫全域的 `showApp()`
+（`app.js` 沒有模組化，函式都在全域）。這樣能跑完整 UI 而不需要真帳號。
 
 ### 待確認 / 待處理
 
@@ -95,9 +116,13 @@ floating label 在 iOS AutoFill 時 `:placeholder-shown` 會不會正確觸發�
 
 現存唯一樣張＝**`mockup.html`**：今日頁常態＋破表兩屏，實作以它為準。已是完整 HTML 文件（含 `lang`、landmark、`button`、`ul`），可直接照抄語意結構。畫框 745px＝真機可視高度。
 
-### 下次續點的修正
+### 真正的下次續點（2026-07-28 收工時）
 
-1. **實作前必讀 `session-state/review-findings.md`**（剩 10 條未處理；骨架階段做掉 7 條，
-   已完成的移到該檔「已處理」節）
-2. 第一版**不做**歷史檢視（照 `spec.md` 第二版範圍），日期箭頭已從樣張移除
-3. 「記一筆」流程的樣張仍未設計，動工前要先走決策樣張
+第一版功能齊了，但**沒在真機跑過**，也**沒跑過設計流程 ➍ 精修**。建議順序：
+
+1. 跑 ➍ 精修（`emil-design-eng`／`impeccable` polish／`hallmark` audit）審新的 sheet 與三張表單
+   ——這是全新的互動介面，從樣張直接落地，沒經過任何 polish 審視
+2. 真機（iPhone Safari）走一遍完整流程：floating label 的 AutoFill、左滑手感、
+   `100dvh` 在有網址列時的表現
+3. `review-findings.md` 剩 5 條未處理
+4. 第二版才做的：編輯（非刪重記）、趨勢分析、「常吃一鍵」「複製前一天」

@@ -47,12 +47,10 @@ body {
 .pair .sep { color: var(--ink-muted); }                   /* 分隔符 */
 .pair .tgt { color: var(--ink-muted); }                   /* 固定的參考值 */
 
-/* ── 頂欄（第一版無歷史檢視，故無日期箭頭） ── */
-.topbar { padding: var(--s-4) var(--s-5) var(--s-2); }
+/* ── 頂欄（日期切換控制見下方 .datectl） ── */
+.topbar { padding: var(--s-4) var(--s-5) 0; }
 .topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md);
   margin: 0; line-height: 1.2; }
-.topbar .date { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs);
-  margin-top: 2px; font-variant-numeric: tabular-nums; }
 
 /* ── 主區 ── */
 .main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -116,20 +114,60 @@ body {
 .node:last-child .node-body { padding-bottom: 0; }
 .timeline .muted { color: var(--ink-muted); margin: 0; }
 
+/* 餐別標題列同時是「追加這一餐」的入口，所以是原生 button */
 .node-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2);
-  padding-bottom: var(--s-2); border-bottom: 1px solid var(--rule); }
+  width: 100%; padding: 0 0 var(--s-2); border: none; border-bottom: 1px solid var(--rule);
+  background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+@media (hover: hover) { .node-head:hover { opacity: .68; } }
+.node-head:active { opacity: .5; }
+.node-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
+  border-radius: var(--s-1); }
 .node-name { font-weight: 700; font-size: var(--t-md); line-height: 1.2;
   letter-spacing: var(--track-md); }
 .node-kcal { font-size: var(--t-base); font-weight: 600; line-height: 1.2;
   font-variant-numeric: tabular-nums; }
 .items { margin: var(--s-2) 0 0; padding: 0; list-style: none; }
-.item { display: flex; justify-content: space-between; gap: var(--s-3);
-  font-size: var(--t-base); padding: var(--s-1) 0; line-height: 1.45;
-  letter-spacing: var(--track-base); }
+
+/* ── 品項列：左滑露出刪除鈕 ──
+   .item-track 是橫向 scroll-snap 容器，內容與刪除鈕兩個 snap 點。左滑走原生捲動，
+   不寫 touchstart/touchmove。手勢對鍵盤與螢幕閱讀器是死路，所以內容本身也是原生
+   button——點它由 JS 把捲動位置帶到刪除鈕，兩條路都通。 */
+.item-track { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; }
+.item-track::-webkit-scrollbar { display: none; }
+.item-track-row { display: flex; }
+.item-content { flex: 0 0 100%; width: 100%; scroll-snap-align: start;
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
+  min-height: 44px; padding: var(--s-1) 0; border: none; background: none; text-align: left;
+  font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
+  letter-spacing: var(--track-base); cursor: pointer;
+  -webkit-appearance: none; appearance: none; position: relative; }
+.item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
+  border-radius: var(--s-1); }
 .item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
+/* 刪除鈕借用 --over-fill（系統唯一的語意紅）表示危險動作。
+   margin-left 1px 不是排版留白：品項寬度是分數值（實測 320.4px），刪除鈕左緣落在
+   裁切邊的同一個分數像素上，未滑開時會沿右緣露出一條紅線。推開 1px 就完全在裁切外 */
+.item-delete { flex: 0 0 auto; min-width: 56px; margin-left: 1px;
+  align-self: stretch; scroll-snap-align: end;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: var(--over-fill); color: var(--on-accent);
+  font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.item-delete svg { width: 18px; height: 18px; }
+.item-delete:active { opacity: .8; }
+
+/* 加入成功的短暫高亮：疊一層 --accent-soft 只動 opacity，不動 layout */
+/* inset 不外擴——這一列在橫向 scroll container 裡，往外長會多撐出捲動寬度 */
+.item-content::before { content: ''; position: absolute; inset: 0;
+  border-radius: var(--s-1); background: var(--accent-soft); opacity: 0; pointer-events: none; }
+/* 1.4s 不是 --dur 的過場，是「看得到又不礙事」的停留時間：--dur(160ms) 太快，
+   回到今日頁時高亮已經消失，等於沒有確認訊號 */
+.item.just-added .item-content::before { animation: flash 1.4s var(--ease) forwards; }
+@keyframes flash { 0% { opacity: .9; } 100% { opacity: 0; } }
 
 /* ── 待記錄餐次（整行可點） ── */
 .todo-row { display: flex; align-items: center; justify-content: space-between;
@@ -226,7 +264,223 @@ body {
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* ═══════════ 日期切換 ═══════════ */
+/* 日期本身是原生 input[type=date]（點了叫系統日曆），左右箭頭各走一天。
+   原生元件零成本，補記三天前不用按三次。 */
+/* margin-left 抵銷左箭頭 44px 觸控區內的留白，讓日期文字的左緣對齊上方標題，
+   而不是被觸控區往右推 */
+.datectl { display: flex; align-items: center; gap: var(--s-1); margin-left: -10px; }
+.date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--ink-muted); cursor: pointer;
+  border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur) var(--ease); }
+.date-arrow svg { width: 16px; height: 16px; }
+.date-arrow:active { opacity: .5; }
+.date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.date-arrow:disabled { opacity: .3; cursor: default; }
+.date-input { border: none; background: none; font-family: inherit; font-size: var(--t-sm);
+  color: var(--ink-muted); letter-spacing: var(--track-xs); font-variant-numeric: tabular-nums;
+  padding: var(--s-1) var(--s-1); min-height: 44px; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.date-input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
+/* 不在今天時把日期本身加重——這是「你正在看過去」唯一的持續訊號 */
+.datectl.past .date-input { color: var(--ink); font-weight: 600; }
+
+/* ═══════════ 記一筆 sheet ═══════════ */
+.scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  -webkit-appearance: none; appearance: none; }
+/* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
+   低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
+  background: var(--card); border-top: 1px solid var(--rule);
+  border-radius: var(--r-btn) var(--r-btn) 0 0;
+  display: flex; flex-direction: column; min-height: 0; }
+.sheet svg { stroke: currentColor; fill: none; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+/* 純裝飾的 sheet 把手，尺寸沿用 iOS 慣例（36×4），不對應任何 token */
+.handle { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--rule);
+  margin: var(--s-2) auto 0; flex-shrink: 0; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s-2) var(--s-3) 0 var(--s-5); flex-shrink: 0; }
+.sheet-title { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md); }
+.icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: none; background: none; color: var(--ink-muted); cursor: pointer;
+  border-radius: var(--r-pill); flex-shrink: 0;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:active { opacity: .5; }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 餐別 chip 列：沿用分頁列的選中態語言（jade 文字 ＋ accent inset 邊框） */
+.chiprow { display: flex; gap: var(--s-2); padding: var(--s-3) var(--s-5);
+  flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
+.chiprow::-webkit-scrollbar { display: none; }
+.chip { flex-shrink: 0; min-height: 44px; padding: 0 var(--s-4); border: none;
+  border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+.chip:active { opacity: .6; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip[aria-current="true"] { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.sect-lb { padding: var(--s-4) var(--s-5) var(--s-1); font-size: var(--t-xs);
+  color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }
+
+/* 搜尋框是模式切換器：一有輸入，搜尋結果取代整段清單，同時只存在一段 */
+.search-wrap { padding: var(--s-3) var(--s-5); flex-shrink: 0; }
+.search-box { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
+  padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--r-tab);
+  background: var(--paper); }
+.search-box svg { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
+.search-box input { border: none; background: none; font-family: inherit;
+  font-size: var(--t-base); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
+.search-box input::placeholder { color: var(--ink-faint); }
+.search-box:focus-within { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
+
+/* 唯一捲動區 */
+.food-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.food-scroll::-webkit-scrollbar { display: none; }
+.food-list { margin: 0; padding: 0 var(--s-5); list-style: none; }
+.food-list li { border-bottom: 1px solid var(--rule-subtle); }
+.food-list li:last-child { border-bottom: none; }
+.food-scroll .muted { color: var(--ink-muted); padding: var(--s-4) var(--s-5); margin: 0; }
+
+.food-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 44px;
+  padding: var(--s-2) 0; border: none; background: none; text-align: left;
+  font-family: inherit; color: inherit; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.food-row:active { opacity: .6; }
+.food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
+  border-radius: var(--s-1); }
+.food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-faint); }
+.food-row[aria-pressed="true"] .chk { color: var(--accent); }
+.food-row .nm-wrap { min-width: 0; flex: 1; }
+/* 店家那一行不可截斷或省略——它是區分同名品項的唯一資訊 */
+.food-row .nm { font-size: var(--t-base); display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.food-row .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
+.food-row .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; }
+
+/* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪底色會與 cream 打架）。
+   input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
+.food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
+  padding: var(--s-1) 0; }
+.food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
+.qty-stepper { display: flex; align-items: center; gap: var(--s-1); flex-shrink: 0; }
+.qty-btn { width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: var(--r-tab);
+  background: var(--card); color: var(--ink); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; flex-shrink: 0;
+  -webkit-appearance: none; appearance: none; }
+.qty-btn svg { width: 16px; height: 16px; }
+.qty-btn:active { opacity: .6; }
+.qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 34px 是被算出來的：加減鈕 44＋44、間距 4＋4，整組要壓在 130px 上限內（DESIGN.md），
+   剩下就是這個寬度。高度仍是 44px，觸控區沒有變小 */
+.qty-value { width: 34px; min-height: 44px; border: 1px solid var(--rule);
+  border-radius: var(--r-tab); background: var(--paper); font-family: inherit;
+  font-size: var(--t-sm); color: var(--ink); text-align: center;
+  font-variant-numeric: tabular-nums; padding: 0;
+  -webkit-appearance: none; appearance: none; }
+.qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 新增食物入口：只要搜尋框有輸入就常駐清單末尾，不是只在零結果時出現 */
+.search-empty-msg { padding: var(--s-4) var(--s-5) var(--s-1); text-align: center;
+  color: var(--ink-muted); font-size: var(--t-sm); margin: 0; }
+.add-food-row { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  width: 100%; min-height: 44px; padding: var(--s-2) 0; border: none; background: none;
+  color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.add-food-row svg { width: 16px; height: 16px; flex-shrink: 0; }
+.add-food-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-food-row:active { opacity: .6; }
+.add-food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 底部確認列：小計靠左（會變動、要盯的）、剩餘靠右（固定參考值），不加標籤字 */
+.pick-bar { flex-shrink: 0; display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-3) var(--s-5); border-top: 1px solid var(--rule); background: var(--card);
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
+/* 不叫 .line——時間軸的連接線已經佔了這個名字（width: 1px），撞到會被壓成直排 */
+.pick-bar .pick-line { display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--s-3); }
+.pick-bar .sub, .pick-bar .remain { white-space: nowrap; }
+.pick-bar .sub { font-size: var(--t-base); font-weight: 600; color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+.pick-bar .remain { font-size: var(--t-base); color: var(--ink-muted);
+  font-variant-numeric: tabular-nums; }
+.pick-bar.is-over .remain { color: var(--over); }
+.pick-bar-btn { width: 100%; min-height: 52px; padding: 0 var(--s-5); border: none;
+  border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent);
+  font-family: inherit; font-size: var(--t-md); font-weight: 700;
+  letter-spacing: var(--track-md); cursor: pointer; flex-shrink: 0;
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.pick-bar-btn:active { transform: translateY(1px); }
+.pick-bar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pick-bar-btn:disabled { opacity: .6; cursor: default; }
+/* 寫入失敗就地可見，已選內容不清空——記錄的地點正好是收訊最差的地方 */
+.sheet-error { color: var(--over); font-size: var(--t-sm); margin: 0; }
+
+/* ═══════════ 表單（新增食物／設定編輯／記體重） ═══════════ */
+.form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
+  scrollbar-width: none; }
+.form-wrap::-webkit-scrollbar { display: none; }
+.back-row { display: flex; align-items: center; padding: var(--s-1) var(--s-4) 0; flex-shrink: 0; }
+.back-btn { display: flex; align-items: center; gap: var(--s-1); min-height: 44px;
+  padding: 0 var(--s-2); border: none; background: none; color: var(--ink-muted);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.back-btn svg { width: 16px; height: 16px; }
+.back-btn:active { opacity: .5; }
+.back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.confirm-wrap { flex-shrink: 0; padding: var(--s-4) var(--s-5);
+  padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: var(--s-2); }
+
+/* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移。
+   禁止用 placeholder 冒充 label（WCAG 3.3.2）——placeholder=" " 只是給
+   :placeholder-shown 當開關用的空白值。
+   ponytail: iOS AutoFill 灌值時 :placeholder-shown 會不會正確翻轉未經真機驗證，
+   真機發現標籤壓字時改用 input 事件加 class 判斷。 */
+.field-row { display: flex; gap: var(--s-3); }
+.field-row > * { flex: 1; min-width: 0; }
+.field-float { position: relative; margin-bottom: var(--s-4); }
+/* 高度與上內距是一組的：label 浮起後佔 8–19.5px，輸入文字從 26px 起，中間留 6.5px。
+   樣張的 52/18/13 這組會讓兩者重疊，字擠在一起 */
+.field-float input, .field-float select { width: 100%; min-height: 60px;
+  border: 1px solid var(--rule); border-radius: var(--r-tab); background: var(--paper);
+  font-family: inherit; font-size: var(--t-base); color: var(--ink);
+  padding: 26px var(--s-3) 6px; -webkit-appearance: none; appearance: none; }
+.field-float input:focus, .field-float select:focus { outline: none;
+  border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.field-float label { position: absolute; left: var(--s-3); top: 50%; transform: translateY(-50%);
+  font-size: var(--t-base); color: var(--ink-faint); pointer-events: none;
+  transition: top var(--dur) var(--ease), font-size var(--dur) var(--ease),
+    color var(--dur) var(--ease); }
+/* line-height 1 讓浮起的 label 只佔字高，行盒不再往下吃掉輸入文字的空間 */
+.field-float input:focus + label,
+.field-float input:not(:placeholder-shown) + label,
+.field-float select + label {
+  top: var(--s-2); transform: translateY(0); line-height: 1;
+  font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.field-float .req { color: var(--over); margin-left: .15em; }
+.form-wrap .note { font-size: var(--t-xs); color: var(--ink-muted); margin: 0;
+  line-height: 1.5; letter-spacing: var(--track-xs); }
+
+/* 設定頁的次要動作：與登出同一種（不填色、accent 文字） */
+.settings .link-btn { display: block; width: 100%; min-height: 44px; margin-top: var(--s-4);
+  background: none; border: none; border-radius: var(--r-btn); cursor: pointer;
+  font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--accent);
+  letter-spacing: var(--track-md);
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+@media (hover: hover) { .settings .link-btn:hover { opacity: .7; } }
+.settings .link-btn:active { opacity: .5; }
+.settings .link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .cta, .todo-row, .tab, .settings .signout { transition-duration: .01ms; }
-  .cta:active { transform: none; }
+  .cta, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
+  .chip, .icon-btn, .date-arrow, .pick-bar-btn, .field-float label { transition-duration: .01ms; }
+  .cta:active, .pick-bar-btn:active { transform: none; }
+  .item.just-added .item-content::before { animation-duration: .01ms; }
 }
