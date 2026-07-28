@@ -20,14 +20,14 @@
 - **後端**：Supabase 免費版 — Auth（登入）＋ Edge Function（保管 secret、代理需 service key 的操作）。
 - **資料庫**：Supabase Postgres（唯一來源）。
 - **計算**：全在前端 JS（繞開 Notion 公式限制）；目標動態（依最新體重／TDEE）。
-- **登入**：Supabase Auth，email magic link ＋記住，平常不重登。
+- **登入**：Supabase Auth ＋ Google OAuth，session 存 localStorage，平常不重登。（訪談時原訂 email magic link，實作改用 Google——省掉每次收信的往返。）
 
 ## 安全（不可妥協）
 
 - `service_role` key 只待後端（Edge Function 環境變數）＋使用者本機，**永不進前端、永不進 repo**。
 - 前端只用 `anon` key ＋ RLS（Row Level Security）。
 - Neve 分析：平常用**唯讀 key**；**key 絕不進 repo**（放本機 env 或需要時臨時提供）。
-- repo 為 private，但注意 GitHub Pages 網站公開，隱私靠登入保護。
+- **repo 為 public**（2026-07-27 轉），GitHub Pages 網站當然也公開。隱私全靠 Auth ＋ RLS：前端只有 publishable key，未登入讀任何一張表都回 `[]`（已實測）。
 
 ## 資料模型（Supabase，初版四表；細節開發時定）
 
@@ -40,7 +40,7 @@
 
 - 前端算：BMR → TDEE(活動係數) → 目標熱量 → 三大營養素。
 - **公式鏈要從使用者 Notion 身體指標取得**（Neve 讀不到 formulaCode，需使用者手動提供公式）。
-- 已知參數：活動係數 1.375、比例約 27/27/46、目標快照 1868 kcal／蛋白 126／脂 56／碳 215。
+- 已知參數：活動係數 1.375、比例 27/27/46。訪談時抄下的 Notion 快照是 1868 kcal／蛋白 126／脂 56／碳 215；app 以最新體重 75.95kg 實算為 **1860／126／56／214**，差異來自快照當時體重較重。
 
 ## Notion 遷移（一次性）
 
@@ -62,7 +62,7 @@
 
 ## 分階段
 
-**第一版（能天天用的最小集）**：登入 ／ Notion 資料遷移 ／ 加餐(選餐別/食物/份量/新增食物) ／ 前端算＋環圈進度條看今日還能吃 ／ 刪除當天某筆。
+**第一版（能天天用的最小集）**：登入 ／ Notion 資料遷移 ／ 加餐(選餐別/食物/份量/新增食物) ／ 前端算＋橫向量尺看今日還能吃 ／ 刪除當天某筆。
 **第二版**：編輯(非刪重記) ／ 看前一天・歷史頁 ／ app 內記體重 ／ 趨勢分析 ／「常吃一鍵」「複製前一天」記錄加速。
 
 ## Neve 的持續角色
