@@ -1,4 +1,4 @@
--- Tally schema v1
+-- Tally schema v2
 -- Supabase Dashboard → SQL Editor → 貼上 → Run
 
 create table foods (
@@ -10,12 +10,14 @@ create table foods (
   fat        numeric(6,2) not null,
   carb       numeric(6,2) not null,
   vendor     text,
-  category   text,
   created_at timestamptz not null default now()
 );
 
 -- ponytail: food_id 用 restrict 擋掉「刪掉還有紀錄的食物」。代價是刪 auth 帳號時
 -- cascade 可能卡住；第一版沒有刪帳號流程，真要刪就先手動清 intake。
+--
+-- kcal/protein/fat/carb 是「當時那份」的營養快照（從 foods 複製過來的單份值，
+-- 非乘 qty 後的值；乘 qty 是顯示時算），用來讓熱量對帳不隨食物庫日後修改而改寫歷史。
 create table intake (
   id         bigint generated always as identity primary key,
   user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -23,6 +25,10 @@ create table intake (
   meal       text not null check (meal in ('breakfast','lunch','dinner','snack')),
   food_id    bigint not null references foods(id) on delete restrict,
   qty        numeric(6,2) not null check (qty > 0),
+  kcal       numeric(7,2) not null,
+  protein    numeric(6,2) not null,
+  fat        numeric(6,2) not null,
+  carb       numeric(6,2) not null,
   created_at timestamptz not null default now()
 );
 create index intake_user_date_idx on intake (user_id, eaten_on);
@@ -42,13 +48,19 @@ create table weight (
   unique (user_id, measured_on)
 );
 
+-- protein_pct/fat_pct/carb_pct 原本寫死在 app.js，改成使用者可在設定頁調整
+-- （例如減脂期想調高蛋白），check 確保三者相加等於 100。
 create table profile (
   user_id         uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   sex             text not null check (sex in ('male','female')),
   birth_date      date not null,
   height_cm       numeric(5,1) not null,
   activity_factor numeric(4,3) not null default 1.375,
-  goal            text not null check (goal in ('cut','maintain','bulk'))
+  goal            text not null check (goal in ('cut','maintain','bulk')),
+  protein_pct     numeric(4,1) not null default 27,
+  fat_pct         numeric(4,1) not null default 27,
+  carb_pct        numeric(4,1) not null default 46,
+  check (protein_pct + fat_pct + carb_pct = 100)
 );
 
 alter table foods   enable row level security;

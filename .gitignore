@@ -8,6 +8,7 @@ client_secret*.json
 
 # 含真實個人健康資料，repo 是 public，永遠不進版控
 seed.sql
+migrate-v2.sql
 
 # 本機 Claude Code agent 狀態，非專案內容
 .claude/
