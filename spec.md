@@ -16,7 +16,7 @@
 
 ## 架構
 
-- **前端**：GitHub Pages，純 HTML/CSS/JS（無框架、無 build），環圈用 SVG。手機優先 RWD。UI 要有質感（走設計流程、先 demo 再實作，不端平庸貨）。
+- **前端**：GitHub Pages，純 HTML/CSS/JS（無框架、無 build）。手機優先 RWD。UI 要有質感（走設計流程、先 demo 再實作，不端平庸貨）。視覺一律以 `DESIGN.md` 為準。
 - **後端**：Supabase 免費版 — Auth（登入）＋ Edge Function（保管 secret、代理需 service key 的操作）。
 - **資料庫**：Supabase Postgres（唯一來源）。
 - **計算**：全在前端 JS（繞開 Notion 公式限制）；目標動態（依最新體重／TDEE）。
@@ -52,7 +52,8 @@
 ## 記錄流程（核心）
 
 加餐 → 選餐別 → 選食物(撈 Supabase 食品庫，可搜尋) → 沒有就**新增食物**(營養必填、店家分類選填，寫回食品庫，之後即可選) → 填份量(可小數) → 存。
-即時：前端算今日已吃／目標／還能吃，環圈＋進度條呈現（參考 MyFitnessPal 那張環圈圖）。
+即時：前端算今日已吃／目標／還能吃，橫向量尺＋三大營養素條呈現。
+（原訂「環圈」已在 `DESIGN.md` 禁止事項第一條否決——環圈的隱喻是「填滿＝達成」，吃東西相反。）
 
 ## 從 MyFitnessPal 借鏡
 
