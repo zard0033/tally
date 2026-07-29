@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+/* legacy/app.css 沒有在這裡用 @import 併入：CSS 規定 @import 必須排在所有一般規則
+   之前，若放在這裡，它的內容仍會被排在本檔下方的 :root{}（shadcn 的 --accent 等
+   token）**之前**，造成同名 token（--accent 等）被 shadcn 的值蓋掉——這正是實測
+   踩到的 token fallback 案例。改在 main.tsx 用第二個 CSS import（`import './app.css'`，
+   排在 `import './index.css'` 之後）併入，讓它在最終產出的樣式表裡確實排在後面、
+   同名 unlayered token 才會照 legacy 行為優先，見該檔頭部另一則註記。 */
 
 @custom-variant dark (&:is(.dark *));
 

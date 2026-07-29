@@ -95,6 +95,18 @@
 - 背景：「無框架無 build 不載第三方」是開案時未經論證的預設值漏進 spec，已定調為誤判（教訓在全域 memory `prefer-ecosystem-over-handrolling`）。**專案 CLAUDE.md 與 spec.md 的該行等遷移落地時一併改**——現在 code 還是 vanilla，先改文件會誤導。
 - **v2 UI 打磨（下方軌二）直接做在新棧上**，不在 vanilla 上改完再移植。遷移 plan 尚未開，下一步＝開 plan 把移植切成可驗證的階段（含既有 self-check 邏輯轉 Vitest）。
 - 下方「明天的順序」「已定案」各節的**設計決策全部有效**（樣張挑編號、動效 token 階梯、覆蓋式刪除、日期區），只是實作載體換了。
+
+#### 遷移 Phase 0–2 已完成（2026-07-29）——實作期裁決記錄
+
+- **CSS 整包搬移不改寫**：legacy/app.css 558 行原樣進 `src/app.css`（實戰修法保留），React 元件沿用 legacy class 名，DOM 結構鏡像 legacy；Tailwind/shadcn 機制保留供新元件。注意 `@import` 排序會讓 shadcn 的同名 token 蓋掉 legacy token（CTA 洗白實測過），修法＝main.tsx 雙 import，`app.css` 排 `index.css` 之後。
+- **NTFS 大小寫坑**：`App.css`→`app.css` 這類只差大小寫的改名必須 `git mv`，否則 Windows 上 git 記混、Linux CI 會炸。
+- **A-6 按鈕文案分歧**：sample-log-entry.html 寫「加入食品庫並記一筆」，legacy 行為是「加入食品庫並選取」——採 legacy（樣張視為舊稿）。
+- **LogSheet 直接 import `lib/api.listRecentIntake()`** 做「常吃」排序（props 契約沒有跨日歷史）；mutation 仍全走 props。要收斂回契約時補 `types.ts` 欄位。
+- **vaul 附帶 drag-to-dismiss**（legacy 沒有）：保留，這是選 vaul 的理由之一；真機手感待驗。
+- **Settings 自建 sheet 沒做背景 inert**（檔案互斥擋住 App 層改動），以 role=dialog + aria-modal + Esc + 焦點管理頂替——precommit review 時判定要不要在 App 層補。
+- **E2E 環境兩坑**：playwright 的 `page.route()` 在此環境完全不攔截，不設防會直接打中正式 Supabase 真實資料——一律先裝 fetch-stub seam（stub `window.fetch` ＋ localStorage 種 `sb-<ref>-auth-token`，見 App.tsx 註記）再互動；多 agent 共用 dev server 會互相觸發 HMR 全頁重載，並行驗證各開自己的分頁。
+- **真機待驗清單（Phase 3 上線後）**：IME 注音組字（自動化只能合成事件驗邏輯）、iOS AutoFill vs floating label（ponytail 註記仍在）、vaul 拖曳關閉手感。
+- bundle 有 >500KB 分塊警告（vaul+supabase-js 進來），非錯誤；code-split 留給之後判斷。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。

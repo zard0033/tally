@@ -21,3 +21,15 @@ export function ageOn(birthDate: string, today: Date = new Date()): number {
   if (m < 0 || (m === 0 && today.getDate() < b.getDate())) age--
   return age
 }
+
+/**
+ * 頂欄標題：今天／昨天／星期幾（日期本身另外顯示，不重複）。
+ * 新增於 React 遷移（地基階段），照 legacy/app.js 的 dateTitle 逐字搬，語意不變。
+ */
+export function dateTitle(iso: string, now: Date = new Date()): string {
+  const today = localDate(now)
+  if (iso === today) return '今天'
+  if (iso === shiftDate(today, -1)) return '昨天'
+  const [y, m, d] = iso.split('-').map(Number)
+  return '週' + '日一二三四五六'[new Date(y, m - 1, d).getDay()]
+}
