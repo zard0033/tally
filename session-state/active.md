@@ -174,13 +174,53 @@
 
 ### 下一 session 起手（v2 打磨收官三步）
 
-1. **fresh verifier 複驗九項回修**（複驗未跑是本次收尾的裁決，不是漏掉——修完的申報只有主對話
-   煙霧驗證背書）。配方：對 active.md 本節九項逐條驗，vitest 用 PowerShell。
-2. **走 push 流程**（讀 `rules/git-push.md`：分流 → precommit-review → 「準備 push」確認）。
-   `build_type` 已是 workflow，push 即部署 Pages。
+**第 1、2 步已於 2026-07-29 執行完（見下方「收官執行記錄」），只剩第 3 步的真機 gate。**
+
+1. ~~fresh verifier 複驗九項回修~~ ✅
+2. ~~precommit deep review 並回修~~ ✅（push 本身還沒做，等使用者確認）
 3. **真機兩個 gate（要使用者的 iPhone）**：左滑刪除實滑（react-swipeable-list iOS issue #33 的
    採用 gate，不過就退 motion drag）；加主畫面驗 apple-touch-icon。順帶複驗 tabular-nums。
-   dev server 5500 有一個孤兒程序還活著（可直接用或 kill 重起）。
+
+#### 收官執行記錄（2026-07-29）
+
+- **verifier 複驗九項**：八項 PASS，第 6 項（Geist 清除）抓到殘留——`src/index.css` 的
+  `--font-sans` token 值還寫著 `'Geist Variable'`。無 `@font-face` 所以不會下載（功能無害），
+  但會誤導下一個人補字體檔。已改成 `var(--font-body)`，字體堆疊回到單一真相來源，
+  並用 webkit 實測 `getComputedStyle(html).fontFamily` 確認 var 有解析到系統字堆疊。
+- **verifier 另提未證實疑點（未處理，有意識略過）**：`components.json` 的 `iconLibrary` 還是
+  `"lucide"`。目前零 runtime 影響（icon 全是手寫 inline SVG），但日後用 shadcn CLI 加元件
+  會把 lucide-react 裝回來——真發生時 `package.json` 的 diff 看得到。
+- **precommit deep review（runId `wf_3e8ea4c2-4f4`）**：6 個 reviewer、34 條成立（confirmed 1、
+  minor 未驗證 33），4 條被反駁剔除。
+  - **唯一 confirmed（major）＝時間軸水平溢位**：`.item-delete.click-reveal` 收起態是
+    `translateX(100%)`，整顆 44px 圓鈕停在 `.item-row` 之外，仍計入祖先的 scrollable overflow；
+    `.timeline` 指定了 `overflow-y:auto`，依 CSS Overflow 3 另一軸的 visible 算成 auto，
+    於是整條時間軸多出 24px 可橫向拖動，而捲軸被 `scrollbar-width:none` 藏著。
+    **先加 e2e 斷言跑出紅燈（實測正好 24px，與 review 推算一致），再修 `.item-row` 加
+    `overflow: clip` 轉綠**——這是本次唯一走完紅綠的一條。順手把 click-reveal 的 focus
+    outline 改內縮，免得被新的 clip 裁掉半圈。
+  - **採納的 minor 四條**：`handleDelete` 加 `deletingIds` 守衛（滑開露出的那顆是套件渲染的
+    `<span>`，不能 disabled，連點兩下會送兩次 DELETE）；`openingTimer` 補 unmount 清理；
+    `var(--dur)` 全站統一成 `var(--dur-base)`（同值兩名並存，改一邊漏一邊只是時間問題）；
+    `--font-sans` 指向 `--font-body`。
+  - **有意識略過的 minor**：`handleSwipeStart` 樂觀先設 `raisedId`（低信心，且可能讓純點擊
+    閃一下底色，得失不明）；套件 resetState 型別轉型加 runtime guard；三處手抄 icon path
+    抽共用元件；日期切換補 live region；`.item-content` 拿掉 `position:relative` 後
+    `::before` 改由 `.item-row` 定位（兩者盒子幾乎重合，視覺等價）；狀態機收斂
+    （raisedId／openingId／manualOpenId 三個 id state）——真機 gate 沒過就要換掉整個套件，
+    現在重構等於白做。
+  - **review 提的一條流程風險（要使用者知道）**：DESIGN.md 自己把「真機 smoke test」定為
+    react-swipeable-list 的採用 gate，但 `build_type` 已是 workflow，**push 即部署 Pages**，
+    等於 gate 未過就上線。使用者是唯一使用者，可接受，但 push 前該說一聲。
+- **收尾全綠**：vitest 42/42（PowerShell）、e2e 10/10（新增溢位斷言後共 10 條路徑）、
+  `tsc -b --force` 與 oxlint 退出碼 0。
+- **本次踩到的環境坑（值得記住）**：用 PowerShell `Get-Content -Raw` ＋ `WriteAllText` 對
+  `app.css` 做整檔字串替換，**Get-Content 以系統 ANSI 解碼 UTF-8 檔，整份中文註解變亂碼**。
+  已 `git checkout` 還原後改用 Edit 工具的 `replace_all` 重做。
+  **結論：含 CJK 的檔案不要用 PowerShell 做整檔讀寫替換，用 Edit 工具。**
+- **待使用者裁決**：`sample-v2-today.html` 與 `sample-v2-login-icon.html` 兩份過程樣張決策
+  已固化進 DESIGN.md v2.0，依 2026-07-28 的先例（過程樣張清空）可以刪；後者還內嵌三段
+  base64 字型 subset（wordmark 題已作廢，那批字體不會再用）。**我沒動它們**，等你說要不要刪。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。
