@@ -21,3 +21,8 @@ test-results/
 
 # playwright MCP 工作目錄
 .playwright-mcp/
+
+# e2e 回歸 harness 產物
+e2e/shots/
+playwright-report/
+blob-report/

@@ -1,0 +1,284 @@
+/* UI 回歸：React 版走同一份路徑清單，移植自 legacy vanilla harness
+   （C:\Users\Administrator\.claude\tools\tally-verify\verify.mjs）。
+
+   紀律（跟 legacy 一致，違反就等於沒驗）：
+   1. 互動一律走真實輸入裝置路徑——click / pressSequentially / keyboard。
+      禁用 evaluate 內的 el.click() 與 dispatchEvent。
+   2. 打字用 pressSequentially（逐鍵）不用 fill。
+   3. 每個 step 自己 try/catch，fail 了繼續跑下一條，一輪拿到全部問題，
+      不是撞一個修一個再跑一輪——用 test.step 包，內部吞例外自己記錄，
+      最後才用 expect(fails).toEqual([]) 統一失敗，而不是讓第一個 throw 就把後面全部標成 skipped。
+
+   10 條路徑全部在同一個瀏覽器 session 裡跑（跟 legacy 一樣是累積狀態：開 sheet → 選食物 →
+   調份量 → 送出，後面的路徑假設前面的狀態還在），所以是一個 test()、十個 test.step()，
+   不是十個獨立 test()。
+
+   selector 對照 legacy → React（DOM 結構鏡像但沒有 id／data-* 屬性，逐一對過實際 DOM 才定案，
+   詳細對照與裁決記在委派回報，不重複寫在這裡）。 */
+import { test, expect, type Page } from '@playwright/test'
+import { mkdir, rm } from 'node:fs/promises'
+import { FIX, TODAY, USER_ID } from './fixtures'
+import { seedFetchStub } from './stub'
+
+const SHOTS_DIR = 'e2e/shots'
+
+interface Fail {
+  step: string
+  msg: string
+}
+
+async function must(page: Page, sel: string, label: string) {
+  if ((await page.locator(sel).count()) === 0) {
+    throw new Error(`契約缺失：${label}　selector \`${sel}\` 在畫面上不存在`)
+  }
+}
+async function mustText(page: Page, sel: string, want: string, label: string) {
+  const got = ((await page.locator(sel).first().textContent()) ?? '').trim()
+  if (!got.includes(want)) throw new Error(`${label}：預期含「${want}」，實際「${got}」`)
+}
+function check(cond: unknown, msg: string): asserts cond {
+  if (!cond) throw new Error(msg)
+}
+const numFrom = async (page: Page, sel: string) =>
+  Number(((await page.locator(sel).first().textContent()) ?? '').replace(/[^\d.-]/g, ''))
+
+test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
+  const fails: Fail[] = []
+  const pageErrs: string[] = []
+  const consoleErrs: string[] = []
+  page.on('pageerror', (e) => pageErrs.push(e.message))
+  page.on('console', (m) => {
+    if (m.type() === 'error') consoleErrs.push(m.text())
+  })
+
+  await rm(SHOTS_DIR, { recursive: true, force: true })
+  await mkdir(SHOTS_DIR, { recursive: true })
+
+  await seedFetchStub(page, FIX, TODAY, USER_ID)
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
+
+  async function step(name: string, run: () => Promise<void>) {
+    const errMark = pageErrs.length
+    await test.step(name, async () => {
+      try {
+        await run()
+        const fresh = pageErrs.slice(errMark)
+        if (fresh.length) throw new Error(`頁面噴出未捕捉例外：${fresh.join(' / ')}`)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        fails.push({ step: name, msg })
+        await page.screenshot({ path: `${SHOTS_DIR}/fail-${fails.length}.png` }).catch(() => {})
+        // 不 re-throw：讓後面的路徑繼續跑，一輪拿到全部問題（legacy 的核心紀律）
+      }
+    })
+  }
+
+  await step('今日頁載入 — 骨架契約與目標數字', async () => {
+    // React 版 Today 只在 ready（profile／weight／targets 都到齊）才掛載，跟 legacy 的
+    // 「骨架先渲染、資料非同步補上」不同架構——#view-app 出現不代表 Today 已掛載，
+    // 得先等真正的內容節點出現，不能假設骨架元素在 fetch 完成前就存在。
+    await page.waitForSelector('.gauge-num', { timeout: 5000 })
+    for (const [sel, label] of [
+      ['.gauge-num', '主數字'],
+      ['.gauge-lead', '主數字標籤'],
+      ['.gauge .bar .fill', '熱量條'],
+      ['.macros .macro:nth-child(1) .fill', '蛋白質條'],
+      ['.macros .macro:nth-child(2) .fill', '脂肪條'],
+      ['.macros .macro:nth-child(3) .fill', '碳水條'],
+      ['.timeline', '時間軸'],
+      ['button.cta', '記一筆'],
+      ['.tabbar .tab', '分頁按鈕'],
+    ] as const) {
+      await must(page, sel, label)
+    }
+    check((await page.locator('.tabbar .tab').count()) === 2, '分頁按鈕數：預期 2（日記／設定）')
+
+    // 目標熱量不硬編（app 自己算），只驗畫面三個數字彼此自洽
+    const cur = await numFrom(page, '.gauge-side .cur')
+    const tgt = await numFrom(page, '.gauge-side .tgt')
+    const lead = await numFrom(page, '.gauge-num')
+    check(cur === 540, `已吃：預期 540（120+420），實際 ${cur}——sumIntake 沒把兩筆加對`)
+    check(lead === tgt - cur, `主數字與「目標 − 已吃」對不上：${lead} ≠ ${tgt} − ${cur}`)
+    const itemCount = await page.locator('.timeline .item').count()
+    check(itemCount === 2, `時間軸品項數：預期 2，實際 ${itemCount}`)
+  })
+
+  await step('開 sheet — 進場契約', async () => {
+    await page.click('button.cta')
+    await page.waitForSelector('.sheet', { timeout: 3000 })
+    for (const [sel, label] of [
+      ['.chip-bar', 'chip 列'],
+      ['.chiprow .chip', '餐別 chip'],
+      ['input[aria-label="搜尋食物"]', '搜尋框'],
+      ['.food-scroll', '清單捲動區'],
+      ['button[aria-label="關閉"]', '關閉鈕'],
+    ] as const) {
+      await must(page, sel, label)
+    }
+    await page.waitForSelector('.food-row', { timeout: 3000 })
+    // 清單屏不該有 .sheet-title（對齊 legacy v1.10 拿掉標題的決策；precommit review 抓到的
+    // TypeError 就是某次改動把它加回去、chip 分支假設反轉造成的——這裡繼續守著這條契約）
+    check(
+      (await page.locator('.sheet .sheet-title').count()) === 0,
+      '清單屏不該有 .sheet-title（v1.10 已移除；它回來會讓 chip 分支的假設反轉）',
+    )
+  })
+
+  await step('切餐別 chip — precommit 抓到的 TypeError 路徑的等效驗證', async () => {
+    // legacy 這條驗的是「chip 分支去改 .sheet-title、清單屏沒有它 → null.textContent
+    // 炸例外」；React 版 chip 的 onClick 只呼叫 setMeal，沒有直接操作 DOM 的分支，
+    // 這個特定的 bug class 在架構上不會發生了。保留這條路徑的價值在於「每顆 chip 都要點過」
+    // 這個一般性原則本身——precommit review 那次教訓正是「用真實點擊驗過」但沒點過 chip，
+    // 未捕捉例外的偵測交給 runner 層（每個 step 結束比對 pageErrs），這裡繼續全部點過。
+    const chips = page.locator('.chiprow .chip')
+    const n = await chips.count()
+    check(n === 4, `餐別 chip 數：預期 4，實際 ${n}`)
+    for (let i = 0; i < n; i++) {
+      const chip = chips.nth(i)
+      const label = (await chip.textContent()) ?? `#${i}`
+      await chip.click()
+      await page.waitForTimeout(120)
+      check(
+        (await chip.getAttribute('aria-current')) === 'true',
+        `點了「${label}」後該 chip 沒有 aria-current="true"`,
+      )
+      check((await page.locator('.food-scroll').count()) === 1, `點「${label}」後清單捲動區消失`)
+    }
+  })
+
+  await step('搜尋框逐鍵輸入 — 焦點與值不被重繪吃掉', async () => {
+    const q = page.locator('input[aria-label="搜尋食物"]')
+    await q.click()
+    await q.pressSequentially('雞胸', { delay: 60 })
+    await page.waitForTimeout(200)
+    check((await q.inputValue()) === '雞胸', `搜尋框值：預期「雞胸」，實際「${await q.inputValue()}」`)
+    check(
+      await q.evaluate((el) => el === document.activeElement),
+      '打完字後搜尋框失去焦點',
+    )
+    const rowCount = await page.locator('.food-row').count()
+    check(rowCount >= 2, `搜尋「雞胸」預期至少 2 筆結果，實際 ${rowCount}`)
+    await must(page, '.add-food-row', '新增食物入口（有輸入就該常駐清單末尾）')
+  })
+
+  await step('選食物 — 確認列長出來、數字對', async () => {
+    await page.locator('.food-row').first().click()
+    await page.waitForSelector('.pick-bar', { timeout: 2000 })
+    await must(page, '.pick-bar .sub', '確認列小計')
+    await must(page, '.pick-bar .remain', '確認列剩餘')
+    await must(page, '.pick-bar-btn', '加入鈕')
+    await mustText(page, '.pick-bar .sub', '1 樣', '小計樣數')
+    check((await page.locator('.food-item.selected').count()) === 1, '選中的品項沒有 .selected')
+  })
+
+  await step('加減鈕 — 減到 1 停用、確認列跟著動', async () => {
+    const minus = page.locator('.qty-btn').nth(0)
+    const plus = page.locator('.qty-btn').nth(1)
+    check(await minus.isDisabled(), '份量 1 時減號應停用（不留「按了沒事」的死路）')
+    await plus.click()
+    await page.waitForTimeout(120)
+    check(!(await minus.isDisabled()), '份量加到 2 後減號仍停用')
+    const input = page.locator('.qty-value')
+    check((await input.inputValue()) === '2', `份量：預期 2，實際 ${await input.inputValue()}`)
+    await minus.click()
+    await page.waitForTimeout(120)
+    check(await minus.isDisabled(), '減回 1 後減號沒有重新停用')
+  })
+
+  await step('填份量後直接按加入 — 失焦重繪咬 click 的坑', async () => {
+    // 這條防的是 legacy app.js:1012-1017 那個坑：輸入框失焦觸發重繪 → mousedown 目標離開
+    // DOM → click 不派送。React 版靠 keyed 渲染天然不會整塊換 DOM（LogSheet.tsx 檔頭註記），
+    // 但這是「架構上應該沒事」不等於「驗過沒事」——順序照舊不能改：有焦點狀態下直接點加入，
+    // 中間不插 blur、不插 waitForTimeout 以外的東西。
+    const input = page.locator('.qty-value')
+    await input.click()
+    await input.press('Control+a')
+    await input.pressSequentially('3', { delay: 60 })
+    await page.click('.pick-bar-btn') // 不先失焦，直接點
+    await page.waitForTimeout(600)
+    const writes = (await page.evaluate(() => (window as unknown as { __writes: { path: string; method: string; body: unknown }[] }).__writes)) ?? []
+    const posted = writes.filter((w) => w.path.startsWith('intake') && w.method === 'POST')
+    check(
+      posted.length === 1,
+      `按「加入」沒有送出 intake（__writes 裡 POST intake 有 ${posted.length} 筆）——這正是「失焦重繪咬掉 click」的表現`,
+    )
+    const body = posted[0]?.body as { qty?: number }[] | undefined
+    check(
+      body?.[0]?.qty === 3,
+      `送出的份量：預期 3，實際 ${JSON.stringify(body?.[0]?.qty)}（打字途中不正規化、失焦才做——值錯表示 normalizeQty 時機跑掉了）`,
+    )
+    check((await page.locator('.sheet').count()) === 0, '送出成功後 sheet 應該關閉')
+  })
+
+  await step('左滑刪除 — scroll-snap 露出與自動關其他列', async () => {
+    await page.waitForSelector('.timeline .item-track', { timeout: 3000 })
+    const tracks = page.locator('.timeline .item-track')
+    const trackCount = await tracks.count()
+    check(trackCount >= 2, `時間軸品項不足 2 筆（實際 ${trackCount}），測不了「自動關其他列」`)
+    // 真實點擊觸發 revealDelete，不用 evaluate 合成 scrollTo；讀 scrollLeft 用 evaluate
+    // 沒問題（那是觀察不是互動）。.item-content 是 Today.tsx 裡呼叫 revealDelete 的按鈕，
+    // 對應 legacy 的 [data-del] 手勢入口。
+    const items = page.locator('.timeline .item-content')
+    check((await items.count()) >= 2, '時間軸可點品項不足 2 個')
+    const [a, b] = [tracks.nth(0), tracks.nth(1)]
+    await items.nth(0).click()
+    await page.waitForTimeout(500)
+    check((await a.evaluate((el) => el.scrollLeft)) > 0, '點第一列後 scrollLeft 仍為 0，刪除鈕沒露出')
+    await items.nth(1).click()
+    await page.waitForTimeout(600)
+    check(
+      (await a.evaluate((el) => el.scrollLeft)) === 0,
+      '開第二列後第一列沒有自動關上（closeOtherTracks 沒生效）',
+    )
+    check((await b.evaluate((el) => el.scrollLeft)) > 0, '第二列點了卻沒露出刪除鈕')
+  })
+
+  await step('日期切換 — 標題、停用態、歷史日語意', async () => {
+    await must(page, 'button[aria-label="前一天"]', '前一天')
+    await must(page, 'button[aria-label="後一天"]', '後一天')
+    check(await page.locator('button[aria-label="後一天"]').isDisabled(), '今天時「後一天」應停用（看不了未來）')
+    await page.click('button[aria-label="前一天"]')
+    await page.waitForTimeout(500)
+    check(!(await page.locator('button[aria-label="後一天"]').isDisabled()), '離開今天後「後一天」仍停用')
+    await mustText(page, '.gauge-lead', '攝取', '歷史日主數字標籤應為「攝取」不是「還能吃／超出」')
+    await page.click('button[aria-label="後一天"]')
+    await page.waitForTimeout(500)
+    await mustText(page, 'h1.today', '今天', '回到今天後標題')
+  })
+
+  await step('切設定頁 — 契約與標題', async () => {
+    const tabs = page.locator('.tabbar .tab')
+    await tabs.nth(1).click() // 設定
+    await page.waitForTimeout(400)
+    await mustText(page, 'h1.today', '設定', '設定頁標題')
+    await must(page, '.settings', '設定面板')
+    // React 版 Today／Settings 是互斥條件渲染（App.tsx 只掛載其中一個），不是同時掛載、
+    // 用 hidden 屬性藏起來——所以驗證方式跟 legacy 的 isHidden() 不同，改驗「根本不存在」
+    check((await page.locator('.datectl').count()) === 0, '設定頁不該存在日期切換列（today 分頁的元件不該掛載在這裡）')
+    await tabs.nth(0).click() // 日記
+    await page.waitForTimeout(400)
+    await mustText(page, 'h1.today', '今天', '切回日記頁標題')
+  })
+
+  // 安全紅線：零真實網路請求是可斷言的事實，不是「沒看到報錯就當作沒發生」
+  const blocked = await page.evaluate(() => (window as unknown as { __blocked: string[] }).__blocked)
+  const allFetches = await page.evaluate(() => (window as unknown as { __allFetches: string[] }).__allFetches)
+  const nonStubSupabase = allFetches.filter((u) => u.includes('supabase.co') && !u.includes('/rest/v1/'))
+
+  console.log(`\n${'─'.repeat(60)}`)
+  if (consoleErrs.length) {
+    console.log(`console 錯誤 ${consoleErrs.length} 筆：`)
+    for (const e of consoleErrs.slice(0, 10)) console.log(`  · ${e}`)
+  }
+  console.log(
+    fails.length
+      ? `FAIL ${fails.length}/10\n` + fails.map((f) => `  · ${f.step}\n    ${f.msg}`).join('\n')
+      : `PASS 10/10`,
+  )
+
+  expect(blocked, `擋下 ${blocked.length} 筆非 /rest/v1/ 的 Supabase 呼叫：${blocked.join(', ')}`).toEqual([])
+  expect(nonStubSupabase, '零真實網路請求斷言：出現了非 stub 網域/路徑的 Supabase 呼叫').toEqual([])
+  expect(consoleErrs, `console 有 ${consoleErrs.length} 筆錯誤`).toEqual([])
+  expect(fails, fails.map((f) => `${f.step}: ${f.msg}`).join('\n')).toEqual([])
+})
