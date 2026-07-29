@@ -21,10 +21,12 @@ type SheetKind = 'weight' | 'profile'
 const GOAL_LABEL: Record<string, string> = { cut: '減重', maintain: '維持', bulk: '增肌' }
 const GOAL_NOTE: Record<string, string> = { cut: '減重再乘 0.8', maintain: '維持不調整', bulk: '增肌再加 500' }
 
-/** 退場動畫時長：220ms＝v2 動效階梯 --dur-mid（退場比進場 280 降一級，與 LogSheet 一致），
- *  reduced-motion 時降到近乎 0。 */
+/** 退場動畫時長：讀 app.css 的 --dur-mid token（退場比進場 --dur-sheet 降一級，與 LogSheet
+ *  同一來源），reduced-motion 時降到近乎 0。 */
 function closeDurationMs(): number {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.01 : 220
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return 0.01
+  const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-mid'))
+  return Number.isFinite(t) ? t : 220
 }
 
 function Kv({ label, value }: { label: string; value: string }) {

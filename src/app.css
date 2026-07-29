@@ -45,7 +45,7 @@
   --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
   /* sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
-  --dur-sheet: 280ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --dur-sheet: 280ms; --dur-mid: 220ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
 }
 * { box-sizing: border-box; }
 
@@ -348,9 +348,10 @@ body {
   display: flex; flex-direction: column; min-height: 0; }
 /* 只有真正開啟那一次帶 .opening；renderSheet 因為切 view／busy 重繪時不帶，
    否則每次重畫都會重播一次進場 */
+/* 進場只給 .opening 那一次；退場：Settings 用 inline style 套 sheet-out/scrim-out
+   （時長讀 --dur-mid，見 closeDurationMs()），LogSheet 由 vaul data-state 驅動，
+   vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
 .sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
-/* 退場：Settings 用 inline style 套 sheet-out/scrim-out（時長見 closeDurationMs()）；
-   LogSheet 由 vaul data-state 驅動。vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM */
 
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }

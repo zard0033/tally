@@ -36,9 +36,11 @@ const VAUL_TRANSITION_CSS = `
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
 }
 [data-vaul-drawer][data-state="closed"], [data-vaul-overlay][data-state="closed"] {
-  animation-duration: 220ms !important;
+  animation-duration: var(--dur-mid, 220ms) !important;
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
 }
+/* reduced-motion 要在這裡自帶一份：上面兩條掛著 !important，app.css 的全域
+   reduced-motion 區塊（無 !important）壓不過，只能同權重就地覆寫 */
 @media (prefers-reduced-motion: reduce) {
   [data-vaul-drawer][data-state], [data-vaul-overlay][data-state] {
     animation-duration: .01ms !important;
