@@ -112,7 +112,19 @@
 
 - **E2E harness 已進 repo `e2e/`**（@playwright/test，10 條路徑 0 刪 0 增，10/10 PASS，主對話 read-back 親測）。跑法 `npm run e2e`（webServer 自動起停 5500）。含「零真實網路請求」全域斷言。舊 `C:\Users\Administrator\.claude\tools\tally-verify\` 尚未退場，React 版穩定後可刪。
 - **Phase 3 已做**：`legacy/` 已 git rm（歷史可考）；`.github/workflows/deploy.yml`（npm ci → vitest → build → deploy-pages，CI 的 vitest＝runner flaky 第二觀察點）；CLAUDE.md 與 spec.md 的棧描述已改（dev 指令換 `npm run dev`、測試指令 vitest/e2e、src/lib 禁沾 DOM 守則入法）。
-- **Phase 3 待做**：precommit-review → 「準備 push」使用者確認 → Pages `build_type` legacy→workflow（push 前切，站點沿用舊版直到 workflow 部署成功）→ push → 驗部署 → **使用者 iPhone 真機驗**（真實 Google 登入、IME 注音、AutoFill、vaul 拖曳手感——自動化蓋不到的四項）。
+- **Phase 3 完成（2026-07-29）**：precommit deep review（runId `wf_db4fde95-c96`）2 confirmed 全修
+  （load() closure 日期錯位、friendlyError 不認 TimeoutError）＋3 minor 採納（listRecentIntake 次要排序、
+  刪未接線的 shadcn button/utils）；使用者確認後 `build_type`→workflow、push `7a52886..4d46bc5`、
+  Actions run 30427265159 success，正式網址已 serving React bundle（`assets/index-*.js`）。
+  **CI 的 Linux vitest 綠**——runner flaky 觀察點第一筆：過。
+- **未修的 review minor（有意識略過）**：CI actions 未 pin SHA（官方 action，要收斂隨時可做）；
+  RLS「跨使用者 DELETE」的 auth.uid() 比對未直接測過（先前只實測過未登入隔離），使用者自查；
+  搜尋逐鍵重排序（23 筆無感）。
+- **真機待驗（使用者的 iPhone，下一步）**：真實 Google 登入（PKCE 新流程）、IME 注音組字、
+  floating label vs AutoFill、vaul 拖曳手感。過了這關，vanilla 對照用的舊 harness
+  `C:\Users\Administrator\.claude\tools\tally-verify\` 可退場。
+- **v2 UI 打磨（軌二）待續**：樣張挑編號的 checkpoint 仍等使用者（`sample-v2-today.html` 的 V/D/M、
+  `sample-v2-login-icon.html`，兩檔的未 commit 修改仍在工作樹）；實作直接在 React 棧上做。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。
