@@ -235,6 +235,11 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
       '開第二列後第一列沒有自動關上（closeOthers 沒生效）',
     )
     check((await b.evaluate((el) => el.classList.contains('is-open'))), '第二列點了卻沒露出刪除鈕')
+    // 收起態的 click-reveal 鈕是 translateX(100%)，會計入祖先的 scrollable overflow；
+    // .timeline 因 overflow-y:auto 使另一軸算成 auto，沒裁切就變成整條時間軸可橫向拖動
+    // （捲軸被 scrollbar-width:none 藏起來，使用者只會看到版面莫名滑走）。
+    const overflowX = await page.locator('.timeline').evaluate((el) => el.scrollWidth - el.clientWidth)
+    check(overflowX === 0, `時間軸有 ${overflowX}px 水平溢位——刪除鈕收起時停在列外沒被裁切`)
   })
 
   await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {

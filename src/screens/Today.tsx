@@ -75,6 +75,8 @@ export default function Today(props: TodayProps) {
     })
   }, [rows])
 
+  useEffect(() => () => window.clearTimeout(openingTimer.current), [])
+
   function closeOthers(exceptId: number) {
     closeFns.current.forEach((fn, id) => {
       if (id !== exceptId) fn()
@@ -116,6 +118,9 @@ export default function Today(props: TodayProps) {
   }
 
   function handleDelete(id: number) {
+    // 守衛擺在這裡而不是按鈕上：click-reveal 那顆是 <button> 可以 disabled，但滑開
+    // 露出的那顆是套件渲染的 <span>，連點兩下會送出兩次 DELETE
+    if (deletingIds.has(id)) return
     setDeletingIds((prev) => new Set(prev).add(id))
     onDeleteIntake(id)
   }

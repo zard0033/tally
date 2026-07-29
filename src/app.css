@@ -42,8 +42,10 @@
   --track-hero: -.022em; --track-md: -.008em; --track-lg: -.005em; --track-base: 0; --track-xs: .015em;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
   --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
-  --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
-  /* sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  /* 四級時長階梯（DESIGN.md v2.0）。--dur 與 --dur-base 原本同值並存、新舊規則各用各的，
+     已全站統一成 --dur-base，舊名不再定義，免得日後改一邊漏另一邊。
+     sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
   --dur-sheet: 280ms; --dur-mid: 220ms; --dur-base: 160ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
 }
@@ -150,7 +152,7 @@ body {
   width: 100%; min-height: 44px; padding: 0 0 var(--s-2); border: none;
   border-bottom: 1px solid var(--rule);
   background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 @media (hover: hover) { .node-head:hover { opacity: .68; } }
 .node-head:active { opacity: .5; }
 .node-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
@@ -166,15 +168,19 @@ body {
    獨立的 .item-delete.click-reveal（鍵盤／非觸控路徑：套件沒有程式化開合的公開 API，
    點 .item-content 改用我們自己的 open state 控制這顆鈕的顯隱，兩條路徑互不干擾，
    細節見 Today.tsx 檔頭註記）。 */
-.item-row { position: relative; border-radius: var(--r-tab); }
+/* overflow:clip 不是裝飾——click-reveal 鈕收起時是 translateX(100%)，停在列外 44px，
+   仍會計入祖先的 scrollable overflow；.timeline 指定了 overflow-y:auto，另一軸的
+   visible 依規範算成 auto，於是整條時間軸多出 24px 可橫向拖動，捲軸還被藏起來。
+   e2e 有一條 scrollWidth === clientWidth 的斷言鎖住這件事。 */
+.item-row { position: relative; border-radius: var(--r-tab); overflow: clip; }
 .item-content { width: 100%;
   display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
   min-height: 44px; padding: var(--s-1) 0; border: none; background: var(--card); text-align: left;
   font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
   letter-spacing: var(--track-base); cursor: pointer;
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease), background-color var(--dur-mid) var(--ease); }
-.item-row.opening .item-content { transition: opacity var(--dur) var(--ease), background-color var(--dur-base) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease), background-color var(--dur-mid) var(--ease); }
+.item-row.opening .item-content { transition: opacity var(--dur-base) var(--ease), background-color var(--dur-base) var(--ease); }
 /* is-raised（底色）跟 is-open（click-reveal 顯隱）是兩個獨立狀態：真的滑動手勢只會
    觸發 is-raised，套件自己的 trailingActions 鈕負責承接點擊；is-open 只在「點內容
    手動露出」時才成立，兩者混一起會讓 click-reveal 在真滑動時也悄悄疊上去 */
@@ -204,7 +210,8 @@ body {
   transition: transform var(--dur-mid) var(--ease), opacity var(--dur-mid) var(--ease); }
 .item-row.opening .item-delete.click-reveal { transition-duration: var(--dur-base); }
 .item-row.is-open .item-delete.click-reveal { transform: translateX(0); opacity: 1; pointer-events: auto; }
-.item-delete.click-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* outline-offset 內縮：.item-row 現在 overflow:clip，往外長的外框會被裁掉半圈 */
+.item-delete.click-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 /* react-swipeable-list 的基礎 CSS（main.tsx 引入）預設退場時長是 .5s／.2s，
    改用 --dur-mid 跟全站四級階梯對齊；套件本身的抓取跟手指（drag 中直接設 transform）
@@ -228,7 +235,7 @@ body {
   min-height: 44px; width: 100%; background: none; border: none; cursor: pointer; text-align: left;
   font-family: inherit; color: inherit; padding: 0;
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 @media (hover: hover) { .todo-row:hover { opacity: .68; } }
 .todo-row:active { opacity: .5; }   /* 手機沒有 hover，按下必須立刻有回饋 */
 .todo-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--s-2); }
@@ -244,7 +251,7 @@ body {
   background: var(--accent); color: var(--on-accent); font-family: inherit;
   font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease); }
 @media (hover: hover) { .cta:hover { background: var(--accent-dark); } }
 .cta:active { transform: translateY(1px); }
 .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -261,7 +268,7 @@ body {
   font-family: inherit; font-size: var(--t-sm); font-weight: 600;
   color: var(--ink-muted); white-space: nowrap; cursor: pointer;
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 .tab:active { opacity: .6; }
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 選中態：底色只是輔助（--raised 對 --card 僅 1.14:1），真正扛辨識的是
@@ -314,7 +321,7 @@ body {
   font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--accent);
   letter-spacing: var(--track-md);
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 @media (hover: hover) { .settings .signout:hover { opacity: .7; } }
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -332,7 +339,7 @@ body {
 .date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
   border: none; background: none; color: var(--ink-muted); cursor: pointer;
   border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 .date-arrow svg { width: 16px; height: 16px; }
 .date-arrow:active { opacity: .5; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -344,7 +351,7 @@ body {
   padding: 0 var(--s-2); border: none; background: none; color: var(--accent);
   font-family: inherit; font-size: var(--t-sm); font-weight: 600; letter-spacing: var(--track-xs);
   cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 .date-today-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .date-today-btn:active { opacity: .6; }
 .date-today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -387,7 +394,7 @@ body {
 .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px;
   border: none; background: none; color: var(--ink-muted); cursor: pointer;
   border-radius: var(--r-pill); flex-shrink: 0;
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 .icon-btn svg { width: 18px; height: 18px; }
 .icon-btn:active { opacity: .5; }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -403,7 +410,7 @@ body {
 .chip { flex-shrink: 0; min-height: 44px; padding: 0 var(--s-4); border: none;
   border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted);
   font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 .chip:active { opacity: .6; }
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chip[aria-current="true"] { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -437,7 +444,7 @@ body {
   padding: var(--s-2) 0; border: none; background: none; text-align: left;
   font-family: inherit; color: inherit; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
-.food-row { transition: opacity var(--dur) var(--ease); }
+.food-row { transition: opacity var(--dur-base) var(--ease); }
 .food-row:active { opacity: .6; }
 .food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
@@ -463,7 +470,7 @@ body {
   background: var(--card); color: var(--ink); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease); }
 .qty-btn svg { width: 16px; height: 16px; }
 .qty-btn:active { opacity: .6; }
 /* 份量下限是 1，減到底時把減號停用。原本按下去完全沒反應——「按了什麼都沒發生」
@@ -489,7 +496,7 @@ body {
   cursor: pointer; -webkit-appearance: none; appearance: none; }
 .add-food-row svg { width: 16px; height: 16px; flex-shrink: 0; }
 .add-food-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.add-food-row { transition: opacity var(--dur) var(--ease); }
+.add-food-row { transition: opacity var(--dur-base) var(--ease); }
 .add-food-row:active { opacity: .6; }
 .add-food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -519,7 +526,7 @@ body {
   font-family: inherit; font-size: var(--t-md); font-weight: 700;
   letter-spacing: var(--track-md); cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease); }
 .pick-bar-btn:active { transform: translateY(1px); }
 .pick-bar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .pick-bar-btn:disabled { opacity: .6; cursor: default; }
@@ -536,7 +543,7 @@ body {
   font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
 .back-btn svg { width: 16px; height: 16px; }
-.back-btn { transition: opacity var(--dur) var(--ease); }
+.back-btn { transition: opacity var(--dur-base) var(--ease); }
 .back-btn:active { opacity: .5; }
 .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .confirm-wrap { flex-shrink: 0; padding: var(--s-4) var(--s-5);
@@ -569,7 +576,7 @@ body {
 .field-float label { position: absolute; left: var(--s-3); top: 0; line-height: 1;
   transform: translateY(19px); transform-origin: left top;
   font-size: var(--t-md); color: var(--ink-muted); pointer-events: none;
-  transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
+  transition: transform var(--dur-base) var(--ease), color var(--dur-base) var(--ease); }
 .field-float input:focus + label,
 .field-float input:not(:placeholder-shown) + label,
 .field-float select + label {
@@ -583,7 +590,7 @@ body {
   background: none; border: none; border-radius: var(--r-btn); cursor: pointer;
   font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--accent);
   letter-spacing: var(--track-md);
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur) var(--ease); }
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 @media (hover: hover) { .settings .link-btn:hover { opacity: .7; } }
 .settings .link-btn:active { opacity: .5; }
 .settings .link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
