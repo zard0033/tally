@@ -324,7 +324,7 @@ body {
 .date-arrow:active { opacity: .5; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .date-arrow:disabled { opacity: .3; cursor: default; }
-.date-input { border: none; background: none; font-family: inherit; font-size: var(--t-sm);
+.date-input { border: none; background: none; font-family: inherit; font-size: var(--t-md);
   color: var(--ink-muted); letter-spacing: var(--track-xs); font-variant-numeric: tabular-nums;
   padding: var(--s-1) var(--s-1); min-height: 44px; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
@@ -395,7 +395,7 @@ body {
   background: var(--paper); }
 .search-box svg { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
 .search-box input { border: none; background: none; font-family: inherit;
-  font-size: var(--t-base); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
+  font-size: var(--t-md); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
 /* placeholder 也是文字，要過 4.5:1。--ink-faint 只有 2.92:1 */
 .search-box input::placeholder { color: var(--ink-muted); }
 .search-box:focus-within { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
@@ -452,7 +452,7 @@ body {
    拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
 .qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule);
   border-radius: var(--r-tab); background: var(--paper); font-family: inherit;
-  font-size: var(--t-sm); color: var(--ink); text-align: center;
+  font-size: var(--t-md); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
   -webkit-appearance: none; appearance: none; }
 .qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -530,9 +530,11 @@ body {
 .field-float { position: relative; margin-bottom: var(--s-4); }
 /* 高度與上內距是一組的：label 浮起後佔 8–19.5px，輸入文字從 26px 起，中間留 6.5px。
    樣張的 52/18/13 這組會讓兩者重疊，字擠在一起 */
+/* 表單控件一律 --t-md（16px）：iOS Safari 對 <16px 的輸入框聚焦會自動 zoom，
+   heuristic 關不掉，唯一乾淨解法就是別低於 16（真機實測撞到，2026-07-29） */
 .field-float input, .field-float select { width: 100%; min-height: 60px;
   border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--paper);
-  font-family: inherit; font-size: var(--t-base); color: var(--ink);
+  font-family: inherit; font-size: var(--t-md); color: var(--ink);
   padding: 26px var(--s-3) 6px; -webkit-appearance: none; appearance: none; }
 .field-float input:focus, .field-float select:focus { outline: none;
   border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -543,7 +545,7 @@ body {
    終點 8px 與 26px 的上內距搭成一組（見上方 input 的註解） */
 .field-float label { position: absolute; left: var(--s-3); top: 0; line-height: 1;
   transform: translateY(19px); transform-origin: left top;
-  font-size: var(--t-base); color: var(--ink-muted); pointer-events: none;
+  font-size: var(--t-md); color: var(--ink-muted); pointer-events: none;
   transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
 .field-float input:focus + label,
 .field-float input:not(:placeholder-shown) + label,
