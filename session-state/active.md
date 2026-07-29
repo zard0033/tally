@@ -143,8 +143,23 @@
   記入 v2 樣張 M 組的判斷輸入。**真機驗證輪至此收關**（登入/zoom/IME/AutoFill/退場時長 ✅、
   scrim 分區變色擱置）；vanilla 舊 harness `C:\Users\Administrator\.claude\tools\tally-verify\`
   已無對照用途，可擇日退場。
-- **v2 UI 打磨（軌二）待續**：樣張挑編號的 checkpoint 仍等使用者（`sample-v2-today.html` 的 V/D/M、
-  `sample-v2-login-icon.html`，兩檔的未 commit 修改仍在工作樹）；實作直接在 React 棧上做。
+- **v2 UI 打磨（軌二）決策全數定案（2026-07-29，DESIGN.md v2.0 已落地）**，經樣張三～五輪使用者裁決：
+  - **日期區**＝T1 安靜文字鈕（「週二 7/28」＋左右箭頭＋歷史日「回今天」文字鈕／今天靜態「今天」；砍 input type=date）
+  - **左滑刪除**＝`react-swipeable-list`（研究比過 6 案；~7KB MIT；iOS open issue #33 → **真機 smoke test 是採用 gate**，退路 motion drag）；視覺＝iOS 提醒事項風格（底色 --card→--raised、44px 圓紅鈕）
+  - **分頁列**＝N2 pill 置中收窄（--r-pill、寬收成內容、整條約 70px）——使用者臨時追加「navbar 很醜」
+  - **登入頁**＝P2 極簡（48px mark＋問句 --t-lg 當主角＋CTA 沉底拇指區）——使用者掃 Meta 系啟動畫面後推翻原骨架；經 L 輪（極簡方向）＋P 輪（文案搭配修法）兩輪
+  - **Wordmark 終結**：全產品不出現、品牌只靠 icon；字體題（F0–F3，含已做好的三個 base64 subset）作廢，零 webfont 無例外
+  - **App icon**＝方向 3 幾何 T（1024 稿座標在 DESIGN.md），180px PNG apple-touch-icon＋favicon 待產出
+  - 新 token：--t-lg 1.25rem（登入問句）
+  - **實作已完成（executor，2026-07-29）**：vitest 42/42、e2e 10/10（左滑步驟改新 DOM 契約）、tsc/oxlint 乾淨、
+    icon 資產已產（public/favicon.svg＋apple-touch-icon.png，index.html 相對路徑 link）。
+    實作事實兩則：(1) react-swipeable-list 打包有疏漏（無 exports 欄、prop-types 漏宣告）→ 已把
+    `prop-types` 裝為本專案 runtime 依賴，這是正解不是 workaround；(2) 套件無程式化開合 API →
+    鍵盤/點擊路徑是**獨立於觸控路徑**的 click-reveal 顯隱鈕（manualOpenId state），「開一列關他列」
+    靠型別擴充接 resetState/playReturnAnimation。
+  - **➍➎ 評審進行中**：verifier 逐條複驗＋hallmark 快篩＋web-design-guidelines 合規三路並行
+    （impeccable 深評跳過：中等範圍改版）。findings 合併一輪修完→複驗→才走 push 流程。
+    push 後真機兩個 gate：iPhone 實滑左滑刪除（套件 iOS issue #33）、加主畫面看 icon。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。
@@ -195,6 +210,13 @@
 
 ### 待確認 / 待處理
 
+- **功能需求備忘（2026-07-29 使用者口述，尚未排期、尚未設計）——「記一筆」的額度預警提示**：
+  情境＝準備記晚餐、脂肪已 35.9/56，開「記一筆」sheet 時希望每個食物項目直接提示
+  「加了會不會讓某個營養素超標」：會超標→紅字「脂肪會超出 n g」；不會→綠字打勾、可寫「建議」。
+  設計時要解的衝突與細節：(1) DESIGN.md 禁止事項有「不做綠色『達標』狀態」，且訊號色規則
+  是 jade＝常態/動作、--over＝破表——「綠字打勾」直接違規，要重新設計不靠新增色的呈現；
+  (2) 判定要乘以份量（qty 可小數）且要把 sheet 內**已選未送出**的項目暫計進剩餘額度；
+  (3) 四個營養素＋熱量哪些參與判定、蛋白質「不足不是錯誤」的既有語意如何相容。
 - **飲食紀錄有 4 筆刻意未遷移**（07-23 早餐重複 ×2、07-25 晚餐空、07-27 午餐空），使用者表示之後在新 app 自行補。
 - **本機開發用 `python -m http.server 5500`**（Supabase redirect URL 白名單已對應這個 port）。playwright MCP 擋 `file://`，一定要走 http。
 

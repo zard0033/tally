@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tally — 今日頁決策樣張 v2</title>
+<title>Tally — 今日頁決策樣張 v3</title>
 <style>
 /* ═══════════════════════════════════════════════════
-   決策樣張：日期區／左滑刪除／動效。token 全部複製自 DESIGN.md，
-   本檔不影響 index.html / app.css / app.js。
+   決策樣張第二輪：日期區收斂／左滑刪除改 iOS 風格／動效 token 定案。
+   token 全部複製自 DESIGN.md，本檔不影響 index.html / app.css / app.js。
    ═══════════════════════════════════════════════════ */
 :root {
   /* 表面 */
@@ -17,7 +17,7 @@
   --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
   /* 主色 jade */
   --accent: #1C7059; --accent-dark: #155747; --accent-soft: #CFE9E0; --on-accent: #FFFFFF;
-  /* 破表（本樣張只借用 --over-fill / --over 畫刪除鈕，不新增顏色） */
+  /* 破表（本樣張只借用 --over-fill 畫刪除鈕，不新增顏色） */
   --over: #9A4330; --over-fill: #B8533A;
 
   --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
@@ -30,7 +30,7 @@
   /* 既有兩支緩動曲線，沿用不新增 */
   --ease: cubic-bezier(.4, 0, .2, 1);
   --ease-sheet: cubic-bezier(.32, .72, 0, 1);
-  /* 這組是本樣張要驗證的新時長階梯 */
+  /* 這輪定案的時長階梯：刪除動效用 --dur-base，退場一律 --dur-mid */
   --dur-fast: 100ms; --dur-base: 160ms; --dur-mid: 220ms; --dur-sheet: 280ms;
 }
 * { box-sizing: border-box; }
@@ -45,14 +45,22 @@ body { margin: 0; background: var(--rule-subtle); color: var(--ink); font-family
 .page-head h1 { font-size: 1.5rem; margin: 0 0 var(--s-2); }
 .page-head p { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-2); }
 .page-head code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .95em; }
+.page-head .measure { color: var(--ink); font-weight: 600; }
 section.group { margin-bottom: 56px; }
 .group > h2 { font-size: 1.2rem; margin: 0 0 var(--s-1); }
 .group > .lead { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-4); max-width: 74ch; }
 .row { display: flex; gap: var(--s-6); flex-wrap: wrap; align-items: flex-start; }
-.col-head { max-width: 390px; margin-bottom: var(--s-3); }
+.col-head { max-width: 340px; margin-bottom: var(--s-3); }
 .col-head .nm { font-weight: 700; font-size: var(--t-md); }
 .col-head .nm .num { color: var(--accent); }
 .col-head .ds { color: var(--ink-muted); font-size: var(--t-sm); margin-top: 2px; }
+.state-btns { display: flex; gap: var(--s-2); margin-bottom: var(--s-3); }
+.state-btn { min-height: 32px; padding: 0 var(--s-3); border-radius: var(--r-pill);
+  border: 1px solid var(--rule); background: var(--card); color: var(--ink-muted);
+  font-family: inherit; font-size: var(--t-xs); letter-spacing: var(--track-xs); cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.state-btn:active { opacity: .6; }
+.state-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .frame { width: 340px; border-radius: 22px; overflow: hidden; border: 1px solid var(--rule);
   background: var(--paper); }
@@ -63,11 +71,10 @@ button { font: inherit; }
 
 /* ═══════════ 共用：頂欄 topbar（沿用 index.html 版面骨架） ═══════════ */
 .topbar { padding: var(--s-4) var(--s-5); display: flex; align-items: center;
-  justify-content: space-between; border-bottom: 1px solid var(--rule-subtle); }
+  justify-content: space-between; gap: var(--s-2); border-bottom: 1px solid var(--rule-subtle); }
 .topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md); margin: 0; }
 .mini-main { padding: var(--s-5); color: var(--ink-muted); font-size: var(--t-xs); }
 
-/* ═══════════ 第一組：日期區 ═══════════ */
 .date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
   border: none; background: none; color: var(--ink-muted); cursor: pointer; flex-shrink: 0;
   border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
@@ -77,104 +84,131 @@ button { font: inherit; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .date-arrow:disabled { opacity: .3; cursor: default; }
 
-/* V1 · 精簡放大：一行字放大＋粗體，回今天靠顏色/字重差異（無額外元素） */
-.dv1 { display: flex; align-items: center; gap: var(--s-1); }
-.dv1 .datetext { min-height: 44px; padding: 0 var(--s-3); border: none; background: var(--raised);
-  border-radius: var(--r-tab); font-family: inherit; cursor: pointer;
-  font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700; color: var(--ink-muted);
+/* 定案格式：週二 7/28。放大、粗體、可點（點擊＝回到今天）*/
+.datetext { min-height: 44px; padding: 0 var(--s-3); border: none; background: var(--raised);
+  border-radius: var(--r-pill); font-family: inherit; cursor: pointer; white-space: nowrap;
+  font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700; color: var(--ink);
+  font-variant-numeric: tabular-nums; -webkit-appearance: none; appearance: none;
+  flex-shrink: 0; transition: opacity var(--dur-base) var(--ease); }
+.datetext:active { opacity: .6; }
+.datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.dt-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.dt-icon-sm { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── T1：安靜文字鈕，純文字「回今天」貼著右箭頭左側 ── */
+.dt1 { display: flex; align-items: center; gap: var(--s-1); flex: 1; min-width: 0; }
+.dt1 .spacer { flex: 1; }
+.dt1-date { font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 var(--s-1); }
+.dt1-quiet { display: none; align-items: center; gap: 4px; min-height: 44px; padding: 0 var(--s-2);
+  border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm);
+  font-weight: 600; letter-spacing: var(--track-xs); cursor: pointer; -webkit-appearance: none;
+  appearance: none; transition: opacity var(--dur-base) var(--ease); white-space: nowrap; }
+.dt1-quiet svg { stroke-width: 1.6; }
+.dt1-quiet:active { opacity: .6; }
+.dt1-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dt1[data-state="past"] .dt1-quiet { display: inline-flex; }
+.dt1-today-label { display: none; font-size: var(--t-sm); color: var(--ink-muted);
+  letter-spacing: var(--track-xs); padding: 0 var(--s-3); min-height: 44px; align-items: center;
+  white-space: nowrap; }
+.dt1[data-state="today"] .dt1-today-label { display: inline-flex; }
+
+/* ── T2：純圖示鈕，逆時針返回箭頭，觸控目標對齊左右箭頭 ── */
+.dt2 { display: flex; align-items: center; gap: var(--s-1); flex: 1; min-width: 0; }
+.dt2 .spacer { flex: 1; }
+.dt2-date { font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0 var(--s-1); }
+.dt2-return { display: none; width: 44px; height: 44px; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--accent); border-radius: var(--r-pill); cursor: pointer;
+  -webkit-appearance: none; appearance: none; flex-shrink: 0;
+  transition: opacity var(--dur-base) var(--ease); }
+.dt2-return svg { width: 18px; height: 18px; stroke-width: 1.6; }
+.dt2-return:active { opacity: .5; }
+.dt2-return:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dt2[data-state="past"] .dt2-return { display: inline-flex; }
+
+/* ── T3：日期本身是鈕，歷史日染 accent＋虛線底線，今天回到 ink 無底線 ── */
+.dt3 { display: flex; align-items: center; gap: var(--s-1); flex: 1; min-width: 0; }
+.dt3 .spacer { flex: 1; }
+.dt3-date { min-height: 44px; padding: 0 var(--s-2); border: none; background: none;
+  font-family: inherit; cursor: pointer; white-space: nowrap; font-size: var(--t-md);
+  letter-spacing: var(--track-md); font-weight: 700; color: var(--ink); text-decoration: none;
   font-variant-numeric: tabular-nums; -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
-.dv1[data-state="past"] .datetext { color: var(--ink); }
-.dv1 .datetext:active { opacity: .6; }
-.dv1 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* V2 · 大數字日曆式：小標籤＋ hero 級數字，回今天靠明確 chip */
-.dv2 { display: flex; align-items: center; gap: var(--s-2); }
-.dv2 .datetext { display: flex; flex-direction: column; align-items: flex-start; gap: 0;
-  min-height: 44px; padding: 2px var(--s-2); border: none; background: none;
-  font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur-base) var(--ease); }
-.dv2 .datetext:active { opacity: .6; }
-.dv2 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--s-1); }
-.dv2 .lb { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); line-height: 1; }
-.dv2 .num { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
-  line-height: .8; font-variant-numeric: tabular-nums; }
-.dv2 .today-chip { font-size: var(--t-xs); color: var(--accent); background: var(--accent-soft);
-  border: none; border-radius: var(--r-pill); padding: var(--s-1) var(--s-2);
-  min-height: 44px; display: none; align-items: center; cursor: pointer; font-family: inherit;
-  letter-spacing: var(--track-xs); -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur-base) var(--ease); }
-.dv2[data-state="past"] .today-chip { display: inline-flex; }
-.dv2 .today-chip:active { opacity: .6; }
-.dv2 .today-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* V3 · 週間格式＋回今天圓點徽章 */
-.dv3 { display: flex; align-items: center; gap: var(--s-1); }
-.dv3 .datetext { position: relative; min-height: 44px; padding: 0 var(--s-4) 0 var(--s-3);
-  border: none; background: var(--raised); border-radius: var(--r-pill); font-family: inherit;
-  cursor: pointer; font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
-  color: var(--ink); font-variant-numeric: tabular-nums; -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur-base) var(--ease); }
-.dv3 .datetext:active { opacity: .6; }
-.dv3 .datetext:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.dv3 .badge { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px;
-  border-radius: var(--r-pill); background: var(--accent); display: none; }
-.dv3[data-state="past"] .badge { display: block; }
+.dt3[data-state="past"] .dt3-date { color: var(--accent); text-decoration: underline dashed;
+  text-underline-offset: 3px; }
+.dt3-date:active { opacity: .6; }
+.dt3-date:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .state-tag { display: inline-block; font-size: var(--t-xs); color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-2); }
 
-/* ═══════════ 第二組：左滑刪除（覆蓋式） ═══════════ */
-.ov-list { list-style: none; margin: 0; padding: var(--s-4) var(--s-5); }
-.ov-item + .ov-item { margin-top: var(--s-2); }
-/* 固定高度（非 min-height）：.ov-content 移出捲動流、用 inset:0 疊圖，
-   需要 track 本身有「definite」高度，行內元素的百分比／inset 才解得出來 */
-.ov-track { position: relative; overflow-x: auto; scroll-snap-type: x mandatory;
-  scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
-  border-radius: var(--r-tab); cursor: grab; height: 52px; }
-.ov-track::-webkit-scrollbar { display: none; }
-.ov-track:active { cursor: grabbing; }
-.ov-row { display: flex; height: 100%; }
-/* .ov-spacer 撐出「與可視區等寬」的捲動距離（寬度由 JS 量測 track 實際寬度寫入，
-   避免依賴 flex-basis:100% 在有 min-content 的情況下可能被壓縮的不確定性）。
-   .ov-content 整個移出 row、用 position:absolute 疊在 track 上方，捲動時視覺上完全不動；
-   刪除鈕留在 row 的捲動流裡，隨捲動從右側自然進入視窗，正好蓋在內容右側（熱量數字）上面 */
-.ov-spacer { flex: 0 0 auto; scroll-snap-align: start; }
-.ov-content { position: absolute; inset: 0; z-index: 0;
-  display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
-  min-height: 52px; padding: var(--s-2) 0; border: none; background: var(--card);
+/* ═══════════ 第二組：左滑刪除（iOS 提醒事項風格） ═══════════
+   實測 .item-content 真實高度＝44px（min-height 44px，border-box，padding 已含在內）。
+   「44px 圓鈕＋下方文字」兩層塞不下——44px 圓本身已經吃滿整列高度，圓下方沒有
+   任何剩餘空間放文字。兩個變體都退成「圓鈕內放垃圾桶 inline SVG、不放文字」，
+   靠 aria-label 補上可讀名稱。 */
+.r-list { list-style: none; margin: 0; padding: var(--s-4) var(--s-5); }
+.r-list li + li { margin-top: var(--s-2); }
+
+.r-circle { width: 44px; height: 44px; border-radius: var(--r-pill); background: var(--over-fill);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.r-circle svg { width: 18px; height: 18px; stroke: var(--on-accent); }
+
+/* ── R1：覆蓋式。列本身不動，底色變淺，圓鈕從右側滑進來蓋住熱量數字 ── */
+.r1-item { position: relative; height: 44px; border-radius: var(--r-tab); overflow: hidden;
+  background: var(--card); transition: background var(--dur-mid) var(--ease); }
+.r1-item.opening { transition-duration: var(--dur-base); }
+.r1-item[data-open="true"] { background: var(--raised); }
+.r1-content { position: absolute; inset: 0; display: flex; justify-content: space-between;
+  align-items: center; gap: var(--s-3); padding: 0 var(--s-2); border: none; background: none;
   font-family: inherit; font-size: var(--t-base); color: inherit; text-align: left;
-  -webkit-appearance: none; appearance: none; cursor: pointer;
-  transition: opacity var(--dur-base) var(--ease); }
-.ov-content:active { opacity: .6; }
-.ov-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
-.ov-content .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-content .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
+  -webkit-appearance: none; appearance: none; cursor: pointer; }
+.r1-content .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: sticky; left: 0; }
+.r1-content .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
-.ov-delete { flex: 0 0 auto; scroll-snap-align: end; position: relative; z-index: 1;
-  align-self: stretch; display: flex; align-items: center; justify-content: center;
-  border: none; color: var(--on-accent); font-family: inherit; cursor: pointer;
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
-.ov-delete:active { opacity: .8; }
+.r1-delete { position: absolute; top: 0; right: 0; bottom: 0; width: 64px; display: flex;
+  align-items: center; justify-content: center; border: none; background: none;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  transform: translateX(100%); opacity: 0;
+  transition: transform var(--dur-mid) var(--ease), opacity var(--dur-mid) var(--ease); }
+.r1-item.opening .r1-delete { transition-duration: var(--dur-base); }
+.r1-item[data-open="true"] .r1-delete { transform: translateX(0); opacity: 1; }
+.r1-delete:active .r-circle { opacity: .8; }
+.r1-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* M1「現況 bug」demo 專用：關閉另一列時要瞬間跳掉，不能有過場 */
+.r1-item.no-transition, .r1-item.no-transition .r1-delete { transition: none !important; }
 
-/* 變體 A：56px 全高色塊，圓角只留在露出側（左緣） */
-.ov-delete.style-a { width: 64px; background: var(--over-fill);
-  border-radius: var(--r-tab) 0 0 var(--r-tab); }
-.ov-delete.style-a svg { width: 18px; height: 18px; }
+/* ── R2：整列左推，完全照 iOS 提醒事項；用既有 scroll-snap 機制（與 app.css 同法），
+   .nm 用 position:sticky 釘住品名，被推走的只有熱量數字。 */
+.r2-item { border-radius: var(--r-tab); overflow: hidden;
+  transition: background var(--dur-mid) var(--ease); background: var(--card); }
+.r2-item.opening { transition-duration: var(--dur-base); }
+.r2-item[data-open="true"] { background: var(--raised); }
+.r2-track { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; height: 44px; }
+.r2-track::-webkit-scrollbar { display: none; }
+.r2-row { display: flex; height: 100%; }
+.r2-content { flex: 0 0 100%; width: 100%; scroll-snap-align: start;
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
+  padding: 0 var(--s-2); border: none; background: none; text-align: left;
+  font-family: inherit; font-size: var(--t-base); color: inherit;
+  -webkit-appearance: none; appearance: none; cursor: pointer; }
+.r2-content .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: sticky; left: 0; }
+.r2-content .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; }
+.r2-delete { flex: 0 0 auto; width: 64px; scroll-snap-align: end; align-self: stretch;
+  display: flex; align-items: center; justify-content: center; border: none; background: none;
+  -webkit-appearance: none; appearance: none; cursor: pointer; }
+.r2-delete:active .r-circle { opacity: .8; }
+.r2-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* 變體 B：底維持 --card，露出區只放一顆置中圓形按鈕，紅色收斂成點狀 */
-.ov-delete.style-b { width: 76px; background: var(--card); }
-.ov-delete.style-b .btn-face { width: 44px; height: 44px; border-radius: var(--r-pill);
-  background: var(--over-fill); display: flex; align-items: center; justify-content: center; }
-.ov-delete.style-b svg { width: 20px; height: 20px; }
-
-/* 變體 C：窄版膠囊，貼右緣留一點呼吸，寬度最小 */
-.ov-delete.style-c { width: 48px; background: var(--card); padding-right: var(--s-1); }
-.ov-delete.style-c .btn-face { width: 44px; height: 44px; border-radius: var(--r-pill);
-  background: var(--over-fill); display: flex; align-items: center; justify-content: center; }
-.ov-delete.style-c svg { width: 16px; height: 16px; }
-
-.ov-hint { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 0 var(--s-2); }
+.r-note { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs);
+  background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--s-1);
+  padding: var(--s-2) var(--s-3); margin: 0 0 var(--s-3); max-width: 340px; }
 
 /* ═══════════ 第三組：動效 demo ═══════════ */
 .demo-card { background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-btn);
@@ -194,8 +228,7 @@ button { font: inherit; }
 .demo-btn + .demo-btn { margin-left: var(--s-2); }
 
 .tl-list { list-style: none; margin: var(--s-3) 0; padding: 0; }
-.tl-item { border-bottom: 1px solid var(--rule-subtle); }
-.tl-item + .tl-item { margin-top: var(--s-2); }
+.tl-list li + li { margin-top: var(--s-2); }
 
 /* sheet demo */
 .sheet-demo-scrim { position: absolute; inset: 0; background: rgba(61,34,16,.32);
@@ -212,91 +245,154 @@ button { font: inherit; }
   animation: sheet-demo-scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 .sheet-stage.open .sheet-demo-sheet.entering { animation: sheet-demo-in var(--dur-sheet) var(--ease-sheet) both; }
 .sheet-stage.open .sheet-demo-sheet.shown { transform: translateY(0); }
+
+/* ═══════════ 第四組・分頁列 pill 化（2026-07-29 追加） ═══════════ */
+.nv-ghost { height: 56px; margin: var(--s-5) var(--s-5) var(--s-2); background: var(--card);
+  border: 1px solid var(--rule-subtle); border-radius: var(--r-tab); }
+.nv-tab { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 44px; border: none; background: none; font-family: inherit;
+  font-size: var(--t-sm); font-weight: 600; color: var(--ink-muted); white-space: nowrap;
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.nv-tab svg { width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.nv-tab[aria-current="page"] { background: var(--raised); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent); }
+/* N1 現況 */
+.nv1-wrap { padding: var(--s-2) var(--s-5) var(--s-5); }
+.nv1-bar { display: flex; gap: var(--s-1); padding: var(--s-1); background: var(--card);
+  border: 1px solid var(--rule); border-radius: var(--r-btn); }
+.nv1-bar .nv-tab { flex: 1; border-radius: var(--r-tab); }
+/* N2 pill 置中收窄 */
+.nv2-wrap { padding: var(--s-1) 0 var(--s-3); display: flex; justify-content: center; }
+.nv2-bar { display: flex; gap: var(--s-1); padding: var(--s-1); background: var(--card);
+  border: 1px solid var(--rule); border-radius: var(--r-pill); }
+.nv2-bar .nv-tab { border-radius: var(--r-pill); padding: 0 var(--s-5); }
+/* N3 icon-only 圓鈕 */
+.nv3-wrap { padding: var(--s-1) 0 var(--s-3); display: flex; justify-content: center; }
+.nv3-bar { display: flex; gap: var(--s-1); padding: var(--s-1); background: var(--card);
+  border: 1px solid var(--rule); border-radius: var(--r-pill); }
+.nv3-bar .nv-tab { width: 44px; border-radius: var(--r-pill); }
+.nv3-bar .nv-tab svg { width: 18px; height: 18px; }
 </style>
 </head>
 <body>
 
 <div class="page-head">
-  <h1>今日頁決策樣張 v2</h1>
-  <p>實機測試後三處回饋的具體選項：日期區太小、左滑刪除鈕不好看、關閉另一列時沒有過場。
-    每組變體有編號，挑好後告訴我編號即可定案，我會回寫 <code>DESIGN.md</code> 與實作。</p>
+  <h1>今日頁決策樣張 v3</h1>
+  <p>第三輪。第一組已定案：格式「週二 7/28」、不用原生 <code>input type="date"</code>、不做自製月曆、
+    左右箭頭保留＋右箭頭今天停用、「回今天」跟日期同一行（V1 的位置原則勝出）。**被否決**：V1 的
+    pill 呈現（「太醜」）、V2 的獨立次列 banner（整個砍掉）。這輪比三個「同行呈現」的變體：安靜文字鈕、
+    純圖示鈕、日期本身當鈕。第二組（左滑刪除）與第三組（動效）本輪不動，維持第二輪定案內容。</p>
+  <p>品項列實測高度＝<span class="measure">44px</span>（<code>.item-content</code> 在 app.css 的
+    <code>min-height:44px</code>，border-box 下 padding 已含在內，不是 52px）。這個數字決定了第二組
+    圓鈕不能再放文字——細節見該組上方的說明框。</p>
+  <p><strong>第四組（2026-07-29 追加）</strong>：分頁列 pill 化——使用者評現況「很醜、佔太大」，
+    要 Apple 式圓角（--r-pill 999）＋縮小佔用。在頁面最下方。</p>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="group">
-  <h2>第一組・日期區</h2>
-  <p class="lead">拿掉原生 <code>input type="date"</code>，只留左右箭頭；日期文字放大且可點回今天；
-    右箭頭在「今天」停用。三個變體各示範「今天」與「歷史日」兩種狀態，點日期文字可切換體驗。</p>
+  <h2>第一組・日期區（格式已定案，這輪比「同行呈現」的三個變體）</h2>
+  <p class="lead">格式定案為「週二 7/28」；「回今天」與日期同一行（V1 的位置原則勝出，第二輪的 V2 獨立次列
+    banner 已整個砍掉）；不做原生 <code>input type="date"</code>，也不做自製月曆；左右箭頭保留，右箭頭在
+    今天停用。V1 的 pill 呈現本身已被否決（「太醜」）——這輪要重新比的是同一行裡「回今天」用什麼**元素**
+    呈現：文字、圖示、或直接讓日期本身承擔。三個變體都用左邊的按鈕切換「今天／歷史日」實測。</p>
 
   <div class="row">
     <div>
       <div class="col-head">
-        <div class="nm"><span class="num">V1</span> 精簡放大</div>
-        <div class="ds">一行字放大＋粗體＋淺底觸控墊；回今天靠顏色深淺與字重差異，不加額外元素</div>
+        <div class="nm"><span class="num">T1</span> 安靜文字鈕</div>
+        <div class="ds">純文字「回今天」，<code>--accent</code> 色、無底無框、前置一個 14px chevron-left
+          圖示；視覺最輕，靠 padding 撐出 ≥44px 觸控區。今天時同位置改顯示 <code>--ink-muted</code> 的
+          靜態文字「今天」（不可互動，純狀態提示）</div>
+      </div>
+      <div class="state-btns">
+        <button class="state-btn" type="button" data-t1-set="today">看「今天」狀態</button>
+        <button class="state-btn" type="button" data-t1-set="past">看「歷史日」狀態</button>
       </div>
       <div class="frame"><div class="screen">
         <header class="topbar">
-          <h1 class="today">今天</h1>
-          <div class="dv1" data-state="today" data-idx="0">
-            <button class="date-arrow" type="button" aria-label="前一天" data-dv1-prev>
+          <h1 class="today" data-t1-title>今天</h1>
+          <div class="dt1" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dt1-prev>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
             </button>
-            <button class="datetext" type="button" aria-label="回到今天" data-dv1-text>2026/07/28</button>
-            <button class="date-arrow" type="button" aria-label="後一天" data-dv1-next disabled>
+            <span class="dt1-date" data-dt1-text>週二 7/28</span>
+            <span class="spacer"></span>
+            <span class="dt1-today-label">今天</span>
+            <button class="dt1-quiet" type="button" data-dt1-today>
+              <svg class="dt-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+              回今天
+            </button>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dt1-next disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>
           </div>
         </header>
-        <div class="mini-main">點左箭頭看歷史日狀態；歷史日時點日期文字回今天。</div>
+        <div class="mini-main">點左箭頭切到歷史日；點「回今天」文字鈕回到今天。</div>
       </div></div>
     </div>
 
     <div>
       <div class="col-head">
-        <div class="nm"><span class="num">V2</span> 大數字日曆式</div>
-        <div class="ds">小標籤＋ hero 級數字（44px）；回今天靠明確的「今天」chip，只在歷史日出現</div>
+        <div class="nm"><span class="num">T2</span> 純圖示鈕</div>
+        <div class="ds">一顆逆時針返回箭頭圓形觸控目標（44px，視覺重量對齊左右箭頭），貼在日期文字右側，
+          <code>aria-label="回到今天"</code>。今天時**該位置完全不顯示**——取捨：不留一個停用態佔位，
+          因為停用態的圖示按鈕本身就是視覺噪音（沒有動作可做的按鈕形狀還在，反而引人去點）；代價是
+          今天／歷史日切換時右側寬度會變動，日期文字位置隨之小幅挪動</div>
+      </div>
+      <div class="state-btns">
+        <button class="state-btn" type="button" data-t2-set="today">看「今天」狀態</button>
+        <button class="state-btn" type="button" data-t2-set="past">看「歷史日」狀態</button>
       </div>
       <div class="frame"><div class="screen">
         <header class="topbar">
-          <h1 class="today">今天</h1>
-          <div class="dv2" data-state="today" data-idx="0">
-            <button class="date-arrow" type="button" aria-label="前一天" data-dv2-prev>
+          <h1 class="today" data-t2-title>今天</h1>
+          <div class="dt2" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dt2-prev>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
             </button>
-            <button class="datetext" type="button" aria-label="檢視日期，點擊查看" data-dv2-text>
-              <span class="lb">7 月</span><span class="num">28</span>
+            <span class="dt2-date" data-dt2-text>週二 7/28</span>
+            <button class="dt2-return" type="button" aria-label="回到今天" data-dt2-today>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
             </button>
-            <button class="today-chip" type="button" data-dv2-today>回今天</button>
-            <button class="date-arrow" type="button" aria-label="後一天" data-dv2-next disabled>
+            <span class="spacer"></span>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dt2-next disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>
           </div>
         </header>
-        <div class="mini-main">點左箭頭看歷史日狀態；出現的「回今天」chip 是獨立可點元素。</div>
+        <div class="mini-main">點左箭頭切到歷史日；點日期文字右側的圓形圖示鈕回到今天。</div>
       </div></div>
     </div>
 
     <div>
       <div class="col-head">
-        <div class="nm"><span class="num">V3</span> 週間格式＋圓點徽章</div>
-        <div class="ds">「週二 7/28」膠囊按鈕；回今天靠右上角一顆 jade 圓點徽章，不佔額外版面</div>
+        <div class="nm"><span class="num">T3</span> 日期本身是鈕</div>
+        <div class="ds">歷史日時日期文字整體變 <code>--accent</code> 色＋1px 虛線底線
+          （<code>text-decoration: underline dashed</code>），點日期即回今天、不另加任何元素；今天時
+          日期為 <code>--ink</code>、無底線。**風險：可發現性最低**——沒有顯式「回今天」字樣，使用者要先
+          注意到日期變色帶底線，才會想到它可點；三個變體裡最節制也最賭運氣</div>
+      </div>
+      <div class="state-btns">
+        <button class="state-btn" type="button" data-t3-set="today">看「今天」狀態</button>
+        <button class="state-btn" type="button" data-t3-set="past">看「歷史日」狀態</button>
       </div>
       <div class="frame"><div class="screen">
         <header class="topbar">
-          <h1 class="today">今天</h1>
-          <div class="dv3" data-state="today" data-idx="0">
-            <button class="date-arrow" type="button" aria-label="前一天" data-dv3-prev>
+          <h1 class="today" data-t3-title>今天</h1>
+          <div class="dt3" data-state="today" data-idx="0">
+            <button class="date-arrow" type="button" aria-label="前一天" data-dt3-prev>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
             </button>
-            <button class="datetext" type="button" aria-label="回到今天" data-dv3-text>
-              週二 7/28<span class="badge" aria-hidden="true"></span>
-            </button>
-            <button class="date-arrow" type="button" aria-label="後一天" data-dv3-next disabled>
+            <button class="dt3-date" type="button" aria-label="今天" data-dt3-text>週二 7/28</button>
+            <span class="spacer"></span>
+            <button class="date-arrow" type="button" aria-label="後一天" data-dt3-next disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>
           </div>
         </header>
-        <div class="mini-main">點左箭頭看歷史日狀態；右上角圓點在歷史日才出現。</div>
+        <div class="mini-main">點左箭頭切到歷史日；點日期文字本身（變色＋虛線底線）回到今天。</div>
       </div></div>
     </div>
   </div>
@@ -304,92 +400,73 @@ button { font: inherit; }
 
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="group">
-  <h2>第二組・左滑刪除（覆蓋式）</h2>
-  <p class="lead">列本身不動，刪除鈕從右邊滑進來蓋在熱量數字上。仍是 CSS <code>scroll-snap</code>，
-    無 touch 事件 JS；滑鼠拖曳或觸控都能操作（本機用滑鼠：直接在品項上左右拖曳）。
-    點品項內容一樣會露出刪除鈕（鍵盤路徑）。三個刪除鈕視覺變體只用 <code>--over-fill</code> / <code>--over</code>。</p>
+  <h2>第二組・左滑刪除（iOS 提醒事項風格）</h2>
+  <p class="lead">左滑時該列底色變淺（<code>--card</code> → <code>--raised</code>），右側出現圓形刪除鈕。
+    品項右側有熱量數字，跟 iOS 提醒事項的空列尾不同——兩個變體示範代價：R1 圓鈕蓋住熱量、R2 把整列推走。
+    品名位置不動（既有定案），點品項內容也會露出刪除鈕（鍵盤路徑）。</p>
 
   <div class="row">
     <div>
       <div class="col-head">
-        <div class="nm"><span class="num">D1</span> 色塊覆蓋，圓角只留露出側</div>
-        <div class="ds">寬 64px、全高紅底，圓角只在左緣（露出的那一側）</div>
+        <div class="nm"><span class="num">R1</span> 覆蓋式</div>
+        <div class="ds">列本身不動，底色變淺，圓鈕從右側滑進來蓋住熱量數字的位置</div>
       </div>
+      <div class="r-note">圓鈕下方放不下「刪除」兩字：44px 圓已經吃滿整列 44px 高度，退成純圖示＋<code>aria-label</code>。</div>
       <div class="frame"><div class="screen">
-        <p class="ov-hint">拖曳或點下方品項</p>
-        <ul class="ov-list" data-ov-group="a">
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除乳清這一筆">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+        <ul class="r-list">
+          <li class="r1-item" data-open="false">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="乳清 ×1，103 卡，點擊顯示刪除">
+              <span class="nm">乳清 <span style="color:var(--ink-muted)">×1</span></span>
+              <span class="kc">103</span>
             </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">乳清 <span style="color:var(--ink-muted)">×1</span></span><span class="kc">103</span></button>
-          </div></li>
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除燕麥片這一筆">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除乳清這一筆">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
             </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">燕麥片 <span style="color:var(--ink-muted)">×5</span></span><span class="kc">120</span></button>
-          </div></li>
+          </li>
+          <li class="r1-item" data-open="false">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="燕麥片 ×5，120 卡，點擊顯示刪除">
+              <span class="nm">燕麥片 <span style="color:var(--ink-muted)">×5</span></span>
+              <span class="kc">120</span>
+            </button>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除燕麥片這一筆">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </li>
         </ul>
       </div></div>
     </div>
 
     <div>
       <div class="col-head">
-        <div class="nm"><span class="num">D2</span> 圓形按鈕，露出區維持卡面色</div>
-        <div class="ds">露出區底色與列相同（<code>--card</code>），紅色收斂成一顆 44px 圓形按鈕</div>
+        <div class="nm"><span class="num">R2</span> 整列左推</div>
+        <div class="ds">完全照 iOS 提醒事項，整列往左推露出右側圓鈕；用 <code>scroll-snap</code>（同 app.css 手法），品名 sticky 不被推走</div>
       </div>
+      <div class="r-note"><strong>實測結果跟預期不同</strong>：用跟 app.css 一樣的 scroll-snap＋<code>justify-content:space-between</code>
+        機制實際點開後，熱量數字其實沒有被推出視野——它固定貼在內容區右緣，捲動裁掉的是左緣（所以才需要
+        <code>position:sticky</code> 護住品名）。兩個範例（短名「茶葉蛋」／長名「培根起司軟法」）都驗證了這點，見下方畫面。
+        這代表「整列左推會丟失熱量」的顧慮在這個技術做法下不成立；R1／R2 的差異其實只剩底色與圓鈕觸發方式，不是誰保得住熱量數字。</div>
       <div class="frame"><div class="screen">
-        <p class="ov-hint">拖曳或點下方品項</p>
-        <ul class="ov-list" data-ov-group="b">
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-b" type="button" aria-label="刪除茶葉蛋這一筆">
-              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
-            </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">茶葉蛋</span><span class="kc">70</span></button>
-          </div></li>
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-b" type="button" aria-label="刪除培根起司軟法這一筆">
-              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
-            </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">培根起司軟法</span><span class="kc">610</span></button>
-          </div></li>
-        </ul>
-      </div></div>
-    </div>
-
-    <div>
-      <div class="col-head">
-        <div class="nm"><span class="num">D3</span> 窄版膠囊，貼右緣</div>
-        <div class="ds">露出寬度最小（48px），按鈕本身仍是 44px 圓形，貼右緣留呼吸空間</div>
-      </div>
-      <div class="frame"><div class="screen">
-        <p class="ov-hint">拖曳或點下方品項</p>
-        <ul class="ov-list" data-ov-group="c">
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-c" type="button" aria-label="刪除滷肉飯（大）這一筆">
-              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
-            </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">滷肉飯（大）</span><span class="kc">620</span></button>
-          </div></li>
-          <li class="ov-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-c" type="button" aria-label="刪除貢丸湯這一筆">
-              <span class="btn-face"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
-            </button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">貢丸湯</span><span class="kc">150</span></button>
-          </div></li>
+        <ul class="r-list">
+          <li class="r2-item" data-open="false">
+            <div class="r2-track" data-r2-track><div class="r2-row">
+              <button class="r2-content" type="button" data-r2-toggle aria-label="茶葉蛋，70 卡，點擊顯示刪除">
+                <span class="nm">茶葉蛋</span><span class="kc">70</span>
+              </button>
+              <button class="r2-delete" type="button" data-r2-del aria-label="刪除茶葉蛋這一筆">
+                <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+              </button>
+            </div></div>
+          </li>
+          <li class="r2-item" data-open="false">
+            <div class="r2-track" data-r2-track><div class="r2-row">
+              <button class="r2-content" type="button" data-r2-toggle aria-label="培根起司軟法，610 卡，點擊顯示刪除">
+                <span class="nm">培根起司軟法</span><span class="kc">610</span>
+              </button>
+              <button class="r2-delete" type="button" data-r2-del aria-label="刪除培根起司軟法這一筆">
+                <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+              </button>
+            </div></div>
+          </li>
         </ul>
       </div></div>
     </div>
@@ -399,32 +476,37 @@ button { font: inherit; }
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="group">
   <h2>第三組・動效</h2>
-  <p class="lead">新時長階梯：<code>--dur-fast 100ms</code> / <code>--dur-base 160ms</code> /
-    <code>--dur-mid 220ms</code> / <code>--dur-sheet 280ms</code>。緩動沿用既有的 <code>--ease</code> 與
-    <code>--ease-sheet</code>，不新增曲線。每個 demo 可反覆點「播放」。</p>
+  <p class="lead">定案時長階梯：<code>--dur-fast 100ms</code> / <code>--dur-base 160ms</code> /
+    <code>--dur-mid 220ms</code> / <code>--dur-sheet 280ms</code>。刪除的開啟動效用
+    <code>--dur-base</code>（160ms），退場一律 <code>--dur-mid</code>（220ms）。緩動沿用既有的
+    <code>--ease</code> 與 <code>--ease-sheet</code>，不新增曲線。每個 demo 可反覆點「播放」。</p>
 
   <div class="row">
     <div>
       <div class="col-head">
         <div class="nm"><span class="num">M1</span> 現況：關閉另一列時瞬間跳掉</div>
-        <div class="ds">開 A，再開 B，A 直接 <code>scrollLeft = 0</code>，沒有過場</div>
+        <div class="ds">開 A，再開 B，A 直接歸零，沒有過場（用 R1 的覆蓋式 transform 機制示範，避開 scroll-snap）</div>
       </div>
       <div class="demo-card">
         <span class="dur-tag">無過場（現況 bug）</span>
         <p class="lead">點「播放」：開 A → 開 B → A 瞬間關閉。也可自己手動點兩列比較。</p>
         <ul class="tl-list" data-m1-group="jump">
-          <li class="tl-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除 A"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span></button>
-          </div></li>
-          <li class="tl-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除 B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">B：燙青菜</span><span class="kc">92</span></button>
-          </div></li>
+          <li class="r1-item" data-open="false" style="height:44px">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="A：黑糖珍珠鮮奶，324 卡，點擊顯示刪除">
+              <span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span>
+            </button>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除 A">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </li>
+          <li class="r1-item" data-open="false" style="height:44px">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="B：燙青菜，92 卡，點擊顯示刪除">
+              <span class="nm">B：燙青菜</span><span class="kc">92</span>
+            </button>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除 B">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </li>
         </ul>
         <button class="demo-btn" type="button" data-m1-play="jump">播放示範</button>
       </div>
@@ -433,24 +515,28 @@ button { font: inherit; }
     <div>
       <div class="col-head">
         <div class="nm"><span class="num">M2</span> 修正版：帶過場的平滑關閉</div>
-        <div class="ds">同樣「開 A、再開 B」，這次 A 用 220ms 緩動滑回去</div>
+        <div class="ds">同樣「開 A、再開 B」，這次 A 用 <code>--dur-mid</code>（220ms）滑回去</div>
       </div>
       <div class="demo-card">
         <span class="dur-tag">--dur-mid · 220ms</span>
         <p class="lead">點「播放」：開 A → 開 B → A 平滑關閉。也可自己手動點兩列比較。</p>
         <ul class="tl-list" data-m1-group="smooth">
-          <li class="tl-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除 A"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span></button>
-          </div></li>
-          <li class="tl-item"><div class="ov-track"><div class="ov-row">
-            <div class="ov-spacer" aria-hidden="true"></div>
-            <button class="ov-delete style-a" type="button" aria-label="刪除 B"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
-          </div>
-            <button class="ov-content" type="button"><span class="nm">B：燙青菜</span><span class="kc">92</span></button>
-          </div></li>
+          <li class="r1-item" data-open="false" style="height:44px">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="A：黑糖珍珠鮮奶，324 卡，點擊顯示刪除">
+              <span class="nm">A：黑糖珍珠鮮奶</span><span class="kc">324</span>
+            </button>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除 A">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </li>
+          <li class="r1-item" data-open="false" style="height:44px">
+            <button class="r1-content" type="button" data-r1-toggle aria-label="B：燙青菜，92 卡，點擊顯示刪除">
+              <span class="nm">B：燙青菜</span><span class="kc">92</span>
+            </button>
+            <button class="r1-delete" type="button" data-r1-del aria-label="刪除 B">
+              <span class="r-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></span>
+            </button>
+          </li>
         </ul>
         <button class="demo-btn" type="button" data-m1-play="smooth">播放示範</button>
       </div>
@@ -482,105 +568,191 @@ button { font: inherit; }
 <script>
 'use strict';
 
-/* ── 共用：eased scrollLeft 動畫（非 touch 事件，只用來做「關閉另一列」的平滑過場） ── */
+/* 讀實際 token 值（ms），JS 端的時長也跟著 CSS 定案值走，不另外寫死一份數字 */
+const rootCS = getComputedStyle(document.documentElement);
+function durMs(name) { return parseFloat(rootCS.getPropertyValue(name)); }
+const DUR_BASE = durMs('--dur-base');
+const DUR_MID = durMs('--dur-mid');
+const DUR_SHEET = durMs('--dur-sheet');
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function animateScrollTo(el, target, duration) {
   const start = el.scrollLeft;
   const delta = target - start;
   if (delta === 0) return;
+  if (reducedMotion()) { el.scrollLeft = target; return; }
+  /* CSS scroll-snap-type 會把非 rAF 手勢設的中間值立刻吸回最近的 snap 點，
+     JS 驅動的緩動因此會被 snap 蓋成瞬跳。動畫期間關掉 snap，結束才恢復。 */
+  el.style.scrollSnapType = 'none';
   const t0 = performance.now();
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduced) { el.scrollLeft = target; return; }
   function ease(t) { return 1 - Math.pow(1 - t, 3); } /* 貼近 cubic-bezier(.4,0,.2,1) 的視覺手感 */
   function step(now) {
     const t = Math.min((now - t0) / duration, 1);
     el.scrollLeft = start + delta * ease(t);
-    if (t < 1) requestAnimationFrame(step);
+    if (t < 1) { requestAnimationFrame(step); }
+    else { el.style.scrollSnapType = ''; }
   }
   requestAnimationFrame(step);
 }
 
-/* ── 共用：滑鼠拖曳捲動（觸控本身走原生手勢，這段只補桌機滑鼠可測） ── */
-function enableDragScroll(track) {
-  let dragging = false, startX = 0, startLeft = 0;
-  track.addEventListener('mousedown', (e) => {
-    dragging = true; startX = e.clientX; startLeft = track.scrollLeft;
-    e.preventDefault();
+/* ── 第一組：日期區三個變體的今天／歷史日切換 ── */
+function wireT1() {
+  const root = document.querySelector('.dt1');
+  const title = document.querySelector('[data-t1-title]');
+  const next = root.querySelector('[data-dt1-next]');
+  function setState(isToday) {
+    root.dataset.state = isToday ? 'today' : 'past';
+    next.disabled = isToday;
+    title.textContent = isToday ? '今天' : '週二';
+  }
+  root.querySelector('[data-dt1-prev]').addEventListener('click', () => setState(false));
+  next.addEventListener('click', () => setState(true));
+  root.querySelector('[data-dt1-today]').addEventListener('click', () => setState(true));
+  document.querySelectorAll('[data-t1-set]').forEach((b) => {
+    b.addEventListener('click', () => setState(b.dataset.t1Set === 'today'));
   });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    track.scrollLeft = startLeft - (e.clientX - startX);
-  });
-  window.addEventListener('mouseup', () => { dragging = false; });
 }
+function wireT2() {
+  const root = document.querySelector('.dt2');
+  const title = document.querySelector('[data-t2-title]');
+  const next = root.querySelector('[data-dt2-next]');
+  function setState(isToday) {
+    root.dataset.state = isToday ? 'today' : 'past';
+    next.disabled = isToday;
+    title.textContent = isToday ? '今天' : '週二';
+  }
+  root.querySelector('[data-dt2-prev]').addEventListener('click', () => setState(false));
+  next.addEventListener('click', () => setState(true));
+  root.querySelector('[data-dt2-today]').addEventListener('click', () => setState(true));
+  document.querySelectorAll('[data-t2-set]').forEach((b) => {
+    b.addEventListener('click', () => setState(b.dataset.t2Set === 'today'));
+  });
+}
+function wireT3() {
+  const root = document.querySelector('.dt3');
+  const title = document.querySelector('[data-t3-title]');
+  const next = root.querySelector('[data-dt3-next]');
+  const dateBtn = root.querySelector('[data-dt3-text]');
+  function setState(isToday) {
+    root.dataset.state = isToday ? 'today' : 'past';
+    next.disabled = isToday;
+    title.textContent = isToday ? '今天' : '週二';
+    dateBtn.setAttribute('aria-label', isToday ? '今天' : '回到今天');
+  }
+  root.querySelector('[data-dt3-prev]').addEventListener('click', () => setState(false));
+  next.addEventListener('click', () => setState(true));
+  dateBtn.addEventListener('click', () => setState(true));
+  document.querySelectorAll('[data-t3-set]').forEach((b) => {
+    b.addEventListener('click', () => setState(b.dataset.t3Set === 'today'));
+  });
+}
+wireT1();
+wireT2();
+wireT3();
 
-/* ── 覆蓋式左滑：點內容露出／收回刪除鈕；開一列自動收其他列 ── */
-function revealWidthOf(track) {
-  const btn = track.querySelector('.ov-delete');
+/* ── 第二組 R1／第三組 M1／M2：覆蓋式開合，class 切換走 CSS transition
+   （開 --dur-base／關 --dur-mid）。範圍限定同一個 ul，R1／M1／M2 各自獨立， 一個demo
+   開著不會把另一個 demo 的展示列關掉——純 CSS transition 沒有 scroll-snap 那種
+   跟真實輸入裝置手勢互相干擾的問題，比 R2 用的 scroll-snap 機制可靠，
+   所以第三組也改沿用這套機制，不再借用 R2。 */
+function closeOtherR1(except) {
+  const scope = except.closest('ul') || document;
+  scope.querySelectorAll('.r1-item[data-open="true"]').forEach((li) => {
+    if (li !== except) { li.classList.remove('opening'); li.dataset.open = 'false'; }
+  });
+}
+document.querySelectorAll('.r1-item').forEach((li) => {
+  const content = li.querySelector('[data-r1-toggle]');
+  const del = li.querySelector('[data-r1-del]');
+  content.addEventListener('click', () => {
+    const open = li.dataset.open === 'true';
+    if (open) {
+      li.classList.remove('opening');
+      li.dataset.open = 'false';
+    } else {
+      closeOtherR1(li);
+      li.classList.add('opening');
+      li.dataset.open = 'true';
+      setTimeout(() => li.classList.remove('opening'), DUR_BASE);
+    }
+  });
+  del.addEventListener('click', () => {
+    li.classList.remove('opening');
+    li.dataset.open = 'false';
+  });
+});
+
+/* ── 第二組 R2 ／ 第三組 M1／M2：整列左推開合，走 scroll-snap ── */
+/* 直接指定 scrollLeft（非緩動）也要暫關 snap，理由同 animateScrollTo 的註解 */
+function hardResetScroll(el) {
+  el.style.scrollSnapType = 'none';
+  el.scrollLeft = 0;
+  requestAnimationFrame(() => { el.style.scrollSnapType = ''; });
+}
+function r2RevealWidth(track) {
+  const btn = track.querySelector('.r2-delete');
   return btn ? btn.getBoundingClientRect().width : 64;
 }
-/* 只收同一份清單（同一個變體 demo）裡的其他列，避免 D1/D2/D3 這種各自獨立的
-   展示欄互相干擾——這是樣張並排比較的需要，跟單一 app 畫面裡「一個清單」的情境不同 */
-function closeOtherOvTracks(except, smooth) {
-  const scope = except.closest('ul') || document;
-  scope.querySelectorAll('.ov-track').forEach((t) => {
-    if (t !== except && t.scrollLeft > 2) {
-      if (smooth) animateScrollTo(t, 0, 220); else t.scrollLeft = 0;
+function closeOtherR2(exceptTrack, scope) {
+  scope.querySelectorAll('.r2-track').forEach((t) => {
+    if (t !== exceptTrack && t.scrollLeft > 2) {
+      const li = t.closest('.r2-item');
+      li.classList.remove('opening'); li.dataset.open = 'false';
+      animateScrollTo(t, 0, DUR_MID);
     }
   });
 }
-/* .ov-spacer 寬度＝track 可視寬度，讓總捲動寬度精準等於「可視寬 ＋ 刪除鈕寬」，
-   不依賴 flex-basis:100% 在有 min-content 內容時可能被壓縮的不確定行為 */
-function sizeSpacer(track) {
-  const spacer = track.querySelector('.ov-spacer');
-  if (spacer) spacer.style.width = track.clientWidth + 'px';
-}
-document.querySelectorAll('.ov-track').forEach(sizeSpacer);
-window.addEventListener('resize', () => document.querySelectorAll('.ov-track').forEach(sizeSpacer));
-
-document.querySelectorAll('.ov-track').forEach((track) => {
-  enableDragScroll(track);
-  const content = track.querySelector('.ov-content');
-  const del = track.querySelector('.ov-delete');
+document.querySelectorAll('[data-r2-track]').forEach((track) => {
+  const li = track.closest('.r2-item');
+  const content = track.querySelector('[data-r2-toggle]');
+  const del = track.querySelector('[data-r2-del]');
+  const scope = track.closest('ul') || document;
   content.addEventListener('click', () => {
     const open = track.scrollLeft > 2;
-    closeOtherOvTracks(track, true);
-    animateScrollTo(track, open ? 0 : revealWidthOf(track), 220);
+    if (open) {
+      li.classList.remove('opening'); li.dataset.open = 'false';
+      animateScrollTo(track, 0, DUR_MID);
+    } else {
+      closeOtherR2(track, scope);
+      li.classList.add('opening'); li.dataset.open = 'true';
+      animateScrollTo(track, r2RevealWidth(track), DUR_BASE);
+      setTimeout(() => li.classList.remove('opening'), DUR_BASE);
+    }
   });
-  /* 示範用：刪除鈕點下去收回（真的刪除是 app 的事，這裡只驗證覆蓋視覺與可點性） */
-  del.addEventListener('click', () => animateScrollTo(track, 0, 160));
+  del.addEventListener('click', () => {
+    li.classList.remove('opening'); li.dataset.open = 'false';
+    animateScrollTo(track, 0, DUR_BASE);
+  });
 });
 
-/* ── 第一組：日期區三個變體的今天／歷史日切換 ── */
-function wireDateVariant(prefix) {
-  const root = document.querySelector(`.${prefix}`);
-  const prev = root.querySelector(`[data-${prefix}-prev]`);
-  const next = root.querySelector(`[data-${prefix}-next]`);
-  const text = root.querySelector(`[data-${prefix}-text]`);
-  function setToday(isToday) {
-    root.dataset.state = isToday ? 'today' : 'past';
-    next.disabled = isToday;
-  }
-  prev.addEventListener('click', () => setToday(false));
-  next.addEventListener('click', () => setToday(true));
-  text.addEventListener('click', () => setToday(true));
-  const todayChip = root.querySelector(`[data-${prefix}-today]`);
-  if (todayChip) todayChip.addEventListener('click', () => setToday(true));
-}
-['dv1', 'dv2', 'dv3'].forEach(wireDateVariant);
-
-/* ── 第三組 M1/M2：播放示範（開 A → 開 B，比較關閉手感） ── */
+/* ── 第三組 M1/M2：播放示範（開 A → 開 B，比較關閉手感） ──
+   直接操作 r1-item 的 class／dataset，交給 CSS transition 跑，不用 JS 算緩動，
+   也就不會遇到 R2 那種 scroll-snap 跟真實輸入裝置手勢互相干擾的問題。 */
 document.querySelectorAll('[data-m1-play]').forEach((btn) => {
   const mode = btn.dataset.m1Play; // 'jump' | 'smooth'
   const group = document.querySelector(`[data-m1-group="${mode}"]`);
-  const tracks = [...group.querySelectorAll('.ov-track')];
+  const items = [...group.querySelectorAll('.r1-item')];
   btn.addEventListener('click', () => {
-    tracks.forEach((t) => { t.scrollLeft = 0; });
-    const w = revealWidthOf(tracks[0]);
-    setTimeout(() => animateScrollTo(tracks[0], w, 220), 150);
+    items.forEach((li) => { li.classList.remove('opening', 'no-transition'); li.dataset.open = 'false'; });
     setTimeout(() => {
-      if (mode === 'jump') { tracks[0].scrollLeft = 0; }
-      else { animateScrollTo(tracks[0], 0, 220); }
-      animateScrollTo(tracks[1], w, 220);
+      items[0].classList.add('opening');
+      items[0].dataset.open = 'true';
+      setTimeout(() => items[0].classList.remove('opening'), DUR_BASE);
+    }, 150);
+    setTimeout(() => {
+      if (mode === 'jump') {
+        /* 現況 bug：關閉沒有過場，直接跳掉 */
+        items[0].classList.add('no-transition');
+        items[0].dataset.open = 'false';
+        requestAnimationFrame(() => requestAnimationFrame(() => items[0].classList.remove('no-transition')));
+      } else {
+        /* 修正版：不加 no-transition，走預設的 --dur-mid 過場 */
+        items[0].dataset.open = 'false';
+      }
+      items[1].classList.add('opening');
+      items[1].dataset.open = 'true';
+      setTimeout(() => items[1].classList.remove('opening'), DUR_BASE);
     }, 900);
   });
 });
@@ -603,7 +775,7 @@ document.querySelectorAll('[data-m1-play]').forEach((btn) => {
   });
   document.querySelectorAll('[data-sheet-close]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const dur = btn.dataset.sheetClose === 'mid' ? 220 : 200;
+      const dur = btn.dataset.sheetClose === 'mid' ? DUR_MID : 200;
       panel.classList.remove('shown', 'entering');
       panel.style.transition = `transform ${dur}ms var(--ease-sheet)`;
       panel.style.transform = 'translateY(100%)';
@@ -619,5 +791,83 @@ document.querySelectorAll('[data-m1-play]').forEach((btn) => {
   });
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="group">
+  <h2>第四組・分頁列 pill 化（追加）</h2>
+  <p class="lead">現況被評「很醜、佔太大」。約束：分頁觸控區 ≥44px 是 DESIGN.md 硬底線、不用陰影、
+    選中態辨識維持「jade 文字＋1px accent inset 邊框」（--raised 底色僅 1.14:1，撐不起單獨辨識）。
+    能省的是<strong>視覺寬度</strong>（現況兩顆各佔半屏）與上下 padding（約省 12px 高）。
+    N2/N3 都是 Apple 現行懸浮 pill 分頁列的方向，差在留不留文字。灰色圓角塊是內容佔位示意。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">N1</span> 現況（對照）</div>
+        <div class="ds">外框 --r-btn 16px、貼滿寬、兩顆分頁各佔一半。整條含 padding 約 82px
+          （safe-area 之前）。</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <div class="nv-ghost"></div>
+        <nav class="nv1-wrap" aria-label="主要導覽（示意）">
+          <div class="nv1-bar">
+            <button class="nv-tab" type="button" aria-current="page">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 4v16"/></svg>
+              日記
+            </button>
+            <button class="nv-tab" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>
+              設定
+            </button>
+          </div>
+        </nav>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">N2</span> pill 置中收窄</div>
+        <div class="ds">外框與分頁都改 --r-pill（999）、寬度收成內容自身、置中懸浮；上下 padding 收小，
+          整條約 70px。文字標籤保留——兩顆鈕縮到中間後，「這是導覽」的語意靠字撐住。</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <div class="nv-ghost"></div>
+        <nav class="nv2-wrap" aria-label="主要導覽（示意）">
+          <div class="nv2-bar">
+            <button class="nv-tab" type="button" aria-current="page">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 4v16"/></svg>
+              日記
+            </button>
+            <button class="nv-tab" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>
+              設定
+            </button>
+          </div>
+        </nav>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-head">
+        <div class="nm"><span class="num">N3</span> icon-only 圓鈕</div>
+        <div class="ds">最緊湊：兩顆 44px 圓鈕、拿掉文字（aria-label 保留）。佔用最小，
+          代價是語意全壓在圖示上——只有兩頁、天天用，學一次就會，但first-look 最弱。</div>
+      </div>
+      <div class="frame"><div class="screen">
+        <div class="nv-ghost"></div>
+        <nav class="nv3-wrap" aria-label="主要導覽（示意）">
+          <div class="nv3-bar">
+            <button class="nv-tab" type="button" aria-current="page" aria-label="日記">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 4v16"/></svg>
+            </button>
+            <button class="nv-tab" type="button" aria-label="設定">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>
+            </button>
+          </div>
+        </nav>
+      </div></div>
+    </div>
+  </div>
+</section>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tally — 登入頁與 App Icon 決策樣張</title>
+<title>Tally — 登入頁決策樣張（第三／四輪）</title>
 <style>
 /* ═══════════════════════════════════════════════════
    決策樣張 · token 定義複製自 DESIGN.md（單獨開啟也能正常顯示）
@@ -27,12 +27,43 @@
 }
 * { box-sizing: border-box; }
 
+/* ═══════════════════════════════════════════════════
+   第三輪：wordmark 字體 subset（Google Fonts css2 API，text=Tally 拿字形子集，
+   下載 woff2 後 base64 內嵌，檔內不殘留任何外部資源引用）。
+   family 名故意加字體專屬字尾（非官方名稱），避免使用者系統剛好裝了同名字體時
+   document.fonts.check() 誤判成功——命中的只能是這裡內嵌的 @font-face。 */
+@font-face {
+  font-family: 'TallySpaceGrotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(data:font/woff2;base64,d09GMgABAAAAAAQwABAAAAAAB+wAAAPVAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhYbgTQcKAZgP1NUQVQqAFQRCAqDfIMzCw4AATYCJAMYBCAFhDoHIAwHG30GyAQe/t8tuy95cGhSFcrJiBvdiggw4gprKsysO6zat2l+fm1mPCSN2ukR3p0/vB0fE0uESKgkmTeXkLaSF3rdWpuVAyZmxRtS8Md3rQhgMSNJQaBgCeDNwxrhpKKUO3ccYGmjq7MZA8hf2KGioaGqvRnbmdqaJAo26QQaYqKs1kk2KhbcbP7MKmk+bt6JwwIVBRWZNcpEUFUAR/bPhG6RcVHBztq39DYozG/O1Bz0aiOJVK0Ex2qmrgklT/HrMSpe5Yhr+3GHOEWqCNMn3OAyezAG7v3O7dx7PQZ96kf/f4ZDcliEG4iL8i/9oPjJbWhGmxJcvZ+wo/TU1HYKc0GokHBPQBW5VTGRFFcGmHidxOAALhrp0z17d4P5tXmveaN5uXl2YtwKzCAmyxite6hY2SLhbnK/9otXMmPgX1q+fHG4LUqXDpc3ICxjQX2J70Pk6Aeae4nvfaGOvact9r6DMvruYe+CGHta980z6j8kxu6LWnfbXWJsQfP6QRNjwaDu+/BZGL3/8fDVF18OukUTy9DkQW8gIMaCQV0XJuyHrnvfd7pf0nU074IQ2sV3v3LIFxRC8z7O6Lxu0eVBscQnhHa5/xUtaoOqK6Pv6p/f1+XoO5oxdrS2yh3prq06uuN8S8ZpI68l///8ljy/8rLPXmrf/F/br1sbOv/vw5/9s2HT9WHhP4cuP7Y6MbFkV1hy8vbQ+Vg16r0v+h6+aXTZMr4rf6PX3vtGOV8uydgfnuxMS0suPxSaPWsP8ycnfeLqiHxk15HIYneb6+QTDnt07YGIXxxiVd6j85urMkpzU7SRsKFNmy7A6R/2M/By81K7Y2hl64pLEnIPpSedLIgedmTXpOUW7aj4d/isNH8q0IZ4Ba9sePx+cXpZ/m82Vf3pXerTq0OvOD5zjse85//PZEA2I7DWHCoCXRcvZMG8579kGagN9mBVz+U0/z+r7GC9Ukqk0HAqtZSKmq2cwIa7zc+t6FYX1Biul6KsPeEX+PNqE2zkC2jx7gDaVNK5MSoJj2azsJFKm5VQSq1LyWSxS9RSmlAmd91hqqijhlo6t/2dtNJBLkn+ZR14aKeOVjpZSJw78CcaSaSFdmpIYjdOdrCfVlx4qGIL7bTQ6X+ngwYSKKWFRio5RBXtEa9roRmDVBJJXs/M1hmBxpgRHm8eTraTlxnLKyYtlPmklb6i0QUHTZi8hfaPtfKVteGee1k9eiKSErrsA2OEDl4fbSWpoe5rfRduEvFwcxNJVNMod6DMRRpwRYUssNl+NnMhgecQY3o053ibeTWprBofF+bU/fIcAA==) format('woff2');
+  unicode-range: U+54, U+61, U+6C, U+79;
+}
+@font-face {
+  font-family: 'TallyOutfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(data:font/woff2;base64,d09GMgABAAAAAAOgABAAAAAABvAAAANFAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhYbgSYcKAZgP1NUQVQqAFQRCAqCOIIACw4AATYCJAMYBCAFhA4HIAwHG5AFyAQCrKsq6cwsoF5IJ8EvMv//vePf5DFxeo7vj3lr0/uvbZ1obiuyYeHY1qZAAgswYEwFPAerg/O7GgE4omCJEEGFr4A9EaQhS5WpVAvnTs17dWHiqCHCv6KsY+seXbBNWd+tkNjiAuxZ8KeZkjAlCxvTk3jyVs9blmOxwuBBTmGmgisZDFn2l5keVWHhA/RHDKR+X6K/ovR7NmXRHw9oiyJK784IwiHZPC9ryEMH6JITZD2gYryMaEKaiMCZEKW32vRo3pZlmPQ33v3/C8Y7ofpd4o08QUzsLgK2LeAZ9gYi+7Zt10sInAwxZSsP4WWux5BCBpkoiuFnsJ1TmNSiOZ3of+zh0g/0a71ZL9dz9cTjsWiIxoUDaxhylKiqoe6EkDJDEngC5XyHm4uNslUOFhfVwslwrF2zdrWG1WvVcLA4qA7CheYT7twRw+/edZh4+3YQi27dqjPxrhi+44L9hHPbGLb9fG1Rt45wkEP/Qe0GDvXtGzrUq9Wwdq2SJ4JPrO2dfjfde2mby5f6Kvt+d+7049O+xfv654yvOx7sSrYrXtC9fPmC7u2Kl0ytEplaIu5GXEqJqpFu41Pzi6WFrXQ0TceTYaE7g0YPHend27t33zlvyLoz/w4Xxdm3q4eMKBw+YvXVt58vTM9r1rX2BQAQ9gW/BUU9bY82dSn4ZmsY79ryjx6+/h9ffZbnE6eH/u/p/MH4gcD6FNjnyD3XlVwi9dD/Ec4fwDaDVa6mpBzK3pE18RUWsqQ3iiObrWZlF85UxjqFe7KqPUPSmLKTbet45xc48oj5XkK3WL9BAuv8Cm9m+C3kUc9vxZsSPmeycFTEciFYsGXP1aU17WlLO3r5rb3oRk/ySJaO9aQlPWhPN3rxcpKJ2M92Iomu9KAtyVSlDJWoSm960Yb29CKREnSlE62oQ2t6kFu70gWTVJI4OUUq5NOWNhx0JbX2pCEpJJHLz6aRTeOljObI1M20oQfNaUv+tkI80iOXlEg3+l+Fu2inSRoppJH67cxrR2vMbXE1esjFDrSmZRmK90C7q8s9uekxsKDtpPPt6E0LkmhJVzojGlqQQTGmRhIpg4fBC7FfPK0u0otIwynfJ/TobWoyAA==) format('woff2');
+  unicode-range: U+54, U+61, U+6C, U+79;
+}
+@font-face {
+  font-family: 'TallyFraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(data:font/woff2;base64,d09GMgABAAAAAAWAAA8AAAAACagAAAUlAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG4EcHCgGYD9TVEFUgRQAVBEICoVshGILDgABNgIkAxgEIAWFXgcgDAcbDAjIxOeftvX3DUMN2IBiYuXaiZFF65ExGvc3bFX8qGDxR/dY/d5pKU124TgPwmIVLPX9o9SS3hWDUInQtSmKREbFJsLFqAgvYjOcPahMzKgx8mGiXwEBwCAEiaCK1VVNcDb0syY4g0bD91VYox+eMEG0dPcLNKiOXMTpolwdCpHgY1DnvuUe6HgLg0Lyo2JvKv9vQIGAkmJuokGHeFsh3lmPLUsYwtTuiIfpivs0fZRqq6jGl9GXENwxv5t6EIlUIQaBQ9At14Ur9/TNRU22j0KFWeGx/6k94hCqHyBbj9d4T/JniFWGECaMskxzbTaosXHz3LX9UGOtuolQINOjGpYQUK21NZWEB56W7TcQT9AoRjx8XerToIgXCUvWWOY4LthzIAprkiXklRRAGKoNW8ivAGV1KkM8LmHlFP7DJZaZ89gS+VlIqrRfhSb0w4BZh05uzeA+4i5wR7hd3LoiJwbrCQjHwYVYMJVLcc/Fr3EoURKhlYPE1C+h6axo7wjP2PZ5t1mTy7zzvIvtgQcktvv82nefCzl2v7fD4WAYkeV0aMl1WBip9QxZSSs9eZaIGavd3rTr3rATF3w6D4q/+b4xEsZfcTDWVwGLnbG+TlZWVyW2W6AtpyW2s547d0psu2Gx2xmrw7RydExG/A0HY7XDcisyreYlSPM6G1KOn4blVJY/G56WrFnZE6Y+sWdzZuvNmxLbQ2NtcxfuT23mJU62S/8aknxtX8Jsa6v+6pHU1BNnDg6uPRg/Y69YIpr//tcS/PY/JLE9sDr4IYRvqSB864HBNgjd2iA/PvNo6M8FisCA7YWFnUnsoOreJLZipiI6ZU6j2Du1bl9YXM4X/m/Kw/atu9Om0MwlV0ZXzCSx96oG2eDKwsLtAYGKgp9xbkke3KxWVxVk/RTall2bX577d1Le6MxzNdvuvbJtWeSrlyua5tT3iqWXXYLiSrsS1e26upZdi+/vfrZAI2/oDVC7RTZ2NVVW1tTmpQ7E+7SlVt/bpLntyAr87tj4Q4BU3h4qc/XY7mf13e7hIgvTKiQBpcrPqCLZT86uSbvvK1p6xy2QwvXN252UW23CKl3oL66yp7weVV6XuXoMqd/6wcbbujZvT1CJcNvcH2/d3RzqKrvu5au8LnOmWx/6v1XROJF2R+9WY3oNe+dcR0FuaXKSgfeUOclTuS+xDgCAb8h0/PDKA+/0umT/JuIJX+XWOw9ezZnv13Bb/ntLwhftfQ6ZymTE845+SKLmtnAlEv6zawsIeF9iiFydy2eRQvejhVpCKT0JoehjAmyDCC9CUIR5Vefd8PpbFKPFXDpATGsnSkGkCkTBmeQ6UUolIgzT54mPRDhIgCBcszojFUubCOCFERCBFB1EwRUVxAODfGLginj2+Bp6QAq4QkGekIIRXjwPaMAYjOiHCeVg3/tZWgyiBmMwoXW6Wo9ZNEJD9hMYRyOGYRSF6UUDhrB6DCNgYcLnzDCjFcPQYhQasKjFONhKUfl+FRqhxRyGj8vZ3WZkYg3WwMxiAhCuNiMOZmiz1XEYwwRGeXUt1KiCOuv1YxImhs7oWEO5FgwzCsLYehUSEIf44f4sdGIAaUidvh+PfiQjAd1nn7cZRWhCloa8QYyCDc6cKXWsWl+EMYxjNjyPKwMVEhE/xnf3Mg2GoapiVh0mMAYdhjEoX1+ASbDQeIJzgwiMQrvXm8QA4gh3lNcU5yEf4Lq9GcNgMYvx0WsUOPIf4Wpe9r8diRisvZdwd1yi1wMAAA==) format('woff2');
+  unicode-range: U+54, U+61, U+6C, U+79;
+}
+
 /* ── 展示台（非 app 本體） ── */
 body { margin: 0; background: var(--raised); color: var(--ink); font-family: var(--font-body);
   font-size: var(--t-base); line-height: 1.55; padding: var(--s-6) var(--s-5) 64px; }
 .doc-head { max-width: 66ch; margin-bottom: var(--s-6); }
 .doc-head h1 { font-size: 1.6rem; margin: 0 0 var(--s-2); letter-spacing: var(--track-md); }
-.doc-head p { color: var(--ink-muted); font-size: var(--t-sm); margin: 0; }
+.doc-head p { color: var(--ink-muted); font-size: var(--t-sm); margin: 0 0 var(--s-1); }
+.doc-head .locked { color: var(--accent); font-weight: 700; }
 section.group { margin-bottom: 56px; }
 section.group > h2 { font-size: 1.25rem; margin: 0 0 var(--s-2); border-bottom: 1px solid var(--rule);
   padding-bottom: var(--s-3); }
@@ -53,7 +84,7 @@ section.group > p.intro { color: var(--ink-muted); font-size: var(--t-sm); margi
 
 /* ═══════════ 登入頁本體（沿用 index.html 結構） ═══════════ */
 .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.login { flex: 1; display: flex; flex-direction: column; align-items: center;
+.login { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: var(--s-6) var(--s-5); box-sizing: border-box; }
 .login h1 { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
   line-height: .95; color: var(--accent); margin: 0 0 var(--s-3); }
@@ -66,234 +97,506 @@ section.group > p.intro { color: var(--ink-muted); font-size: var(--t-sm); margi
 @media (hover: hover) { .login .cta:hover { background: var(--accent-dark); } }
 .login .cta:active { transform: translateY(1px); }
 .login .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.login .mark { color: var(--accent); }
+.login .mark { margin-bottom: var(--s-5); }
 
-/* 變體 A：現況＋呼吸感——只調整節奏與一層安靜背景，不加圖形／文案 */
-.login-a { justify-content: center; position: relative; overflow: hidden; }
-.login-a::before { content: ""; position: absolute; inset: auto 0 0 0; height: 42%;
-  background: var(--card); z-index: 0; }
-.login-a h1, .login-a p, .login-a .cta { position: relative; z-index: 1; }
-.login-a h1 { margin-bottom: var(--s-4); }
-.login-a p.tagline { margin-bottom: var(--s-6); }
-
-/* 變體 B：品牌圖形＋說明文案——上方加刻痕記號、文案加一句情境說明 */
-.login-b { justify-content: center; }
-.login-b .mark { margin-bottom: var(--s-5); }
-.login-b h1 { margin-bottom: var(--s-2); }
-.login-b p.tagline { margin-bottom: var(--s-2); }
-.login-b p.sub { font-size: var(--t-sm); color: var(--ink-faint); margin: 0 0 var(--s-6);
-  text-align: center; max-width: 280px; }
-
-/* 變體 C：量尺留白——不對稱配置，標題貼上、CTA 落在下段，量尺當安靜背景層 */
-.login-c { justify-content: flex-start; padding-top: 15%; position: relative; }
-.login-c h1 { margin-bottom: var(--s-2); }
-.login-c .ruler-bg { margin: var(--s-2) 0 auto; opacity: .55; }
-.login-c .cta { margin-top: var(--s-6); }
-
-/* ═══════════ App icon 本體 ═══════════ */
+/* ═══════════ App icon（定案：方向 3 · 幾何 T） ═══════════ */
 .icon-block { margin-bottom: var(--s-6); }
 .icon-block .col-head { max-width: 66ch; }
 .icon-sizes { display: flex; align-items: flex-end; gap: var(--s-6); flex-wrap: wrap; }
 .icon-cell { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
 .icon-cell .lbl { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
 .icon-cell svg { display: block; border-radius: 22%; }
+
+/* ═══════════ Wordmark 三變體 ═══════════ */
+.wm-block { margin-bottom: 40px; padding: var(--s-5); background: var(--card); border-radius: var(--r-btn);
+  border: 1px solid var(--rule); }
+.wm-pairs { display: flex; gap: var(--s-6); flex-wrap: wrap; align-items: flex-end; margin-top: var(--s-4); }
+.wm-pair { display: flex; flex-direction: column; align-items: center; gap: var(--s-3);
+  background: var(--paper); border-radius: var(--r-btn); padding: var(--s-5) var(--s-6);
+  border: 1px solid var(--rule-subtle); }
+.wm-pair .lockup { display: flex; align-items: flex-end; gap: var(--s-3); }
+.wm-pair .lbl { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+
+/* T-mark（direction 3 幾何 T，無背景方塊，登入頁與 wordmark 共用） */
+.t-mark rect { fill: var(--accent); }
+
+/* W3 · 基線鎖定＋比例呼應（已定案的唯一處理手法，W1 描邊 T 替換／W2 徽章鎖字已砍）——
+   不加任何新造形，只用精確對齊與字重字距呼應 icon 的緊實感。這輪固定用 W3 版式，
+   只換 .wm3-text 的 font-family／font-weight 比字體。 */
+.wm3 { display: flex; align-items: flex-end; gap: var(--s-2); }
+.wm3 .wm3-icon { flex-shrink: 0; border-radius: 22%; }
+.wm3 .wm3-text { font-size: var(--t-hero); font-weight: 700; letter-spacing: -.03em;
+  line-height: .95; color: var(--accent); }
+.wm3.f0 .wm3-text { font-family: var(--font-body); font-weight: 700; }
+.wm3.f1 .wm3-text { font-family: 'TallySpaceGrotesk', var(--font-body); font-weight: 700; }
+.wm3.f2 .wm3-text { font-family: 'TallyOutfit', var(--font-body); font-weight: 700; }
+.wm3.f3 .wm3-text { font-family: 'TallyFraunces', var(--font-body); font-weight: 600;
+  letter-spacing: -.01em; }
+
+/* ═══════════ 第四輪：登入頁極簡化（Meta splash 式） ═══════════
+   共用 .login 的 CTA 樣式，只改版面：mark 區 flex:1 置中、CTA 沉到底部拇指區
+   （與 DESIGN.md「CTA 固定在拇指區」同一原則）。 */
+.login.login-min { justify-content: flex-start; padding-bottom: 32px; }
+.login-min .mid { flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: var(--s-4); }
+.login-min .mid .tagline { margin: 0; }
+.login-min .foot { width: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--s-5); }
+.login-min .wordmark-sm { font-family: 'TallyFraunces', var(--font-body); font-weight: 600;
+  font-size: var(--t-md); letter-spacing: -.01em; color: var(--ink-muted); }
+
+/* 第五輪：文案與 mark 的搭配修法 */
+.login-min.p1 .mid { gap: var(--s-6); }
+.login-min.p1 .tagline { font-size: var(--t-md); color: var(--ink); }
+.login-min.p2 .mid { gap: var(--s-4); }
+.login-min.p2 .hero-q { font-size: 1.25rem; font-weight: 500; color: var(--ink);
+  letter-spacing: var(--track-md); margin: 0; text-align: center; }
+
+/* ═══════════ 第四輪：wordmark 在 app 內的落點（設定頁 mock） ═══════════
+   佔位列只demo落點，非設定頁實際內容 */
+.set-mock { display: flex; flex-direction: column; height: 100%; }
+.set-mock .topbar { display: flex; align-items: baseline; justify-content: space-between;
+  padding: var(--s-5) var(--s-5) var(--s-3); }
+.set-mock .topbar .ttl { font-size: 1.25rem; font-weight: 700; letter-spacing: var(--track-md); }
+.set-mock .topbar .wm-top { display: flex; align-items: flex-end; gap: 6px; }
+.set-mock .wm-sm-text { font-family: 'TallyFraunces', var(--font-body); font-weight: 600;
+  font-size: var(--t-sm); letter-spacing: -.01em; color: var(--ink-muted); line-height: 1; }
+.set-mock .ph { height: 44px; background: var(--card); border: 1px solid var(--rule-subtle);
+  border-radius: var(--r-tab); margin: 0 var(--s-5) var(--s-3); }
+.set-mock .ph-lbl { font-size: var(--t-xs); color: var(--ink-faint); letter-spacing: var(--track-xs);
+  margin: var(--s-3) var(--s-5) var(--s-2); }
+.set-mock .set-foot { margin-top: auto; padding: var(--s-6) 0 40px; display: flex;
+  align-items: flex-end; justify-content: center; gap: 6px; }
 </style>
 </head>
 <body>
 
 <div class="doc-head">
-  <h1>Tally 決策樣張 — 登入頁 × App Icon</h1>
-  <p>登入頁 3 個變體、App icon 3 個方向。用編號指名要哪個即可。所有顏色來自 DESIGN.md token，未硬編色值。</p>
+  <h1>Tally 決策樣張 — Wordmark 字體（第三輪）＋登入頁極簡化（第四輪）</h1>
+  <p><span class="locked">已定案，不再列選項：</span>App icon＝方向 3（幾何 T）／登入頁骨架＝變體 2（品牌圖形＋一行文案）／
+    wordmark 處理手法＝<strong>W3 基線鎖定</strong>（icon 與文字靠比例與基線對齊出一體感，不加新造形；
+    W1 描邊 T 替換、W2 徽章鎖字已砍）／登入文案＝ZH「今天吃了什麼？」（EN 版已砍，不再中英並列比較）。</p>
+  <p>這輪要挑：wordmark 的<strong>字體</strong>本身（使用者已表態可接受系統字以外的字體）。四個變體全部套用
+    已定案的 W3 版式，只換 <code>.wm3-text</code> 的字體。字體 subset 已 base64 內嵌，不從外部主機載入。
+    所有顏色來自 DESIGN.md token，未硬編色值。</p>
+  <p><strong>第四輪（見第四、五節）</strong>：使用者掃了 FB／Threads／IG 的啟動畫面後提議登入頁極簡化——
+    wordmark 可能從登入頁消失、搬進 app 內。先定落點（L×S 兩題），字體題（F0–F3）在那之後才有份量可言。
+    第四輪 mock 內的 wordmark 一律暫用 F3 示範，非定案。</p>
 </div>
 
-<!-- ══════ 登入頁 ══════ -->
+<!-- ══════ 一、App Icon（定案） ══════ -->
 <section class="group">
-  <h2>一、登入頁變體</h2>
-  <p class="intro">現況只有 hero 標題＋一行說明＋CTA，太空。三個變體在「品牌圖形有無」「留白節奏」「說明文字有無」「背景層次」四個面向上分歧，皆保留真 button、focus-visible、lang、單一 h1。不放 Google 彩色 logo（DESIGN.md 已否決）。</p>
+  <h2>一、App Icon（定案：方向 3 · 幾何 T）</h2>
+  <p class="intro">用途是 apple-touch-icon。方向 1、2 已砍。60px 是驗收點——縮到書籤大小仍看得出是個 T。</p>
 
-  <div class="row">
-
-    <!-- 變體 1 -->
-    <div>
-      <div class="col-head">
-        <div class="nm">變體 1 · 維持極簡，加安靜背景層</div>
-        <div class="ds">元素不變（標題／說明／CTA），只用 --card 鋪出下半層次，讓畫面有前後景之分。</div>
+  <div class="icon-block">
+    <div class="icon-sizes">
+      <div class="icon-cell">
+        <svg width="128" height="128" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
       </div>
-      <div class="frame">
-        <div class="screen">
-          <main class="login login-a">
-            <h1>Tally</h1>
-            <p class="tagline">記錄今天吃了什麼</p>
-            <button class="cta" type="button">用 Google 登入</button>
-          </main>
-        </div>
+      <div class="icon-cell">
+        <svg width="180" height="180" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
+      </div>
+      <div class="icon-cell">
+        <svg width="60" height="60" viewBox="0 0 1024 1024">
+          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+        </svg>
+        <div class="lbl">60px（書籤／主畫面觀感）</div>
       </div>
     </div>
-
-    <!-- 變體 2 -->
-    <div>
-      <div class="col-head">
-        <div class="nm">變體 2 · 品牌圖形＋兩行文案</div>
-        <div class="ds">標題上方加刻痕記號（呼應 icon 方向 1），文案分兩層：標語＋一句更安靜的補充說明。</div>
-      </div>
-      <div class="frame">
-        <div class="screen">
-          <main class="login login-b">
-            <svg class="mark" width="56" height="56" viewBox="0 0 1024 1024" aria-hidden="true">
-              <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-              <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-              <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-              <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-              <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
-            </svg>
-            <h1>Tally</h1>
-            <p class="tagline">記錄今天吃了什麼</p>
-            <p class="sub">一天開五次、三秒看完，不用想</p>
-            <button class="cta" type="button">用 Google 登入</button>
-          </main>
-        </div>
-      </div>
-    </div>
-
-    <!-- 變體 3 -->
-    <div>
-      <div class="col-head">
-        <div class="nm">變體 3 · 不對稱配置＋量尺背景</div>
-        <div class="ds">標題貼上、CTA 落在下段，中間留白拉開；用一條安靜的橫向量尺當背景層，不寫說明文字。</div>
-      </div>
-      <div class="frame">
-        <div class="screen">
-          <main class="login login-c">
-            <h1>Tally</h1>
-            <svg class="ruler-bg" width="200" height="24" viewBox="0 0 1024 120" aria-hidden="true">
-              <rect x="0" y="30" width="1024" height="60" rx="30" style="fill:var(--rule-subtle)"/>
-              <rect x="0" y="30" width="620" height="60" rx="30" style="fill:var(--accent-soft)"/>
-            </svg>
-            <button class="cta" type="button">用 Google 登入</button>
-          </main>
-        </div>
-      </div>
-    </div>
-
   </div>
 </section>
 
-<!-- ══════ App Icon ══════ -->
+<!-- ══════ 二、Wordmark 字體四變體（版式已定案＝W3 基線鎖定） ══════ -->
 <section class="group">
-  <h2>二、App Icon 方向</h2>
-  <p class="intro">用途是 apple-touch-icon（加到 iOS 主畫面／書籤）。配色只用 --card 當底、--accent 當主體。60px 是最重要的驗收點——縮到那麼小還認得出來才算成立。</p>
+  <h2>二、Wordmark 字體（版式定案 W3，這輪比字體本身）</h2>
+  <p class="intro">四個變體都是同一套 W3 基線鎖定版式（icon 縮放到跟文字大寫高度同一比例、底部對齊同一條基線、
+    間距 --s-2）——差別只在 <code>.wm3-text</code> 用什麼字體。F0 是系統字 700 的現況 control；
+    F1–F3 是自架 subset（Google Fonts css2 API 取 <code>text=Tally</code> 專屬子集，base64 內嵌，
+    不外連）。跟 icon 在 60px／180px 兩個尺寸下並排比較。</p>
 
-  <!-- Icon 1 -->
-  <div class="icon-block">
+  <!-- F0 -->
+  <div class="wm-block">
     <div class="col-head">
-      <div class="nm">方向 1 · 計數刻痕（正字標記）</div>
-      <div class="ds">四道粗刻痕＋一道斜線收尾，呼應「Tally／計數」的字面意義，圖形本身無方向性、縮小不糊。</div>
+      <div class="nm">F0 · 系統字 700（現況 control）</div>
+      <div class="ds">--font-body（-apple-system / PingFang TC 等）700 weight。跨平台不統一（iOS 拿 SF Pro，
+        Windows 拿微軟正黑），但零額外字重、零下載成本，是唯一在 DESIGN.md「不自架字體」原則下不需要
+        新增例外的選項。當作比較基準。</div>
     </div>
-    <div class="icon-sizes">
-      <div class="icon-cell">
-        <svg width="128" height="128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
-        </svg>
-        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+    <div class="wm-pairs">
+      <div class="wm-pair">
+        <span class="lbl">配 icon 180px</span>
+        <div class="lockup">
+          <svg width="180" height="180" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f0">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
-      <div class="icon-cell">
-        <svg width="180" height="180" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
-        </svg>
-        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
-      </div>
-      <div class="icon-cell">
-        <svg width="60" height="60" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="167" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="347" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="527" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="707" y="232" width="110" height="560" rx="55" style="fill:var(--accent)"/>
-          <rect x="150" y="447" width="740" height="130" rx="65" transform="rotate(-28 520 512)" style="fill:var(--accent-dark)"/>
-        </svg>
-        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      <div class="wm-pair">
+        <span class="lbl">配 icon 60px</span>
+        <div class="lockup">
+          <svg width="60" height="60" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f0">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Icon 2 -->
-  <div class="icon-block">
+  <!-- F1 -->
+  <div class="wm-block">
     <div class="col-head">
-      <div class="nm">方向 2 · 橫向量尺</div>
-      <div class="ds">呼應 app 主視覺「不用環圈、用橫向量尺」的決定；一段填色軌道，形狀簡單，縮到 60px 仍是清楚的一條粗槓。</div>
+      <div class="nm">F1 · Space Grotesk 700</div>
+      <div class="ds">geometric sans，字懷方正、a/y 帶點工程感的細節切角，跟幾何 T icon 的直角矩形語彙同一個
+        性格家族——四個變體裡跟 icon「長得最像親戚」的一個。代價：偏工程/科技感，跟「溫暖平靜」的產品方向
+        有一點點距離，但不到衝突的程度。</div>
     </div>
-    <div class="icon-sizes">
-      <div class="icon-cell">
-        <svg width="128" height="128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
-          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+    <div class="wm-pairs">
+      <div class="wm-pair">
+        <span class="lbl">配 icon 180px</span>
+        <div class="lockup">
+          <svg width="180" height="180" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f1">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
-      <div class="icon-cell">
-        <svg width="180" height="180" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
-          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
-      </div>
-      <div class="icon-cell">
-        <svg width="60" height="60" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="112" y="432" width="800" height="160" rx="80" style="fill:var(--rule)"/>
-          <rect x="112" y="432" width="500" height="160" rx="80" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      <div class="wm-pair">
+        <span class="lbl">配 icon 60px</span>
+        <div class="lockup">
+          <svg width="60" height="60" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f1">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Icon 3 -->
-  <div class="icon-block">
+  <!-- F2 -->
+  <div class="wm-block">
     <div class="col-head">
-      <div class="nm">方向 3 · 幾何 T</div>
-      <div class="ds">App 名稱首字母做粗體幾何處理，圓角比照 --r-btn／--r-pill 的圓潤感，是三個方向裡最抽象、最像傳統 app icon 的一個。</div>
+      <div class="nm">F2 · Outfit 700</div>
+      <div class="ds">geometric sans，比 Space Grotesk 圓潤、比系統字更緊實統一。選 700（非 600）是因為
+        hero 尺度（44px）需要撐住視覺重量——600 在這個字級量感偏薄，跟旁邊 accent 色的 icon 並排會顯得單薄；
+        700 讓筆畫粗細跟 icon 的粗矩形更平衡。整體性格比 Space Grotesk 溫和，介於「工程感」與「溫暖」之間。</div>
     </div>
-    <div class="icon-sizes">
-      <div class="icon-cell">
-        <svg width="128" height="128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
-          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">1024 設計稿（縮小顯示於 128px）</div>
+    <div class="wm-pairs">
+      <div class="wm-pair">
+        <span class="lbl">配 icon 180px</span>
+        <div class="lockup">
+          <svg width="180" height="180" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f2">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
-      <div class="icon-cell">
-        <svg width="180" height="180" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
-          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">180px（apple-touch-icon 實際尺寸）</div>
-      </div>
-      <div class="icon-cell">
-        <svg width="60" height="60" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
-          <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
-          <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
-        </svg>
-        <div class="lbl">60px（書籤／主畫面觀感）</div>
+      <div class="wm-pair">
+        <span class="lbl">配 icon 60px</span>
+        <div class="lockup">
+          <svg width="60" height="60" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f2">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- F3 -->
+  <div class="wm-block">
+    <div class="col-head">
+      <div class="nm">F3 · Fraunces 600（warm serif）</div>
+      <div class="ds">刻意要比的一個方向：warm serif，跟 cream 暖底的情緒最貼近，但跟幾何 T icon 的直角矩形
+        語彙形成明顯的<strong>風格張力</strong>——一個是手感／人文的襯線，一個是冷靜的幾何圖形。這張力可能是
+        「反差有趣」也可能是「兩套語言打架」，這正是要拿去給使用者判斷的地方，不預先替他下結論。</div>
+    </div>
+    <div class="wm-pairs">
+      <div class="wm-pair">
+        <span class="lbl">配 icon 180px</span>
+        <div class="lockup">
+          <svg width="180" height="180" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f3">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
+      </div>
+      <div class="wm-pair">
+        <span class="lbl">配 icon 60px</span>
+        <div class="lockup">
+          <svg width="60" height="60" viewBox="0 0 1024 1024" style="border-radius:22%">
+            <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+            <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+            <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+          </svg>
+          <div class="wm3 f3">
+            <svg class="wm3-icon" width="50" height="50" viewBox="0 0 1024 1024" aria-hidden="true">
+              <rect width="1024" height="1024" rx="224" style="fill:var(--card)"/>
+              <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <span class="wm3-text">Tally</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════ 三、登入頁文案（已定案，只留 ZH 版供對照） ══════ -->
+<section class="group">
+  <h2>三、登入頁文案（<span class="locked">已定案</span>：ZH「今天吃了什麼？」）</h2>
+  <p class="intro">全站 UI 是繁中，插一句英文會像貼上去的。中英兩版已比過，本輪不再列 EN 卡片——
+    這裡套用定案骨架（品牌圖形＋一行文案＋CTA）＋定案文案，只換 wordmark 的字體，方便跟上面第二組的
+    比較對照到完整頁面情境。mark 圖形是方向 3 的幾何 T。
+    <strong>注意：第四輪（下一節）重開了骨架題——若採 L1／L3，本節的示範僅供對照。</strong></p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm">ZH 版（已定案文案）</div>
+        <div class="ds">今天吃了什麼？——語意對等，不加行銷語，不用 italic。wordmark 這裡用 F3 Fraunces
+          示範完整頁面情境；四個字體變體的並排比較見上方第二組。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login">
+            <svg class="mark" width="64" height="48" viewBox="0 0 700 520" aria-hidden="true">
+              <rect x="0" y="0" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+              <rect x="290" y="0" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+            </svg>
+            <h1 style="font-family:'TallyFraunces', var(--font-body); font-weight:600;">Tally</h1>
+            <p class="tagline">今天吃了什麼？</p>
+            <button class="cta" type="button">用 Google 登入</button>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 四、登入頁極簡化（第五輪：文案與 mark 怎麼搭） ══════ -->
+<section class="group">
+  <h2>四、登入頁極簡化（第五輪：文案與 mark 怎麼搭）</h2>
+  <p class="intro"><span class="locked">第四輪已裁決：</span>極簡方向成立、CTA 沉到底部拇指區、
+    wordmark 不出現在登入頁（落點題＝不放、品牌只靠 icon，字體題連帶作廢）。
+    L2「mark＋一行文案」方向被接受，但被評「那行字跟 logo 搭不起來、有點怪」——診斷：文字被排成了
+    logo 的 <strong>caption</strong>（小、灰、貼太近），看起來像圖示的說明標籤，不是頁面在說話。
+    這輪比三種修法；P3 是「乾脆拿掉」的對照組。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm">P1 · 拉開距離＋升級成正文</div>
+        <div class="ds">文字從 caption 升級成正文：字級 --t-base → --t-md（16px）、色 --ink-muted → --ink、
+          與 mark 的間距 16 → 24px。mark 與文字各自成立，一個是圖、一個是話。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-min p1">
+            <div class="mid">
+              <svg width="96" height="71" viewBox="0 0 700 520" aria-hidden="true">
+                <rect x="0" y="0" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+                <rect x="290" y="0" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+              </svg>
+              <p class="tagline">今天吃了什麼？</p>
+            </div>
+            <div class="foot">
+              <button class="cta" type="button">用 Google 登入</button>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="col-head">
+        <div class="nm">P2 · 文字當主角</div>
+        <div class="ds">反轉階層：mark 縮小（48px）退居陪襯，問句放大到 20px --ink 當畫面主角——
+          頁面在跟你打招呼，logo 只是署名。跟 Meta splash 的「圖形獨大」走相反方向。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-min p2">
+            <div class="mid">
+              <svg width="48" height="36" viewBox="0 0 700 520" aria-hidden="true">
+                <rect x="0" y="0" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+                <rect x="290" y="0" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+              </svg>
+              <p class="hero-q">今天吃了什麼？</p>
+            </div>
+            <div class="foot">
+              <button class="cta" type="button">用 Google 登入</button>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="col-head">
+        <div class="nm">P3 · 拿掉文案（對照組）</div>
+        <div class="ds">中心只有 T mark，底部只有 CTA——如果 P1/P2 都還是覺得怪，答案就是這行字
+          本來就不屬於這一屏。代價：文案定案「今天吃了什麼？」從登入頁退場。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <main class="login login-min">
+            <div class="mid">
+              <svg width="96" height="71" viewBox="0 0 700 520" aria-hidden="true">
+                <rect x="0" y="0" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+                <rect x="290" y="0" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+              </svg>
+            </div>
+            <div class="foot">
+              <button class="cta" type="button">用 Google 登入</button>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════ 五、wordmark 在 app 內的落點（第四輪） ══════ -->
+<section class="group">
+  <h2>五、wordmark 在 app 內的落點</h2>
+  <p class="intro">使用者提議把 wordmark 搬進 app。<strong>今日頁頂欄已排除</strong>——那一列已被日期切換佔用，
+    再放 wordmark 只能加一列（約 40px），與「一屏不捲」硬約束對撞，不出變體。可行落點在設定頁
+    （頁面本身會捲、不吃高度約束）。灰色圓角列是佔位示意，非設定頁實際內容；wordmark 暫用 F3 示範。</p>
+
+  <div class="row">
+    <div>
+      <div class="col-head">
+        <div class="nm">S1 · 設定頁底部 footer</div>
+        <div class="ds">小 icon＋Tally 小字置中在頁面最底，經典的 about 落點。安靜、零成本，
+          代價是曝光極低——真的只是「有個家」。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <div class="set-mock">
+            <div class="topbar"><span class="ttl">設定</span></div>
+            <div class="ph-lbl">今日目標（佔位）</div>
+            <div class="ph"></div><div class="ph"></div>
+            <div class="ph-lbl">怎麼算出來的（佔位）</div>
+            <div class="ph"></div><div class="ph"></div><div class="ph"></div>
+            <div class="set-foot">
+              <svg width="18" height="18" viewBox="0 0 1024 1024" style="border-radius:22%" aria-hidden="true">
+                <rect width="1024" height="1024" rx="224" style="fill:var(--raised)"/>
+                <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+                <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+              </svg>
+              <span class="wm-sm-text">Tally</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="col-head">
+        <div class="nm">S2 · 設定頁頂欄右緣</div>
+        <div class="ds">「設定」標題右側放小 wordmark。每次進設定頁都看得到，
+          代價是頂欄從「純功能」變成掛了一塊品牌，跟全站安靜的調性有一點張力。</div>
+      </div>
+      <div class="frame">
+        <div class="screen">
+          <div class="set-mock">
+            <div class="topbar">
+              <span class="ttl">設定</span>
+              <span class="wm-top">
+                <svg width="16" height="16" viewBox="0 0 1024 1024" style="border-radius:22%" aria-hidden="true">
+                  <rect width="1024" height="1024" rx="224" style="fill:var(--raised)"/>
+                  <rect x="162" y="252" width="700" height="180" rx="60" style="fill:var(--accent)"/>
+                  <rect x="452" y="252" width="220" height="520" rx="60" style="fill:var(--accent)"/>
+                </svg>
+                <span class="wm-sm-text">Tally</span>
+              </span>
+            </div>
+            <div class="ph-lbl">今日目標（佔位）</div>
+            <div class="ph"></div><div class="ph"></div>
+            <div class="ph-lbl">怎麼算出來的（佔位）</div>
+            <div class="ph"></div><div class="ph"></div><div class="ph"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 
 </body>
