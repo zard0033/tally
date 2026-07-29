@@ -44,11 +44,14 @@ interface Notice {
   onAction: () => void
 }
 
-/** 原始錯誤訊息（'Failed to fetch'、'signal timed out'、AbortError…）對使用者沒有意義，
- *  換成看得懂的話。逾時的判準照委派指示：message 含 'AbortError' 一律當網路沒回應。
- *  逐字照 legacy/app.js 的 db() catch 區塊。 */
+/** 原始錯誤訊息（'Failed to fetch'、'signal timed out'、TimeoutError…）對使用者沒有意義，
+ *  換成看得懂的話。AbortSignal.timeout 產生的是 DOMException{name:'TimeoutError'}，
+ *  postgrest-js 組出的 message 形如 'TimeoutError: signal timed out'——三種寫法都要接住
+ *  （precommit review 抓到只認 AbortError 會讓逾時原文直接見人）。 */
 function friendlyError(message: string): string {
-  if (message.includes('AbortError')) return '網路沒回應，請確認連線是否正常'
+  if (message.includes('TimeoutError') || message.includes('AbortError') || message.includes('signal timed out')) {
+    return '網路沒回應，請確認連線是否正常'
+  }
   if (message.includes('Failed to fetch') || message.includes('TypeError')) {
     return '連不上網路，請確認 Wi-Fi 或行動網路'
   }
@@ -91,21 +94,21 @@ export default function App() {
    * 食品庫在這裡一起撈（跟 legacy 開 sheet 時才撈不同）是委派指示的明確要求——
    * 讓 LogSheet 拿到現成的 foods prop，不必自己管一份載入狀態，
    * 代價是開機多打一支 API，量體（23 筆）小到可以忽略。 */
-  const load = useCallback(async () => {
+  const load = useCallback(async (date: string) => {
     try {
-      const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntake(currentDate), listFoods()])
+      const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntake(date), listFoods()])
       if (!p || !w) {
         const detail = !p && !w
           ? '這個帳號的身體參數與體重紀錄都是空的。若之前用另一組帳號登入過，資料可能掛在那組帳號下——請確認登入的是同一個 Google 帳號。'
           : !p
             ? '還沒有身高、生日這些身體參數，算不出目標熱量。'
             : '還沒有任何體重紀錄，算不出目標熱量。'
-        showNotice('還沒有身體參數', detail, '重新載入', () => void load())
+        showNotice('還沒有身體參數', detail, '重新載入', () => void load(date))
         return
       }
       const t = computeTargets(p, num(w.weight_kg))
       if (!Number.isFinite(t.kcal)) {
-        showNotice('目標熱量算不出來', '身體參數有缺漏或格式不對，算出來的目標不是有效數字。', '重新載入', () => void load())
+        showNotice('目標熱量算不出來', '身體參數有缺漏或格式不對，算出來的目標不是有效數字。', '重新載入', () => void load(date))
         return
       }
       setProfile(p)
@@ -116,10 +119,10 @@ export default function App() {
       setFailed(false)
       setNotice(null)
     } catch (e) {
-      showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load())
+      showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
     }
-    // currentDate 變動不該觸發這支——那是 loadDay 的事，load() 只在登入／全域重試時呼叫
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 日期走顯式參數（跟 loadDay 對稱）——closure 抓 currentDate 曾造成
+    // 「歷史日存設定後畫面日期與資料錯位」，precommit review 抓到的，別改回去
   }, [showNotice])
 
   /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變 */
@@ -199,18 +202,18 @@ export default function App() {
     async (patch: Partial<ProfileRow>) => {
       if (!profile) throw new Error('身體參數還沒載入')
       await apiUpdateProfile(profile.user_id, patch)
-      await load() // 參數變了，目標要重算；load() 保留在目前分頁，不會被丟回今日頁
+      await load(currentDate) // 參數變了，目標要重算；load() 保留在目前分頁，不會被丟回今日頁
     },
-    [profile, load],
+    [profile, load, currentDate],
   )
 
   const handleSaveWeight = useCallback(
     async (w: Omit<NewWeight, 'user_id'>) => {
       if (!profile) throw new Error('身體參數還沒載入')
       await apiUpsertWeight({ ...w, user_id: profile.user_id })
-      await load() // 體重變了，目標要重算
+      await load(currentDate) // 體重變了，目標要重算
     },
-    [profile, load],
+    [profile, load, currentDate],
   )
 
   const handleSignOut = useCallback(() => void apiSignOut(), [])
@@ -260,11 +263,11 @@ export default function App() {
   useEffect(() => {
     if (session && !loadedForSession.current) {
       loadedForSession.current = true
-      void load()
+      void load(currentDate)
     } else if (!session) {
       loadedForSession.current = false
     }
-  }, [session, load])
+  }, [session, load, currentDate])
 
   if (session === undefined) {
     return (

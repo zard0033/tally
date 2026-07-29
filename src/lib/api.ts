@@ -12,7 +12,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 /* 逾時是必要件不是保險：連上了但不回的失敗形態，fetch 對它永遠不 reject。
    數值照 legacy DB_TIMEOUT。只掛在資料 CRUD 上，auth 呼叫（signInWithOAuth/getSession）不掛。
-   逾時時 postgrest-js 把 AbortError 收進 error.message，unwrap() 會原樣拋出，呼叫端認得出來。 */
+   AbortSignal.timeout 逾時產生 DOMException{name:'TimeoutError'}，postgrest-js 組出的
+   error.message 形如 'TimeoutError: signal timed out'（不是 AbortError），unwrap() 原樣拋出，
+   App 的 friendlyError 靠這個字串辨識。 */
 const DB_TIMEOUT = 8000
 const dbSignal = () => AbortSignal.timeout(DB_TIMEOUT)
 
@@ -120,6 +122,7 @@ export async function listRecentIntake(limit = 120): Promise<RecentIntakeRow[]> 
     .from('intake')
     .select('meal,food_id,qty')
     .order('eaten_on', { ascending: false })
+    .order('id', { ascending: false }) // 同日多筆時「最近一次」才有定義（review 抓的）
     .limit(limit)
     .abortSignal(dbSignal()))
 }
