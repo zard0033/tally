@@ -177,7 +177,7 @@
 **第 1、2 步已於 2026-07-29 執行完（見下方「收官執行記錄」），只剩第 3 步的真機 gate。**
 
 1. ~~fresh verifier 複驗九項回修~~ ✅
-2. ~~precommit deep review 並回修~~ ✅（push 本身還沒做，等使用者確認）
+2. ~~precommit deep review 並回修~~ ✅（已 push，見本節末「收官與現況」）
 3. ~~真機 gate：左滑刪除實滑~~ ✅ 已滑（2026-07-29），結果＝**套件不採用，走退路**（見下方
    「真機第二輪」）。**apple-touch-icon 與 tabular-nums 仍未驗**（下次拿手機順手看）。
 
@@ -307,6 +307,24 @@ undo 資料正確、版面不再跳動（`.timeline` 356→356）、reduced-moti
 - **教訓**：我當時把「測不起來」歸因成測試工具的問題就停手了，實際上那正是產品在對我說話。
   能單獨跑、能印狀態之後，這件事從「查不出來」變成三分鐘。
 
+#### 收官與現況（2026-07-29 session 末）
+
+- **已 push 並部署**：Tally `6735d8d..5e287ee`（Actions success）。線上網址就是最新版，
+  「左滑拖不開」已修好。最後一個 commit 是 precommit light review（runId `wf_66d9d898-283`，
+  **0 條 confirmed**，唯一一條 major 被驗證推翻）的三條 minor 採納：擋 click 的機制從
+  「旗標＋計時器」改成單一時間戳 `blockClickUntil`（dragStart 設 Infinity、dragEnd 設
+  現在+`CLICK_GRACE_MS` 自然到期，少一個要管生命週期的計時器）；`grabPoint` 去掉沒人用的
+  `width`，`tally.spec.ts` 兩處手寫取點改呼叫它。
+- **全域 skill 已更新並 push**（`claude-global-config` `73eba73..cdd2bea`）：`ui-verify` 補
+  「全份回歸與單條探針」一節（共用件抽出來讓單條能自己開機）、「探針先於斷言」、
+  「一條斷言死活建不起來時先懷疑產品」、有 npm 就用 `@playwright/test` 並設 `actionTimeout`；
+  本機實例指標從已退場的 `tools/tally-verify` 換成 repo 內的 `e2e/`。
+  同 push 另補兩則全域 memory（PowerShell 讀寫 CJK 檔案毀檔、vitest 在 Git Bash 全炸）。
+- **測試現況**：vitest 42/42；e2e = `tally.spec.ts` 14 條全份回歸 ＋ `interaction.spec.ts`
+  3 條獨立（單條約 3 秒，跑法 `npx playwright test interaction -g "關鍵字"`）。
+- **舊的 vanilla harness `C:\Users\Administrator\.claude\tools\tally-verify\` 已無用途，可刪**
+  （ui-verify skill 的指標也已經不指它了）。
+
 - **驗證**：vitest 42/42、tsc/oxlint 乾淨、**e2e 14/14（連跑兩次都綠）**、`npm run build` 成功。
 
 #### 收官執行記錄（2026-07-29）
@@ -397,6 +415,18 @@ undo 資料正確、版面不再跳動（`.timeline` 356→356）、reduced-moti
 **驗收方式（下次要驗同樣的東西照這個做）**：登入走 Google OAuth，agent 進不去。
 做法是 stub `window.fetch` ＋ 塞 `localStorage` 的 `tally.session`，再直接呼叫全域的 `showApp()`
 （`app.js` 沒有模組化，函式都在全域）。這樣能跑完整 UI 而不需要真帳號。
+
+### 下次做什麼（2026-07-29 session 末排序）
+
+1. **真機驗新左滑**（要你的 iPhone，最優先——整輪改動的驗收都卡這裡）：拖開一列、
+   滑到底刪除、刪完的「已刪除／復原」、滑開時右緣圓角。順帶補驗 apple-touch-icon
+   （加主畫面）與 tabular-nums 對齊，這兩件從 v2 起就一直沒驗。
+2. **額度預警提示**（最大的一塊新功能，尚未設計）：規格與待解衝突見下方「待確認／待處理」。
+   要走 dev-flow ＋ ui-design-flow，建議開新對話做。
+3. 零碎收尾：`review-findings.md` 剩 6 條（都不擋上線）；CI 的 actions 未 pin SHA；
+   RLS 的跨使用者 DELETE 還沒實測過；Notion 該評估退場了（app 已上線且跑過真機驗證）。
+4. 已知未覆蓋，想補再補：刪掉某餐最後一筆時退場動畫不會跑（要先擴 fixture 讓某餐有
+   兩筆以上才測得到）。
 
 ### 待確認 / 待處理
 
