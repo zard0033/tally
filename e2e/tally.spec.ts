@@ -42,8 +42,9 @@ function check(cond: unknown, msg: string): asserts cond {
 const numFrom = async (page: Page, sel: string) =>
   Number(((await page.locator(sel).first().textContent()) ?? '').replace(/[^\d.-]/g, ''))
 
-test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
+test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
   const fails: Fail[] = []
+  let ran = 0
   const pageErrs: string[] = []
   const consoleErrs: string[] = []
   page.on('pageerror', (e) => pageErrs.push(e.message))
@@ -59,6 +60,7 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
   await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
 
   async function step(name: string, run: () => Promise<void>) {
+    ran++
     const errMark = pageErrs.length
     await test.step(name, async () => {
       try {
@@ -211,7 +213,7 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
     check((await page.locator('.sheet').count()) === 0, '送出成功後 sheet 應該關閉')
   })
 
-  await step('左滑刪除 — 點擊露出與自動關其他列（react-swipeable-list v2.0）', async () => {
+  await step('左滑刪除 — 點擊露出與自動關其他列（v2.1 motion drag 手刻）', async () => {
     await page.waitForSelector('.timeline .item-row', { timeout: 3000 })
     const rows = page.locator('.timeline .item-row')
     const rowCount = await rows.count()
@@ -225,7 +227,7 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
     await page.waitForTimeout(300)
     check((await a.evaluate((el) => el.classList.contains('is-open'))), '點第一列後沒有 .is-open，刪除鈕沒露出')
     check(
-      (await a.locator('.item-delete.click-reveal').getAttribute('tabindex')) === '0',
+      (await a.locator('.item-delete').getAttribute('tabindex')) === '0',
       '點第一列後刪除鈕不可 tab 到（tabindex 應為 0）',
     )
     await items.nth(1).click()
@@ -235,11 +237,33 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
       '開第二列後第一列沒有自動關上（closeOthers 沒生效）',
     )
     check((await b.evaluate((el) => el.classList.contains('is-open'))), '第二列點了卻沒露出刪除鈕')
-    // 收起態的 click-reveal 鈕是 translateX(100%)，會計入祖先的 scrollable overflow；
+    // 滑開時 .item-slide 的內容會超出列寬，會計入祖先的 scrollable overflow；
     // .timeline 因 overflow-y:auto 使另一軸算成 auto，沒裁切就變成整條時間軸可橫向拖動
     // （捲軸被 scrollbar-width:none 藏起來，使用者只會看到版面莫名滑走）。
     const overflowX = await page.locator('.timeline').evaluate((el) => el.scrollWidth - el.clientWidth)
     check(overflowX === 0, `時間軸有 ${overflowX}px 水平溢位——刪除鈕收起時停在列外沒被裁切`)
+  })
+
+  await step('刪除的 undo 窗 — 樂觀移除、復原把那一列放回去（v2.1）', async () => {
+    const before = await page.locator('.timeline .item').count()
+    check(before >= 2, `時間軸品項不足 2 筆（實際 ${before}），測不了刪除與復原`)
+    const firstName = ((await page.locator('.timeline .item .nm').first().textContent()) ?? '').trim()
+
+    // 第二列此時是開的（上一條路徑點開的），刪除鈕已可點
+    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    await page.waitForTimeout(400) // 等 exit 動畫跑完真的從 DOM 移除
+    const afterDelete = await page.locator('.timeline .item').count()
+    check(afterDelete === before - 1, `刪除後品項數應為 ${before - 1}，實際 ${afterDelete}`)
+    await must(page, '.undo-bar', '復原提示條')
+    await mustText(page, '.undo-bar', '已刪除', '復原提示條文案')
+
+    await page.locator('.undo-bar button').click()
+    await page.waitForTimeout(300)
+    const afterUndo = await page.locator('.timeline .item').count()
+    check(afterUndo === before, `復原後品項數應回到 ${before}，實際 ${afterUndo}`)
+    check((await page.locator('.undo-bar').count()) === 0, '復原後提示條應該消失')
+    const nameAfter = ((await page.locator('.timeline .item .nm').first().textContent()) ?? '').trim()
+    check(nameAfter === firstName, `復原後第一列品名變了：原「${firstName}」現「${nameAfter}」`)
   })
 
   await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {
@@ -290,10 +314,12 @@ test('Tally UI 回歸 — 10 條路徑', async ({ page }) => {
     console.log(`console 錯誤 ${consoleErrs.length} 筆：`)
     for (const e of consoleErrs.slice(0, 10)) console.log(`  · ${e}`)
   }
+  // 實數，不是寫死的字串——原本這行永遠印 10/10，加了路徑也不會變，
+  // 等於「全過」這個訊號本身不可信
   console.log(
     fails.length
-      ? `FAIL ${fails.length}/10\n` + fails.map((f) => `  · ${f.step}\n    ${f.msg}`).join('\n')
-      : `PASS 10/10`,
+      ? `FAIL ${fails.length}/${ran}\n` + fails.map((f) => `  · ${f.step}\n    ${f.msg}`).join('\n')
+      : `PASS ${ran}/${ran}`,
   )
 
   expect(blocked, `擋下 ${blocked.length} 筆非 /rest/v1/ 的 Supabase 呼叫：${blocked.join(', ')}`).toEqual([])

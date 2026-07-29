@@ -163,18 +163,18 @@ body {
   font-variant-numeric: tabular-nums; }
 .items { margin: var(--s-2) 0 0; padding: 0; list-style: none; }
 
-/* ── 品項列：左滑露出刪除鈕（v2.0：react-swipeable-list，取代舊版 CSS scroll-snap 手刻） ──
-   .item-row 包住 SwipeableListItem（真正的滑動手勢＋trailingActions 圓鈕）＋一顆
-   獨立的 .item-delete.click-reveal（鍵盤／非觸控路徑：套件沒有程式化開合的公開 API，
-   點 .item-content 改用我們自己的 open state 控制這顆鈕的顯隱，兩條路徑互不干擾，
-   細節見 Today.tsx 檔頭註記）。 */
-/* overflow:clip 不是裝飾——click-reveal 鈕收起時是 translateX(100%)，停在列外 44px，
-   仍會計入祖先的 scrollable overflow；.timeline 指定了 overflow-y:auto，另一軸的
-   visible 依規範算成 auto，於是整條時間軸多出 24px 可橫向拖動，捲軸還被藏起來。
+/* ── 品項列：左滑露出刪除鈕（v2.1：motion drag 手刻，取代 react-swipeable-list） ──
+   結構是兩層：.item-delete 固定壓在列的右緣底下，.item-slide 是唯一會動的那層
+   （motion 只寫 transform，不碰 layout 屬性）。滑開＝內容讓開、露出底下的鈕，
+   不是把鈕蓋上來——視覺結果一樣，但省掉鈕自己的位移動畫。
+   開合狀態只有一個來源：Today.tsx 的 openId，觸控與鍵盤兩條路徑共用。 */
+/* overflow:clip：滑開時 .item-slide 的內容會超出列寬，沒有裁切的話 .timeline
+   （overflow-y:auto 使另一軸算成 auto）會多出可橫向拖動的寬度，捲軸還被藏起來。
    e2e 有一條 scrollWidth === clientWidth 的斷言鎖住這件事。 */
 .item-row { position: relative; border-radius: var(--r-tab); overflow: clip; }
 /* 圓角要給「有底色的那一層」。滑開前這張卡看起來是圓的，其實是外層 .item-row 的
    overflow:clip 裁出來的；一滑開卡片右緣離開裁切區，就露出它自己的直角（真機回報）。 */
+.item-slide { position: relative; z-index: 1; }
 .item-content { width: 100%; border-radius: var(--r-tab);
   display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
   min-height: 44px; padding: var(--s-1) 0; border: none; background: var(--card); text-align: left;
@@ -182,11 +182,9 @@ body {
   letter-spacing: var(--track-base); cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease), background-color var(--dur-mid) var(--ease); }
-.item-row.opening .item-content { transition: opacity var(--dur-base) var(--ease), background-color var(--dur-base) var(--ease); }
-/* is-raised（底色）跟 is-open（click-reveal 顯隱）是兩個獨立狀態：真的滑動手勢只會
-   觸發 is-raised，套件自己的 trailingActions 鈕負責承接點擊；is-open 只在「點內容
-   手動露出」時才成立，兩者混一起會讓 click-reveal 在真滑動時也悄悄疊上去 */
-.item-row.is-raised .item-content { background-color: var(--raised); }
+/* 滑開那一列底色 --card → --raised（DESIGN.md v2.0）。狀態源就是 openId，
+   不再有第二個「raised」旗標。 */
+.item-row.is-open .item-content { background-color: var(--raised); }
 /* 全域關掉了 tap highlight，沒有這行的話點品項是全站唯一零回饋的可點元素 */
 .item-content:active { opacity: .6; }
 .item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
@@ -196,40 +194,33 @@ body {
 .item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
-/* iOS 提醒事項風格：44px 圓鈕、--over-fill 底、白色垃圾桶圖示。同一份視覺套在兩個
-   互不相干的元素上——套件 trailingActions 裡的 <span>（真的滑開才看得到）與我們
-   自己控制顯隱的 <button>（點內容露出，鍵盤可達）。 */
+/* iOS 提醒事項風格：44px 圓鈕、--over-fill 底、白色垃圾桶圖示。它固定壓在列的
+   右緣底下不動，靠上層 .item-slide 讓開才露出來。 */
 .item-delete { width: 44px; height: 44px; border-radius: var(--r-pill); border: none;
   background: var(--over-fill); color: var(--on-accent); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
-  -webkit-appearance: none; appearance: none; }
+  -webkit-appearance: none; appearance: none;
+  position: absolute; top: 0; bottom: 0; right: var(--s-2); margin: auto 0;
+  transition: transform var(--dur-base) var(--ease); }
 .item-delete svg { width: 18px; height: 18px; stroke: var(--on-accent); }
 .item-delete:active { opacity: .8; }
 /* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
 .item-delete:disabled { opacity: .6; cursor: default; }
-.item-delete.click-reveal { position: absolute; top: 0; bottom: 0; right: 0; margin: auto 0;
-  transform: translateX(100%); opacity: 0; pointer-events: none;
-  transition: transform var(--dur-mid) var(--ease), opacity var(--dur-mid) var(--ease); }
-.item-row.opening .item-delete.click-reveal { transition-duration: var(--dur-base); }
-.item-row.is-open .item-delete.click-reveal { transform: translateX(0); opacity: 1; pointer-events: auto; }
-/* outline-offset 內縮：.item-row 現在 overflow:clip，往外長的外框會被裁掉半圈 */
-.item-delete.click-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-
-/* react-swipeable-list 的基礎 CSS（main.tsx 引入）預設退場時長是 .5s／.2s，
-   改用 --dur-mid 跟全站四級階梯對齊；套件本身的抓取跟手指（drag 中直接設 transform）
-   不受影響，只有放開後的回彈／trailing actions 收合動畫走這個時長。 */
-.swipeable-list-item__content--return { transition: transform var(--dur-mid) var(--ease); }
-.swipeable-list-item__trailing-actions--return { transition: width var(--dur-mid) var(--ease); }
+/* 拖過「放手就刪」的門檻時鈕放大一點——純 transform 的預告，讓滑到底不是盲的 */
+.item-row.is-armed .item-delete { transform: scale(1.18); }
+/* outline-offset 內縮：.item-row 是 overflow:clip，往外長的外框會被裁掉半圈 */
+.item-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 /* 加入成功的短暫高亮：疊一層 --accent-soft 只動 opacity，不動 layout */
-/* inset 不外擴——這一列在橫向 scroll container 裡，往外長會多撐出捲動寬度 */
+/* inset 不外擴——.item-row 是 overflow:clip，往外長會被裁掉 */
+.item-content { position: relative; }
 .item-content::before { content: ''; position: absolute; inset: 0;
   border-radius: var(--s-1); background: var(--accent-soft); opacity: 0; pointer-events: none; }
 /* 1.2s 不是 --dur 的過場，是「看得到又不礙事」的停留時間：--dur(160ms) 太快，
    回到今日頁時高亮已經消失，等於沒有確認訊號。
    前 25% 先停住不動再開始衰減——沒有這段 hold，透明度一開始就往下掉，
    真正「看得見」的時間比帳面短，尾巴又在 .05 以下白拖 */
-.item.just-added .item-content::before { animation: flash 1.2s cubic-bezier(.4, 0, 1, 1) forwards; }
+.item-content.just-added::before { animation: flash 1.2s cubic-bezier(.4, 0, 1, 1) forwards; }
 @keyframes flash { 0%, 25% { opacity: .9; } 100% { opacity: 0; } }
 
 /* ── 待記錄餐次（整行可點） ── */
@@ -261,6 +252,21 @@ body {
 .cta svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
 /* ── 分頁列（v2.0：pill 置中收窄，取代貼滿寬的長條） ── */
+/* 刪除的復原條：走版面流、排在分頁列正上方，不用 fixed／不疊在任何東西上面
+   （這個 app 的畫面是固定三段，浮層只會遮住 CTA）。沒有陰影分層（DESIGN.md），
+   邊界靠 --rule；「復原」是動作所以用 --accent，與訊號色規則一致 */
+.undo-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  margin: 0 var(--s-5); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  background: var(--raised); border: 1px solid var(--rule); border-radius: var(--r-btn);
+  font-size: var(--t-sm); color: var(--ink); }
+.undo-bar button { min-height: 44px; padding: 0 var(--s-3); border: none; background: none;
+  font-family: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent);
+  letter-spacing: var(--track-md); cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.undo-bar button:active { opacity: .5; }
+.undo-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
+  border-radius: var(--s-1); }
+
 .tabbar-wrap { padding: var(--s-1) 0 var(--s-3); display: flex; justify-content: center;
   padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
 .tabbar { display: flex; gap: var(--s-1); padding: var(--s-1);
@@ -601,16 +607,14 @@ body {
   .cta, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
   .chip, .icon-btn, .date-arrow, .date-today-btn, .pick-bar-btn, .field-float label,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete,
-  .swipeable-list-item__content--return, .swipeable-list-item__trailing-actions--return,
   .qty-btn { transition-duration: .01ms; }
-  /* 上面幾條需要跟 .item-row.opening／.item-row.is-open 的巢狀規則比specificity，
-     單獨的 class 選擇器贏不過，要原樣列出來才壓得過 */
-  .item-row.opening .item-content,
-  .item-row.is-raised .item-content,
-  .item-row.opening .item-delete.click-reveal,
-  .item-row.is-open .item-delete.click-reveal { transition-duration: .01ms; }
+  /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
+     單獨的 class 選擇器贏不過，要原樣列出來才壓得過。
+     .item-slide 的位移是 motion 在 JS 端驅動的，降速在 Today.tsx 走 reduceMotion() */
+  .item-row.is-open .item-content,
+  .item-row.is-armed .item-delete { transition-duration: .01ms; }
   .cta:active, .pick-bar-btn:active { transform: none; }
-  .item.just-added .item-content::before,
+  .item-content.just-added::before,
   .sheet.opening, .pick-bar,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
   #settings-sheet-root .scrim { animation-duration: .01ms; }

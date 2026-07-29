@@ -5,6 +5,7 @@
    （內部走 fetch）。只要外部把 window.fetch 換掉並在 localStorage 種好
    `sb-<ref>-auth-token`，這裡從開機判斷到 CRUD 全部離線可跑，不需要真網路。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import type { Session } from '@supabase/supabase-js'
 import {
   createFood as apiCreateFood,
@@ -58,6 +59,9 @@ function friendlyError(message: string): string {
   return message
 }
 
+/** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
+const UNDO_MS = 5000
+
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 const byFoodName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
 
@@ -81,6 +85,14 @@ export default function App() {
   const [sheetMeal, setSheetMeal] = useState<MealKey | null>(null)
   const [justAddedIds, setJustAddedIds] = useState<Set<number>>(new Set())
   const flashTimer = useRef<number | undefined>(undefined)
+
+  /* 刪除的 undo 窗（v2.1）：按下刪除後**先不打 DELETE**，只把該列從畫面樂觀移除，
+     等 UNDO_MS 過了才真的送出。復原＝把快照的 rows 放回去，不必反向 INSERT——
+     反向 INSERT 會拿到新的 id，而且復原本身也可能失敗，那就真的救不回來了。
+     代價是這段窗內關掉分頁的話刪除不會生效，所以 pagehide 會先結清（見 useEffect）。 */
+  const pendingDelete = useRef<{ id: number; prevRows: IntakeRow[] } | null>(null)
+  const undoTimer = useRef<number | undefined>(undefined)
+  const [undoOpen, setUndoOpen] = useState(false)
 
   const showNotice = useCallback(
     (headline: string, detail: string | undefined, actionLabel: string, onAction: () => void) => {
@@ -162,25 +174,81 @@ export default function App() {
 
   /* 刪除失敗跟 legacy 一致：轉全域 Notice，不是就地錯誤——這是讀寫失敗分流的例外，
    * 因為刪除沒有「已選內容」需要保留，直接回今天重試就好 */
+  const commitDelete = useCallback(async () => {
+    const p = pendingDelete.current
+    if (!p) return
+    pendingDelete.current = null
+    window.clearTimeout(undoTimer.current)
+    setUndoOpen(false)
+    try {
+      await apiDeleteIntake(p.id)
+    } catch (e) {
+      // 送不出去就把畫面還原成刪除前的樣子，不留下「看起來刪掉了其實還在」
+      setRows(p.prevRows)
+      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDay())
+    }
+  }, [loadDay, showNotice])
+
   const handleDeleteIntake = useCallback(
     (id: number) => {
-      void (async () => {
-        try {
-          await apiDeleteIntake(id)
-          await loadDay()
-        } catch (e) {
-          showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '回今天', () => void loadDay())
-        }
-      })()
+      // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列
+      if (pendingDelete.current) void commitDelete()
+      setRows((prev) => {
+        if (!prev) return prev
+        pendingDelete.current = { id, prevRows: prev }
+        return prev.filter((r) => r.id !== id)
+      })
+      setUndoOpen(true)
+      window.clearTimeout(undoTimer.current)
+      undoTimer.current = window.setTimeout(() => void commitDelete(), UNDO_MS)
     },
-    [loadDay, showNotice],
+    [commitDelete],
   )
+
+  /* 換日期就結清待刪：不然 undo 會把 A 日的 rows 快照放進正在看的 B 日，
+     失敗時的還原也會錯位。待刪永遠不跨日，下面的還原邏輯才能假設同一天。 */
+  const dateRef = useRef(currentDate)
+  useEffect(() => {
+    if (dateRef.current !== currentDate) {
+      dateRef.current = currentDate
+      if (pendingDelete.current) void commitDelete()
+    }
+  }, [currentDate, commitDelete])
+
+  const undoDelete = useCallback(() => {
+    const p = pendingDelete.current
+    if (!p) return
+    pendingDelete.current = null
+    window.clearTimeout(undoTimer.current)
+    setUndoOpen(false)
+    setRows(p.prevRows)
+  }, [])
+
+  /* 待刪還沒送出就離開頁面／切到背景的話，先把它結清。iOS Safari 不保證跑 beforeunload，
+     pagehide 與 visibilitychange 是它比較認的兩個。 */
+  useEffect(() => {
+    const flush = () => {
+      if (pendingDelete.current) void commitDelete()
+    }
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onHidden)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onHidden)
+      flush()
+    }
+  }, [commitDelete])
 
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
    * 按鈕變重試，跟 legacy 的 withBusy 行為一致（跟上面 deleteIntake 的全域 Notice 不同）。 */
   const handleCreateIntake = useCallback(
     async (newRows: NewIntake[]) => {
+      // 先結清待刪：底下的 loadDay() 會整包換掉 rows，undo 的快照就過期了
+      if (pendingDelete.current) await commitDelete()
       const created = await apiCreateIntake(newRows)
       setSheetOpen(false)
       await loadDay()
@@ -189,7 +257,7 @@ export default function App() {
       if (flashTimer.current !== undefined) window.clearTimeout(flashTimer.current)
       flashTimer.current = window.setTimeout(() => setJustAddedIds(new Set()), 1300)
     },
-    [loadDay],
+    [loadDay, commitDelete],
   )
 
   const handleCreateFood = useCallback(async (food: NewFood): Promise<Food> => {
@@ -321,6 +389,27 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* 刪除的可復原提示。role=status＋aria-live=polite：讀屏會播報，但不搶焦點——
+          它是可忽略的提示，不是必須回應的對話框。時間到自己消失，不擋任何操作。 */}
+      <AnimatePresence>
+        {undoOpen && (
+          <motion.div
+            className="undo-bar"
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <span>已刪除</span>
+            <button type="button" onClick={undoDelete}>
+              復原
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <nav className="tabbar-wrap" aria-label="主要導覽">
         <div className="tabbar">

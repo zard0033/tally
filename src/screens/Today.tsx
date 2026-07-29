@@ -1,9 +1,10 @@
 /* 今日頁：熱量量尺＋三大營養素條＋餐別時間軸＋左滑刪除。
-   行為與視覺對齊 DESIGN.md v2.0（樣張選項 T1／R1，樣張檔本身已隨決策固化移除）：
-   日期區改「週二 7/28」＋回今天安靜文字鈕；左滑刪除改 react-swipeable-list（iOS 模式），
-   取代舊版 CSS scroll-snap 手刻。計算全部交給 src/lib/formulas.ts，這裡不重新推導捨入或破表判定。 */
-import { useEffect, useRef, useState } from 'react'
-import { SwipeableListItem, SwipeAction, TrailingActions, Type } from 'react-swipeable-list'
+   行為與視覺對齊 DESIGN.md v2.1：日期區「週二 7/28」＋回今天安靜文字鈕；
+   左滑刪除自 v2.1 改用 motion drag 手刻（取代 react-swipeable-list——那個套件拖曳中
+   每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
+   motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
+import { useCallback, useRef, useState } from 'react'
+import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
@@ -13,24 +14,19 @@ import type { TodayProps } from './types'
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋白質', fat: '脂肪', carb: '碳水' }
 
-/* react-swipeable-list 的型別定義沒有列出 `resetState`（package 的 propTypes 有，
-   d.ts 沒補齊）——它是拿到該列 playReturnAnimation 的唯一管道，用來在「點另一列」
-   時把真的滑開的列關掉。用一個薄型別擴充接住，不用 any 到底。 */
-type SwipeItemExtraProps = { resetState?: (close: () => void) => void }
-const SwipeItem = SwipeableListItem as unknown as React.ComponentType<
-  React.ComponentProps<typeof SwipeableListItem> & SwipeItemExtraProps
->
+/* 左滑的三個距離。REVEAL＝44px 圓鈕＋兩側留白，就是「開啟」時停下來的位置；
+   OPEN_AT＝放手時超過它就吸附開啟（拖不到一半視為反悔）；
+   FULL_AT＝拖過列寬這個比例放手，直接刪除（iOS 提醒事項的滑到底行為，配 undo 才安全）。 */
+const REVEAL = 56
+const OPEN_AT = 24
+const FULL_AT = 0.45
+const EASE = [0.4, 0, 0.2, 1] as const
 
 const DeleteIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
   </svg>
 )
-
-/** --dur-base 現值（ms），跟著 CSS token 走，不在 JS 端另外寫死一份數字。 */
-function durBase(): number {
-  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-base')) || 160
-}
 
 export default function Today(props: TodayProps) {
   const {
@@ -53,77 +49,25 @@ export default function Today(props: TodayProps) {
   const dateRegionRef = useRef<HTMLDivElement>(null)
   const willLandOnToday = (days: number) => shiftDate(currentDate, days) === localDate()
 
-  /* 左滑刪除的三個狀態，理由見檔尾委派回報：
-     - closeFns：每一列 SwipeableListItem 的 playReturnAnimation，供「開別列時關掉真的滑開的列」用
-     - raisedId／openingId：底色 --card→--raised 的那一列，openingId 只在剛開的那一刻套用
-       較短的 --dur-base，其餘時候（含關閉）走 CSS 預設的 --dur-mid
-     - manualOpenId：點擊品項內容（鍵盤／非觸控路徑）手動露出的刪除鈕；套件本身沒有
-       程式化開合的公開 API，這條路徑是另外補的，跟真正的滑動手勢互不干擾
-       （real swipe 一開始就會把 manualOpenId 清掉，見 handleSwipeStart） */
-  const closeFns = useRef(new Map<number, () => void>())
-  const [raisedId, setRaisedId] = useState<number | null>(null)
-  const [openingId, setOpeningId] = useState<number | null>(null)
-  const [manualOpenId, setManualOpenId] = useState<number | null>(null)
-  const openingTimer = useRef<number | undefined>(undefined)
+  /* 左滑刪除只有一個狀態：哪一列是開的。v2.0 曾拆成 raisedId／openingId／manualOpenId
+     三個並行 id，是因為當時的套件沒有程式化開合 API，觸控與鍵盤只能各走各的路；
+     改成自己控制 x 位移之後，兩條路徑寫的是同一個 openId，「開一列自動關他列」
+     也就不必再維護一份 close 函式的 Map——單值 state 天生只能有一列是開的。 */
+  const [openId, setOpenId] = useState<number | null>(null)
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<number>>(new Set())
 
-  // 品項被刪掉／換日期後，Map 裡對應不到任何列的殘留項清掉，避免無限累積
-  useEffect(() => {
-    const ids = new Set((rows ?? []).map((r) => r.id))
-    closeFns.current.forEach((_fn, id) => {
-      if (!ids.has(id)) closeFns.current.delete(id)
-    })
-  }, [rows])
+  const toggleOpen = useCallback((id: number) => setOpenId((prev) => (prev === id ? null : id)), [])
 
-  useEffect(() => () => window.clearTimeout(openingTimer.current), [])
-
-  function closeOthers(exceptId: number) {
-    closeFns.current.forEach((fn, id) => {
-      if (id !== exceptId) fn()
-    })
-  }
-
-  function markOpening(id: number) {
-    setOpeningId(id)
-    window.clearTimeout(openingTimer.current)
-    openingTimer.current = window.setTimeout(() => setOpeningId(null), reduceMotion() ? 0 : durBase())
-  }
-
-  function toggleManual(id: number) {
-    if (manualOpenId === id) {
-      setManualOpenId(null)
-      setRaisedId((prev) => (prev === id ? null : prev))
-      return
-    }
-    closeOthers(id)
-    setManualOpenId(id)
-    setRaisedId(id)
-    markOpening(id)
-  }
-
-  function handleSwipeStart(id: number) {
-    closeOthers(id)
-    setManualOpenId(null)
-  }
-
-  function handleSwipeProgress(id: number, progress: number) {
-    if (progress > 0) {
-      if (raisedId !== id) {
-        setRaisedId(id)
-        markOpening(id)
-      }
-    } else if (raisedId === id) {
-      setRaisedId(null)
-    }
-  }
-
-  function handleDelete(id: number) {
-    // 守衛擺在這裡而不是按鈕上：click-reveal 那顆是 <button> 可以 disabled，但滑開
-    // 露出的那顆是套件渲染的 <span>，連點兩下會送出兩次 DELETE
-    if (deletingIds.has(id)) return
-    setDeletingIds((prev) => new Set(prev).add(id))
-    onDeleteIntake(id)
-  }
+  const handleDelete = useCallback(
+    (id: number) => {
+      // 連點守衛：刪除是破壞性動作，而樂觀移除到那一列真的消失中間有一段動畫時間
+      if (deletingIds.has(id)) return
+      setDeletingIds((prev) => new Set(prev).add(id))
+      setOpenId((prev) => (prev === id ? null : prev))
+      onDeleteIntake(id)
+    },
+    [deletingIds, onDeleteIntake],
+  )
 
   const eaten = rows ? sumIntake(rows) : null
   const eatenKcal = eaten ? Math.round(eaten.kcal) : null
@@ -245,19 +189,7 @@ export default function Today(props: TodayProps) {
         {rows === null ? (
           <p className="muted">載入中…</p>
         ) : (
-          renderTimeline(rows, {
-            raisedId,
-            openingId,
-            manualOpenId,
-            deletingIds,
-            justAddedIds,
-            onOpenSheet,
-            toggleManual,
-            handleDelete,
-            handleSwipeStart,
-            handleSwipeProgress,
-            registerClose: (id, fn) => closeFns.current.set(id, fn),
-          })
+          renderTimeline(rows, { openId, deletingIds, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
         )}
       </div>
 
@@ -274,17 +206,113 @@ export default function Today(props: TodayProps) {
 }
 
 interface TimelineHelpers {
-  raisedId: number | null
-  openingId: number | null
-  manualOpenId: number | null
+  openId: number | null
   deletingIds: ReadonlySet<number>
   justAddedIds: ReadonlySet<number>
   onOpenSheet: (meal: MealKey) => void
-  toggleManual: (id: number) => void
+  toggleOpen: (id: number) => void
   handleDelete: (id: number) => void
-  handleSwipeStart: (id: number) => void
-  handleSwipeProgress: (id: number, progress: number) => void
-  registerClose: (id: number, fn: () => void) => void
+}
+
+/* 一列品項。位移層是 motion.div（純 transform，不動 layout），刪除鈕壓在它底下，
+   滑開才露出來——這是「覆蓋式」的反面做法：實際上是內容讓開，不是鈕蓋上去，
+   但視覺結果一樣而且不必在鈕上做位移動畫。開合狀態由父層的 openId 單一決定，
+   `animate` 負責放手後吸附到位，拖曳中則由 drag 手勢直接接管 x。 */
+function SwipeRow({
+  row,
+  name,
+  vendor,
+  qty,
+  open,
+  deleting,
+  justAdded,
+  onToggle,
+  onDelete,
+}: {
+  row: IntakeRow
+  name: string
+  vendor: string | null
+  qty: number
+  open: boolean
+  deleting: boolean
+  justAdded: boolean
+  onToggle: () => void
+  onDelete: () => void
+}) {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const draggedRef = useRef(false)
+  const [armed, setArmed] = useState(false)
+  const quick = reduceMotion()
+
+  const fullSwipeAt = () => (rowRef.current?.offsetWidth ?? 320) * FULL_AT
+
+  function handleDragEnd(_e: unknown, info: PanInfo) {
+    setArmed(false)
+    // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
+    if (info.offset.x < -fullSwipeAt()) {
+      onDelete()
+      return
+    }
+    // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔
+    const flung = info.velocity.x < -320
+    onToggleTo(info.offset.x < -OPEN_AT || flung)
+  }
+
+  function onToggleTo(next: boolean) {
+    if (next !== open) onToggle()
+  }
+
+  return (
+    <div className={`item-row${open ? ' is-open' : ''}${armed ? ' is-armed' : ''}`} ref={rowRef}>
+      <button
+        className="item-delete"
+        type="button"
+        tabIndex={open ? 0 : -1}
+        aria-hidden={!open}
+        disabled={deleting}
+        aria-label={`刪除 ${name} 這一筆`}
+        onClick={onDelete}
+      >
+        <DeleteIcon />
+      </button>
+      <motion.div
+        className="item-slide"
+        drag="x"
+        dragDirectionLock
+        dragMomentum={false}
+        dragConstraints={{ left: -280, right: 0 }}
+        dragElastic={{ left: 0.4, right: 0 }}
+        animate={{ x: open ? -REVEAL : 0 }}
+        transition={quick ? { duration: 0 } : { duration: (open ? 160 : 220) / 1000, ease: EASE }}
+        onDragStart={() => {
+          draggedRef.current = true
+        }}
+        onDrag={(_e, info) => setArmed(info.offset.x < -fullSwipeAt())}
+        onDragEnd={handleDragEnd}
+      >
+        <button
+          className={`item-content${justAdded ? ' just-added' : ''}`}
+          type="button"
+          aria-expanded={open}
+          onClick={() => {
+            // 拖曳結束後瀏覽器仍會補一個 click，這裡吃掉它，免得滑開的同時又切了開合
+            if (draggedRef.current) {
+              draggedRef.current = false
+              return
+            }
+            onToggle()
+          }}
+        >
+          <span className="nm">
+            {name}
+            {vendor && <span className="vendor"> {vendor}</span>}
+            {qty !== 1 && <span className="qty"> ×{qty}</span>}
+          </span>
+          <span className="kc">{Math.round(num(row.kcal) * qty)}</span>
+        </button>
+      </motion.div>
+    </div>
+  )
 }
 
 function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
@@ -321,65 +349,36 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
                     <span className="node-kcal">{Math.round(sumIntake(items).kcal)}</span>
                   </button>
                   <ul className="items">
-                    {items.map((r) => {
-                      const q = num(r.qty)
-                      const name = r.foods?.name ?? '（食物已刪除）'
-                      const dup = (nameCount.get(name) ?? 0) > 1 && r.foods?.vendor
-                      const raised = h.raisedId === r.id
-                      const opening = h.openingId === r.id
-                      const manualOpen = h.manualOpenId === r.id
-                      const deleteLabel = `刪除 ${name} 這一筆`
-                      return (
-                        <li className={`item${h.justAddedIds.has(r.id) ? ' just-added' : ''}`} data-row={r.id} key={r.id}>
-                          {/* is-raised／is-open 是兩個獨立狀態：真的滑動手勢只設 raised（底色），
-                              是否露出我們自己的 click-reveal 鈕只看 manualOpen——否則真滑動時
-                              這顆鈕會悄悄跟著疊上去，跟套件自己的 trailingActions 鈕重複 */}
-                          <div className={`item-row${raised ? ' is-raised' : ''}${manualOpen ? ' is-open' : ''}${opening ? ' opening' : ''}`}>
-                            <SwipeItem
-                              listType={Type.IOS}
-                              fullSwipe={false}
-                              resetState={(close) => h.registerClose(r.id, close)}
-                              onSwipeStart={() => h.handleSwipeStart(r.id)}
-                              onSwipeProgress={(progress) => h.handleSwipeProgress(r.id, progress)}
-                              trailingActions={
-                                <TrailingActions>
-                                  <SwipeAction destructive={false} onClick={() => h.handleDelete(r.id)}>
-                                    <span className="item-delete swipe-reveal" aria-hidden="true">
-                                      <DeleteIcon />
-                                    </span>
-                                  </SwipeAction>
-                                </TrailingActions>
-                              }
-                            >
-                              <button
-                                className="item-content"
-                                type="button"
-                                aria-expanded={manualOpen}
-                                onClick={() => h.toggleManual(r.id)}
-                              >
-                                <span className="nm">
-                                  {name}
-                                  {dup && <span className="vendor"> {r.foods?.vendor}</span>}
-                                  {q !== 1 && <span className="qty"> ×{q}</span>}
-                                </span>
-                                <span className="kc">{Math.round(num(r.kcal) * q)}</span>
-                              </button>
-                            </SwipeItem>
-                            <button
-                              className="item-delete click-reveal"
-                              type="button"
-                              tabIndex={manualOpen ? 0 : -1}
-                              aria-hidden={!manualOpen}
-                              disabled={h.deletingIds.has(r.id)}
-                              aria-label={deleteLabel}
-                              onClick={() => h.handleDelete(r.id)}
-                            >
-                              <DeleteIcon />
-                            </button>
-                          </div>
-                        </li>
-                      )
-                    })}
+                    {/* 刪除那一列淡出、其餘用 layout 的 FLIP 滑上來——兩者都只動 transform／
+                        opacity，沒有動 height（DESIGN.md「不動 layout 屬性」）。 */}
+                    <AnimatePresence initial={false}>
+                      {items.map((r) => {
+                        const name = r.foods?.name ?? '（食物已刪除）'
+                        const dup = (nameCount.get(name) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
+                        return (
+                          <motion.li
+                            className="item"
+                            data-row={r.id}
+                            key={r.id}
+                            layout
+                            exit={{ opacity: 0, x: -32 }}
+                            transition={{ duration: 0.22, ease: EASE }}
+                          >
+                            <SwipeRow
+                              row={r}
+                              name={name}
+                              vendor={dup}
+                              qty={num(r.qty)}
+                              open={h.openId === r.id}
+                              deleting={h.deletingIds.has(r.id)}
+                              justAdded={h.justAddedIds.has(r.id)}
+                              onToggle={() => h.toggleOpen(r.id)}
+                              onDelete={() => h.handleDelete(r.id)}
+                            />
+                          </motion.li>
+                        )
+                      })}
+                    </AnimatePresence>
                   </ul>
                 </>
               ) : (
