@@ -178,8 +178,40 @@
 
 1. ~~fresh verifier 複驗九項回修~~ ✅
 2. ~~precommit deep review 並回修~~ ✅（push 本身還沒做，等使用者確認）
-3. **真機兩個 gate（要使用者的 iPhone）**：左滑刪除實滑（react-swipeable-list iOS issue #33 的
-   採用 gate，不過就退 motion drag）；加主畫面驗 apple-touch-icon。順帶複驗 tabular-nums。
+3. ~~真機 gate：左滑刪除實滑~~ ✅ 已滑（2026-07-29），結果＝**套件不採用，走退路**（見下方
+   「真機第二輪」）。**apple-touch-icon 與 tabular-nums 仍未驗**（下次拿手機順手看）。
+
+#### 真機第二輪回報與處置（2026-07-29，已實作完成待複驗）
+
+使用者實滑後提四點，全部處理，commit `7ffa028`。
+
+- **① 滑開時右緣是直角** → 品項卡自己補 `border-radius`。根因有點意外：那張卡本來就沒有圓角，
+  滑開前看起來圓是**外層 `.item-row` 的 `overflow: clip` 裁出來的**，而那個 clip 是同一天下午
+  為了修水平溢位才加的。一滑開，卡片右緣離開裁切區就露出本體的直角。
+- **② 手感卡 → 判定為套件的天花板，不是 web 的**。讀 `react-swipeable-list` 原始碼確認：拖曳中
+  它每一幀同時設 `transform`（走合成層，順）**與 trailing actions 的 `width`**
+  （`esm.js:615/624/627`、`830-834`），改 width 每幀觸發版面重排。它公開的可調項只有
+  `threshold`／`maxSwipe`／`swipeStartThreshold` 這類門檻值，**沒有任何手感物理參數**，
+  調不掉。→ 走 DESIGN.md v2.0 就寫好的退路：**`motion` drag 手刻，純 transform**。
+  換掉同時消掉四筆為了留著它而背的債（覆寫三個內部 class 名／替它補裝未宣告的 `prop-types`／
+  手刻鍵盤路徑／`resetState` 型別自己補）。
+- **③ 滑到底刪除** → 拖過列寬 45% 放手即刪，越過門檻時刪除鈕 `scale(1.18)` 預告。
+  **與 undo 綁在一起，缺一不可**——沒有復原就不該讓單一手勢造成不可逆的資料損失。
+- **④ 刪除後整頁重刷** → 確認根因是 `handleDeleteIntake` 打完 API 直接 `await loadDay()` 重拉
+  整天再換整包。改成樂觀移除＋`AnimatePresence` 退場，其餘列用 `layout` 的 FLIP 滑上來
+  （**只動 transform／opacity，沒有動 height**，守住 DESIGN.md「不動 layout 屬性」——
+  原本的套件正是踩這條才被換掉，換完自己踩就沒有意義了）。
+- **undo 的做法**：按下刪除**先不打 DELETE**，樂觀移除＋提示條，5 秒後才送出。復原＝把刪除前
+  的 rows 快照放回去，**不做反向 INSERT**（會拿到新 id，且復原本身也可能失敗，那就真的救不回）。
+  代價是這 5 秒內關掉分頁刪除不會生效，所以 `pagehide`／`visibilitychange`／換日期／記一筆
+  都會先結清待刪。
+- **狀態收斂**：`raisedId`／`openingId`／`manualOpenId` 三個並行 id 收成單一 `openId`，觸控與
+  鍵盤共用同一狀態源；「開一列自動關他列」變成單值 state 的自然結果，不必再維護 close 函式表。
+  這順帶結掉了 precommit review 提過但當時略過的「狀態機過於複雜」那條。
+- **e2e 的假訊號**：摘要行 `PASS 10/10` 是**寫死的字串**，加了路徑也不會變——等於「全過」這個
+  訊號本身不可信。已改成實數，現在 `PASS 11/11`（新增 undo 路徑一條）。
+- **驗證**：vitest 42/42、tsc/oxlint 乾淨、e2e 11/11、`npm run build` 成功
+  （bundle 632KB / gzip 187KB，motion 進來了）。**fresh verifier 複驗進行中，結果未回**。
 
 #### 收官執行記錄（2026-07-29）
 
