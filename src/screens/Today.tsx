@@ -21,8 +21,8 @@ const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋�
 const REVEAL = 56
 const OPEN_AT = 24
 const FULL_AT = 0.45
-/** 拖曳結束後多久才把「這是拖曳」的旗標清掉——瀏覽器補的 click 在這之內都會被吃掉 */
-const CLICK_AFTER_DRAG_MS = 150
+/** 拖曳結束後這段時間內的 click 都當成「瀏覽器補的那一下」吃掉 */
+const CLICK_GRACE_MS = 150
 const EASE = [0.4, 0, 0.2, 1] as const
 
 const DeleteIcon = () => (
@@ -246,10 +246,10 @@ function SwipeRow({
        之後每次真正的點擊都被靜默吃掉（precommit review 抓到）。
      v2 改成在 dragEnd 記時間戳擋 click——**擋不到**，因為 click 比 dragEnd 先到（實測：
        拖 100px 放手，click 先把列切開、dragEnd 再切一次，兩次抵銷成關閉，所以「拖了卻打不開」）。
-     v3（現在）旗標在 dragStart 就立起，所以不管 click 在 dragEnd 前後都擋得住；清除交給
-       dragEnd 之後的計時器，不依賴任何不保證發生的事件，也就不會卡住。 */
-  const dragging = useRef(false)
-  const dragClearTimer = useRef<number | undefined>(undefined)
+     v3（現在）記一個「在此之前的 click 都不算」的時刻：dragStart 設 Infinity（拖曳中一律擋，
+       不管 click 在 dragEnd 前後），dragEnd 改成現在 + CLICK_GRACE_MS 讓它自然到期。
+       一個數字，不必管計時器生命週期。 */
+  const blockClickUntil = useRef(0)
   const [armed, setArmed] = useState(false)
   const quick = reduceMotion()
 
@@ -265,10 +265,7 @@ function SwipeRow({
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
-    window.clearTimeout(dragClearTimer.current)
-    dragClearTimer.current = window.setTimeout(() => {
-      dragging.current = false
-    }, CLICK_AFTER_DRAG_MS)
+    blockClickUntil.current = Date.now() + CLICK_GRACE_MS
     const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
     if (moved < -fullSwipeAt()) {
@@ -308,7 +305,7 @@ function SwipeRow({
         animate={{ x: open ? -REVEAL : 0 }}
         transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
         onDragStart={() => {
-          dragging.current = true
+          blockClickUntil.current = Infinity
         }}
         onDrag={() => setArmed(x.get() < -fullSwipeAt())}
         onDragEnd={handleDragEnd}
@@ -319,7 +316,7 @@ function SwipeRow({
           aria-expanded={open}
           onClick={() => {
             // 拖曳期間／剛結束時瀏覽器補的那個 click 吃掉，免得滑開的同時又切一次開合
-            if (dragging.current) return
+            if (Date.now() < blockClickUntil.current) return
             onToggle()
           }}
         >

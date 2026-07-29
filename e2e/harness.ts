@@ -84,5 +84,5 @@ export async function rowState(page: Page, n = 0) {
 export async function grabPoint(page: Page, n = 0) {
   const box = await page.locator('.timeline .item-content').nth(n).boundingBox()
   expect(box, '拿不到品項座標').not.toBeNull()
-  return { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2, width: box!.width }
+  return { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
 }

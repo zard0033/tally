@@ -17,7 +17,7 @@
    詳細對照與裁決記在委派回報，不重複寫在這裡）。 */
 import { test, expect } from '@playwright/test'
 import { mkdir, rm } from 'node:fs/promises'
-import { check, closeFirstRow, leg, must, mustText, numFrom, openApp, slowDrag } from './harness'
+import { check, closeFirstRow, grabPoint, leg, must, mustText, numFrom, openApp, slowDrag } from './harness'
 
 const SHOTS_DIR = 'e2e/shots'
 
@@ -274,12 +274,10 @@ test('Tally UI 回歸', async ({ page }) => {
   await step('滑到底直接刪除（v2.1）——同時證明底下那條縱向測試不是假通過', async () => {
     const before = await page.locator('.timeline .item').count()
     check(before >= 1, '時間軸沒有品項，測不了滑到底刪除')
-    const box = await page.locator('.timeline .item-content').first().boundingBox()
-    check(box !== null, '拿不到品項座標')
     // 純橫向拖過列寬 45%：這一條必須真的刪掉。它同時是下一條（縱向不可誤刪）的對照組——
     // 若拖曳路徑根本沒被觸發，這裡會先失敗，而不是讓下一條在無事發生的情況下綠著
-    const start = { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
-    await slowDrag(page, start, leg(start, { x: box!.x - 260, y: start.y }, 14))
+    const start = await grabPoint(page)
+    await slowDrag(page, start, leg(start, { x: start.x - 540, y: start.y }, 14))
     await page.waitForTimeout(400)
     const after = await page.locator('.timeline .item').count()
     check(after === before - 1, `滑到底放手應刪掉一筆（${before} → ${before - 1}），實際 ${after}`)
@@ -292,14 +290,12 @@ test('Tally UI 回歸', async ({ page }) => {
   await step('縱向捲動帶左偏不可以刪東西（v2.1 回歸鎖）', async () => {
     const before = await page.locator('.timeline .item').count()
     check(before >= 1, '時間軸沒有品項，測不了誤刪')
-    const box = await page.locator('.timeline .item-content').first().boundingBox()
-    check(box !== null, '拿不到品項座標')
     // 先往下（觸發 motion 的 dragDirectionLock 鎖在 Y 軸）再大幅左移。
     // 這一列不會有任何位移，但指標的原始 offset.x 照樣累積到刪除門檻以上——
     // 第一版就是拿 offset.x 當門檻，於是畫面毫無變化卻靜默刪掉一筆
-    const start = { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
+    const start = await grabPoint(page)
     const down = { x: start.x, y: start.y + 60 }
-    await slowDrag(page, start, [...leg(start, down, 8), ...leg(down, { x: box!.x - 260, y: down.y }, 12)])
+    await slowDrag(page, start, [...leg(start, down, 8), ...leg(down, { x: start.x - 540, y: down.y }, 12)])
     await page.waitForTimeout(400)
     const after = await page.locator('.timeline .item').count()
     check(after === before, `縱向拖曳帶左偏後品項從 ${before} 變成 ${after}——被誤判成刪除`)
