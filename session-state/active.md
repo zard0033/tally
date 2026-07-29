@@ -83,6 +83,18 @@
 
 ## 未解失敗
 
+- **sheet 關閉時 scrim 分區變色（iPhone 真機，2026-07-29，兩輪修法未解，使用者裁定先擱置）**：
+  現象＝關 sheet 時頂部（狀態列一帶）延遲變回底色、sheet 與底部之間的區塊較早變回。
+  **已排除假設**：(1) `.scrim` class 動畫與 vaul data-state 動畫雙軌打架——已單軌化（commit
+  `9782544`），複測仍在；(2) scrim 與 sheet 同速淡出的「掀開時序物理」——scrim 已改
+  --dur-fast 100ms 先清、sheet 220ms 慢滑（commit `428818b`），複測仍在。
+  **剩餘嫌犯（下次從這裡接）**：(a) vaul 對 overlay 有 drag 邏輯驅動的 inline `opacity`／
+  `transition`，可能蓋過我們的 animation 覆寫；(b) `viewport-fit=cover` 下頂部 safe-area 帶
+  的成畫來源可能根本不是 scrim（可能是 html/body 背景或 vaul 的 body 操作透出來）；
+  (c) iOS 對 fixed 全屏層的獨立合成。
+  **無 Mac 的診斷配方**：出一版 debug build 把各層塗成對比色（scrim 紅、body 綠、sheet 藍、
+  html 黃），iPhone 錄屏慢放，看頂部帶到底是哪一層在變色——先確定「誰在畫那條帶」，
+  再談怎麼修。純視覺瑕疵、不影響功能與資料，優先級低。
 - **vitest collection 偶發全滅（2026-07-29）**：同 repo 同 node_modules（vitest 4.1.10 / vite 8.1.5 / Node 26.3.0），Phase 1 的 verifier agent 在它的 shell 跑 `npx vitest run` 三個測試檔 collection 階段全炸 `TypeError: Cannot read properties of undefined (reading 'config')`（@vitest/runner 的 `runner.config.testTimeout`，runner 實例未裝上），連三行 smoke test 也炸；但主對話與 executor 的 shell 跑同指令 39/39 全過。已排除假設：`--pool=forks/threads` 無效、空白 config 無效、`npm ls` 依賴樹乾淨無重複 vite。未定位的變因＝shell 環境差異（PowerShell vs Bash？env var？）。**觀察點**：Phase 3 的 GitHub Actions CI 在 Linux 跑 vitest，若那邊也炸就升級處理；若長期只有特定 agent shell 炸，查 agent shell 的 env 差異。
 
 ## 下次續點
@@ -126,10 +138,11 @@
   （LogSheet 的 ponytail 註記已銷）。**scrim 分區變色第一輪修法（動畫單軌化）複測未解**——
   雙軌打架假設被推翻，真因是時序物理：scrim 與 sheet 同速 220ms 時，sheet 滑走「掀開」的
   區域露出淡到一半的暗幕、頂部 96px 帶卻從全黑開始淡 → 視覺上「頂部延遲、中下先變」。
-  第二輪修法（2026-07-29）＝**scrim 退場改 --dur-fast 100ms、比 sheet 先清**（LogSheet vaul
-  覆寫塊與 Settings scrimFadeMs() 都改），DESIGN.md 動效段已入法，**待真機複測**。
-  進場 280ms 使用者說「偏快」→ 不動，記入 v2 樣張 M 組的判斷輸入。全項過關後，
-  vanilla 舊 harness `C:\Users\Administrator\.claude\tools\tally-verify\` 可退場。
+  第二輪修法（scrim 退場 --dur-fast 100ms 先清）**複測仍未解，使用者裁定擱置**——
+  完整病歷與下次診斷配方移至上方「未解失敗」。進場 280ms 使用者說「偏快」→ 不動，
+  記入 v2 樣張 M 組的判斷輸入。**真機驗證輪至此收關**（登入/zoom/IME/AutoFill/退場時長 ✅、
+  scrim 分區變色擱置）；vanilla 舊 harness `C:\Users\Administrator\.claude\tools\tally-verify\`
+  已無對照用途，可擇日退場。
 - **v2 UI 打磨（軌二）待續**：樣張挑編號的 checkpoint 仍等使用者（`sample-v2-today.html` 的 V/D/M、
   `sample-v2-login-icon.html`，兩檔的未 commit 修改仍在工作樹）；實作直接在 React 棧上做。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
