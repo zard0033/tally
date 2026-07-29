@@ -218,9 +218,10 @@
   `app.css` 做整檔字串替換，**Get-Content 以系統 ANSI 解碼 UTF-8 檔，整份中文註解變亂碼**。
   已 `git checkout` 還原後改用 Edit 工具的 `replace_all` 重做。
   **結論：含 CJK 的檔案不要用 PowerShell 做整檔讀寫替換，用 Edit 工具。**
-- **待使用者裁決**：`sample-v2-today.html` 與 `sample-v2-login-icon.html` 兩份過程樣張決策
-  已固化進 DESIGN.md v2.0，依 2026-07-28 的先例（過程樣張清空）可以刪；後者還內嵌三段
-  base64 字型 subset（wordmark 題已作廢，那批字體不會再用）。**我沒動它們**，等你說要不要刪。
+- **兩份 v2 過程樣張已刪**（使用者裁定，2026-07-29）：`sample-v2-today.html` /
+  `sample-v2-login-icon.html` 決策已固化進 DESIGN.md v2.0，依 2026-07-28 先例移除；
+  後者內嵌的三段 base64 字型 subset 隨 wordmark 題作廢一併消失。commit 前可救回。
+  現存樣張只剩 `mockup.html`（今日頁）與 `sample-log-entry.html`（記一筆流程）。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。

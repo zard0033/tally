@@ -1,5 +1,5 @@
 /* 今日頁：熱量量尺＋三大營養素條＋餐別時間軸＋左滑刪除。
-   行為與視覺對齊 DESIGN.md v2.0（樣張 sample-v2-today.html T1／R1）：
+   行為與視覺對齊 DESIGN.md v2.0（樣張選項 T1／R1，樣張檔本身已隨決策固化移除）：
    日期區改「週二 7/28」＋回今天安靜文字鈕；左滑刪除改 react-swipeable-list（iOS 模式），
    取代舊版 CSS scroll-snap 手刻。計算全部交給 src/lib/formulas.ts，這裡不重新推導捨入或破表判定。 */
 import { useEffect, useRef, useState } from 'react'
