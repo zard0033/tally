@@ -107,6 +107,12 @@
 - **E2E 環境兩坑**：playwright 的 `page.route()` 在此環境完全不攔截，不設防會直接打中正式 Supabase 真實資料——一律先裝 fetch-stub seam（stub `window.fetch` ＋ localStorage 種 `sb-<ref>-auth-token`，見 App.tsx 註記）再互動；多 agent 共用 dev server 會互相觸發 HMR 全頁重載，並行驗證各開自己的分頁。
 - **真機待驗清單（Phase 3 上線後）**：IME 注音組字（自動化只能合成事件驗邏輯）、iOS AutoFill vs floating label（ponytail 註記仍在）、vaul 拖曳關閉手感。
 - bundle 有 >500KB 分塊警告（vaul+supabase-js 進來），非錯誤；code-split 留給之後判斷。
+
+#### Phase 2 驗收＋Phase 3 進行中（2026-07-29）
+
+- **E2E harness 已進 repo `e2e/`**（@playwright/test，10 條路徑 0 刪 0 增，10/10 PASS，主對話 read-back 親測）。跑法 `npm run e2e`（webServer 自動起停 5500）。含「零真實網路請求」全域斷言。舊 `C:\Users\Administrator\.claude\tools\tally-verify\` 尚未退場，React 版穩定後可刪。
+- **Phase 3 已做**：`legacy/` 已 git rm（歷史可考）；`.github/workflows/deploy.yml`（npm ci → vitest → build → deploy-pages，CI 的 vitest＝runner flaky 第二觀察點）；CLAUDE.md 與 spec.md 的棧描述已改（dev 指令換 `npm run dev`、測試指令 vitest/e2e、src/lib 禁沾 DOM 守則入法）。
+- **Phase 3 待做**：precommit-review → 「準備 push」使用者確認 → Pages `build_type` legacy→workflow（push 前切，站點沿用舊版直到 workflow 部署成功）→ push → 驗部署 → **使用者 iPhone 真機驗**（真實 Google 登入、IME 注音、AutoFill、vaul 拖曳手感——自動化蓋不到的四項）。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。

@@ -16,7 +16,7 @@
 
 ## 架構
 
-- **前端**：GitHub Pages，純 HTML/CSS/JS（無框架、無 build）。手機優先 RWD。UI 要有質感（走設計流程、先 demo 再實作，不端平庸貨）。視覺一律以 `DESIGN.md` 為準。
+- **前端**：GitHub Pages（Actions build 部署），Vite + React + TypeScript + Tailwind + shadcn/ui + vaul + supabase-js。手機優先 RWD。UI 要有質感（走設計流程、先 demo 再實作，不端平庸貨）。視覺一律以 `DESIGN.md` 為準。（2026-07-29 改版：原「純 HTML/CSS/JS 無框架無 build」是開案時未經論證的預設值，檢討與研究脈絡見 session-state/active.md「技術棧轉向」節。）
 - **後端**：Supabase 免費版 — Auth（登入）＋ Edge Function（保管 secret、代理需 service key 的操作）。
 - **資料庫**：Supabase Postgres（唯一來源）。
 - **計算**：全在前端 JS（繞開 Notion 公式限制）；目標動態（依最新體重／TDEE）。
