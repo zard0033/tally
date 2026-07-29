@@ -348,9 +348,9 @@ body {
   display: flex; flex-direction: column; min-height: 0; }
 /* 只有真正開啟那一次帶 .opening；renderSheet 因為切 view／busy 重繪時不帶，
    否則每次重畫都會重播一次進場 */
-/* 進場只給 .opening 那一次；退場：Settings 用 inline style 套 sheet-out/scrim-out
-   （時長讀 --dur-mid，見 closeDurationMs()），LogSheet 由 vaul data-state 驅動，
-   vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
+/* 進場只給 .opening 那一次；退場：Settings 用 inline style 套 sheet-out（--dur-mid，
+   closeDurationMs()）與 scrim-out（--dur-fast，scrimFadeMs()——暗幕先清，理由見 Settings.tsx），
+   LogSheet 由 vaul data-state 驅動，vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
 .sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
 
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
