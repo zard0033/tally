@@ -173,7 +173,9 @@ body {
    visible 依規範算成 auto，於是整條時間軸多出 24px 可橫向拖動，捲軸還被藏起來。
    e2e 有一條 scrollWidth === clientWidth 的斷言鎖住這件事。 */
 .item-row { position: relative; border-radius: var(--r-tab); overflow: clip; }
-.item-content { width: 100%;
+/* 圓角要給「有底色的那一層」。滑開前這張卡看起來是圓的，其實是外層 .item-row 的
+   overflow:clip 裁出來的；一滑開卡片右緣離開裁切區，就露出它自己的直角（真機回報）。 */
+.item-content { width: 100%; border-radius: var(--r-tab);
   display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
   min-height: 44px; padding: var(--s-1) 0; border: none; background: var(--card); text-align: left;
   font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
