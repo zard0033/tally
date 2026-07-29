@@ -12,3 +12,9 @@ migrate-v2.sql
 
 # 本機 Claude Code agent 狀態，非專案內容
 .claude/
+
+# Node / Vite
+node_modules
+dist
+*.log
+test-results/
