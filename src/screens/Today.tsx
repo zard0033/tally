@@ -4,7 +4,7 @@
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
 import { useCallback, useRef, useState } from 'react'
-import { AnimatePresence, motion, type PanInfo } from 'motion/react'
+import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
@@ -54,19 +54,20 @@ export default function Today(props: TodayProps) {
      改成自己控制 x 位移之後，兩條路徑寫的是同一個 openId，「開一列自動關他列」
      也就不必再維護一份 close 函式的 Map——單值 state 天生只能有一列是開的。 */
   const [openId, setOpenId] = useState<number | null>(null)
-  const [deletingIds, setDeletingIds] = useState<ReadonlySet<number>>(new Set())
 
   const toggleOpen = useCallback((id: number) => setOpenId((prev) => (prev === id ? null : id)), [])
 
+  /* 沒有 deletingIds 這種「刪除中」旗標了：刪除已改成樂觀移除，按下去那一列當場離開
+     清單，不存在「按了沒反應所以再按一次」的窗口。連點同一列的守衛改放在 App.tsx
+     的 handleDeleteIntake（比對待刪 id），那裡才是資料的真相。
+     v2.1 第一版留了這個旗標，結果是**復原後該列永遠 disabled、再也刪不掉**——
+     旗標只加不減，而復原會把那一列放回來（verifier 實測抓到）。 */
   const handleDelete = useCallback(
     (id: number) => {
-      // 連點守衛：刪除是破壞性動作，而樂觀移除到那一列真的消失中間有一段動畫時間
-      if (deletingIds.has(id)) return
-      setDeletingIds((prev) => new Set(prev).add(id))
       setOpenId((prev) => (prev === id ? null : prev))
       onDeleteIntake(id)
     },
-    [deletingIds, onDeleteIntake],
+    [onDeleteIntake],
   )
 
   const eaten = rows ? sumIntake(rows) : null
@@ -189,7 +190,7 @@ export default function Today(props: TodayProps) {
         {rows === null ? (
           <p className="muted">載入中…</p>
         ) : (
-          renderTimeline(rows, { openId, deletingIds, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
+          renderTimeline(rows, { openId, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
         )}
       </div>
 
@@ -207,7 +208,6 @@ export default function Today(props: TodayProps) {
 
 interface TimelineHelpers {
   openId: number | null
-  deletingIds: ReadonlySet<number>
   justAddedIds: ReadonlySet<number>
   onOpenSheet: (meal: MealKey) => void
   toggleOpen: (id: number) => void
@@ -224,7 +224,6 @@ function SwipeRow({
   vendor,
   qty,
   open,
-  deleting,
   justAdded,
   onToggle,
   onDelete,
@@ -234,7 +233,6 @@ function SwipeRow({
   vendor: string | null
   qty: number
   open: boolean
-  deleting: boolean
   justAdded: boolean
   onToggle: () => void
   onDelete: () => void
@@ -244,18 +242,28 @@ function SwipeRow({
   const [armed, setArmed] = useState(false)
   const quick = reduceMotion()
 
-  const fullSwipeAt = () => (rowRef.current?.offsetWidth ?? 320) * FULL_AT
+  /* 門檻一律讀「這一列實際位移了多少」，不讀指標的原始位移 info.offset.x。
+     dragDirectionLock 判定成縱向捲動時列根本不會動，但 offset.x 照樣累積——
+     直向捲動只要帶一點左偏就會湊到刪除門檻，畫面毫無變化卻靜默刪掉一筆
+     （verifier 實測重現：先下拉 20-90px 再左移 300px，transform 全程 none，品項少一筆）。
+     x 這個 motion value 是位移的唯一真相，鎖在 Y 軸時它就是 0。 */
+  const x = useMotionValue(0)
+  /* 上限鎖在 dragConstraints 之內：寬版面上 45% 會超過 280px 的拖曳邊界，門檻就只剩
+     彈性區搆得到，同一個手勢在手機與桌機的手感會不一樣 */
+  const fullSwipeAt = () => Math.min((rowRef.current?.offsetWidth ?? 320) * FULL_AT, 200)
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
+    const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
-    if (info.offset.x < -fullSwipeAt()) {
+    if (moved < -fullSwipeAt()) {
       onDelete()
       return
     }
-    // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔
-    const flung = info.velocity.x < -320
-    onToggleTo(info.offset.x < -OPEN_AT || flung)
+    // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔。
+    // 速度也要配 moved < 0 把關，否則縱向甩動時的 velocity.x 雜訊會誤判成開啟
+    const flung = info.velocity.x < -320 && moved < 0
+    onToggleTo(moved < -OPEN_AT || flung)
   }
 
   function onToggleTo(next: boolean) {
@@ -269,7 +277,6 @@ function SwipeRow({
         type="button"
         tabIndex={open ? 0 : -1}
         aria-hidden={!open}
-        disabled={deleting}
         aria-label={`刪除 ${name} 這一筆`}
         onClick={onDelete}
       >
@@ -277,6 +284,7 @@ function SwipeRow({
       </button>
       <motion.div
         className="item-slide"
+        style={{ x }}
         drag="x"
         dragDirectionLock
         dragMomentum={false}
@@ -287,7 +295,7 @@ function SwipeRow({
         onDragStart={() => {
           draggedRef.current = true
         }}
-        onDrag={(_e, info) => setArmed(info.offset.x < -fullSwipeAt())}
+        onDrag={() => setArmed(x.get() < -fullSwipeAt())}
         onDragEnd={handleDragEnd}
       >
         <button
@@ -362,7 +370,7 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
                             key={r.id}
                             layout
                             exit={{ opacity: 0, x: -32 }}
-                            transition={{ duration: 0.22, ease: EASE }}
+                            transition={reduceMotion() ? { duration: 0 } : { duration: 0.22, ease: EASE }}
                           >
                             <SwipeRow
                               row={r}
@@ -370,7 +378,6 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
                               vendor={dup}
                               qty={num(r.qty)}
                               open={h.openId === r.id}
-                              deleting={h.deletingIds.has(r.id)}
                               justAdded={h.justAddedIds.has(r.id)}
                               onToggle={() => h.toggleOpen(r.id)}
                               onDelete={() => h.handleDelete(r.id)}

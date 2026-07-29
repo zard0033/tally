@@ -62,6 +62,8 @@ function friendlyError(message: string): string {
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
 
+const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 const byFoodName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
 
@@ -90,9 +92,10 @@ export default function App() {
      等 UNDO_MS 過了才真的送出。復原＝把快照的 rows 放回去，不必反向 INSERT——
      反向 INSERT 會拿到新的 id，而且復原本身也可能失敗，那就真的救不回來了。
      代價是這段窗內關掉分頁的話刪除不會生效，所以 pagehide 會先結清（見 useEffect）。 */
-  const pendingDelete = useRef<{ id: number; prevRows: IntakeRow[] } | null>(null)
+  const pendingDelete = useRef<{ row: IntakeRow; index: number } | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
   const [undoOpen, setUndoOpen] = useState(false)
+  const undoBtnRef = useRef<HTMLButtonElement>(null)
 
   const showNotice = useCallback(
     (headline: string, detail: string | undefined, actionLabel: string, onAction: () => void) => {
@@ -174,6 +177,20 @@ export default function App() {
 
   /* 刪除失敗跟 legacy 一致：轉全域 Notice，不是就地錯誤——這是讀寫失敗分流的例外，
    * 因為刪除沒有「已選內容」需要保留，直接回今天重試就好 */
+  /* 還原一律是「把那一筆插回**目前**的清單」，不是套用一份刪除當下的整包快照。
+     快照做法在連續刪兩筆時會錯：刪 A → 5 秒內刪 B → A 送出失敗 → 畫面被還原成
+     「A、B 都在」，但 B 其實仍在待刪且隨後真的會被刪掉，使用者看到的是假的復活
+     （verifier 抓到）。插回單筆就沒有這個歧義。 */
+  const restore = useCallback((p: { row: IntakeRow; index: number }) => {
+    setRows((prev) => {
+      if (!prev) return prev
+      if (prev.some((r) => r.id === p.row.id)) return prev
+      const next = [...prev]
+      next.splice(Math.min(p.index, next.length), 0, p.row)
+      return next
+    })
+  }, [])
+
   const commitDelete = useCallback(async () => {
     const p = pendingDelete.current
     if (!p) return
@@ -181,21 +198,25 @@ export default function App() {
     window.clearTimeout(undoTimer.current)
     setUndoOpen(false)
     try {
-      await apiDeleteIntake(p.id)
+      await apiDeleteIntake(p.row.id)
     } catch (e) {
-      // 送不出去就把畫面還原成刪除前的樣子，不留下「看起來刪掉了其實還在」
-      setRows(p.prevRows)
+      // 送不出去就把那一筆放回去，不留下「看起來刪掉了其實還在」
+      restore(p)
       showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDay())
     }
-  }, [loadDay, showNotice])
+  }, [loadDay, restore, showNotice])
 
   const handleDeleteIntake = useCallback(
     (id: number) => {
+      // 同一列連點（樂觀移除到退場動畫跑完之間仍點得到）直接忽略
+      if (pendingDelete.current?.row.id === id) return
       // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列
       if (pendingDelete.current) void commitDelete()
       setRows((prev) => {
         if (!prev) return prev
-        pendingDelete.current = { id, prevRows: prev }
+        const index = prev.findIndex((r) => r.id === id)
+        if (index < 0) return prev
+        pendingDelete.current = { row: prev[index], index }
         return prev.filter((r) => r.id !== id)
       })
       setUndoOpen(true)
@@ -221,11 +242,24 @@ export default function App() {
     pendingDelete.current = null
     window.clearTimeout(undoTimer.current)
     setUndoOpen(false)
-    setRows(p.prevRows)
-  }, [])
+    restore(p)
+  }, [restore])
+
+  /* 被刪掉那一列連同它的刪除鈕一起離開 DOM，焦點會掉回 body，鍵盤使用者等於原地迷路、
+     而且要在 5 秒內盲摸 Tab 才找得到「復原」。只在焦點真的掉了（activeElement 是 body）
+     才把它接到復原鈕上——觸控刪除不會有 focus-visible 外框，看不出差別。 */
+  useEffect(() => {
+    if (!undoOpen) return
+    if (document.activeElement === document.body) undoBtnRef.current?.focus()
+  }, [undoOpen])
 
   /* 待刪還沒送出就離開頁面／切到背景的話，先把它結清。iOS Safari 不保證跑 beforeunload，
-     pagehide 與 visibilitychange 是它比較認的兩個。 */
+     pagehide 與 visibilitychange 是它比較認的兩個。
+     ponytail: 這裡送的是普通 fetch（經 supabase-js），關分頁時可能被中止，那筆就沒刪成
+     ——下次開 app 它會再出現。**這是刻意選的失敗方向**：反過來做（先真的 DELETE、
+     復原時反向 INSERT）在復原失敗時會直接損失資料，而這邊最壞只是「刪了又回來」，
+     使用者再刪一次就好。要根治得繞過 supabase-js 自己組帶 keepalive 的請求（要自帶
+     auth header，sendBeacon 設不了 header），為這個機率不高的邊界情況不值得。 */
   useEffect(() => {
     const flush = () => {
       if (pendingDelete.current) void commitDelete()
@@ -388,28 +422,30 @@ export default function App() {
             onSignOut={handleSignOut}
           />
         )}
+        {/* 刪除的可復原提示。role=status＋aria-live=polite：讀屏會播報，但不搶焦點——
+            它是可忽略的提示，不是必須回應的對話框。時間到自己消失，不擋任何操作。
+            放在 main 內用絕對定位浮在時間軸底部：走版面流的話它一出現就把時間軸擠短
+            62px、消失再彈回來，每次刪除都抖一下（verifier 實測）。浮層蓋住的是時間軸
+            最後幾列，不是 CTA。 */}
+        <AnimatePresence>
+          {undoOpen && (
+            <motion.div
+              className="undo-bar"
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={prefersReducedMotion() ? { duration: 0 } : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <span>已刪除</span>
+              <button type="button" ref={undoBtnRef} onClick={undoDelete}>
+                復原
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
-
-      {/* 刪除的可復原提示。role=status＋aria-live=polite：讀屏會播報，但不搶焦點——
-          它是可忽略的提示，不是必須回應的對話框。時間到自己消失，不擋任何操作。 */}
-      <AnimatePresence>
-        {undoOpen && (
-          <motion.div
-            className="undo-bar"
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <span>已刪除</span>
-            <button type="button" onClick={undoDelete}>
-              復原
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <nav className="tabbar-wrap" aria-label="主要導覽">
         <div className="tabbar">

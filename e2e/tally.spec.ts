@@ -251,7 +251,10 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
 
     // 第二列此時是開的（上一條路徑點開的），刪除鈕已可點
     await page.locator('.timeline .item-row.is-open .item-delete').click()
-    await page.waitForTimeout(400) // 等 exit 動畫跑完真的從 DOM 移除
+    // ponytail: fixture 每餐只有一筆，刪掉等於整個 <ul> 隨餐次轉「待記錄」一起卸載，
+    // AnimatePresence 的退場動畫其實不會跑（DOM 20ms 內就移除）。這個等待只是保險。
+    // 要真的覆蓋退場動畫，fixture 得有某一餐兩筆以上——留給下次擴 fixture 時一起做。
+    await page.waitForTimeout(400)
     const afterDelete = await page.locator('.timeline .item').count()
     check(afterDelete === before - 1, `刪除後品項數應為 ${before - 1}，實際 ${afterDelete}`)
     await must(page, '.undo-bar', '復原提示條')
@@ -264,6 +267,56 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
     check((await page.locator('.undo-bar').count()) === 0, '復原後提示條應該消失')
     const nameAfter = ((await page.locator('.timeline .item .nm').first().textContent()) ?? '').trim()
     check(nameAfter === firstName, `復原後第一列品名變了：原「${firstName}」現「${nameAfter}」`)
+
+    // 復原回來的那一列必須還能再刪一次。v2.1 第一版的 deletingIds 只加不減，
+    // 復原後該列的刪除鈕永久 disabled——這條就是為了鎖住那個 bug
+    await page.locator('.timeline .item-content').first().click()
+    await page.waitForTimeout(300)
+    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    await page.waitForTimeout(400)
+    const afterRedelete = await page.locator('.timeline .item').count()
+    check(afterRedelete === before - 1, `復原後再刪一次應剩 ${before - 1} 筆，實際 ${afterRedelete}——那一列刪不掉了`)
+    await page.locator('.undo-bar button').click()
+    await page.waitForTimeout(300)
+  })
+
+  await step('滑到底直接刪除（v2.1）——同時證明底下那條縱向測試不是假通過', async () => {
+    const before = await page.locator('.timeline .item').count()
+    check(before >= 1, '時間軸沒有品項，測不了滑到底刪除')
+    const box = await page.locator('.timeline .item-content').first().boundingBox()
+    check(box !== null, '拿不到品項座標')
+    // 純橫向拖過列寬 45%：這一條必須真的刪掉。它同時是下一條（縱向不可誤刪）的對照組——
+    // 若拖曳路徑根本沒被觸發，這裡會先失敗，而不是讓下一條在無事發生的情況下綠著
+    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box!.x - 260, box!.y + box!.height / 2, { steps: 14 })
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+    const after = await page.locator('.timeline .item').count()
+    check(after === before - 1, `滑到底放手應刪掉一筆（${before} → ${before - 1}），實際 ${after}`)
+    await must(page, '.undo-bar', '滑到底刪除後的復原提示條')
+    await page.locator('.undo-bar button').click()
+    await page.waitForTimeout(300)
+    check((await page.locator('.timeline .item').count()) === before, '滑到底刪除後復原沒把那一筆放回來')
+  })
+
+  await step('縱向捲動帶左偏不可以刪東西（v2.1 回歸鎖）', async () => {
+    const before = await page.locator('.timeline .item').count()
+    check(before >= 1, '時間軸沒有品項，測不了誤刪')
+    const box = await page.locator('.timeline .item-content').first().boundingBox()
+    check(box !== null, '拿不到品項座標')
+    // 先往下（觸發 motion 的 dragDirectionLock 鎖在 Y 軸）再大幅左移。
+    // 這一列不會有任何位移，但指標的原始 offset.x 照樣累積到刪除門檻以上——
+    // 第一版就是拿 offset.x 當門檻，於是畫面毫無變化卻靜默刪掉一筆
+    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2 + 60, { steps: 6 })
+    await page.mouse.move(box!.x - 260, box!.y + box!.height / 2 + 60, { steps: 12 })
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+    const after = await page.locator('.timeline .item').count()
+    check(after === before, `縱向拖曳帶左偏後品項從 ${before} 變成 ${after}——被誤判成刪除`)
+    check((await page.locator('.undo-bar').count()) === 0, '縱向拖曳不該觸發刪除，卻出現了復原提示條')
   })
 
   await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {

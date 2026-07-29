@@ -84,7 +84,8 @@ body {
   margin: 0; line-height: 1.2; }
 
 /* ── 主區 ── */
-.main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* position:relative 是 .undo-bar 的定位基準（它絕對定位浮在時間軸底部） */
+.main { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 
 /* ── 熱量量尺 ── */
 .gauge { padding: var(--s-1) var(--s-5) var(--s-4); }
@@ -252,11 +253,13 @@ body {
 .cta svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
 /* ── 分頁列（v2.0：pill 置中收窄，取代貼滿寬的長條） ── */
-/* 刪除的復原條：走版面流、排在分頁列正上方，不用 fixed／不疊在任何東西上面
-   （這個 app 的畫面是固定三段，浮層只會遮住 CTA）。沒有陰影分層（DESIGN.md），
-   邊界靠 --rule；「復原」是動作所以用 --accent，與訊號色規則一致 */
-.undo-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-  margin: 0 var(--s-5); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+/* 刪除的復原條：絕對定位浮在時間軸底部（CTA 之上），不走版面流——走流的話它
+   一出現就把時間軸擠短 62px、消失再彈回來，每次刪除都抖一下。沒有陰影分層
+   （DESIGN.md），邊界靠 --rule；「復原」是動作所以用 --accent，與訊號色規則一致 */
+.undo-bar { position: absolute; left: var(--s-5); right: var(--s-5); z-index: 2;
+  bottom: calc(52px + var(--s-2) * 2 + var(--s-2));
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
   background: var(--raised); border: 1px solid var(--rule); border-radius: var(--r-btn);
   font-size: var(--t-sm); color: var(--ink); }
 .undo-bar button { min-height: 44px; padding: 0 var(--s-3); border: none; background: none;
