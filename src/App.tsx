@@ -62,6 +62,9 @@ function friendlyError(message: string): string {
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
 
+/** 品項退場動畫時長，與 Today.tsx 的 motion.li exit 同一個數字（--dur-mid 220ms） */
+const EXIT_MS = 220
+
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
@@ -96,6 +99,8 @@ export default function App() {
   const undoTimer = useRef<number | undefined>(undefined)
   const [undoOpen, setUndoOpen] = useState(false)
   const undoBtnRef = useRef<HTMLButtonElement>(null)
+  // loadDay 定義在 commitDelete 之前，靠這個 ref 回頭取用最新的那一份
+  const commitRef = useRef<(() => Promise<void>) | null>(null)
 
   const showNotice = useCallback(
     (headline: string, detail: string | undefined, actionLabel: string, onAction: () => void) => {
@@ -143,6 +148,11 @@ export default function App() {
   /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變 */
   const loadDay = useCallback(
     async (date: string = currentDate) => {
+      /* 重撈前先把待刪結清，否則會出現反向的不一致：刪 A 失敗 → 按「重試」跑 loadDay →
+         同在窗內的 B 被一起撈回畫面 → B 的計時器隨後照樣送出 DELETE → 畫面看得到 B、
+         伺服器上已經沒有（verifier 追出的路徑）。用 ref 取最新的 commitDelete，
+         因為它定義在 loadDay 之後、直接引用會是 TDZ。 */
+      if (pendingDelete.current) await commitRef.current?.()
       setRows(null)
       try {
         const r = await listIntake(date)
@@ -206,6 +216,10 @@ export default function App() {
     }
   }, [loadDay, restore, showNotice])
 
+  useEffect(() => {
+    commitRef.current = commitDelete
+  }, [commitDelete])
+
   const handleDeleteIntake = useCallback(
     (id: number) => {
       // 同一列連點（樂觀移除到退場動畫跑完之間仍點得到）直接忽略
@@ -247,10 +261,17 @@ export default function App() {
 
   /* 被刪掉那一列連同它的刪除鈕一起離開 DOM，焦點會掉回 body，鍵盤使用者等於原地迷路、
      而且要在 5 秒內盲摸 Tab 才找得到「復原」。只在焦點真的掉了（activeElement 是 body）
-     才把它接到復原鈕上——觸控刪除不會有 focus-visible 外框，看不出差別。 */
+     才把它接到復原鈕上——觸控刪除不會有 focus-visible 外框，看不出差別。
+     **一定要等退場動畫跑完才判斷**：刪除是樂觀移除＋AnimatePresence，undoOpen 轉 true 的
+     那一刻被刪那列還在 DOM 上、刪除鈕仍持有焦點，當場檢查 activeElement 永遠不是 body，
+     這個轉移就等於沒寫（第一版正是這樣寫的，verifier 逐時刻取樣抓到：+80ms 還在按鈕上、
+     +200ms 才掉到 body，而 effect 早就跑完了）。 */
   useEffect(() => {
     if (!undoOpen) return
-    if (document.activeElement === document.body) undoBtnRef.current?.focus()
+    const t = window.setTimeout(() => {
+      if (document.activeElement === document.body) undoBtnRef.current?.focus()
+    }, EXIT_MS + 40)
+    return () => window.clearTimeout(t)
   }, [undoOpen])
 
   /* 待刪還沒送出就離開頁面／切到背景的話，先把它結清。iOS Safari 不保證跑 beforeunload，

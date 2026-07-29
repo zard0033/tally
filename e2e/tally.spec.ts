@@ -42,6 +42,25 @@ function check(cond: unknown, msg: string): asserts cond {
 const numFrom = async (page: Page, sel: string) =>
   Number(((await page.locator(sel).first().textContent()) ?? '').replace(/[^\d.-]/g, ''))
 
+/* 逐點移動＋每點停一小段。`mouse.move(x, y, { steps })` 在冷頁面上不足以讓 motion 的
+   drag 起手——實測同一個手勢連跑四次全都沒觸發拖曳、收尾等於一次 click，於是「拖了
+   沒刪」這種斷言會在什麼都沒發生的情況下綠著（verifier 抓到的假通過風險）。 */
+async function slowDrag(page: Page, from: { x: number; y: number }, path: { x: number; y: number }[]) {
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  for (const p of path) {
+    await page.mouse.move(p.x, p.y)
+    await page.waitForTimeout(16)
+  }
+  await page.mouse.up()
+}
+/** 從起點到終點切成 n 段，配合 slowDrag 用 */
+const leg = (from: { x: number; y: number }, to: { x: number; y: number }, n = 10) =>
+  Array.from({ length: n }, (_, i) => ({
+    x: from.x + ((to.x - from.x) * (i + 1)) / n,
+    y: from.y + ((to.y - from.y) * (i + 1)) / n,
+  }))
+
 test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
   const fails: Fail[] = []
   let ran = 0
@@ -259,6 +278,15 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
     check(afterDelete === before - 1, `刪除後品項數應為 ${before - 1}，實際 ${afterDelete}`)
     await must(page, '.undo-bar', '復原提示條')
     await mustText(page, '.undo-bar', '已刪除', '復原提示條文案')
+    /* 焦點必須接到「復原」鈕上。被刪那列連同刪除鈕一起離開 DOM，焦點會掉回 body，
+       鍵盤使用者等於要在 5 秒內盲摸 Tab。第一版的轉移寫在 undoOpen 轉 true 的當下、
+       那時該鈕還在退場動畫裡沒卸載，判斷式永遠不成立——這條斷言就是鎖那個時機。 */
+    await page.waitForTimeout(300)
+    const focusedTag = await page.evaluate(() => document.activeElement?.tagName ?? 'NONE')
+    check(
+      (await page.locator('.undo-bar button:focus').count()) === 1,
+      `刪除後焦點沒接到復原鈕，停在 ${focusedTag}`,
+    )
 
     await page.locator('.undo-bar button').click()
     await page.waitForTimeout(300)
@@ -287,10 +315,8 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
     check(box !== null, '拿不到品項座標')
     // 純橫向拖過列寬 45%：這一條必須真的刪掉。它同時是下一條（縱向不可誤刪）的對照組——
     // 若拖曳路徑根本沒被觸發，這裡會先失敗，而不是讓下一條在無事發生的情況下綠著
-    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(box!.x - 260, box!.y + box!.height / 2, { steps: 14 })
-    await page.mouse.up()
+    const start = { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
+    await slowDrag(page, start, leg(start, { x: box!.x - 260, y: start.y }, 14))
     await page.waitForTimeout(400)
     const after = await page.locator('.timeline .item').count()
     check(after === before - 1, `滑到底放手應刪掉一筆（${before} → ${before - 1}），實際 ${after}`)
@@ -308,11 +334,9 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
     // 先往下（觸發 motion 的 dragDirectionLock 鎖在 Y 軸）再大幅左移。
     // 這一列不會有任何位移，但指標的原始 offset.x 照樣累積到刪除門檻以上——
     // 第一版就是拿 offset.x 當門檻，於是畫面毫無變化卻靜默刪掉一筆
-    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(box!.x + box!.width - 20, box!.y + box!.height / 2 + 60, { steps: 6 })
-    await page.mouse.move(box!.x - 260, box!.y + box!.height / 2 + 60, { steps: 12 })
-    await page.mouse.up()
+    const start = { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
+    const down = { x: start.x, y: start.y + 60 }
+    await slowDrag(page, start, [...leg(start, down, 8), ...leg(down, { x: box!.x - 260, y: down.y }, 12)])
     await page.waitForTimeout(400)
     const after = await page.locator('.timeline .item').count()
     check(after === before, `縱向拖曳帶左偏後品項從 ${before} 變成 ${after}——被誤判成刪除`)
