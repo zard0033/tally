@@ -54,6 +54,17 @@ async function slowDrag(page: Page, from: { x: number; y: number }, path: { x: n
   }
   await page.mouse.up()
 }
+/* 這些路徑是累積狀態的（同一個 session 一路跑下來），所以每條 drag 相關的路徑開場先
+   把第一列正規化成關閉，斷言才不會建在上一條留下的中間狀態上 */
+async function closeFirstRow(page: Page) {
+  const row = page.locator('.timeline .item-row').first()
+  if ((await row.count()) === 0) return
+  if (await row.evaluate((el) => el.classList.contains('is-open'))) {
+    await page.locator('.timeline .item-content').first().click()
+    await page.waitForTimeout(300)
+  }
+}
+
 /** 從起點到終點切成 n 段，配合 slowDrag 用 */
 const leg = (from: { x: number; y: number }, to: { x: number; y: number }, n = 10) =>
   Array.from({ length: n }, (_, i) => ({
@@ -61,7 +72,7 @@ const leg = (from: { x: number; y: number }, to: { x: number; y: number }, n = 1
     y: from.y + ((to.y - from.y) * (i + 1)) / n,
   }))
 
-test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
+test('Tally UI 回歸', async ({ page }) => {
   const fails: Fail[] = []
   let ran = 0
   const pageErrs: string[] = []
@@ -341,6 +352,28 @@ test('Tally UI 回歸 — 11 條路徑', async ({ page }) => {
     const after = await page.locator('.timeline .item').count()
     check(after === before, `縱向拖曳帶左偏後品項從 ${before} 變成 ${after}——被誤判成刪除`)
     check((await page.locator('.undo-bar').count()) === 0, '縱向拖曳不該觸發刪除，卻出現了復原提示條')
+  })
+
+  /* 未覆蓋（2026-07-29，刻意留白而不是留一條不穩的斷言）：
+     「拖曳之後的下一次點擊不可以被吃掉」。程式已修（會過期的時間戳取代卡得住的旗標，
+     見 Today.tsx 的 dragEndAt），但測不起來——同一個 slowDrag helper 拖 560px 會正常
+     觸發拖曳（滑到底那條路徑就是靠它），拖 70px 卻完全沒起手（.item-slide transform=none），
+     門檻在哪還沒查出來。留一條時好時壞的斷言比沒有更糟，所以先記在這裡。 */
+
+  await step('切分頁時待刪要結清、復原提示條不可殘留（v2.1 回歸鎖）', async () => {
+    await closeFirstRow(page)
+    await page.locator('.timeline .item-content').first().click()
+    await page.waitForTimeout(300)
+    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    await page.waitForTimeout(400)
+    await must(page, '.undo-bar', '刪除後的復原提示條')
+    // 提示條掛在 <main> 下、與 Today／Settings 同層，且定位是照今日頁 CTA 高度算的，
+    // 不結清的話它會浮在設定頁半空中（precommit review 抓到）
+    await page.locator('.tabbar .tab').nth(1).click()
+    await page.waitForTimeout(300)
+    check((await page.locator('.undo-bar').count()) === 0, '切到設定頁後復原提示條仍殘留')
+    await page.locator('.tabbar .tab').nth(0).click()
+    await page.waitForTimeout(500)
   })
 
   await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {

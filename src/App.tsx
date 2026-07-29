@@ -28,6 +28,7 @@ import {
   type ProfileRow,
   type Weight,
 } from '@/lib/api'
+import { DUR, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, shiftDate } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
@@ -61,9 +62,6 @@ function friendlyError(message: string): string {
 
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
-
-/** 品項退場動畫時長，與 Today.tsx 的 motion.li exit 同一個數字（--dur-mid 220ms） */
-const EXIT_MS = 220
 
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -226,29 +224,33 @@ export default function App() {
       if (pendingDelete.current?.row.id === id) return
       // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列
       if (pendingDelete.current) void commitDelete()
-      setRows((prev) => {
-        if (!prev) return prev
-        const index = prev.findIndex((r) => r.id === id)
-        if (index < 0) return prev
-        pendingDelete.current = { row: prev[index], index }
-        return prev.filter((r) => r.id !== id)
-      })
+      // 索引與待刪都在 updater 外面算好：updater 應該是純函式，StrictMode 下 React 會
+      // 刻意跑兩次來抓副作用，在裡面寫 ref 只是目前剛好無害（precommit review 指出）
+      const index = rows?.findIndex((r) => r.id === id) ?? -1
+      if (index < 0) return
+      pendingDelete.current = { row: rows![index], index }
+      setRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
       setUndoOpen(true)
       window.clearTimeout(undoTimer.current)
       undoTimer.current = window.setTimeout(() => void commitDelete(), UNDO_MS)
     },
-    [commitDelete],
+    [commitDelete, rows],
   )
 
   /* 換日期就結清待刪：不然 undo 會把 A 日的 rows 快照放進正在看的 B 日，
-     失敗時的還原也會錯位。待刪永遠不跨日，下面的還原邏輯才能假設同一天。 */
+     失敗時的還原也會錯位。待刪永遠不跨日，下面的還原邏輯才能假設同一天。
+     切分頁同理：復原提示條掛在 <main> 下、與 Today／Settings 同層，不結清的話它會
+     浮在設定頁上，而它的定位是照今日頁的 CTA 高度算的，在設定頁會落在半空
+     （precommit review 抓到）。 */
   const dateRef = useRef(currentDate)
+  const tabRef = useRef(tab)
   useEffect(() => {
-    if (dateRef.current !== currentDate) {
+    if (dateRef.current !== currentDate || tabRef.current !== tab) {
       dateRef.current = currentDate
+      tabRef.current = tab
       if (pendingDelete.current) void commitDelete()
     }
-  }, [currentDate, commitDelete])
+  }, [currentDate, tab, commitDelete])
 
   const undoDelete = useCallback(() => {
     const p = pendingDelete.current
@@ -270,7 +272,7 @@ export default function App() {
     if (!undoOpen) return
     const t = window.setTimeout(() => {
       if (document.activeElement === document.body) undoBtnRef.current?.focus()
-    }, EXIT_MS + 40)
+    }, DUR.mid + 40)
     return () => window.clearTimeout(t)
   }, [undoOpen])
 
@@ -457,7 +459,7 @@ export default function App() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={prefersReducedMotion() ? { duration: 0 } : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
             >
               <span>已刪除</span>
               <button type="button" ref={undoBtnRef} onClick={undoDelete}>

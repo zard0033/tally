@@ -7,6 +7,7 @@ import { useCallback, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
+import { DUR, sec } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { defaultMeal, MEALS, type MealKey } from '@/lib/meals'
 import type { TodayProps } from './types'
@@ -20,6 +21,8 @@ const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋�
 const REVEAL = 56
 const OPEN_AT = 24
 const FULL_AT = 0.45
+/** 拖曳結束後多久之內的 click 視為「瀏覽器補的那一下」而忽略 */
+const CLICK_AFTER_DRAG_MS = 120
 const EASE = [0.4, 0, 0.2, 1] as const
 
 const DeleteIcon = () => (
@@ -238,7 +241,12 @@ function SwipeRow({
   onDelete: () => void
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
-  const draggedRef = useRef(false)
+  /* 記「最後一次拖曳結束的時間」而不是一個 dragged 旗標。旗標版本的歸零點只有 click，
+     而拖曳後瀏覽器不保證會補 click（觸控上位移超過 tap slop 就不補；方向鎖判定成縱向
+     或拖到 dragConstraints 上限時，mouseup 也可能落在別的元素上），只要漏掉一次，
+     旗標就永遠停在 true、把使用者下一次真正的點擊靜默吃掉（precommit review 抓到）。
+     時間戳會自己過期，不存在卡住的狀態。 */
+  const dragEndAt = useRef(0)
   const [armed, setArmed] = useState(false)
   const quick = reduceMotion()
 
@@ -254,6 +262,7 @@ function SwipeRow({
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
+    dragEndAt.current = Date.now()
     const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
     if (moved < -fullSwipeAt()) {
@@ -291,10 +300,7 @@ function SwipeRow({
         dragConstraints={{ left: -280, right: 0 }}
         dragElastic={{ left: 0.4, right: 0 }}
         animate={{ x: open ? -REVEAL : 0 }}
-        transition={quick ? { duration: 0 } : { duration: (open ? 160 : 220) / 1000, ease: EASE }}
-        onDragStart={() => {
-          draggedRef.current = true
-        }}
+        transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
         onDrag={() => setArmed(x.get() < -fullSwipeAt())}
         onDragEnd={handleDragEnd}
       >
@@ -303,11 +309,8 @@ function SwipeRow({
           type="button"
           aria-expanded={open}
           onClick={() => {
-            // 拖曳結束後瀏覽器仍會補一個 click，這裡吃掉它，免得滑開的同時又切了開合
-            if (draggedRef.current) {
-              draggedRef.current = false
-              return
-            }
+            // 拖曳結束後瀏覽器可能補一個 click，這裡吃掉它，免得滑開的同時又切了開合
+            if (Date.now() - dragEndAt.current < CLICK_AFTER_DRAG_MS) return
             onToggle()
           }}
         >
@@ -370,7 +373,7 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
                             key={r.id}
                             layout
                             exit={{ opacity: 0, x: -32 }}
-                            transition={reduceMotion() ? { duration: 0 } : { duration: 0.22, ease: EASE }}
+                            transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
                           >
                             <SwipeRow
                               row={r}

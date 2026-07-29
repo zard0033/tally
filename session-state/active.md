@@ -261,9 +261,34 @@ undo 資料正確、版面不再跳動（`.timeline` 356→356）、reduced-moti
 - **未處理（低信心、目前流程難觸發）**：`restore` 的 index 用刪除當下的舊索引，期間清單被別的
   來源換過時會插錯位置。
 
-- **驗證**：vitest 42/42、tsc/oxlint 乾淨、**e2e 13/13**、`npm run build` 成功
-  （bundle 632KB / gzip 187KB，motion 進來了）。**第三輪複驗未跑**——第二輪的三條回修
-  只有主對話的煙霧驗證＋新增的 e2e 斷言背書。push 前要不要再驗一輪由使用者決定。
+#### precommit deep review（2026-07-29，runId `wf_cf6251fa-983`）——3 confirmed 全修
+
+使用者裁定「不用再派 verifier，直接推」，precommit review 仍照規則跑（review 綁 push）。
+
+- **`EXIT_MS` 是跨檔的魔術數字**（confirmed）：App.tsx 的焦點計時器寫 `220`（ms）、Today.tsx 的
+  退場動畫寫 `0.22`（秒），兩處不同單位各自硬編、只靠註解承諾同步——**而焦點 bug 的成因
+  正是這個模式**，等於同一份 diff 裡它出現了第二次。已抽成 `src/lib/durations.ts` 的 `DUR`
+  單一來源，兩邊 import。（不用 `getComputedStyle` 讀 CSS token：那會讓每次動畫付一次強制
+  樣式重算，而那正是換掉 react-swipeable-list 的理由之一。改值時同步改 app.css。）
+- **`draggedRef` 會永久卡在 true**（confirmed）：唯一歸零點是 click，而拖曳後瀏覽器不保證補
+  click（觸控上超過 tap slop 就不補；方向鎖判定成縱向或拖到 `dragConstraints` 上限時，
+  mouseup 也可能落在別的元素上）。漏一次，之後每一次真正的點擊都被靜默吃掉、要點兩次。
+  改用會自己過期的時間戳 `dragEndAt`。
+- **復原提示條會殘留在設定頁**（confirmed）：它掛在 `<main>` 下與 Today／Settings 同層，而切
+  分頁不在任何結清待刪的路徑裡；且它的 `bottom` 是照今日頁 CTA 的 52px 算的，設定頁沒有
+  CTA，會浮在半空。已把切分頁併進結清條件。
+- 順帶採納的 minor：`setRows` 的 updater 裡寫 ref（StrictMode 下會跑兩次，目前剛好無害但違反
+  純函式契約）改成在外面算好；e2e 標題寫死的「11 條路徑」拿掉數字（第二輪加到 13 時漏改，
+  跟 `PASS 10/10` 是同一種會過期的假訊號）。
+- **harness 兩處體質改善**：`timeout` 30s→120s（15 條路徑跑在同一個 test 裡，總時長撞牆了）、
+  新增 `actionTimeout: 5s`——沒有它時一個點不到的元素會把整份拖到逾時，報錯位置指向收尾那行
+  `evaluate`、跟真正卡住的地方無關，「一輪走完拿到全部問題」的紀律等於失效。
+
+**未覆蓋（刻意留白）**：「拖曳之後的下一次點擊不可以被吃掉」。程式已修，但 e2e 建不起來——
+同一個 `slowDrag` helper 拖 560px 會正常觸發拖曳（滑到底那條就是靠它），拖 70px 卻完全沒起手
+（`.item-slide transform=none`），門檻在哪還沒查出來。留一條時好時壞的斷言比沒有更糟。
+
+- **驗證**：vitest 42/42、tsc/oxlint 乾淨、**e2e 14/14（連跑兩次都綠）**、`npm run build` 成功。
 
 #### 收官執行記錄（2026-07-29）
 

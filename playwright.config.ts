@@ -11,11 +11,19 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   retries: 0,
+  /* 15 條路徑跑在同一個 test() 裡（狀態累積，見 spec 檔頭），所以 timeout 是整份的總時長，
+     不是單一路徑。預設 30s 在加到 15 條時就撞牆了——調高而不是拆成多個 test，
+     因為「一輪走完不中斷」正是這份 harness 的核心紀律。 */
+  timeout: 120_000,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:5500/tally/',
     ...devices['iPhone 14 Pro'],
     viewport: { width: 393, height: 745 },
+    /* 單一操作等不到就快速失敗，不要把整份 harness 拖到 timeout。沒有這行時，一個被
+       遮住／不存在的元素會讓 click 一路等到整份逾時，於是「一輪走完拿到全部問題」的
+       紀律失效，而且報錯位置指向收尾那行 evaluate，跟真正卡住的地方無關。 */
+    actionTimeout: 5_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
