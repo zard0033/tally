@@ -21,8 +21,8 @@ const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋�
 const REVEAL = 56
 const OPEN_AT = 24
 const FULL_AT = 0.45
-/** 拖曳結束後多久之內的 click 視為「瀏覽器補的那一下」而忽略 */
-const CLICK_AFTER_DRAG_MS = 120
+/** 拖曳結束後多久才把「這是拖曳」的旗標清掉——瀏覽器補的 click 在這之內都會被吃掉 */
+const CLICK_AFTER_DRAG_MS = 150
 const EASE = [0.4, 0, 0.2, 1] as const
 
 const DeleteIcon = () => (
@@ -241,12 +241,15 @@ function SwipeRow({
   onDelete: () => void
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
-  /* 記「最後一次拖曳結束的時間」而不是一個 dragged 旗標。旗標版本的歸零點只有 click，
-     而拖曳後瀏覽器不保證會補 click（觸控上位移超過 tap slop 就不補；方向鎖判定成縱向
-     或拖到 dragConstraints 上限時，mouseup 也可能落在別的元素上），只要漏掉一次，
-     旗標就永遠停在 true、把使用者下一次真正的點擊靜默吃掉（precommit review 抓到）。
-     時間戳會自己過期，不存在卡住的狀態。 */
-  const dragEndAt = useRef(0)
+  /* 「這次指標互動是不是拖曳」的旗標，dragStart 立起、dragEnd 之後延遲清掉。三個版本的血淚：
+     v1 用純旗標、唯一歸零點是 click——拖曳後瀏覽器不保證補 click，漏一次旗標就永遠停在 true，
+       之後每次真正的點擊都被靜默吃掉（precommit review 抓到）。
+     v2 改成在 dragEnd 記時間戳擋 click——**擋不到**，因為 click 比 dragEnd 先到（實測：
+       拖 100px 放手，click 先把列切開、dragEnd 再切一次，兩次抵銷成關閉，所以「拖了卻打不開」）。
+     v3（現在）旗標在 dragStart 就立起，所以不管 click 在 dragEnd 前後都擋得住；清除交給
+       dragEnd 之後的計時器，不依賴任何不保證發生的事件，也就不會卡住。 */
+  const dragging = useRef(false)
+  const dragClearTimer = useRef<number | undefined>(undefined)
   const [armed, setArmed] = useState(false)
   const quick = reduceMotion()
 
@@ -262,7 +265,10 @@ function SwipeRow({
 
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
-    dragEndAt.current = Date.now()
+    window.clearTimeout(dragClearTimer.current)
+    dragClearTimer.current = window.setTimeout(() => {
+      dragging.current = false
+    }, CLICK_AFTER_DRAG_MS)
     const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
     if (moved < -fullSwipeAt()) {
@@ -301,6 +307,9 @@ function SwipeRow({
         dragElastic={{ left: 0.4, right: 0 }}
         animate={{ x: open ? -REVEAL : 0 }}
         transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
+        onDragStart={() => {
+          dragging.current = true
+        }}
         onDrag={() => setArmed(x.get() < -fullSwipeAt())}
         onDragEnd={handleDragEnd}
       >
@@ -309,8 +318,8 @@ function SwipeRow({
           type="button"
           aria-expanded={open}
           onClick={() => {
-            // 拖曳結束後瀏覽器可能補一個 click，這裡吃掉它，免得滑開的同時又切了開合
-            if (Date.now() - dragEndAt.current < CLICK_AFTER_DRAG_MS) return
+            // 拖曳期間／剛結束時瀏覽器補的那個 click 吃掉，免得滑開的同時又切一次開合
+            if (dragging.current) return
             onToggle()
           }}
         >

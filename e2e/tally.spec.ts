@@ -15,10 +15,9 @@
 
    selector 對照 legacy → React（DOM 結構鏡像但沒有 id／data-* 屬性，逐一對過實際 DOM 才定案，
    詳細對照與裁決記在委派回報，不重複寫在這裡）。 */
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import { mkdir, rm } from 'node:fs/promises'
-import { FIX, TODAY, USER_ID } from './fixtures'
-import { seedFetchStub } from './stub'
+import { check, closeFirstRow, leg, must, mustText, numFrom, openApp, slowDrag } from './harness'
 
 const SHOTS_DIR = 'e2e/shots'
 
@@ -26,51 +25,6 @@ interface Fail {
   step: string
   msg: string
 }
-
-async function must(page: Page, sel: string, label: string) {
-  if ((await page.locator(sel).count()) === 0) {
-    throw new Error(`契約缺失：${label}　selector \`${sel}\` 在畫面上不存在`)
-  }
-}
-async function mustText(page: Page, sel: string, want: string, label: string) {
-  const got = ((await page.locator(sel).first().textContent()) ?? '').trim()
-  if (!got.includes(want)) throw new Error(`${label}：預期含「${want}」，實際「${got}」`)
-}
-function check(cond: unknown, msg: string): asserts cond {
-  if (!cond) throw new Error(msg)
-}
-const numFrom = async (page: Page, sel: string) =>
-  Number(((await page.locator(sel).first().textContent()) ?? '').replace(/[^\d.-]/g, ''))
-
-/* 逐點移動＋每點停一小段。`mouse.move(x, y, { steps })` 在冷頁面上不足以讓 motion 的
-   drag 起手——實測同一個手勢連跑四次全都沒觸發拖曳、收尾等於一次 click，於是「拖了
-   沒刪」這種斷言會在什麼都沒發生的情況下綠著（verifier 抓到的假通過風險）。 */
-async function slowDrag(page: Page, from: { x: number; y: number }, path: { x: number; y: number }[]) {
-  await page.mouse.move(from.x, from.y)
-  await page.mouse.down()
-  for (const p of path) {
-    await page.mouse.move(p.x, p.y)
-    await page.waitForTimeout(16)
-  }
-  await page.mouse.up()
-}
-/* 這些路徑是累積狀態的（同一個 session 一路跑下來），所以每條 drag 相關的路徑開場先
-   把第一列正規化成關閉，斷言才不會建在上一條留下的中間狀態上 */
-async function closeFirstRow(page: Page) {
-  const row = page.locator('.timeline .item-row').first()
-  if ((await row.count()) === 0) return
-  if (await row.evaluate((el) => el.classList.contains('is-open'))) {
-    await page.locator('.timeline .item-content').first().click()
-    await page.waitForTimeout(300)
-  }
-}
-
-/** 從起點到終點切成 n 段，配合 slowDrag 用 */
-const leg = (from: { x: number; y: number }, to: { x: number; y: number }, n = 10) =>
-  Array.from({ length: n }, (_, i) => ({
-    x: from.x + ((to.x - from.x) * (i + 1)) / n,
-    y: from.y + ((to.y - from.y) * (i + 1)) / n,
-  }))
 
 test('Tally UI 回歸', async ({ page }) => {
   const fails: Fail[] = []
@@ -85,9 +39,7 @@ test('Tally UI 回歸', async ({ page }) => {
   await rm(SHOTS_DIR, { recursive: true, force: true })
   await mkdir(SHOTS_DIR, { recursive: true })
 
-  await seedFetchStub(page, FIX, TODAY, USER_ID)
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
+  await openApp(page)
 
   async function step(name: string, run: () => Promise<void>) {
     ran++
@@ -354,11 +306,9 @@ test('Tally UI 回歸', async ({ page }) => {
     check((await page.locator('.undo-bar').count()) === 0, '縱向拖曳不該觸發刪除，卻出現了復原提示條')
   })
 
-  /* 未覆蓋（2026-07-29，刻意留白而不是留一條不穩的斷言）：
-     「拖曳之後的下一次點擊不可以被吃掉」。程式已修（會過期的時間戳取代卡得住的旗標，
-     見 Today.tsx 的 dragEndAt），但測不起來——同一個 slowDrag helper 拖 560px 會正常
-     觸發拖曳（滑到底那條路徑就是靠它），拖 70px 卻完全沒起手（.item-slide transform=none），
-     門檻在哪還沒查出來。留一條時好時壞的斷言比沒有更糟，所以先記在這裡。 */
+  /* 拖曳開合的三條斷言在 interaction.spec.ts（各自獨立、單獨跑得動）。當初以為是
+     「拖 70px 沒觸發拖曳」，拆開量了才知道拖曳一直是好的，壞的是放手之後——
+     詳見該檔註記。 */
 
   await step('切分頁時待刪要結清、復原提示條不可殘留（v2.1 回歸鎖）', async () => {
     await closeFirstRow(page)
