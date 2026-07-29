@@ -23,13 +23,12 @@ export function ageOn(birthDate: string, today: Date = new Date()): number {
 }
 
 /**
- * 頂欄標題：今天／昨天／星期幾（日期本身另外顯示，不重複）。
- * 新增於 React 遷移（地基階段），照 legacy/app.js 的 dateTitle 逐字搬，語意不變。
+ * 日期區文字（DESIGN.md v2.0）：「週二 7/28」——星期＋月/日，不帶年份。
+ * 純字串解析＋`new Date(y, m-1, d)` 只用來查星期幾，不經過 UTC 轉換，跨時區安全；
+ * 不帶年份是刻意的（歷史記帳只往回翻幾天，年份不必露出）。
  */
-export function dateTitle(iso: string, now: Date = new Date()): string {
-  const today = localDate(now)
-  if (iso === today) return '今天'
-  if (iso === shiftDate(today, -1)) return '昨天'
+export function weekdayDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return '週' + '日一二三四五六'[new Date(y, m - 1, d).getDay()]
+  const weekday = '日一二三四五六'[new Date(y, m - 1, d).getDay()]
+  return `週${weekday} ${m}/${d}`
 }

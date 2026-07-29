@@ -37,15 +37,15 @@
   /* 全站單一字體。數字靠 tabular-nums 對齊，不用 mono */
   --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
-  --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-hero: 2.75rem;
+  --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-lg: 1.25rem; --t-hero: 2.75rem;
   /* tracking 隨字級走：大字收緊、小字放開 */
-  --track-hero: -.022em; --track-md: -.008em; --track-base: 0; --track-xs: .015em;
+  --track-hero: -.022em; --track-md: -.008em; --track-lg: -.005em; --track-base: 0; --track-xs: .015em;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
   --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
   --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
   /* sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
-  --dur-sheet: 280ms; --dur-mid: 220ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --dur-sheet: 280ms; --dur-mid: 220ms; --dur-base: 160ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
 }
 * { box-sizing: border-box; }
 
@@ -161,48 +161,56 @@ body {
   font-variant-numeric: tabular-nums; }
 .items { margin: var(--s-2) 0 0; padding: 0; list-style: none; }
 
-/* ── 品項列：左滑露出刪除鈕 ──
-   .item-track 是橫向 scroll-snap 容器，內容與刪除鈕兩個 snap 點。左滑走原生捲動，
-   不寫 touchstart/touchmove。手勢對鍵盤與螢幕閱讀器是死路，所以內容本身也是原生
-   button——點它由 JS 把捲動位置帶到刪除鈕，兩條路都通。 */
-/* overscroll-behavior：滑到底時不要把手勢鏈給頁面或瀏覽器的邊緣返回 */
-.item-track { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
-.item-track::-webkit-scrollbar { display: none; }
-.item-track-row { display: flex; }
-.item-content { flex: 0 0 100%; width: 100%; scroll-snap-align: start;
+/* ── 品項列：左滑露出刪除鈕（v2.0：react-swipeable-list，取代舊版 CSS scroll-snap 手刻） ──
+   .item-row 包住 SwipeableListItem（真正的滑動手勢＋trailingActions 圓鈕）＋一顆
+   獨立的 .item-delete.click-reveal（鍵盤／非觸控路徑：套件沒有程式化開合的公開 API，
+   點 .item-content 改用我們自己的 open state 控制這顆鈕的顯隱，兩條路徑互不干擾，
+   細節見 Today.tsx 檔頭註記）。 */
+.item-row { position: relative; border-radius: var(--r-tab); }
+.item-content { width: 100%;
   display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
-  min-height: 44px; padding: var(--s-1) 0; border: none; background: none; text-align: left;
+  min-height: 44px; padding: var(--s-1) 0; border: none; background: var(--card); text-align: left;
   font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
   letter-spacing: var(--track-base); cursor: pointer;
-  -webkit-appearance: none; appearance: none; position: relative;
-  transition: opacity var(--dur) var(--ease); }
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur) var(--ease), background-color var(--dur-mid) var(--ease); }
+.item-row.opening .item-content { transition: opacity var(--dur) var(--ease), background-color var(--dur-base) var(--ease); }
+/* is-raised（底色）跟 is-open（click-reveal 顯隱）是兩個獨立狀態：真的滑動手勢只會
+   觸發 is-raised，套件自己的 trailingActions 鈕負責承接點擊；is-open 只在「點內容
+   手動露出」時才成立，兩者混一起會讓 click-reveal 在真滑動時也悄悄疊上去 */
+.item-row.is-raised .item-content { background-color: var(--raised); }
 /* 全域關掉了 tap highlight，沒有這行的話點品項是全站唯一零回饋的可點元素 */
 .item-content:active { opacity: .6; }
 .item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
 .item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
-/* sticky 讓品名在滑開時停在捲動容器的左緣，不跟著整列被推出視野。
-   被推走的是右邊的熱量數字——刪除確認面上該留下的是「刪的是哪一筆」，不是它幾卡。
-   內容區必須維持 100% 寬（才有捲動空間），所以不能改用 calc 把刪除鈕讓出來 */
-.item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  position: sticky; left: 0; }
+.item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
-/* 刪除鈕借用 --over-fill（系統唯一的語意紅）表示危險動作。
-   margin-left 1px 不是排版留白：品項寬度是分數值（實測 320.4px），刪除鈕左緣落在
-   裁切邊的同一個分數像素上，未滑開時會沿右緣露出一條紅線。推開 1px 就完全在裁切外 */
-.item-delete { flex: 0 0 auto; min-width: 56px; margin-left: 1px;
-  align-self: stretch; scroll-snap-align: end;
-  display: flex; align-items: center; justify-content: center;
-  border: none; background: var(--over-fill); color: var(--on-accent);
-  font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.item-delete svg { width: 18px; height: 18px; }
-.item-delete { transition: opacity var(--dur) var(--ease); }
+/* iOS 提醒事項風格：44px 圓鈕、--over-fill 底、白色垃圾桶圖示。同一份視覺套在兩個
+   互不相干的元素上——套件 trailingActions 裡的 <span>（真的滑開才看得到）與我們
+   自己控制顯隱的 <button>（點內容露出，鍵盤可達）。 */
+.item-delete { width: 44px; height: 44px; border-radius: var(--r-pill); border: none;
+  background: var(--over-fill); color: var(--on-accent); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; flex-shrink: 0;
+  -webkit-appearance: none; appearance: none; }
+.item-delete svg { width: 18px; height: 18px; stroke: var(--on-accent); }
 .item-delete:active { opacity: .8; }
 /* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
 .item-delete:disabled { opacity: .6; cursor: default; }
+.item-delete.click-reveal { position: absolute; top: 0; bottom: 0; right: 0; margin: auto 0;
+  transform: translateX(100%); opacity: 0; pointer-events: none;
+  transition: transform var(--dur-mid) var(--ease), opacity var(--dur-mid) var(--ease); }
+.item-row.opening .item-delete.click-reveal { transition-duration: var(--dur-base); }
+.item-row.is-open .item-delete.click-reveal { transform: translateX(0); opacity: 1; pointer-events: auto; }
+.item-delete.click-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* react-swipeable-list 的基礎 CSS（main.tsx 引入）預設退場時長是 .5s／.2s，
+   改用 --dur-mid 跟全站四級階梯對齊；套件本身的抓取跟手指（drag 中直接設 transform）
+   不受影響，只有放開後的回彈／trailing actions 收合動畫走這個時長。 */
+.swipeable-list-item__content--return { transition: transform var(--dur-mid) var(--ease); }
+.swipeable-list-item__trailing-actions--return { transition: width var(--dur-mid) var(--ease); }
 
 /* 加入成功的短暫高亮：疊一層 --accent-soft 只動 opacity，不動 layout */
 /* inset 不外擴——這一列在橫向 scroll container 裡，往外長會多撐出捲動寬度 */
@@ -243,13 +251,13 @@ body {
 .cta:disabled { opacity: .45; cursor: default; }
 .cta svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
-/* ── 分頁列 ── */
-.tabbar-wrap { padding: var(--s-2) var(--s-5) var(--s-5);
-  padding-bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); }
+/* ── 分頁列（v2.0：pill 置中收窄，取代貼滿寬的長條） ── */
+.tabbar-wrap { padding: var(--s-1) 0 var(--s-3); display: flex; justify-content: center;
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
 .tabbar { display: flex; gap: var(--s-1); padding: var(--s-1);
-  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-btn); }
-.tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--s-2);
-  min-height: 44px; border: none; border-radius: var(--r-tab); background: none;
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
+.tab { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 44px; padding: 0 var(--s-5); border: none; border-radius: var(--r-pill); background: none;
   font-family: inherit; font-size: var(--t-sm); font-weight: 600;
   color: var(--ink-muted); white-space: nowrap; cursor: pointer;
   -webkit-appearance: none; appearance: none;
@@ -262,17 +270,18 @@ body {
   box-shadow: inset 0 0 0 1px var(--accent); }
 .tab svg { width: 16px; height: 16px; }
 
-/* ═══════════ 登入頁 ═══════════ */
-/* DESIGN.md 未畫樣張；沿用既有元件規則推導：hero 字級標題 ＋ 標準 CTA。
-   不放 Google 彩色 logo——fill-based 圖示與「全部 inline SVG / stroke 1.6 / fill:none」相斥 */
-.login { flex: 1; display: flex; flex-direction: column; justify-content: center;
-  padding: 0 var(--s-5) calc(var(--s-6) + env(safe-area-inset-bottom)); text-align: center; }
-/* line-height .95 讓行盒切住字，margin 要比看起來需要的再大一級 */
-.login h1 { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
-  line-height: .95; color: var(--accent); margin: 0 0 var(--s-5); }
-.login p { font-size: var(--t-base); color: var(--ink-muted); margin: 0 0 var(--s-6);
-  line-height: 1.45; }
-.login .cta { max-width: 320px; margin: 0 auto; }
+/* ═══════════ 登入頁（v2.0：極簡化，Meta splash 式，見 DESIGN.md P2） ═══════════ */
+/* 不放 Google 彩色 logo——fill-based 圖示與「全部 inline SVG / stroke 1.6 / fill:none」相斥。
+   骨架：mark＋問句置中在 flex:1 的中段，CTA 沉到底部拇指區（同「CTA 固定在拇指區」原則）。 */
+.login { flex: 1; display: flex; flex-direction: column;
+  padding: var(--s-6) var(--s-5) calc(32px + env(safe-area-inset-bottom)); text-align: center; }
+.login .mid { flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: var(--s-4); }
+/* mark：48px 幾何 T（方向 3，見 App icon 規則），無背景方塊，直接是 jade 圖形 */
+.login .mark rect { fill: var(--accent); }
+.login .hero-q { font-size: var(--t-lg); font-weight: 500; color: var(--ink);
+  letter-spacing: var(--track-lg); margin: 0; }
+.login .cta { max-width: 320px; margin: 0 auto; width: 100%; }
 .login .err { color: var(--over); font-size: var(--t-sm); margin: var(--s-4) 0 0; }
 
 /* ═══════════ 狀態畫面（載入／錯誤／降級） ═══════════ */
@@ -310,12 +319,16 @@ body {
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ═══════════ 日期切換 ═══════════ */
-/* 日期本身是原生 input[type=date]（點了叫系統日曆），左右箭頭各走一天。
-   原生元件零成本，補記三天前不用按三次。 */
-/* margin-left 抵銷左箭頭 44px 觸控區內的留白，讓日期文字的左緣對齊上方標題，
-   而不是被觸控區往右推 */
+/* ═══════════ 日期切換（v2.0：拿掉原生 input[type=date]） ═══════════ */
+/* 格式「週二 7/28」是靜態文字（不再是可點的 input），左右箭頭各走一天；
+   歷史日在同一行右側多一顆「回今天」安靜文字鈕，今天時同位置是靜態「今天」。
+   margin-left 抵銷左箭頭 44px 觸控區內的留白，讓日期文字左緣對齊上方標題。 */
 .datectl { display: flex; align-items: center; gap: var(--s-1); margin-left: -10px; }
+/* tabIndex=-1：只接受「回今天」「後一天」按到今天時的程式化焦點轉移，不進 Tab
+   順序。:not(:focus-visible) 只殺程式化 focus 的預設外框，鍵盤使用者的 :focus-visible
+   不受影響（這個容器本來就進不了 Tab 順序，正常操作下 :focus-visible 不會命中它）。 */
+.datectl:focus:not(:focus-visible) { outline: none; }
+.datectl-spacer { flex: 1; }
 .date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
   border: none; background: none; color: var(--ink-muted); cursor: pointer;
   border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
@@ -324,13 +337,19 @@ body {
 .date-arrow:active { opacity: .5; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .date-arrow:disabled { opacity: .3; cursor: default; }
-.date-input { border: none; background: none; font-family: inherit; font-size: var(--t-md);
-  color: var(--ink-muted); letter-spacing: var(--track-xs); font-variant-numeric: tabular-nums;
-  padding: var(--s-1) var(--s-1); min-height: 44px; cursor: pointer;
-  -webkit-appearance: none; appearance: none; }
-.date-input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
-/* 不在今天時把日期本身加重——這是「你正在看過去」唯一的持續訊號 */
-.datectl.past .date-input { color: var(--ink); font-weight: 600; }
+.date-text { font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap;
+  padding: 0 var(--s-1); }
+.date-today-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px;
+  padding: 0 var(--s-2); border: none; background: none; color: var(--accent);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600; letter-spacing: var(--track-xs);
+  cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur) var(--ease); }
+.date-today-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.date-today-btn:active { opacity: .6; }
+.date-today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.date-today-label { font-size: var(--t-sm); color: var(--ink-muted); letter-spacing: var(--track-xs);
+  padding: 0 var(--s-3); min-height: 44px; display: inline-flex; align-items: center; white-space: nowrap; }
 
 /* ═══════════ 記一筆 sheet ═══════════ */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
@@ -571,9 +590,16 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .cta, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
-  .chip, .icon-btn, .date-arrow, .pick-bar-btn, .field-float label,
+  .chip, .icon-btn, .date-arrow, .date-today-btn, .pick-bar-btn, .field-float label,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete,
+  .swipeable-list-item__content--return, .swipeable-list-item__trailing-actions--return,
   .qty-btn { transition-duration: .01ms; }
+  /* 上面幾條需要跟 .item-row.opening／.item-row.is-open 的巢狀規則比specificity，
+     單獨的 class 選擇器贏不過，要原樣列出來才壓得過 */
+  .item-row.opening .item-content,
+  .item-row.is-raised .item-content,
+  .item-row.opening .item-delete.click-reveal,
+  .item-row.is-open .item-delete.click-reveal { transition-duration: .01ms; }
   .cta:active, .pick-bar-btn:active { transform: none; }
   .item.just-added .item-content::before,
   .sheet.opening, .pick-bar,

@@ -1,4 +1,5 @@
-/* 登入頁。視覺照 legacy/app.css 的 .login 規則（DESIGN.md 未畫樣張，元件規則已能唯一推導）。
+/* 登入頁。v2.0 極簡化（Meta splash 式，DESIGN.md P2）：48px 幾何 T mark＋問句置中，
+   CTA 沉到底部拇指區。Wordmark（「Tally」字樣）全產品不出現，只活在 index.html 的 title。
    OAuth 走 supabase-js 的 signInWithOAuth（PKCE，detectSessionInUrl 自動處理回跳），
    legacy 手刻的 hash 解析／implicit flow 整段作廢，不在這裡搬。 */
 import { useState } from 'react'
@@ -30,8 +31,13 @@ export default function Login({ error }: LoginProps) {
   return (
     <div className="screen" id="view-login">
       <main className="login">
-        <h1>Tally</h1>
-        <p>記錄今天吃了什麼</p>
+        <div className="mid">
+          <svg className="mark" width="48" height="36" viewBox="0 0 700 520" aria-hidden="true">
+            <rect x="0" y="0" width="700" height="180" rx="60" />
+            <rect x="290" y="0" width="220" height="520" rx="60" />
+          </svg>
+          <h1 className="hero-q">今天吃了什麼？</h1>
+        </div>
         <button className="cta" type="button" onClick={() => void handleSignIn()} disabled={busy}>
           用 Google 登入
         </button>

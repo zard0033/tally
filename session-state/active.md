@@ -95,7 +95,12 @@
   **無 Mac 的診斷配方**：出一版 debug build 把各層塗成對比色（scrim 紅、body 綠、sheet 藍、
   html 黃），iPhone 錄屏慢放，看頂部帶到底是哪一層在變色——先確定「誰在畫那條帶」，
   再談怎麼修。純視覺瑕疵、不影響功能與資料，優先級低。
-- **vitest collection 偶發全滅（2026-07-29）**：同 repo 同 node_modules（vitest 4.1.10 / vite 8.1.5 / Node 26.3.0），Phase 1 的 verifier agent 在它的 shell 跑 `npx vitest run` 三個測試檔 collection 階段全炸 `TypeError: Cannot read properties of undefined (reading 'config')`（@vitest/runner 的 `runner.config.testTimeout`，runner 實例未裝上），連三行 smoke test 也炸；但主對話與 executor 的 shell 跑同指令 39/39 全過。已排除假設：`--pool=forks/threads` 無效、空白 config 無效、`npm ls` 依賴樹乾淨無重複 vite。未定位的變因＝shell 環境差異（PowerShell vs Bash？env var？）。**觀察點**：Phase 3 的 GitHub Actions CI 在 Linux 跑 vitest，若那邊也炸就升級處理；若長期只有特定 agent shell 炸，查 agent shell 的 env 差異。
+- **vitest collection 全滅——已定位觸發條件（2026-07-29 第二輪）：Windows Git Bash 專屬**。同 repo 同
+  node_modules 同指令（vitest 4.1.10 / Node 26.3.0）對照實驗：**PowerShell 42/42 全過、Git Bash 集合階段
+  全炸** `TypeError: Cannot read properties of undefined (reading 'config')`；repo 外三行空白測試在 Bash
+  也炸（verifier 實證）；CI 的 Linux bash 綠——所以是 MSYS/Git Bash 環境特有（嫌疑：MSYS 路徑轉換或
+  env var 影響 tinypool/worker IPC），非 repo 程式碼。已排除：`--pool` 切換、空白 config、依賴樹重複。
+  **實務解（現行紀律）：本機 vitest 一律用 PowerShell 跑**；根因未挖（優先級低，兩條可用路徑都在）。
 
 ## 下次續點
 
@@ -157,9 +162,25 @@
     `prop-types` 裝為本專案 runtime 依賴，這是正解不是 workaround；(2) 套件無程式化開合 API →
     鍵盤/點擊路徑是**獨立於觸控路徑**的 click-reveal 顯隱鈕（manualOpenId state），「開一列關他列」
     靠型別擴充接 resetState/playReturnAnimation。
-  - **➍➎ 評審進行中**：verifier 逐條複驗＋hallmark 快篩＋web-design-guidelines 合規三路並行
-    （impeccable 深評跳過：中等範圍改版）。findings 合併一輪修完→複驗→才走 push 流程。
-    push 後真機兩個 gate：iPhone 實滑左滑刪除（套件 iOS issue #33）、加主畫面看 icon。
+  - **➍➎ 評審已跑完並回修（2026-07-29）**：三路並行（verifier 複驗／web-design-guidelines 合規／
+    hallmark 快篩；impeccable 深評跳過＝中等範圍改版）合併 9 項，原 executor 一輪修完：
+    --dur-base 補定義（原本 .opening 整條 transition 0s 瞬跳）、登入問句改 h1、aria-expanded、
+    click-reveal 狀態源統一綁 manualOpen（拆 is-raised/is-open）、回今天焦點轉移 dateRegionRef、
+    Geist webfont 殘留清除（uninstall）、**h1 改靜態「日記」**（與日期區疊字，dateTitle() 已刪）、
+    設定圖示太陽→齒輪（lucide-react 零引用一併 uninstall）、--track-lg token 補上。
+    主對話收尾煙霧驗證全綠：vitest 42/42（PowerShell）＋ e2e 10/10 ＋ tsc/oxlint 乾淨。
+  - **評審輪的有意識略過**：刪除鈕蓋熱量數字（樣張輪已接受）；套件 SwipeAction 渲染 span 非
+    button（鍵盤路徑由 click-reveal 承擔）；vitest Git Bash flake 根因未挖（見未解失敗）。
+
+### 下一 session 起手（v2 打磨收官三步）
+
+1. **fresh verifier 複驗九項回修**（複驗未跑是本次收尾的裁決，不是漏掉——修完的申報只有主對話
+   煙霧驗證背書）。配方：對 active.md 本節九項逐條驗，vitest 用 PowerShell。
+2. **走 push 流程**（讀 `rules/git-push.md`：分流 → precommit-review → 「準備 push」確認）。
+   `build_type` 已是 workflow，push 即部署 Pages。
+3. **真機兩個 gate（要使用者的 iPhone）**：左滑刪除實滑（react-swipeable-list iOS issue #33 的
+   採用 gate，不過就退 motion drag）；加主畫面驗 apple-touch-icon。順帶複驗 tabular-nums。
+   dev server 5500 有一個孤兒程序還活著（可直接用或 kill 重起）。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
   - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
   - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。
