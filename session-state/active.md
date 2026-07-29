@@ -120,8 +120,14 @@
 - **未修的 review minor（有意識略過）**：CI actions 未 pin SHA（官方 action，要收斂隨時可做）；
   RLS「跨使用者 DELETE」的 auth.uid() 比對未直接測過（先前只實測過未登入隔離），使用者自查；
   搜尋逐鍵重排序（23 筆無感）。
-- **真機待驗（使用者的 iPhone，下一步）**：真實 Google 登入（PKCE 新流程）、IME 注音組字、
-  floating label vs AutoFill、vaul 拖曳手感。過了這關，vanilla 對照用的舊 harness
+- **真機第一輪（2026-07-29）**：Google 登入（PKCE）✅／IME 注音 ✅／輸入框聚焦自動 zoom ❌→已修
+  （表單控件字級一律 --t-md 16px，DESIGN.md 入法「表單控件字級下限」條）。
+  sheet 兩項發現已修待複測：退場 200ms「像直接消失」→ 220ms（--dur-mid token 已落地，
+  LogSheet/Settings 共用）；關閉時 scrim 分區變色（頂部延遲）→ 頭號嫌犯＝.scrim base class
+  動畫與 vaul data-state 動畫同元素雙軌打架，已單軌化。**複測若頂部延遲仍在**，下一個嫌犯是
+  iOS 對 fixed 全屏層的合成行為（方向：scrim 加 transform: translateZ(0) 促升獨立合成層，
+  或改 overlay 結構）。進場 280ms 使用者說「偏快」→ 不動，記入 v2 樣張 M 組的判斷輸入。
+  floating label vs AutoFill 尚未回報。全項過關後，vanilla 舊 harness
   `C:\Users\Administrator\.claude\tools\tally-verify\` 可退場。
 - **v2 UI 打磨（軌二）待續**：樣張挑編號的 checkpoint 仍等使用者（`sample-v2-today.html` 的 V/D/M、
   `sample-v2-login-icon.html`，兩檔的未 commit 修改仍在工作樹）；實作直接在 React 棧上做。
