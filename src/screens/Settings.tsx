@@ -21,13 +21,16 @@ type SheetKind = 'weight' | 'profile'
 const GOAL_LABEL: Record<string, string> = { cut: '減重', maintain: '維持', bulk: '增肌' }
 const GOAL_NOTE: Record<string, string> = { cut: '減重再乘 0.8', maintain: '維持不調整', bulk: '增肌再加 500' }
 
-/** 退場動畫時長：讀 app.css 的 --dur-mid token（退場比進場 --dur-sheet 降一級，與 LogSheet
- *  同一來源），reduced-motion 時降到近乎 0。 */
-function closeDurationMs(): number {
+/** 動效時長讀 app.css 的 token（與 LogSheet 同一來源），reduced-motion 時降到近乎 0。
+ *  sheet 退場 --dur-mid；scrim 退場 --dur-fast——暗幕要比 sheet 先清，否則 sheet 滑走
+ *  掀開的區域露出淡到一半的 scrim，頂部卻從全黑開始淡，真機看起來是分區變色。 */
+function tokenMs(name: string, fallback: number): number {
   if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return 0.01
-  const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-mid'))
-  return Number.isFinite(t) ? t : 220
+  const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name))
+  return Number.isFinite(t) ? t : fallback
 }
+const closeDurationMs = () => tokenMs('--dur-mid', 220)
+const scrimFadeMs = () => tokenMs('--dur-fast', 100)
 
 function Kv({ label, value }: { label: string; value: string }) {
   return (
@@ -188,7 +191,7 @@ export default function Settings(props: SettingsProps) {
   const sheetTitle = sheetKind === 'weight' ? '記體重' : '身體參數'
   // 退場覆寫整個 animation shorthand（不能只改 duration）：.scrim 平時的 animation 是
   // scrim-in，只改時長會讓它用縮短的時間重播「進場」而不是播放「退場」
-  const scrimExitStyle = closing ? { animation: `scrim-out ${closeDurationMs()}ms var(--ease-sheet) both` } : undefined
+  const scrimExitStyle = closing ? { animation: `scrim-out ${scrimFadeMs()}ms var(--ease-sheet) both` } : undefined
   const sheetExitStyle = closing ? { animation: `sheet-out ${closeDurationMs()}ms var(--ease-sheet) both` } : undefined
 
   return (

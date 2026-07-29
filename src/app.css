@@ -45,7 +45,7 @@
   --ease: cubic-bezier(.4, 0, .2, 1); --dur: 160ms;
   /* sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
-  --dur-sheet: 280ms; --dur-mid: 220ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --dur-sheet: 280ms; --dur-mid: 220ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
 }
 * { box-sizing: border-box; }
 

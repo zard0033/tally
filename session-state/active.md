@@ -122,13 +122,14 @@
   搜尋逐鍵重排序（23 筆無感）。
 - **真機第一輪（2026-07-29）**：Google 登入（PKCE）✅／IME 注音 ✅／輸入框聚焦自動 zoom ❌→已修
   （表單控件字級一律 --t-md 16px，DESIGN.md 入法「表單控件字級下限」條）。
-  sheet 兩項發現已修待複測：退場 200ms「像直接消失」→ 220ms（--dur-mid token 已落地，
-  LogSheet/Settings 共用）；關閉時 scrim 分區變色（頂部延遲）→ 頭號嫌犯＝.scrim base class
-  動畫與 vaul data-state 動畫同元素雙軌打架，已單軌化。**複測若頂部延遲仍在**，下一個嫌犯是
-  iOS 對 fixed 全屏層的合成行為（方向：scrim 加 transform: translateZ(0) 促升獨立合成層，
-  或改 overlay 結構）。進場 280ms 使用者說「偏快」→ 不動，記入 v2 樣張 M 組的判斷輸入。
-  floating label vs AutoFill 尚未回報。全項過關後，vanilla 舊 harness
-  `C:\Users\Administrator\.claude\tools\tally-verify\` 可退場。
+  sheet 退場 220ms（--dur-mid token 落地）複測 ✅；AutoFill vs floating label 複測 ✅
+  （LogSheet 的 ponytail 註記已銷）。**scrim 分區變色第一輪修法（動畫單軌化）複測未解**——
+  雙軌打架假設被推翻，真因是時序物理：scrim 與 sheet 同速 220ms 時，sheet 滑走「掀開」的
+  區域露出淡到一半的暗幕、頂部 96px 帶卻從全黑開始淡 → 視覺上「頂部延遲、中下先變」。
+  第二輪修法（2026-07-29）＝**scrim 退場改 --dur-fast 100ms、比 sheet 先清**（LogSheet vaul
+  覆寫塊與 Settings scrimFadeMs() 都改），DESIGN.md 動效段已入法，**待真機複測**。
+  進場 280ms 使用者說「偏快」→ 不動，記入 v2 樣張 M 組的判斷輸入。全項過關後，
+  vanilla 舊 harness `C:\Users\Administrator\.claude\tools\tally-verify\` 可退場。
 - **v2 UI 打磨（軌二）待續**：樣張挑編號的 checkpoint 仍等使用者（`sample-v2-today.html` 的 V/D/M、
   `sample-v2-login-icon.html`，兩檔的未 commit 修改仍在工作樹）；實作直接在 React 棧上做。
 - **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。

@@ -35,8 +35,15 @@ const VAUL_TRANSITION_CSS = `
   animation-duration: var(--dur-sheet, 280ms) !important;
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
 }
-[data-vaul-drawer][data-state="closed"], [data-vaul-overlay][data-state="closed"] {
+[data-vaul-drawer][data-state="closed"] {
   animation-duration: var(--dur-mid, 220ms) !important;
+  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
+}
+/* overlay 退場比 sheet 短：兩者同速時，sheet 滑走「掀開」的區域露出的是淡到一半的
+   scrim，而頂部 96px 從全黑開始淡——真機看起來就是頂部延遲變色（2026-07-29 實測）。
+   暗幕先清、sheet 慢滑，掀開處已是乾淨背景，不一致感即消失 */
+[data-vaul-overlay][data-state="closed"] {
+  animation-duration: var(--dur-fast, 100ms) !important;
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
 }
 /* reduced-motion 要在這裡自帶一份：上面兩條掛著 !important，app.css 的全域
@@ -191,7 +198,7 @@ interface FieldOpts {
 /* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移（app.css
    .field-float 那組規則）。placeholder=" " 只是給 :placeholder-shown 當開關用的空白值，
    不是拿 placeholder 冒充 label（WCAG 3.3.2）。
-   ponytail: iOS AutoFill 灌值時 :placeholder-shown 會不會正確翻轉未經真機驗證
+   iOS AutoFill 灌值時 :placeholder-shown 正確翻轉、標籤不壓字——2026-07-29 真機驗證通過
    （legacy 同一處也標了這條，行為照搬），真機發現標籤壓字時改用 input 事件加 class 判斷。 */
 function renderField(opts: FieldOpts) {
   return (
