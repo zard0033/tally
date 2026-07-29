@@ -83,9 +83,23 @@
 
 ## 未解失敗
 
-尚未有。
+- **vitest collection 偶發全滅（2026-07-29）**：同 repo 同 node_modules（vitest 4.1.10 / vite 8.1.5 / Node 26.3.0），Phase 1 的 verifier agent 在它的 shell 跑 `npx vitest run` 三個測試檔 collection 階段全炸 `TypeError: Cannot read properties of undefined (reading 'config')`（@vitest/runner 的 `runner.config.testTimeout`，runner 實例未裝上），連三行 smoke test 也炸；但主對話與 executor 的 shell 跑同指令 39/39 全過。已排除假設：`--pool=forks/threads` 無效、空白 config 無效、`npm ls` 依賴樹乾淨無重複 vite。未定位的變因＝shell 環境差異（PowerShell vs Bash？env var？）。**觀察點**：Phase 3 的 GitHub Actions CI 在 Linux 跑 vitest，若那邊也炸就升級處理；若長期只有特定 agent shell 炸，查 agent shell 的 env 差異。
 
 ## 下次續點
+
+### 技術棧轉向（2026-07-29 使用者拍板）——先讀這節，優先於下方所有實作項
+
+- **vanilla 三本柱退場**，換 **Vite + React + TypeScript + Tailwind + shadcn/ui（sheet 用 Vaul）+ supabase-js**。靜態輸出照舊託管 GitHub Pages（`build_type` 要從 `legacy` 改回 `workflow`，這次用真的 Actions workflow）。
+- **App Store 上架＝未來選項，不是承諾**（使用者之後可能買 Mac）。今天不上 Expo。不關門做法：公式鏈與 Supabase 存取層寫成不沾 DOM 的 TS 模組，UI 層才是未來換平台要重寫的部分。
+- 依據＝兩路研究（2026-07-29），蒸餾版在全域 memory `web-appstore-paths-ledger`。對本 repo 最關鍵的一條：react-native-web 不支援 CSS scroll-snap——現行左滑刪除的根基，上 Expo 等於當場重寫核心互動。另 shadcn 2026-07 起預設 primitive 已改 Base UI（非 Radix），起專案時用當下預設。
+- 背景：「無框架無 build 不載第三方」是開案時未經論證的預設值漏進 spec，已定調為誤判（教訓在全域 memory `prefer-ecosystem-over-handrolling`）。**專案 CLAUDE.md 與 spec.md 的該行等遷移落地時一併改**——現在 code 還是 vanilla，先改文件會誤導。
+- **v2 UI 打磨（下方軌二）直接做在新棧上**，不在 vanilla 上改完再移植。遷移 plan 尚未開，下一步＝開 plan 把移植切成可驗證的階段（含既有 self-check 邏輯轉 Vitest）。
+- 下方「明天的順序」「已定案」各節的**設計決策全部有效**（樣張挑編號、動效 token 階梯、覆蓋式刪除、日期區），只是實作載體換了。
+- **E2E 回歸 harness 已經存在，遷移 plan 要把它算進去**（2026-07-29 另一 session 建）。位置 `C:\Users\Administrator\.claude\tools\tally-verify\`，跑法：進該目錄 `npm run verify`（需 5500 server 在跑），`npm run setup` 補 browser binary。WebKit ＋ 393×745，stub fetch 免真帳號（配方即下方「驗收方式」那段），10 條路徑一次跑完 8 秒，**現況 10/10 PASS**。
+  - **遷移期拿它當新舊對照基準**：React 版重寫完跑同一份清單也要 10/10。這是「沒把既有行為改壞」唯一講得清楚的證據，不然只能靠手點。
+  - 處置：fixture 與 runner 骨架沿用、**selector 層整批重寫**、防 vanilla 專屬坑的 step（sheet 重繪咬 click、注音組字中斷）隨 reconciliation 失去意義可刪；runner 換成 `@playwright/test`（手刻 runner 的理由隨新棧消失）。
+  - **位置要搬進 repo 的 `e2e/`**——現在放在 `.claude/tools/` 是因為當時 Tally 無 npm 塞不了 package.json，新棧有了就沒理由留在外面。（也因為放在外面，`/ponytail-debt` 掃不到它，這條記在這裡才有效。）
+  - 配方與紀律（真實輸入路徑、逐鍵打字、一輪走完不中斷、DOM 契約）見全域 `ui-verify` skill。
 
 實作前必讀 `DESIGN.md` v1.7（尤其「禁止事項」與「已否決的做法」兩節）與 `sample-log-entry.html` 七屏。
 
