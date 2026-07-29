@@ -335,8 +335,11 @@ body {
 /* ═══════════ 記一筆 sheet ═══════════ */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
-  -webkit-appearance: none; appearance: none;
-  animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
+  -webkit-appearance: none; appearance: none; }
+/* 進場動畫只給 Settings 的手刻 sheet——LogSheet 的 scrim 是 vaul Overlay，動畫由
+   vaul 的 [data-state] 單軌驅動（LogSheet.tsx 的覆寫塊）。base class 掛動畫會跟
+   vaul 打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
+#settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
@@ -346,8 +349,8 @@ body {
 /* 只有真正開啟那一次帶 .opening；renderSheet 因為切 view／busy 重繪時不帶，
    否則每次重畫都會重播一次進場 */
 .sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
-#sheet-root.closing .sheet { animation: sheet-out 200ms var(--ease-sheet) both; }
-#sheet-root.closing .scrim { animation: scrim-out 200ms var(--ease-sheet) both; }
+/* 退場：Settings 用 inline style 套 sheet-out/scrim-out（時長見 closeDurationMs()）；
+   LogSheet 由 vaul data-state 驅動。vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM */
 
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
@@ -572,6 +575,7 @@ body {
   .qty-btn { transition-duration: .01ms; }
   .cta:active, .pick-bar-btn:active { transform: none; }
   .item.just-added .item-content::before,
-  .sheet.opening, .scrim, .pick-bar,
-  #sheet-root.closing .sheet, #sheet-root.closing .scrim { animation-duration: .01ms; }
+  .sheet.opening, .pick-bar,
+  /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
+  #settings-sheet-root .scrim { animation-duration: .01ms; }
 }

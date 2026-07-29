@@ -26,16 +26,23 @@ import type { LogSheetProps } from './types'
    屬性動畫」是唯一路徑：vaul 自己的規則用 [data-vaul-drawer][data-state=...] 這組選擇器
    （二個屬性選擇器，優先權 (0,0,2,0)），這裡用相同優先權的選擇器覆寫，靠 !important
    保證勝出（vaul 的 <style> 插入時機不保證在這份元件的 <style> 之前）。
-   進場沿用 --dur-sheet/--ease-sheet（DESIGN.md v1.9 動效階梯）；退場 200ms 是 legacy 現值，
-   沒有對應 token（legacy 的 sheet-out 也是字面 200ms），照抄字面值。 */
+   進場沿用 --dur-sheet/--ease-sheet（DESIGN.md v1.9 動效階梯）；退場 220ms＝v2 動效階梯的
+   --dur-mid（退場比進場降一級；原 200ms 真機體感「像直接消失」，使用者已核准 220）。
+   scrim（Drawer.Overlay）的動畫只有這一軌——app.css 的 .scrim base class 不掛動畫，
+   兩軌並存會在真機退場時分區變色。 */
 const VAUL_TRANSITION_CSS = `
 [data-vaul-drawer][data-state="open"], [data-vaul-overlay][data-state="open"] {
   animation-duration: var(--dur-sheet, 280ms) !important;
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
 }
 [data-vaul-drawer][data-state="closed"], [data-vaul-overlay][data-state="closed"] {
-  animation-duration: 200ms !important;
+  animation-duration: 220ms !important;
   animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-vaul-drawer][data-state], [data-vaul-overlay][data-state] {
+    animation-duration: .01ms !important;
+  }
 }
 `
 
