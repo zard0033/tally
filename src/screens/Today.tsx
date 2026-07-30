@@ -9,7 +9,7 @@ import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { DUR, sec } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
-import { defaultMeal, MEALS, type MealKey } from '@/lib/meals'
+import { MEALS, type MealKey } from '@/lib/meals'
 import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -80,8 +80,10 @@ export default function Today(props: TodayProps) {
 
   return (
     <div className={`main${over ? ' is-over' : ''}`} data-screen="today">
+      {/* v2.4：日期組 `‹ 日期 › ` 包進一顆膠囊（.datectl 本身即容器），置中不受
+          「回今天」影響——後者移到左端、脫離膠囊，絕對定位貼 .topbar 左邊距，
+          與膠囊間距用 CSS padding 撐開，不吃版面流。今天時同位置不放東西。 */}
       <header className="topbar">
-        <h1 className="today">日記</h1>
         <div className="datectl" ref={dateRegionRef} tabIndex={-1}>
           <button
             type="button"
@@ -93,27 +95,7 @@ export default function Today(props: TodayProps) {
               <path d="M15 6l-6 6 6 6" />
             </svg>
           </button>
-          <span className="date-text">{weekdayDate(currentDate)}</span>
-          <span className="datectl-spacer" />
-          {isToday ? (
-            <span className="date-today-label">今天</span>
-          ) : (
-            <button
-              type="button"
-              className="date-today-btn"
-              onClick={() => {
-                onGoToDate(localDate())
-                // 這顆鈕自己會被今天狀態的靜態 span 取代（unmount），焦點要在同一個
-                // click handler 裡搶先移到還會留著的容器，不能等 re-render 完才做
-                dateRegionRef.current?.focus()
-              }}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-              回今天
-            </button>
-          )}
+          <h1 className="date-title">{weekdayDate(currentDate)}</h1>
           <button
             type="button"
             className="date-arrow"
@@ -130,6 +112,20 @@ export default function Today(props: TodayProps) {
             </svg>
           </button>
         </div>
+        {!isToday && (
+          <button
+            type="button"
+            className="date-today-btn"
+            onClick={() => {
+              onGoToDate(localDate())
+              // 這顆鈕自己會被 unmount（今天時同位置不放東西），焦點要在同一個
+              // click handler 裡搶先移到還會留著的容器，不能等 re-render 完才做
+              dateRegionRef.current?.focus()
+            }}
+          >
+            回今天
+          </button>
+        )}
       </header>
 
       <section className="gauge" aria-label="今日熱量">
@@ -195,15 +191,6 @@ export default function Today(props: TodayProps) {
         ) : (
           renderTimeline(rows, { openId, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
         )}
-      </div>
-
-      <div className="cta-wrap">
-        <button className="cta" type="button" onClick={() => onOpenSheet(defaultMeal())}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          記一筆
-        </button>
       </div>
     </div>
   )

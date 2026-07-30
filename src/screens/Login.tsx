@@ -38,7 +38,7 @@ export default function Login({ error }: LoginProps) {
           </svg>
           <h1 className="hero-q">今天吃了什麼？</h1>
         </div>
-        <button className="cta" type="button" onClick={() => void handleSignIn()} disabled={busy}>
+        <button className="action-btn" type="button" onClick={() => void handleSignIn()} disabled={busy}>
           用 Google 登入
         </button>
         {message && (

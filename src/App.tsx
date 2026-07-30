@@ -31,7 +31,7 @@ import {
 import { DUR, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, shiftDate } from '@/lib/dates'
-import type { MealKey } from '@/lib/meals'
+import { defaultMeal, type MealKey } from '@/lib/meals'
 import Login from '@/screens/Login'
 import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
@@ -415,7 +415,7 @@ export default function App() {
           <div className="notice">
             <p className="headline">{notice.headline}</p>
             {notice.detail && <p>{notice.detail}</p>}
-            <button className="cta" type="button" onClick={notice.onAction}>
+            <button className="action-btn" type="button" onClick={notice.onAction}>
               {notice.actionLabel}
             </button>
           </div>
@@ -448,8 +448,9 @@ export default function App() {
         {/* 刪除的可復原提示。role=status＋aria-live=polite：讀屏會播報，但不搶焦點——
             它是可忽略的提示，不是必須回應的對話框。時間到自己消失，不擋任何操作。
             放在 main 內用絕對定位浮在時間軸底部：走版面流的話它一出現就把時間軸擠短
-            62px、消失再彈回來，每次刪除都抖一下（verifier 實測）。浮層蓋住的是時間軸
-            最後幾列，不是 CTA。 */}
+            62px、消失再彈回來，每次刪除都抖一下（verifier 實測）。v2.3：置中浮在底部列
+            上方，不進底部列——它是 5 秒就消失的暫時物件，進常駐列會讓那一列的構成
+            每次刪除都改變。 */}
         <AnimatePresence>
           {undoOpen && (
             <motion.div
@@ -461,8 +462,14 @@ export default function App() {
               exit={{ opacity: 0, y: 8 }}
               transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
             >
-              <span>已刪除</span>
-              <button type="button" ref={undoBtnRef} onClick={undoDelete}>
+              {/* 「已刪除」只給讀屏（role=status 播報）。畫面上不寫——列消失本身就是回報，
+                  再寫一次就得為它撐出一整條，而使用者要的是一顆「icon ＋ 復原」 */}
+              <span className="sr-only">已刪除</span>
+              <button type="button" ref={undoBtnRef} onClick={undoDelete} aria-label="復原剛刪除的一筆">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 8h11a5 5 0 0 1 0 10H9" />
+                  <path d="M7 4 3 8l4 4" />
+                </svg>
                 復原
               </button>
             </motion.div>
@@ -470,24 +477,29 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <nav className="tabbar-wrap" aria-label="主要導覽">
+      {/* 底部列（v2.3）：分頁 pill 靠左、56px 圓形主 CTA 靠右，同列取代 v2.2 的上下兩段
+          （138px→約 72px，時間軸多出 84px）。CTA 只在今日頁渲染，設定頁右端留空——
+          這是預期行為，不是漏放。分頁改純圖示：同列已有主 CTA，兩顆帶字分頁塞不下，
+          aria-label 補無障礙名稱。 */}
+      <nav className="bottom-bar" aria-label="主要導覽">
         <div className="tabbar">
           <button
             className="tab"
             type="button"
             aria-current={tab === 'today' ? 'page' : undefined}
+            aria-label="日記"
             onClick={() => setTab('today')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 4h16v16H4z" />
               <path d="M8 4v16" />
             </svg>
-            日記
           </button>
           <button
             className="tab"
             type="button"
             aria-current={tab === 'settings' ? 'page' : undefined}
+            aria-label="設定"
             onClick={() => setTab('settings')}
           >
             {/* 齒輪（cog），取代原本的圓＋放射線——那組讀起來像太陽／亮度圖示，跟「設定」
@@ -498,9 +510,15 @@ export default function App() {
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
-            設定
           </button>
         </div>
+        {tab === 'today' && ready && (
+          <button className="cta" type="button" aria-label="記一筆" onClick={() => openSheet(defaultMeal())}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
       </nav>
 
       {ready && (

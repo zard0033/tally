@@ -77,6 +77,11 @@ test('Tally UI 回歸', async ({ page }) => {
       await must(page, sel, label)
     }
     check((await page.locator('.tabbar .tab').count()) === 2, '分頁按鈕數：預期 2（日記／設定）')
+    // v2.3：CTA 已無文字，改驗 aria-label
+    check(
+      (await page.locator('button.cta').getAttribute('aria-label')) === '記一筆',
+      'CTA 的 aria-label 應為「記一筆」',
+    )
 
     // 目標熱量不硬編（app 自己算），只驗畫面三個數字彼此自洽
     const cur = await numFrom(page, '.gauge-side .cur')
@@ -323,13 +328,17 @@ test('Tally UI 回歸', async ({ page }) => {
   })
 
   await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {
-    // h1 是靜態頁名「日記」（review 修正：v2.0 拿掉了跟日期區重複的動態標題），
-    // 日期／狀態資訊全權交給 .datectl 承擔，這裡改驗 .date-today-label／.date-today-btn
-    await mustText(page, 'h1.today', '日記', '今日頁 h1 應為靜態頁名「日記」')
+    // v2.3：今日頁 h1 就是置中的日期本身（靜態頁名「日記」已拿掉，分頁列已經寫了
+    // 「日記」），格式「週X M/D」；今天時同位置不放任何東西（.date-today-label 已刪除）
+    const h1TextToday = ((await page.locator('h1.date-title').first().textContent()) ?? '').trim()
+    check(
+      /^週[一二三四五六日] \d+\/\d+$/.test(h1TextToday),
+      `今日頁 h1 應為「週X M/D」格式的日期，實際「${h1TextToday}」`,
+    )
     await must(page, 'button[aria-label="前一天"]', '前一天')
     await must(page, 'button[aria-label="後一天"]', '後一天')
     check(await page.locator('button[aria-label="後一天"]').isDisabled(), '今天時「後一天」應停用（看不了未來）')
-    await mustText(page, '.date-today-label', '今天', '今天時同位置應顯示靜態「今天」')
+    check((await page.locator('button.date-today-btn').count()) === 0, '今天時不應出現「回今天」鈕')
     await page.click('button[aria-label="前一天"]')
     await page.waitForTimeout(500)
     check(!(await page.locator('button[aria-label="後一天"]').isDisabled()), '離開今天後「後一天」仍停用')
@@ -337,7 +346,7 @@ test('Tally UI 回歸', async ({ page }) => {
     await must(page, 'button.date-today-btn', '回今天鈕（歷史日應出現）')
     await page.click('button.date-today-btn')
     await page.waitForTimeout(500)
-    await mustText(page, '.date-today-label', '今天', '點「回今天」後應回到今天狀態')
+    check((await page.locator('button.date-today-btn').count()) === 0, '點「回今天」後回今天鈕應消失')
     // review 抓到的焦點流失：「回今天」鈕自己會被卸載，焦點要接到 .datectl 容器，
     // 不能掉回 body（掉回 body 代表鍵盤使用者按完之後找不到自己在哪）
     check(
@@ -357,7 +366,8 @@ test('Tally UI 回歸', async ({ page }) => {
     check((await page.locator('.datectl').count()) === 0, '設定頁不該存在日期切換列（today 分頁的元件不該掛載在這裡）')
     await tabs.nth(0).click() // 日記
     await page.waitForTimeout(400)
-    await mustText(page, 'h1.today', '日記', '切回日記頁標題（靜態頁名，不隨日期變）')
+    const h1Text = ((await page.locator('h1.date-title').first().textContent()) ?? '').trim()
+    check(/^週[一二三四五六日] \d+\/\d+$/.test(h1Text), `切回日記頁 h1 應為日期格式，實際「${h1Text}」`)
   })
 
   // 安全紅線：零真實網路請求是可斷言的事實，不是「沒看到報錯就當作沒發生」

@@ -78,8 +78,10 @@ body {
 .pair .sep { color: var(--ink-muted); }                   /* 分隔符 */
 .pair .tgt { color: var(--ink-muted); }                   /* 固定的參考值 */
 
-/* ── 頂欄（日期切換控制見下方 .datectl） ── */
-.topbar { padding: var(--s-4) var(--s-5) 0; }
+/* ── 頂欄（日期切換控制見下方 .datectl）。position:relative 是 .date-today-btn
+   的定位基準（絕對定位貼左邊距，見下方） ── */
+.topbar { position: relative; padding: var(--s-4) var(--s-5) 0; }
+/* .today：設定頁專用的靜態標題（今日頁 v2.3 起改用 .date-title，見下方 .datectl） */
 .topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md);
   margin: 0; line-height: 1.2; }
 
@@ -195,20 +197,26 @@ body {
 .item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; }
-/* iOS 提醒事項風格：44px 圓鈕、--over-fill 底、白色垃圾桶圖示。它固定壓在列的
-   右緣底下不動，靠上層 .item-slide 讓開才露出來。 */
+/* iOS 提醒事項風格：紅圓鈕、白色垃圾桶圖示。它固定壓在列的右緣底下不動，
+   靠上層 .item-slide 讓開才露出來。
+   盒子 44px（觸控區），**紅圓畫在 ::before 上、inset 2px＝40px**：畫在盒子本身時圓會
+   與 44px 的列上下緣相切，而門檻預告的 scale(1.18) 會長成 51.9px、被 .item-row 的
+   overflow:clip 切掉上下各 4px——真機回報「圓角變得很大、上下被截斷」（2026-07-30 量到）。
+   40px 打底後預告改 scale(1.1)＝44px，剛好貼齊列高不外溢，觸控區與 transform-only 都不動。 */
 .item-delete { width: 44px; height: 44px; border-radius: var(--r-pill); border: none;
-  background: var(--over-fill); color: var(--on-accent); display: flex; align-items: center;
+  background: none; color: var(--on-accent); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
-  position: absolute; top: 0; bottom: 0; right: var(--s-2); margin: auto 0;
-  transition: transform var(--dur-base) var(--ease); }
-.item-delete svg { width: 18px; height: 18px; stroke: var(--on-accent); }
+  position: absolute; top: 0; bottom: 0; right: var(--s-2); margin: auto 0; }
+.item-delete::before { content: ''; position: absolute; inset: 2px; border-radius: var(--r-pill);
+  background: var(--over-fill); transition: transform var(--dur-base) var(--ease); }
+/* position:relative 讓圖示疊在 ::before 之上（絕對定位的 pseudo 會蓋掉靜態子元素） */
+.item-delete svg { position: relative; width: 18px; height: 18px; stroke: var(--on-accent); }
 .item-delete:active { opacity: .8; }
 /* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
 .item-delete:disabled { opacity: .6; cursor: default; }
-/* 拖過「放手就刪」的門檻時鈕放大一點——純 transform 的預告，讓滑到底不是盲的 */
-.item-row.is-armed .item-delete { transform: scale(1.18); }
+/* 拖過「放手就刪」的門檻時圓放大一點——純 transform 的預告，讓滑到底不是盲的 */
+.item-row.is-armed .item-delete::before { transform: scale(1.1); }
 /* outline-offset 內縮：.item-row 是 overflow:clip，往外長的外框會被裁掉半圈 */
 .item-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
@@ -238,55 +246,76 @@ body {
   letter-spacing: var(--track-md); }
 .todo-row .chev { width: 14px; height: 14px; color: var(--ink-muted); }
 
-/* ── 主 CTA（固定拇指區，不隨時間軸捲動） ── */
-.cta-wrap { padding: var(--s-2) var(--s-5); }
-.cta { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
-  width: 100%; min-height: 52px; border: none; border-radius: var(--r-btn); cursor: pointer;
-  background: var(--accent); color: var(--on-accent); font-family: inherit;
-  font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
+/* ── 主 CTA（v2.3：56px 實心圓、只有加號，見底部列 .bottom-bar） ── */
+.cta { display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; min-height: 0; padding: 0; flex-shrink: 0;
+  border: none; border-radius: var(--r-pill); cursor: pointer;
+  background: var(--accent); color: var(--on-accent);
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease); }
 @media (hover: hover) { .cta:hover { background: var(--accent-dark); } }
 .cta:active { transform: translateY(1px); }
 .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .cta:disabled { opacity: .45; cursor: default; }
-.cta svg { width: 18px; height: 18px; stroke-width: 2.2; }
+/* 加號放大到 22px——18px 疊在 56px 圓鈕上太小；stroke-width 2.2 是圖示規則的唯一例外 */
+.cta svg { width: 22px; height: 22px; stroke-width: 2.2; }
 
-/* ── 分頁列（v2.0：pill 置中收窄，取代貼滿寬的長條） ── */
-/* 刪除的復原條：絕對定位浮在時間軸底部（CTA 之上），不走版面流——走流的話它
-   一出現就把時間軸擠短 62px、消失再彈回來，每次刪除都抖一下。沒有陰影分層
-   （DESIGN.md），邊界靠 --rule；「復原」是動作所以用 --accent，與訊號色規則一致 */
-.undo-bar { position: absolute; left: var(--s-5); right: var(--s-5); z-index: 2;
-  bottom: calc(52px + var(--s-2) * 2 + var(--s-2));
-  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
-  background: var(--raised); border: 1px solid var(--rule); border-radius: var(--r-btn);
-  font-size: var(--t-sm); color: var(--ink); }
-.undo-bar button { min-height: 44px; padding: 0 var(--s-3); border: none; background: none;
-  font-family: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent);
-  letter-spacing: var(--track-md); cursor: pointer;
+/* ── 通用滿寬動作鈕（登入 CTA、載入失敗重試）：與主 CTA 曾共用 .cta，
+   v2.3 主 CTA 改成 56px 圓鈕後語意分岔，這裡獨立成一個 class，樣式照舊不變 ── */
+.action-btn { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  width: 100%; min-height: 52px; border: none; border-radius: var(--r-btn); cursor: pointer;
+  background: var(--accent); color: var(--on-accent); font-family: inherit;
+  font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease); }
+@media (hover: hover) { .action-btn:hover { background: var(--accent-dark); } }
+.action-btn:active { transform: translateY(1px); }
+.action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.action-btn:disabled { opacity: .45; cursor: default; }
+
+/* ── 刪除的復原提示（v2.3：置中浮在底部列上方，不進底部列） ──
+   絕對定位浮在時間軸底部（.main 是定位基準），不走版面流——走流的話它一出現就把
+   時間軸擠短、消失再彈回來，每次刪除都抖一下。
+   置中且不與底部列左右任一端對齊，位置本身就在說「我不是這一組的」——底部列合併
+   CTA 與分頁後右下角已被 CTA 佔住，且它是 5 秒就消失的暫時物件，進常駐列會讓每次
+   刪除都改變那一列的構成。深色底是不動用第二個訊號色就能拉開對比的唯一做法
+   （不用陰影，DESIGN.md）——jade 會與底部列的 CTA 撞成同色。
+   外層 div 只負責定位與 role=status 的播報（含 sr-only 的「已刪除」）。 */
+.undo-bar { position: absolute; left: 0; right: 0; bottom: var(--s-2); z-index: 2;
+  display: flex; justify-content: center; }
+.undo-bar button { display: flex; align-items: center; gap: var(--s-2);
+  min-height: 44px; padding: 0 var(--s-4); border: none; border-radius: var(--r-pill);
+  background: var(--ink); color: var(--paper);
+  font-family: inherit; font-size: var(--t-base); font-weight: 600;
+  letter-spacing: var(--track-base); cursor: pointer;
   -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
-.undo-bar button:active { opacity: .5; }
-.undo-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
-  border-radius: var(--s-1); }
+.undo-bar svg { width: 16px; height: 16px; }
+.undo-bar button:active { opacity: .6; }
+.undo-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.tabbar-wrap { padding: var(--s-1) 0 var(--s-3); display: flex; justify-content: center;
-  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
+/* ── 底部列（v2.3：分頁 pill 靠左、56px 圓形主 CTA 靠右併成同一列，
+   取代 v2.2 的上下兩段 .cta-wrap／.tabbar-wrap，138px→約 72px） ── */
+.bottom-bar { display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-3); padding: var(--s-2) var(--s-5);
+  padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
 .tabbar { display: flex; gap: var(--s-1); padding: var(--s-1);
   background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
-.tab { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
-  min-height: 44px; padding: 0 var(--s-5); border: none; border-radius: var(--r-pill); background: none;
-  font-family: inherit; font-size: var(--t-sm); font-weight: 600;
-  color: var(--ink-muted); white-space: nowrap; cursor: pointer;
+/* 分頁改純圖示（v2.3）：同列已有主 CTA，帶字分頁塞不下，aria-label 補無障礙名稱 */
+.tab { display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0; border: none; border-radius: var(--r-pill); background: none;
+  color: var(--ink-muted); cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
 .tab:active { opacity: .6; }
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 選中態：底色只是輔助（--raised 對 --card 僅 1.14:1），真正扛辨識的是
-   jade 文字色＋1px accent 邊框 */
-.tab[aria-current="page"] { background: var(--raised); color: var(--accent);
+/* 選中態底色（v2.4：--raised → --accent-soft）。純圖示分頁的選中/未選中圖示色
+   jade #1C7059 對 ink-muted #7A5C44 亮度只差 1.02:1，兩者差異幾乎只在色相；
+   --raised 對 --card 又只有 1.14:1，實際只剩 1px inset 邊框在扛狀態訊號。
+   --accent-soft 是本檔既有的「選取底色 / focus halo」token，不新增 token；
+   1px accent inset 邊框與 aria-current 仍保留 */
+.tab[aria-current="page"] { background: var(--accent-soft); color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent); }
-.tab svg { width: 16px; height: 16px; }
+.tab svg { width: 18px; height: 18px; }
 
 /* ═══════════ 登入頁（v2.0：極簡化，Meta splash 式，見 DESIGN.md P2） ═══════════ */
 /* 不放 Google 彩色 logo——fill-based 圖示與「全部 inline SVG / stroke 1.6 / fill:none」相斥。
@@ -299,7 +328,7 @@ body {
 .login .mark rect { fill: var(--accent); }
 .login .hero-q { font-size: var(--t-lg); font-weight: 500; color: var(--ink);
   letter-spacing: var(--track-lg); margin: 0; }
-.login .cta { max-width: 320px; margin: 0 auto; width: 100%; }
+.login .action-btn { max-width: 320px; margin: 0 auto; width: 100%; }
 .login .err { color: var(--over); font-size: var(--t-sm); margin: var(--s-4) 0 0; }
 
 /* ═══════════ 狀態畫面（載入／錯誤／降級） ═══════════ */
@@ -309,7 +338,7 @@ body {
 .notice p { margin: 0; color: var(--ink-muted); max-width: 34ch; line-height: 1.5; }
 .notice .headline { color: var(--ink); font-weight: 700; font-size: var(--t-md);
   letter-spacing: var(--track-md); }
-.notice .cta { max-width: 260px; }
+.notice .action-btn { max-width: 260px; }
 
 /* ═══════════ 設定頁 ═══════════ */
 /* 第一版只交付「看得到目標怎麼算出來的」＋登出。編輯留待設定頁走完設計流程 */
@@ -337,17 +366,18 @@ body {
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ═══════════ 日期切換（v2.0：拿掉原生 input[type=date]） ═══════════ */
-/* 格式「週二 7/28」是靜態文字（不再是可點的 input），左右箭頭各走一天；
-   歷史日在同一行右側多一顆「回今天」安靜文字鈕，今天時同位置是靜態「今天」。
-   margin-left 抵銷左箭頭 44px 觸控區內的留白，讓日期文字左緣對齊上方標題。 */
-.datectl { display: flex; align-items: center; gap: var(--s-1); margin-left: -10px; }
+/* ═══════════ 日期切換（v2.4：`‹ 日期 › ` 三件包進一顆膠囊，日期本身是 h1） ═══════════ */
+/* 膠囊＝.datectl 本身：--card 底、1px --rule 邊框、--r-pill 圓角，寬度收成內容自身
+   （width: fit-content ＋ margin: 0 auto，在 .topbar 裡置中）。裸 chevron 在 cream 上
+   沒有任何「可按」的訊號，容器補上這個訊號（DESIGN.md v2.4）。 */
+.datectl { display: flex; align-items: center; width: fit-content; margin: 0 auto;
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
 /* tabIndex=-1：只接受「回今天」「後一天」按到今天時的程式化焦點轉移，不進 Tab
    順序。:not(:focus-visible) 只殺程式化 focus 的預設外框，鍵盤使用者的 :focus-visible
    不受影響（這個容器本來就進不了 Tab 順序，正常操作下 :focus-visible 不會命中它）。 */
 .datectl:focus:not(:focus-visible) { outline: none; }
-.datectl-spacer { flex: 1; }
-.date-arrow { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+/* 膠囊內縮成 40px 寬（高度仍 44px，觸控高度不能低於這個數）*/
+.date-arrow { width: 40px; height: 44px; display: flex; align-items: center; justify-content: center;
   border: none; background: none; color: var(--ink-muted); cursor: pointer;
   border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
@@ -355,19 +385,25 @@ body {
 .date-arrow:active { opacity: .5; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .date-arrow:disabled { opacity: .3; cursor: default; }
-.date-text { font-size: var(--t-md); letter-spacing: var(--track-md); font-weight: 700;
-  color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap;
-  padding: 0 var(--s-1); }
-.date-today-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px;
-  padding: 0 var(--s-2); border: none; background: none; color: var(--accent);
+/* 日期本身是 h1（--t-lg/700），取代 v2.2 拿掉的靜態頁名「日記」。左右內距 --s-2
+   同時是膠囊內「箭頭緊貼日期兩側」的間距來源 */
+.date-title { font-size: var(--t-lg); font-weight: 700; letter-spacing: var(--track-lg);
+  margin: 0; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums;
+  white-space: nowrap; padding: 0 var(--s-2); }
+/* 回今天（v2.4）：移到頂欄左端、拿掉前置 chevron（與膠囊內的 ‹ 同向重複）。
+   絕對定位貼 .topbar（不是 .datectl）：定位基準若留在膠囊上，位置會跟著膠囊寬度
+   （隨日期文字長度）漂移；貼 .topbar 才能穩定貼齊頁面左邊距。絕對定位的 offset 是相對
+   容器的 padding box 起點，會跳過 .topbar 自己的 padding-left，所以要用 var(--s-5)
+   （不是 0）才真的對齊其他區塊共用的 20px 頁面邊距。今天時整個 unmount，
+   同位置不放任何東西（日期組置中後不需要佔位穩住寬度）。 */
+.date-today-btn { position: absolute; left: var(--s-5); top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; min-height: 44px;
+  padding: 0 var(--s-3); border: none; background: none; color: var(--accent);
   font-family: inherit; font-size: var(--t-sm); font-weight: 600; letter-spacing: var(--track-xs);
   cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
-.date-today-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .date-today-btn:active { opacity: .6; }
 .date-today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.date-today-label { font-size: var(--t-sm); color: var(--ink-muted); letter-spacing: var(--track-xs);
-  padding: 0 var(--s-3); min-height: 44px; display: inline-flex; align-items: center; white-space: nowrap; }
 
 /* ═══════════ 記一筆 sheet ═══════════ */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
@@ -607,16 +643,16 @@ body {
 .settings .link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cta, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
+  .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
   .chip, .icon-btn, .date-arrow, .date-today-btn, .pick-bar-btn, .field-float label,
-  .food-row, .add-food-row, .back-btn, .item-content, .item-delete,
+  .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
   .qty-btn { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
      單獨的 class 選擇器贏不過，要原樣列出來才壓得過。
      .item-slide 的位移是 motion 在 JS 端驅動的，降速在 Today.tsx 走 reduceMotion() */
   .item-row.is-open .item-content,
-  .item-row.is-armed .item-delete { transition-duration: .01ms; }
-  .cta:active, .pick-bar-btn:active { transform: none; }
+  .item-row.is-armed .item-delete::before { transition-duration: .01ms; }
+  .cta:active, .action-btn:active, .pick-bar-btn:active { transform: none; }
   .item-content.just-added::before,
   .sheet.opening, .pick-bar,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
