@@ -481,8 +481,11 @@ export default function App() {
           （138px→約 72px，時間軸多出 84px）。CTA 只在今日頁渲染，設定頁右端留空——
           這是預期行為，不是漏放。分頁改純圖示：同列已有主 CTA，兩顆帶字分頁塞不下，
           aria-label 補無障礙名稱。 */}
-      <nav className="bottom-bar" aria-label="主要導覽">
-        <div className="tabbar">
+      {/* 底部列本身是純版面容器（div），<nav> 只包分頁——CTA 是「開記一筆表單」的動作，
+          不是導覽項；把它放進 aria-label="主要導覽" 的 landmark 裡，讀屏使用者跳到導覽時
+          會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
+      <div className="bottom-bar">
+        <nav className="tabbar" aria-label="主要導覽">
           <button
             className="tab"
             type="button"
@@ -511,15 +514,19 @@ export default function App() {
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
-        </div>
-        {tab === 'today' && ready && (
+        </nav>
+        {/* !failed 不可少：ready 只看 profile/targets/weight，初次載入成功之後才發生的失敗
+            （loadDay 掛掉、刪除送不出去）不會讓 ready 轉 false。CTA 搬出 Today 之前是跟著
+            Today 一起被錯誤畫面換掉的，搬到底部列之後就沒人管它了——會在「讀不到這天的
+            紀錄」的畫面上留一顆綠色加號，按下去用過期的 rows 開表單（review 抓到）。 */}
+        {tab === 'today' && ready && !failed && (
           <button className="cta" type="button" aria-label="記一筆" onClick={() => openSheet(defaultMeal())}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
         )}
-      </nav>
+      </div>
 
       {ready && (
         <LogSheet

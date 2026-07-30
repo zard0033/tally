@@ -84,6 +84,22 @@ export default function Today(props: TodayProps) {
           「回今天」影響——後者移到左端、脫離膠囊，絕對定位貼 .topbar 左邊距，
           與膠囊間距用 CSS padding 撐開，不吃版面流。今天時同位置不放東西。 */}
       <header className="topbar">
+        {/* 「回今天」render 在膠囊**之前**：它視覺上在左端（絕對定位），DOM 順序必須跟著
+            視覺順序走，否則 Tab 會先跳到右邊的箭頭再回頭跳左邊這顆（WCAG 2.4.3 焦點順序）。 */}
+        {!isToday && (
+          <button
+            type="button"
+            className="date-today-btn"
+            onClick={() => {
+              onGoToDate(localDate())
+              // 這顆鈕自己會被 unmount（今天時同位置不放東西），焦點要在同一個
+              // click handler 裡搶先移到還會留著的容器，不能等 re-render 完才做
+              dateRegionRef.current?.focus()
+            }}
+          >
+            回今天
+          </button>
+        )}
         <div className="datectl" ref={dateRegionRef} tabIndex={-1}>
           <button
             type="button"
@@ -112,20 +128,6 @@ export default function Today(props: TodayProps) {
             </svg>
           </button>
         </div>
-        {!isToday && (
-          <button
-            type="button"
-            className="date-today-btn"
-            onClick={() => {
-              onGoToDate(localDate())
-              // 這顆鈕自己會被 unmount（今天時同位置不放東西），焦點要在同一個
-              // click handler 裡搶先移到還會留著的容器，不能等 re-render 完才做
-              dateRegionRef.current?.focus()
-            }}
-          >
-            回今天
-          </button>
-        )}
       </header>
 
       <section className="gauge" aria-label="今日熱量">

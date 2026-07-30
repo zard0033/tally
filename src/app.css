@@ -281,8 +281,14 @@ body {
    刪除都改變那一列的構成。深色底是不動用第二個訊號色就能拉開對比的唯一做法
    （不用陰影，DESIGN.md）——jade 會與底部列的 CTA 撞成同色。
    外層 div 只負責定位與 role=status 的播報（含 sr-only 的「已刪除」）。 */
+/* pointer-events: none 在容器上、auto 在鈕上——**看得見的只有置中那顆 84px pill，
+   但容器是滿寬 353×44 的命中區**。v2.2 時它是滿寬可見條，遮住哪裡看得出來；v2.3 縮成
+   置中 pill 後遮蔽範圍沒跟著縮，變成一條看不見的攔截帶：它掛在 .main 底下、不是
+   .timeline 的後代，觸控起手落在帶上時捲動與左滑刪除全部收不到事件——「那一列還在、
+   一捲就出來」這個略過理由當場失效（precommit deep review 抓到）。 */
 .undo-bar { position: absolute; left: 0; right: 0; bottom: var(--s-2); z-index: 2;
-  display: flex; justify-content: center; }
+  display: flex; justify-content: center; pointer-events: none; }
+.undo-bar button { pointer-events: auto; }
 .undo-bar button { display: flex; align-items: center; gap: var(--s-2);
   min-height: 44px; padding: 0 var(--s-4); border: none; border-radius: var(--r-pill);
   background: var(--ink); color: var(--paper);
@@ -312,9 +318,14 @@ body {
    jade #1C7059 對 ink-muted #7A5C44 亮度只差 1.02:1，兩者差異幾乎只在色相；
    --raised 對 --card 又只有 1.14:1，實際只剩 1px inset 邊框在扛狀態訊號。
    --accent-soft 是本檔既有的「選取底色 / focus halo」token，不新增 token；
-   1px accent inset 邊框與 aria-current 仍保留 */
+   1px accent inset 邊框與 aria-current 仍保留。
+   **底色換掉買到的是色相差，不是亮度差**（實算：--accent-soft 對 --card 1.22:1，
+   換之前的 --raised 是 1.14:1），所以另外加一個**非顏色訊號**：選中的圖示描邊 1.6→2.2
+   加粗。這與 DESIGN.md「破表靠 3px→6px 高度差當主訊號、顏色是第二層」同一個原則——
+   只有色相差的狀態訊號在色弱者眼裡等於沒有（review 實算後補，2026-07-30）。 */
 .tab[aria-current="page"] { background: var(--accent-soft); color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent); }
+.tab[aria-current="page"] svg { stroke-width: 2.2; }
 .tab svg { width: 18px; height: 18px; }
 
 /* ═══════════ 登入頁（v2.0：極簡化，Meta splash 式，見 DESIGN.md P2） ═══════════ */

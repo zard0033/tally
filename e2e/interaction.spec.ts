@@ -32,6 +32,39 @@ test('拖曳之後的下一次點擊不可以被吃掉', async ({ page }) => {
   check(!(await rowState(page)).open, '拖曳之後的下一次點擊被吃掉了——列沒有關上')
 })
 
+test('復原提示顯示中，它兩側的空白不可以攔截底下的時間軸', async ({ page }) => {
+  await openApp(page)
+  const g = await grabPoint(page)
+  await slowDrag(page, g, leg(g, { x: g.x - 80, y: g.y }, 8))
+  await page.waitForTimeout(400)
+  await page.locator('.item-delete').first().click()
+  await page.waitForTimeout(400)
+  /* 看得見的只有置中那顆 84px pill，但容器是滿寬 44px 的絕對定位層。v2.3 把滿寬可見條
+     縮成置中 pill 時，命中區沒有跟著縮——變成一條看不見的攔截帶，5 秒內捲不動也滑不動
+     （precommit deep review 抓到）。這條鎖的是「容器不吃事件、鈕自己吃」。 */
+  const hit = await page.evaluate(() => {
+    const bar = document.querySelector('.undo-bar') as HTMLElement
+    const btn = bar.querySelector('button') as HTMLElement
+    const r = bar.getBoundingClientRect()
+    const b = btn.getBoundingClientRect()
+    const y = r.top + r.height / 2
+    const cls = (el: Element | null) => (el ? el.className.toString() : 'null')
+    return {
+      left: cls(document.elementFromPoint(r.left + 30, y)),
+      right: cls(document.elementFromPoint(r.right - 30, y)),
+      pill: document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest('.undo-bar button') !== null,
+    }
+  })
+  check(!hit.left.includes('undo-bar'), `復原條左側仍在攔截：命中 ${hit.left}`)
+  check(!hit.right.includes('undo-bar'), `復原條右側仍在攔截：命中 ${hit.right}`)
+  check(hit.pill, 'pill 本身反而點不到了（pointer-events 收得太乾淨）')
+  // 鈕仍然按得動：復原後品項回到 2 筆、提示條消失
+  await page.locator('.undo-bar button').click()
+  await page.waitForTimeout(300)
+  const s = await rowState(page)
+  check(s.count === 2 && s.undoBar === 0, `復原沒生效：count=${s.count} undoBar=${s.undoBar}`)
+})
+
 test('小幅拖曳不到門檻 → 回彈關閉，且不誤刪', async ({ page }) => {
   await openApp(page)
   const g = await grabPoint(page)
