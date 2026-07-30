@@ -68,6 +68,18 @@ const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)'
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 const byFoodName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
 
+/** 把「待刪那一筆」從 rows 濾掉——這是把 rows 放進畫面的唯一合法方式，不論 rows 是
+ *  剛 fetch 回來的、還是從快取取出的。快取本身永遠存**原始**（未濾除）的 rows，
+ *  濾除只在「放進畫面」這一刻做，理由是 pendingDelete 會隨時間改變（送出、復原），
+ *  存濾過的版本進快取只會讓快取跟著過期。 */
+function filterPendingRow(
+  rows: IntakeRow[],
+  date: string,
+  pending: { row: IntakeRow; date: string } | null,
+): IntakeRow[] {
+  return pending && pending.date === date ? rows.filter((row) => row.id !== pending.row.id) : rows
+}
+
 export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -92,13 +104,31 @@ export default function App() {
   /* 刪除的 undo 窗（v2.1）：按下刪除後**先不打 DELETE**，只把該列從畫面樂觀移除，
      等 UNDO_MS 過了才真的送出。復原＝把快照的 rows 放回去，不必反向 INSERT——
      反向 INSERT 會拿到新的 id，而且復原本身也可能失敗，那就真的救不回來了。
-     代價是這段窗內關掉分頁的話刪除不會生效，所以 pagehide 會先結清（見 useEffect）。 */
-  const pendingDelete = useRef<{ row: IntakeRow; index: number } | null>(null)
+     代價是這段窗內關掉分頁的話刪除不會生效，所以 pagehide 會先結清（見 useEffect）。
+     v2.5 真機第四輪：待刪要**跨日期存活**（換日期不再結清，只有換分頁才結清，見下方
+     兩個 useEffect）。因此多記一個 date——復原時要知道那一筆原本屬於哪一天，
+     不同天就不能把它插回目前畫面（那正是當初「換日期就結清」要防的事）。 */
+  const pendingDelete = useRef<{ row: IntakeRow; index: number; date: string } | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
   const [undoOpen, setUndoOpen] = useState(false)
   const undoBtnRef = useRef<HTMLButtonElement>(null)
-  // loadDay 定義在 commitDelete 之前，靠這個 ref 回頭取用最新的那一份
-  const commitRef = useRef<(() => Promise<void>) | null>(null)
+
+  /* 已看過的日期快取（v2.6：切日期無感）。存原始（未濾除待刪）rows，見 filterPendingRow。
+     沒有上限、不做 LRU——一次 session 看不到幾千天，淘汰只是多一套要維護的東西。
+     prefetchingRef 只是「這個日期正在背景撈」的去重旗標，跟 cacheRef 分開存，
+     避免同一天被連續按箭頭時觸發兩次重複的預取請求。 */
+  const cacheRef = useRef<Map<string, IntakeRow[]>>(new Map())
+  const prefetchingRef = useRef<Set<string>>(new Set())
+
+  /* 「現在正在看哪一天」的 ref。用 ref 不用 currentDate 本身，是因為需要它的地方
+     （loadDay 的 await 之後、commitDelete 的 catch）都不能把 currentDate 放進 deps：
+     那會讓這些 callback 的 identity 每次換日期都變，而 pagehide 那個 effect 依賴
+     commitDelete，identity 一變 cleanup 就跑，等於每換一次日期就偷送一次真的 DELETE
+     （已經踩過一次的坑，見下方 pagehide effect）。 */
+  const currentDateRef = useRef(currentDate)
+  useEffect(() => {
+    currentDateRef.current = currentDate
+  }, [currentDate])
 
   const showNotice = useCallback(
     (headline: string, detail: string | undefined, actionLabel: string, onAction: () => void) => {
@@ -106,6 +136,39 @@ export default function App() {
       setFailed(true)
     },
     [],
+  )
+
+  /* 背景把某一天的 intake 撈進快取，不碰任何畫面 state。失敗靜默忽略——這是預取，
+   *  使用者根本不知道它發生過，彈錯誤畫面或動到當前畫面的 state 都是過度反應。
+   *  prefetchingRef 防同一天被連續觸發兩次重複的請求（例如快速連按兩次箭頭）。 */
+  const prefetchDate = useCallback((date: string) => {
+    if (cacheRef.current.has(date) || prefetchingRef.current.has(date)) return
+    prefetchingRef.current.add(date)
+    void listIntake(date)
+      .then((r) => {
+        /* 落地前再檢查一次：這支請求在飛的期間，這一天可能已經被更新的東西寫進快取了
+           （commitDelete 成功後濾掉那筆、loadDay 重撈、記一筆後回填）。無條件寫入會把
+           較新的內容回捲成舊快照——症狀是「已經真的刪掉的那筆，切走再切回又出現」，
+           而且因為走快取不打 API，伺服器不會來糾正它（precommit deep review 抓到）。 */
+        if (!cacheRef.current.has(date)) cacheRef.current.set(date, r)
+      })
+      .catch(() => {})
+      .finally(() => {
+        prefetchingRef.current.delete(date)
+      })
+  }, [])
+
+  /* 載入某一天成功之後呼叫：背景預取前一天；只有在目前檢視日不是今天時才連後一天
+   *  也預取，且後一天不能超過今天——goToDate 已有「看不了未來」的規則，這裡照樣守。 */
+  const prefetchAdjacent = useCallback(
+    (date: string) => {
+      prefetchDate(shiftDate(date, -1))
+      if (date !== localDate()) {
+        const next = shiftDate(date, 1)
+        if (next <= localDate()) prefetchDate(next)
+      }
+    },
+    [prefetchDate],
   )
 
   /* 照 legacy load()：profile／最新體重／當日 intake／食品庫並行撈。
@@ -132,36 +195,52 @@ export default function App() {
       setProfile(p)
       setWeight(w)
       setTargets(t)
-      setRows(r)
+      // 濾除照樣走 filterPendingRow：目前這條路徑（開機／設定頁存檔）呼叫時待刪一定是
+      // null（切到設定分頁就結清了），但「把 rows 放進畫面的唯一合法方式」是個不變式，
+      // 留一條例外就等著哪天有人加一個不必切分頁的存檔入口時漏掉它（review 指出）
+      setRows(filterPendingRow(r, date, pendingDelete.current))
       setFoods(f)
       setFailed(false)
       setNotice(null)
+      cacheRef.current.set(date, r) // 也覆寫快取——這條路徑也會被 handleSaveProfile／
+      // handleSaveWeight 呼叫（設定改動後重算），r 是這一天的最新狀態，讓快取跟著更新
+      prefetchAdjacent(date)
     } catch (e) {
       showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
     }
     // 日期走顯式參數（跟 loadDay 對稱）——closure 抓 currentDate 曾造成
     // 「歷史日存設定後畫面日期與資料錯位」，precommit review 抓到的，別改回去
-  }, [showNotice])
+  }, [showNotice, prefetchAdjacent])
 
-  /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變 */
+  /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變。
+   *  這是「快取沒命中」的路徑，goToDate 命中快取時完全繞過這支函式。 */
   const loadDay = useCallback(
     async (date: string = currentDate) => {
-      /* 重撈前先把待刪結清，否則會出現反向的不一致：刪 A 失敗 → 按「重試」跑 loadDay →
-         同在窗內的 B 被一起撈回畫面 → B 的計時器隨後照樣送出 DELETE → 畫面看得到 B、
-         伺服器上已經沒有（verifier 追出的路徑）。用 ref 取最新的 commitDelete，
-         因為它定義在 loadDay 之後、直接引用會是 TDZ。 */
-      if (pendingDelete.current) await commitRef.current?.()
       setRows(null)
       try {
         const r = await listIntake(date)
-        setRows(r)
+        cacheRef.current.set(date, r) // 存原始 rows，濾除留給 filterPendingRow 在放進畫面時做
+        /* 回來時人還在這一天嗎？不在就只寫快取、不動畫面。**加了快取之後這條 race 從
+           罕見變成常態**：以前每次換日都要往返、延遲差不多，最後按的那天最後落地；
+           現在命中快取是同步回填，於是「先發的慢請求」會後到並蓋掉畫面。實測重現
+           （verifier）：慢 fetch 到前兩天途中按回今天 → 今天的畫面被前兩天的空清單整包
+           蓋掉，頁首寫「7/30」、主數字 1863、品項 0 筆，而且不會自我修復（不再打 API）。 */
+        if (date !== currentDateRef.current) return
+        /* 待刪跨日期存活（v2.5）：如果它屬於「正在載入的這一天」（最常見的路徑是
+           使用者切走又切回來，5 秒還沒到），要把它從剛撈回來的 rows 濾掉，**不要結清**
+           （不要真的送出 DELETE）。舊版做法是重撈前先結清，理由是防「畫面看得到、
+           伺服器已經沒有」的反向不一致；濾掉同樣防得住這個不一致——只是方向相反
+           （畫面藏著、伺服器還在，跟樂觀刪除本來就是同一個方向），而且不會讓使用者
+           單純切走再切回來就把一筆還在 undo 窗內的東西弄假成真地刪掉。 */
+        setRows(filterPendingRow(r, date, pendingDelete.current))
         setFailed(false)
         setNotice(null)
+        prefetchAdjacent(date)
       } catch (e) {
         showNotice('讀不到這天的紀錄', friendlyError(errMsg(e)), '重試', () => void loadDay(date))
       }
     },
-    [currentDate, showNotice],
+    [currentDate, showNotice, prefetchAdjacent],
   )
 
   const goToDate = useCallback(
@@ -170,9 +249,20 @@ export default function App() {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return
       if (iso > localDate()) return // 看不了未來
       setCurrentDate(iso)
-      void loadDay(iso)
+      const cached = cacheRef.current.get(iso)
+      if (cached) {
+        /* 快取命中：直接把快取的 rows（經同一套濾除）放進畫面，完全不進載入態——
+         *  不 setRows(null)，主數字不掉回 —、時間軸不出現「載入中…」。這是這次改動
+         *  唯一的目的：使用者按下箭頭時資料已經在手上。 */
+        setRows(filterPendingRow(cached, iso, pendingDelete.current))
+        setFailed(false)
+        setNotice(null)
+        prefetchAdjacent(iso)
+      } else {
+        void loadDay(iso)
+      }
     },
-    [currentDate, loadDay],
+    [currentDate, loadDay, prefetchAdjacent],
   )
 
   const shiftDateBy = useCallback((days: number) => goToDate(shiftDate(currentDate, days)), [currentDate, goToDate])
@@ -199,6 +289,19 @@ export default function App() {
     })
   }, [])
 
+  /* commitDelete 不能把 loadDay 直接放進自己的 deps：loadDay 的 identity 隨 currentDate
+     變（它把 currentDate 當預設參數關進 closure），若 commitDelete 也跟著變，
+     下面 pagehide／visibilitychange 那個 effect的 cleanup 會在**單純換日期**時被觸發
+     （cleanup 在依賴改變時一樣會跑，不是只有真正卸載才跑）——cleanup 最後一行的
+     flush() 因此在每次換日期都偷跑一次真的 DELETE，等於繞了一圈把「換日期不再結清」
+     這條規則悄悄破了（真機第四輪這條 e2e 一開始就是被這裡絆倒，不是被日期效果絆倒）。
+     用 ref 把 loadDay 的最新版本存住、只在真正呼叫的當下讀，commitDelete 的 identity
+     就只跟著 restore／showNotice 走（兩者 deps 都是 []，形同永遠不變）。 */
+  const loadDayRef = useRef<(date?: string) => Promise<void>>(async () => {})
+  useEffect(() => {
+    loadDayRef.current = loadDay
+  }, [loadDay])
+
   const commitDelete = useCallback(async () => {
     const p = pendingDelete.current
     if (!p) return
@@ -207,50 +310,56 @@ export default function App() {
     setUndoOpen(false)
     try {
       await apiDeleteIntake(p.row.id)
+      // 真的刪成功了：快取這一天的原始 rows 裡也要把它拿掉，不然之後切回這天
+      // 會命中快取、直接把已經真的刪掉的那一筆又畫回螢幕上
+      const cached = cacheRef.current.get(p.date)
+      if (cached) cacheRef.current.set(p.date, cached.filter((row) => row.id !== p.row.id))
     } catch (e) {
-      // 送不出去就把那一筆放回去，不留下「看起來刪掉了其實還在」
-      restore(p)
-      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDay())
+      /* 送不出去就把那一筆放回去，不留下「看起來刪掉了其實還在」。
+         **但只在使用者仍停在那一天時才還原**——待刪會跨日期存活（v2.5），計時器可能在
+         使用者已經切到別天之後才觸發，此時無條件 restore 會把 A 日那筆插進 B 日的 rows，
+         正是 undoDelete 明講「絕對不可以」的事。目前它剛好被錯誤畫面擋著畫不出來，但
+         記一筆的 sheet 不在那道 gate 裡，會把 A 日的熱量算進 B 日的「已吃」
+         （precommit deep review 抓到）。不同天時不必補償：那筆從沒真的刪掉，
+         下次載入那天自然還在。
+         重試也要帶上 p.date——不帶的話 loadDay 會用預設的 currentDate，重撈的是
+         使用者現在看的那天，而不是真正出事的那天。 */
+      if (p.date === currentDateRef.current) restore(p)
+      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDayRef.current(p.date))
     }
-  }, [loadDay, restore, showNotice])
-
-  useEffect(() => {
-    commitRef.current = commitDelete
-  }, [commitDelete])
+  }, [restore, showNotice])
 
   const handleDeleteIntake = useCallback(
     (id: number) => {
       // 同一列連點（樂觀移除到退場動畫跑完之間仍點得到）直接忽略
       if (pendingDelete.current?.row.id === id) return
-      // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列
+      // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列。
+      // 這條不分日期：換日期後刪第二筆一樣先把前一筆（不論哪天）真的送出去。
       if (pendingDelete.current) void commitDelete()
       // 索引與待刪都在 updater 外面算好：updater 應該是純函式，StrictMode 下 React 會
       // 刻意跑兩次來抓副作用，在裡面寫 ref 只是目前剛好無害（precommit review 指出）
       const index = rows?.findIndex((r) => r.id === id) ?? -1
       if (index < 0) return
-      pendingDelete.current = { row: rows![index], index }
+      pendingDelete.current = { row: rows![index], index, date: currentDate }
       setRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
       setUndoOpen(true)
       window.clearTimeout(undoTimer.current)
       undoTimer.current = window.setTimeout(() => void commitDelete(), UNDO_MS)
     },
-    [commitDelete, rows],
+    [commitDelete, rows, currentDate],
   )
 
-  /* 換日期就結清待刪：不然 undo 會把 A 日的 rows 快照放進正在看的 B 日，
-     失敗時的還原也會錯位。待刪永遠不跨日，下面的還原邏輯才能假設同一天。
-     切分頁同理：復原提示條掛在 <main> 下、與 Today／Settings 同層，不結清的話它會
-     浮在設定頁上，而它的定位是照今日頁的 CTA 高度算的，在設定頁會落在半空
-     （precommit review 抓到）。 */
-  const dateRef = useRef(currentDate)
+  /* 切分頁才結清待刪（v2.5：換日期不再結清，待刪要跨日期存活，計時器照跑，
+     見上方 pendingDelete 註解與 loadDay）。切分頁維持原樣：復原提示條掛在 <main>
+     下、與 Today／Settings 同層，不結清的話它會浮在設定頁上，而它的定位是照今日頁
+     的 CTA 高度算的，在設定頁會落在半空（precommit review 抓到）。 */
   const tabRef = useRef(tab)
   useEffect(() => {
-    if (dateRef.current !== currentDate || tabRef.current !== tab) {
-      dateRef.current = currentDate
+    if (tabRef.current !== tab) {
       tabRef.current = tab
       if (pendingDelete.current) void commitDelete()
     }
-  }, [currentDate, tab, commitDelete])
+  }, [tab, commitDelete])
 
   const undoDelete = useCallback(() => {
     const p = pendingDelete.current
@@ -258,8 +367,14 @@ export default function App() {
     pendingDelete.current = null
     window.clearTimeout(undoTimer.current)
     setUndoOpen(false)
-    restore(p)
-  }, [restore])
+    /* 待刪跨日期存活（v2.5）：只有在使用者仍停在待刪那一天時，復原才把那一筆插回
+       目前畫面。已經切到別天的話，那一筆從來沒有從**別天**的清單被移出過——它只在
+       它自己那天的邏輯狀態裡被樂觀移除，切回別天時 loadDay 會把它濾掉（見上方），
+       畫面看起來「消失」但其實從沒被插進別天過，所以這裡只需要收掉計時器與提示條，
+       不能呼叫 restore(p)。**絕對不可以把 A 日的那筆插進 B 日目前的畫面**——
+       這正是當初「換日期就結清」要防的事，只是這次用「不還原」而不是「先結清」來防。 */
+    if (p.date === currentDate) restore(p)
+  }, [restore, currentDate])
 
   /* 被刪掉那一列連同它的刪除鈕一起離開 DOM，焦點會掉回 body，鍵盤使用者等於原地迷路、
      而且要在 5 秒內盲摸 Tab 才找得到「復原」。只在焦點真的掉了（activeElement 是 body）
@@ -372,6 +487,8 @@ export default function App() {
         setNotice(null)
         setSheetOpen(false)
         setTab('today')
+        cacheRef.current.clear() // 換帳號後別讓上一個帳號的快取資料在切日期時冒出來
+        prefetchingRef.current.clear()
       } else if (s) {
         setSession(s)
       }
@@ -486,6 +603,14 @@ export default function App() {
           會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
       <div className="bottom-bar">
         <nav className="tabbar" aria-label="主要導覽">
+          {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
+              兩顆分頁共用同一個 layoutId——切換時上一顆卸載、下一顆掛載發生在同一次
+              React commit，motion 的 projection 系統把這當成「同一個元素移動」，
+              自動在兩個掛載點之間做 FLIP（只動 transform），接管掉原本瞬跳的底色／邊框。
+              --dur-mid（220ms）是 DESIGN.md「中等位移」級距，EASE 沿用全站的
+              cubic-bezier(0.4,0,0.2,1)；reduced-motion 直接把 duration 降到 0，
+              不是另外接 CSS transition-duration（indicator 的位移是 JS 端的
+              motion tween，CSS 那條規則對它沒有作用）。 */}
           <button
             className="tab"
             type="button"
@@ -493,6 +618,14 @@ export default function App() {
             aria-label="日記"
             onClick={() => setTab('today')}
           >
+            {tab === 'today' && (
+              <motion.span
+                className="tab-indicator"
+                layoutId="tab-indicator"
+                aria-hidden="true"
+                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
+              />
+            )}
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 4h16v16H4z" />
               <path d="M8 4v16" />
@@ -505,6 +638,14 @@ export default function App() {
             aria-label="設定"
             onClick={() => setTab('settings')}
           >
+            {tab === 'settings' && (
+              <motion.span
+                className="tab-indicator"
+                layoutId="tab-indicator"
+                aria-hidden="true"
+                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
+              />
+            )}
             {/* 齒輪（cog），取代原本的圓＋放射線——那組讀起來像太陽／亮度圖示，跟「設定」
                 語意不合（review 快篩抓到的）。path 是通用的齒輪幾何座標（lucide 的
                 settings 圖示同款輪廓），不 import lucide-react，手抄座標到這裡即可，

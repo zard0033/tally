@@ -8,7 +8,7 @@
    harness 的 selector 也靠這個）。此檔不寫在任何 @layer 裡，CSS 層疊規則下
    unlayered 規則優先於任何 @layer（包含 Tailwind 的 preflight/base），所以下面的
    reset（* { box-sizing }、html,body { margin/height } 等）會照 legacy 行為生效，
-   不需要额外覆寫 Tailwind 的 base layer。Tailwind／shadcn 的機制本身不拆，
+   不需要額外覆寫 Tailwind 的 base layer。Tailwind／shadcn 的機制本身不拆，
    供未來新元件使用。
 
    例外：--accent／--card／--ring 等少數 token 名稱兩邊真的撞了（shadcn 在
@@ -306,9 +306,10 @@ body {
   padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
 .tabbar { display: flex; gap: var(--s-1); padding: var(--s-1);
   background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
-/* 分頁改純圖示（v2.3）：同列已有主 CTA，帶字分頁塞不下，aria-label 補無障礙名稱 */
-.tab { display: flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; padding: 0; border: none; border-radius: var(--r-pill); background: none;
+/* 分頁改純圖示（v2.3）：同列已有主 CTA，帶字分頁塞不下，aria-label 補無障礙名稱。
+   v2.5：44→56px 寬（真機回報「稍嫌小」），position:relative 給 .tab-indicator 當定位基準 */
+.tab { position: relative; display: flex; align-items: center; justify-content: center;
+  width: 56px; height: 44px; padding: 0; border: none; border-radius: var(--r-pill); background: none;
   color: var(--ink-muted); cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
@@ -322,11 +323,22 @@ body {
    **底色換掉買到的是色相差，不是亮度差**（實算：--accent-soft 對 --card 1.22:1，
    換之前的 --raised 是 1.14:1），所以另外加一個**非顏色訊號**：選中的圖示描邊 1.6→2.2
    加粗。這與 DESIGN.md「破表靠 3px→6px 高度差當主訊號、顏色是第二層」同一個原則——
-   只有色相差的狀態訊號在色弱者眼裡等於沒有（review 實算後補，2026-07-30）。 */
-.tab[aria-current="page"] { background: var(--accent-soft); color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent); }
+   只有色相差的狀態訊號在色弱者眼裡等於沒有（review 實算後補，2026-07-30）。
+   v2.5：底色與邊框從「直接畫在選中的 .tab 上」改成一個會在兩顆分頁間滑過去的
+   .tab-indicator（見下方）——background／box-shadow 從這裡搬過去，.tab[aria-current]
+   只留 color（決定圖示的 currentColor）。 */
+.tab[aria-current="page"] { color: var(--accent); }
 .tab[aria-current="page"] svg { stroke-width: 2.2; }
-.tab svg { width: 18px; height: 18px; }
+.tab svg { position: relative; z-index: 1; width: 18px; height: 18px; }
+/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡掛載，motion 用 layoutId 在兩個
+   掛載點之間做 FLIP——上一顆卸載、下一顆掛載發生在同一次 React commit，projection
+   系統會把這當成同一個元素「移動」而不是「消失又出現」，接管掉原本瞬跳的底色／邊框。
+   inset:0 蓋滿整顆 56×44 按鈕，z-index:0 讓圖示（z-index:1）疊在它之上——絕對定位
+   的層預設會蓋掉靜態子元素，同 .item-delete::before／.datectl::before 同一個手法。
+   只動 transform（FLIP 的位移與縮放走 transform，不是 left/top），遵守
+   「只動 opacity／transform」的動效硬規則。 */
+.tab-indicator { position: absolute; inset: 0; z-index: 0; border-radius: var(--r-pill);
+  background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* ═══════════ 登入頁（v2.0：極簡化，Meta splash 式，見 DESIGN.md P2） ═══════════ */
 /* 不放 Google 彩色 logo——fill-based 圖示與「全部 inline SVG / stroke 1.6 / fill:none」相斥。
@@ -381,14 +393,22 @@ body {
 /* 膠囊＝.datectl 本身：--card 底、1px --rule 邊框、--r-pill 圓角，寬度收成內容自身
    （width: fit-content ＋ margin: 0 auto，在 .topbar 裡置中）。裸 chevron 在 cream 上
    沒有任何「可按」的訊號，容器補上這個訊號（DESIGN.md v2.4）。 */
-.datectl { display: flex; align-items: center; width: fit-content; margin: 0 auto;
+/* v2.5 真機第四輪：膠囊視覺高度收到約 36px，觸控區維持 44px——沿用 .item-delete
+   的手法（底色與邊框畫在絕對定位的 ::before，本體只當觸控容器）。.datectl 自己不再
+   有背景／邊框，改由 ::before 承擔，inset: 4px 0＝上下各收 4px、左右不收（水平寬度
+   仍等於內容自身寬度，不影響「置中」）。子元素（箭頭、h1）要顯式 position:relative
+   疊到 ::before 之上——絕對定位的 pseudo 預設會蓋掉靜態子元素，同 .item-delete svg
+   的手法（那邊的註解已經解釋過一次）。 */
+.datectl { position: relative; display: flex; align-items: center; width: fit-content; margin: 0 auto; }
+.datectl::before { content: ''; position: absolute; inset: 4px 0; z-index: 0;
   background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
 /* tabIndex=-1：只接受「回今天」「後一天」按到今天時的程式化焦點轉移，不進 Tab
    順序。:not(:focus-visible) 只殺程式化 focus 的預設外框，鍵盤使用者的 :focus-visible
    不受影響（這個容器本來就進不了 Tab 順序，正常操作下 :focus-visible 不會命中它）。 */
 .datectl:focus:not(:focus-visible) { outline: none; }
-/* 膠囊內縮成 40px 寬（高度仍 44px，觸控高度不能低於這個數）*/
-.date-arrow { width: 40px; height: 44px; display: flex; align-items: center; justify-content: center;
+/* 膠囊內縮成 36px 寬（v2.5，原 40px；高度仍 44px 觸控區不變，視覺層見上方 ::before）*/
+.date-arrow { position: relative; z-index: 1; width: 36px; height: 44px; display: flex;
+  align-items: center; justify-content: center;
   border: none; background: none; color: var(--ink-muted); cursor: pointer;
   border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
@@ -398,7 +418,8 @@ body {
 .date-arrow:disabled { opacity: .3; cursor: default; }
 /* 日期本身是 h1（--t-lg/700），取代 v2.2 拿掉的靜態頁名「日記」。左右內距 --s-2
    同時是膠囊內「箭頭緊貼日期兩側」的間距來源 */
-.date-title { font-size: var(--t-lg); font-weight: 700; letter-spacing: var(--track-lg);
+.date-title { position: relative; z-index: 1; font-size: var(--t-lg); font-weight: 700;
+  letter-spacing: var(--track-lg);
   margin: 0; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums;
   white-space: nowrap; padding: 0 var(--s-2); }
 /* 回今天（v2.4）：移到頂欄左端、拿掉前置 chevron（與膠囊內的 ‹ 同向重複）。

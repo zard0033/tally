@@ -10,6 +10,14 @@ export const TODAY = (() => {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`
 })()
 
+/** 昨天，供跨日期 undo 測試用（e2e/interaction.spec.ts 的四條「undo 跨日期」斷言）。 */
+export const YDAY = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+})()
+
 export const USER_ID = '00000000-0000-0000-0000-000000000001'
 
 export const FIX = {
@@ -62,6 +70,19 @@ export const FIX = {
       fat: 12,
       carb: 30,
       foods: { name: '雞胸餐盒', vendor: '健康盒' },
+    },
+  ],
+  // listIntake(昨天) 的形狀，只給「undo 跨日期」測試用（stub.ts 依 eaten_on===YDAY 回這份）
+  intakeYday: [
+    {
+      id: 201,
+      meal: 'lunch',
+      qty: 1,
+      kcal: 130,
+      protein: 2,
+      fat: 0.2,
+      carb: 31,
+      foods: { name: '地瓜', vendor: null },
     },
   ],
 }

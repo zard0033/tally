@@ -9,11 +9,12 @@
    跑單一條：npx playwright test -g "關鍵字" */
 import { expect, type Page } from '@playwright/test'
 import { FIX, TODAY, USER_ID } from './fixtures'
-import { seedFetchStub } from './stub'
+import { seedFetchStub, type StubOptions } from './stub'
 
-/** 種好 fetch stub 與 session，開到今日頁且資料已到齊。零真實網路請求。 */
-export async function openApp(page: Page) {
-  await seedFetchStub(page, FIX, TODAY, USER_ID)
+/** 種好 fetch stub 與 session，開到今日頁且資料已到齊。零真實網路請求。
+ *  opts 目前只轉發 intakeDelayMs，給要量「無感切日期」實際毫秒數的測試用。 */
+export async function openApp(page: Page, opts: StubOptions = {}) {
+  await seedFetchStub(page, FIX, TODAY, USER_ID, opts)
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
   // Today 只在 profile／weight／targets 都到齊才掛載，#view-app 出現不代表內容在了

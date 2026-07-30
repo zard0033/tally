@@ -15,9 +15,21 @@ import type { FIX as FixType } from './fixtures'
 const SUPABASE_REF = 'bpnucfejoiazmsnsuzdb' // 同步自 src/lib/config.ts 的 SUPABASE_URL
 const STORAGE_KEY = `sb-${SUPABASE_REF}-auth-token`
 
-export async function seedFetchStub(page: Page, fix: typeof FixType, today: string, userId: string): Promise<void> {
+export interface StubOptions {
+  /** intake 查詢（listIntake）的人工延遲，只用來量「無感切日期」的實際毫秒數；
+   *  不設就是 0——其餘測試不需要真的等這段時間。 */
+  intakeDelayMs?: number
+}
+
+export async function seedFetchStub(
+  page: Page,
+  fix: typeof FixType,
+  today: string,
+  userId: string,
+  opts: StubOptions = {},
+): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs }) => {
       localStorage.setItem(
         storageKey,
         JSON.stringify({
@@ -41,13 +53,23 @@ export async function seedFetchStub(page: Page, fix: typeof FixType, today: stri
         __writes: { path: string; table: string; method: string; body: unknown }[]
         __allFetches: string[]
         __blocked: string[]
+        __intakeCalls: string[] // 每次 listIntake(date) 打中的日期，依序累積，量快取/計次用
       }
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
+      w.__intakeCalls = []
 
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+      // 昨天，只給「undo 跨日期」的 intake 查詢分流用（跟 e2e/fixtures.ts 的 YDAY 算法一致）
+      const yday = (() => {
+        const [y, mo, d] = today.split('-').map(Number)
+        const dt = new Date(y, mo - 1, d - 1)
+        const p = (n: number) => String(n).padStart(2, '0')
+        return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
+      })()
 
       const real = window.fetch.bind(window)
       // @ts-expect-error — 刻意覆寫全域 fetch，型別對不上是預期的
@@ -94,12 +116,18 @@ export async function seedFetchStub(page: Page, fix: typeof FixType, today: stri
         if (table === 'intake') {
           // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)
-          if (m) return json(m[1] === today ? fix.intake : [])
+          if (m) {
+            w.__intakeCalls.push(m[1])
+            if (intakeDelayMs) await new Promise((r) => setTimeout(r, intakeDelayMs))
+            if (m[1] === today) return json(fix.intake)
+            if (m[1] === yday) return json(fix.intakeYday)
+            return json([])
+          }
           return json(fix.history)
         }
         return json([])
       }
     },
-    { fix, today, userId, storageKey: STORAGE_KEY },
+    { fix, today, userId, storageKey: STORAGE_KEY, intakeDelayMs: opts.intakeDelayMs ?? 0 },
   )
 }
