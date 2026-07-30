@@ -9,3 +9,13 @@
 - 本機開發跑 `npm run dev`（Vite，釘 5500 strictPort）。**port 不能換**——Supabase 的 OAuth redirect 白名單綁死 5500，換了登入就壞；playwright 也擋 `file://`，一定要走 http。
 - 測試：`npx vitest run`＝邏輯層（動公式、捨入、日期必跑）；`npm run e2e`＝10 條 UI 回歸路徑（改 UI 必跑，fetch 全 stub 不打真後端）。
 - `service_role` / DB 密碼 / OAuth client secret 永不進 repo。repo 是 public，前端只用 anon key ＋ RLS。
+
+## Pre-Push Checklist（跳過的寫理由，不留空）
+
+- [ ] `npx vitest run` 全量綠（動公式、捨入、日期、資料存取必跑）
+- [ ] `npm run build` 過（tsc -b 含在內）＋ `npm run lint` 0 error
+- [ ] 改 UI → `npm run e2e` 10 條回歸路徑綠；亮/暗 × mobile 截圖無 token fallback
+- [ ] 動 Supabase schema / 匯出格式 → 屬影響面升級，先過 spec → ★核可（見全域 dev-flow）
+- [ ] spec 外追加？有 → session-state/active.md 標一行 `[追加]`
+- [ ] session-state/active.md 已更新（現況/待決/續點）並 stage 進同一 commit
+- [ ] 蒸餾一句：有通則寫進 active.md，沒有明講「無」
