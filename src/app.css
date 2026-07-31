@@ -702,8 +702,7 @@ body {
    屆時照實際堆疊順序決定會比現在猜得準。 */
 .vendor-popup { width: var(--anchor-width); max-width: var(--available-width);
   max-height: min(240px, var(--available-height)); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-tab);
-  padding: var(--s-1) 0; }
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-tab); }
 .vendor-item { padding: var(--s-2) var(--s-3); font-size: var(--t-md); color: var(--ink);
   cursor: default; }
 .vendor-item[data-highlighted] { background: var(--accent-soft); }

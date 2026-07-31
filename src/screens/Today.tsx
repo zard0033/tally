@@ -9,7 +9,7 @@ import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { DUR, sec } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
-import { MEALS, type MealKey } from '@/lib/meals'
+import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -337,69 +337,111 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
     <>
       {MEALS.map((meal, i) => {
         const items = byMeal.get(meal.key) ?? []
-        const done = items.length > 0
         const nextMeal = MEALS[i + 1]
         const nextDone = i < MEALS.length - 1 && (byMeal.get(nextMeal.key)?.length ?? 0) > 0
-
         return (
-          <div className="node" key={meal.key}>
-            <div className="rail" aria-hidden="true">
-              <div className={`dot${done ? '' : ' todo'}`} />
-              {i < MEALS.length - 1 && <div className={`line${nextDone ? '' : ' todo'}`} />}
-            </div>
-            <div className={`node-body${done ? '' : ' is-todo'}`}>
-              {done ? (
-                <>
-                  <button className="node-head" type="button" onClick={() => h.onOpenSheet(meal.key)}>
-                    <span className="node-name">{meal.label}</span>
-                    <span className="node-kcal">{Math.round(sumIntake(items).kcal)}</span>
-                  </button>
-                  <ul className="items">
-                    {/* 刪除那一列淡出、其餘用 layout 的 FLIP 滑上來——兩者都只動 transform／
-                        opacity，沒有動 height（DESIGN.md「不動 layout 屬性」）。 */}
-                    <AnimatePresence initial={false}>
-                      {items.map((r) => {
-                        const name = r.foods?.name ?? '（食物已刪除）'
-                        const dup = (nameCount.get(name) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
-                        return (
-                          <motion.li
-                            className="item"
-                            data-row={r.id}
-                            key={r.id}
-                            layout
-                            exit={{ opacity: 0, x: -32 }}
-                            transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
-                          >
-                            <SwipeRow
-                              row={r}
-                              name={name}
-                              vendor={dup}
-                              qty={num(r.qty)}
-                              open={h.openId === r.id}
-                              justAdded={h.justAddedIds.has(r.id)}
-                              onToggle={() => h.toggleOpen(r.id)}
-                              onDelete={() => h.handleDelete(r.id)}
-                            />
-                          </motion.li>
-                        )
-                      })}
-                    </AnimatePresence>
-                  </ul>
-                </>
-              ) : (
-                <button className="todo-row" type="button" onClick={() => h.onOpenSheet(meal.key)}>
-                  <span className="lb">{meal.label}</span>
-                  <span className="chev" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M9 6l6 6-6 6" />
-                    </svg>
-                  </span>
-                </button>
-              )}
-            </div>
-          </div>
+          <MealNode
+            key={meal.key}
+            meal={meal}
+            items={items}
+            nextDone={nextDone}
+            isLast={i === MEALS.length - 1}
+            nameCount={nameCount}
+            h={h}
+          />
         )
       })}
     </>
+  )
+}
+
+/* 某餐目前有沒有紀錄，決定要畫 `.items` 清單還是 `.todo-row`。
+   刪掉一餐**最後一筆**時 `items` 在同一個 render 內就從 1 變 0——如果直接拿
+   `items.length > 0` 當開關，整段（含 AnimatePresence）跟著同一個 render 卸載，
+   退場動畫連跑的機會都沒有（2026-07-31 實測：刪除後 10ms 內 `.todo-row` 就已經在畫面上，
+   `.item` 完全沒有經過任何 opacity 過渡）。用 `lingering` 讓「翻成待記錄」延後到
+   AnimatePresence 的 `onExitComplete` 才發生，其餘（2 筆以上互相 FLIP）不受影響——
+   那條路徑 `hasItems` 從頭到尾是 true，不會觸發這個分支。 */
+function MealNode({
+  meal,
+  items,
+  nextDone,
+  isLast,
+  nameCount,
+  h,
+}: {
+  meal: Meal
+  items: IntakeRow[]
+  nextDone: boolean
+  isLast: boolean
+  nameCount: Map<string, number>
+  h: TimelineHelpers
+}) {
+  const hasItems = items.length > 0
+  const [prevHasItems, setPrevHasItems] = useState(hasItems)
+  const [lingering, setLingering] = useState(false)
+  if (hasItems !== prevHasItems) {
+    setPrevHasItems(hasItems)
+    if (prevHasItems && !hasItems) setLingering(true)
+  }
+  const done = hasItems || lingering
+
+  return (
+    <div className="node">
+      <div className="rail" aria-hidden="true">
+        <div className={`dot${done ? '' : ' todo'}`} />
+        {!isLast && <div className={`line${nextDone ? '' : ' todo'}`} />}
+      </div>
+      <div className={`node-body${done ? '' : ' is-todo'}`}>
+        {done ? (
+          <>
+            <button className="node-head" type="button" onClick={() => h.onOpenSheet(meal.key)}>
+              <span className="node-name">{meal.label}</span>
+              <span className="node-kcal">{Math.round(sumIntake(items).kcal)}</span>
+            </button>
+            <ul className="items">
+              {/* 刪除那一列淡出、其餘用 layout 的 FLIP 滑上來——兩者都只動 transform／
+                  opacity，沒有動 height（DESIGN.md「不動 layout 屬性」）。 */}
+              <AnimatePresence initial={false} onExitComplete={() => setLingering(false)}>
+                {items.map((r) => {
+                  const name = r.foods?.name ?? '（食物已刪除）'
+                  const dup = (nameCount.get(name) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
+                  return (
+                    <motion.li
+                      className="item"
+                      data-row={r.id}
+                      key={r.id}
+                      layout
+                      exit={{ opacity: 0, x: -32 }}
+                      transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
+                    >
+                      <SwipeRow
+                        row={r}
+                        name={name}
+                        vendor={dup}
+                        qty={num(r.qty)}
+                        open={h.openId === r.id}
+                        justAdded={h.justAddedIds.has(r.id)}
+                        onToggle={() => h.toggleOpen(r.id)}
+                        onDelete={() => h.handleDelete(r.id)}
+                      />
+                    </motion.li>
+                  )
+                })}
+              </AnimatePresence>
+            </ul>
+          </>
+        ) : (
+          <button className="todo-row" type="button" onClick={() => h.onOpenSheet(meal.key)}>
+            <span className="lb">{meal.label}</span>
+            <span className="chev" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
   )
 }

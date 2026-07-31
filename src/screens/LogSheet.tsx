@@ -437,7 +437,7 @@ export default function LogSheet(props: LogSheetProps) {
     if (!foods) return []
     const set = new Set<string>()
     for (const f of foods) if (f.vendor) set.add(f.vendor)
-    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant-u-co-stroke'))
   }, [foods])
   const trimmedQuery = filterQuery.trim()
   const pickedFoods = [...picks.keys()].map(foodById).filter((f): f is Food => !!f)

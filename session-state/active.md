@@ -11,32 +11,48 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線——記一筆 sheet（多選／搜尋品名＋店家／新增食物）、今日頁左滑刪除
   ＋滑到底刪除＋5 秒復原窗、日期切換＋快取預取、設定頁編輯＋記體重。資料在 Supabase
-  （四表＋RLS），Notion 原始資料還在、尚未退場。
+  （四表＋RLS）。Notion 那邊的一次性遷移本身已出貨，但收尾（刪掉 Notion 對應頁面）看起來還沒做，
+  細節見下方「Notion 退場現況」。
 - **測試**：`npx vitest run` 42/42（**必須用 PowerShell 跑**，Git Bash 全炸，見下方未解）；
-  `npm run e2e` ＝ 16 條（`tally.spec.ts` 全份回歸 ＋ `interaction.spec.ts` 互動路徑
-  ＋ `vendor-autocomplete.spec.ts`）。CI 的 Linux vitest 綠。
+  `npm run e2e` ＝ 17 條，分四個檔（`tally.spec.ts` 全份回歸 ＋ `interaction.spec.ts` 互動路徑
+  ＋ `vendor-autocomplete.spec.ts` ＋ `meal-exit-animation.spec.ts`）。CI 的 Linux vitest 綠。
 - **樣張已全數退場**（2026-07-31）：`mockup.html`／`sample-log-entry.html` 是 07-28 vanilla
   時代的 v1.5／v1.7 樣貌，轉 React 後又走過 v2.0→v2.7，照著做會做出三版前的畫面。
   **設計規則自此以 DESIGN.md 元件規則表為唯一真相來源**，不再有「實作以某份樣張為準」的旁路。
 
+### 本輪未 commit 的改動（2026-07-31 下午）
+
+- **補上 PWA manifest＋192/512 icon**：使用者回報「加到主畫面/釘選後 icon 是黑底白 T」，查證
+  `favicon.svg`／`apple-touch-icon.png` 從 git log 上從沒出現過黑底白字版本，一直是綠底＋米白 T——
+  真正原因是**專案從沒有 `manifest.json`**，Chrome/Edge/Android 在缺 manifest 合適尺寸 icon 時會
+  自己合成深色方塊＋首字母頂替。已補 `public/manifest.webmanifest`、`public/icon-192.png`／
+  `icon-512.png`（用專案既有 `playwright-core` 的 webkit 現轉 SVG，零新依賴）、`index.html` 補
+  `<link rel="manifest">`／`theme-color`。**使用者裝置上的舊捷徑要刪掉重加才會換新 icon**（iOS/Android
+  都是加入當下快照，不會自動跟著站台更新）。
+- **店家 Autocomplete 兩處微調**：排序從 `localeCompare(..., 'zh-Hant')` 明釘成
+  `'zh-Hant-u-co-stroke'`——V8／WebKit 實測目前預設 collation 就是筆畫序，明釘只是把它寫進程式碼、
+  不再依賴引擎預設值；**沒有改用食物數量排序**，因為 11 個店家 8 個只有一筆，數量幾乎打平。
+  `.vendor-popup` 拿掉自己的 `padding: var(--s-1) 0`，兩層 padding 疊加造成的頭尾死區收掉。
+  DESIGN.md 已補 v2.8。
+- **修掉「某餐最後一筆刪除時退場動畫不會跑」**：這條原本記在「已知未覆蓋」，本輪用 webkit 現場
+  量測（點刪除後每 30ms 採樣 opacity）證實不是「沒測到」而是**真的壞了**——刪除後 10ms 內
+  `.item` 已經整個消失、`.todo-row` 已經出現，opacity 過渡完全沒有發生。根因：`Today.tsx` 原本
+  `done = items.length > 0` 一格公式跟 `items` 同一個 render 一起翻假，把 `AnimatePresence` 連同
+  它包著的 `<ul>` 一起卸載，退場動畫沒有機會播放。修法：拆出 `MealNode` 元件，加 `lingering`
+  state，讓「翻成待記錄列」延後到 `AnimatePresence` 的 `onExitComplete` 才發生；2 筆以上互刪的
+  既有路徑不受影響（`hasItems` 全程是 true）。新增 `e2e/meal-exit-animation.spec.ts` 鎖住這個行為
+  （驗過會在舊程式碼上失敗，不是空鎖）。DESIGN.md 已補 v2.9。
+- 驗證：`npm run build`／`npm run lint` 過，vitest 42/42，e2e 17/17（含新增的
+  `meal-exit-animation.spec.ts`）；popup 截圖比對過收緊效果。**這輪沒開 verifier**（機械式小改動
+  ＋一個有現場量測佐證的 bug 修復，主對話截圖＋讀碼＋量測自驗）。
+
 ## 已驗證事實
 
-- **`foods.archived` 欄已在線上 DB**（使用者 07-31 於 Supabase SQL Editor 執行
-  `alter table foods add column archived boolean not null default false;`），`schema.sql` 已同步。
-  **前端還沒用它**——soft delete 的 UI 是下一輪的事。
-- **Base UI 首次引入**（`@base-ui/react` 本來就在 package.json 但零 import）。踩到的坑已寫進
-  DESIGN.md「店家欄位（v2.6）」：vaul 底層是 Radix Dialog，開啟時把 `body` 設 `pointer-events: none`
-  只豁免自己的 Content 子樹，**任何掛在 body 下的兄弟 portal 都是「看得到、點不到」**。
-  解法＝`Autocomplete.Portal` 的 `container` 指到 `Drawer.Content` 的 ref。純讀程式碼驗不出來。
-- **e2e 那條 flaky 是真 bug，不是並行負載**（推翻前一輪 verifier 的歸因）。`AnimatePresence`
-  （`Today.tsx:360`）換日期時退場與進場動畫有重疊窗口，DOM 上會同時存在兩個 `.item`；
-  單次 `count()` 快照會撞到這個暫態。鑑別特徵：`--workers=1` 隔離跑照樣重現。
-  修法＝輪詢等它收斂到穩態筆數（`harness.ts` 的 `waitCount`）。
-- **字體選 Archivo 是硬約束下的唯一解**，不是品味決定。實測十個數字的最大寬度差：
-  Archivo 0.09px（天生 tabular figures）、Outfit 12.89、Space Grotesk 8.88、Manrope 9.68、
-  Sora 14.56，且對後者套 `font-variant-numeric: tabular-nums` **完全無效**（Google Fonts 的
-  靜態實例不帶那個 feature）。DESIGN.md 規定數字要對齊，所以只有 Archivo 過關。
-  日後想換字體，先跑這個量測再說。
+- `foods.archived` 欄已在線上 DB（`schema.sql` 已同步），**前端還沒用它**——soft delete UI 是下一輪的事。
+- Base UI Autocomplete 的 portal 坑（vaul 的 `pointer-events:none` 讓 body 下的兄弟 portal 點不到）
+  已解掉，細節在 DESIGN.md「店家欄位（v2.6）」，不重複貼在這裡。
+- e2e 換日期那條 flaky 是真 bug（`AnimatePresence` 退場/進場重疊窗口），已修，細節見 git log。
+- 數字字體選 Archivo 是硬約束（tabular-nums 對其他候選字體全部無效，實測數據見 DESIGN.md「字體」章節），不是品味決定，換字體前先重跑那個量測。
 
 ## 未解失敗
 
@@ -78,36 +94,43 @@
   「加了會不會超標」。三個衝突要解：(1) DESIGN.md 禁「綠色達標狀態」，訊號色只有 jade＝常態/動作、
   `--over`＝破表，「綠字打勾」直接違規；(2) 判定要乘份量（可小數）且要把 sheet 內**已選未送出**
   的項目暫計進剩餘額度；(3) 蛋白質「不足不是錯誤」的既有語意如何相容。
-- **零碎（都不擋上線）**：RLS 的跨使用者 DELETE 未實測過（只驗過未登入隔離）；Notion 該評估退場了；
-  `review-findings.md` 剩 6 條；飲食紀錄有 4 筆刻意未遷移（07-23 早餐重複×2、07-25 晚餐空、
-  07-27 午餐空），使用者要自己補。
-- **已知未覆蓋**：刪掉某餐**最後一筆**時整個 `<ul>` 隨餐次轉「待記錄」一起卸載，退場動畫不會跑；
-  e2e fixture 每餐只有一筆，所以退場動畫從沒被測到。要覆蓋得先擴 fixture。
+- **零碎（都不擋上線）**：RLS 的跨使用者 DELETE 未實測過（只驗過未登入隔離，測需要兩組真帳號撞
+  正式 DB，不宜無人看管時做）；飲食紀錄有 4 筆刻意未遷移（07-23 早餐重複×2、07-25 晚餐空、
+  07-27 午餐空），使用者要自己補。**訂正**：`review-findings.md` 與「CI actions 未
+  pin SHA」這兩條 2026-07-31 查證已經不成立——檔案已不存在、`deploy.yml` 三個 action 全部已經是
+  SHA 釘死（帶 `# vX.X.X` 註解），是這份筆記没跟上實際進度，不是待辦。
+- **Notion 退場現況（2026-07-31 唯讀盤點，本輪沒有 Notion MCP 可用，只能查 repo 內文件）**：
+  spec.md 明寫「Notion 健康域完全退場」是一次性遷移的終態，遷移本身已隨第一版出貨（2026-07-28）；
+  卡住的不是「要不要遷」，是遷移留下的收尾——上面那 4 筆刻意跳過的髒資料，和 spec.md:49
+  講的「遷完移除 Notion 對應頁面」這個刪除動作看起來還沒做。**要判斷 Notion 裡還有沒有沒搬完的
+  東西，得有 Notion MCP 或使用者自己去看**，這份盤點查不到 Notion 現存內容，只能查到 repo 這邊
+  文件寫了什麼。
 - **復原 pill 會蓋住時間軸最後一列 5 秒**：有意識略過（補底部 padding 要吃掉 v2.3 省下空間的一半，
   而那一列還在、一捲就出來）。
 
 ## 下次續點
 
-1. **補驗這輪**：fresh verifier 對 `origin/main..HEAD` 的 diff 做獨立驗收（見上方待決第一條）。
-2. **真機看這輪**：Archivo 數字、日期縮到 16px/600、qty stepper 的接縫、店家 Autocomplete
-   在真手機上的下拉手感（e2e 過不代表真機順）。
-3. **實作食品庫管理＋設定頁重構**：走 `dev-flow` 的實作階段，含 UI 所以整段轉 `ui-design-flow`
+1. **今天這輪（icon manifest＋店家排序/間距＋刪除退場動畫修復＋兩處文件訂正）還沒 commit**——
+   要不要 commit／要不要先 push 由使用者定，開場先問。範圍：`index.html`／`src/app.css`／
+   `src/screens/Today.tsx`／`src/screens/LogSheet.tsx`／`DESIGN.md`／`CLAUDE.md`／
+   `session-state/active.md`／新增 `public/manifest.webmanifest`、`public/icon-192.png`、
+   `public/icon-512.png`、`e2e/meal-exit-animation.spec.ts`。
+2. **補驗上一輪**：fresh verifier 對 `origin/main..HEAD` 的 diff 做獨立驗收（見上方待決第一條，
+   指 dde8ff5 那輪，不是今天這些改動）。
+3. **真機看這幾輪**：Archivo 數字、日期縮到 16px/600、qty stepper 的接縫、店家 Autocomplete
+   在真手機上的下拉手感與新排序、新 icon 加到主畫面的樣子、刪除某餐最後一筆時的退場動畫
+   （e2e 過不代表真機順）。
+4. **實作食品庫管理＋設定頁重構**：走 `dev-flow` 的實作階段，含 UI 所以整段轉 `ui-design-flow`
    （設定頁是新的資訊架構，要出決策樣張）。決策已全部拍板，見上方待決。
    建議開新對話，這輪的 context 已經很長。
-4. 額度預警提示（等使用者放行）。
+5. 額度預警提示（等使用者放行）。
+6. **Notion 退場收尾要不要做**：等使用者決定要不要處理那 4 筆髒資料與刪除 Notion 頁面，
+   見上方「Notion 退場現況」——這件事需要 Notion 存取，這輪環境沒有。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 
-- **設計決策與被否決的做法** → `DESIGN.md`（元件規則表 ＋ 版本紀錄 v1→v2.7）。動 UI 前必讀，
-  改完必回寫，這條已入 CLAUDE.md 的 Pre-Push Checklist。
-- **Windows/PowerShell 坑**（CJK 檔案整檔讀寫會毀檔、CJK 行數算不準、vitest 在 Git Bash 全炸）
-  → 全域 memory `windows-shell-ledger`。
-- **驗證方法坑**（煙霧驗證抓不到互動 bug、對照組會靜默退化成不觸發、「測不起來」要先懷疑產品）
-  → 全域 memory `verification-ledger` ＋ 全域 `ui-verify` skill。本輪再添兩條：
-  **量測要有對照組**（測字體是否載入，沒有對照組就分不出「字體生效」與「靜默 fallback」，
-  我第一輪就是這樣測出假結論）；**「等寬」這種判準要用容差不要用完全相等**
-  （0.04px 的差異被判成不等寬，差點誤殺可用的字體）。
-- **委派坑**（宣稱「文件已改好」要先 `git diff` 核對再開工）→ 全域 memory `delegation-ledger`。
-  本輪再添一條：**agent 被中斷後不能用 SendMessage 恢復**，要開新的並在 prompt 裡
-  用 `git status`／`git diff` 的客觀事實交接，不要靠描述。
-- 完整的歷史病歷（真機三輪、遷移四階段、每一次 review 的 findings 與回修）→ `archive-2026-07.md`。
+- **設計決策與被否決的做法** → `DESIGN.md`（元件規則表 ＋ 版本紀錄 v1→v2.9）。動 UI 前必讀，改完必回寫，已入 CLAUDE.md Pre-Push Checklist。
+- **Windows/PowerShell 坑** → 全域 memory `windows-shell-ledger`。
+- **驗證方法坑**（煙霧驗證抓不到互動 bug、量測要有對照組、「等寬」判準要用容差） → 全域 memory `verification-ledger` ＋ `ui-verify` skill。
+- **委派坑**（宣稱「文件已改好」要先 `git diff` 核對；agent 中斷後不能 SendMessage 恢復，要開新的帶客觀事實交接） → 全域 memory `delegation-ledger`。
+- 完整的歷史病歷 → `archive-2026-07.md`。
