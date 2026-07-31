@@ -4,8 +4,8 @@
    這整個檔案的存在理由：拖曳／動畫這種要反覆試的東西，在 tally.spec.ts 那串累積狀態的
    15 條路徑裡除錯，一輪 20 秒起跳，而且斷言會建在上一條留下的狀態上。 */
 import { test } from '@playwright/test'
-import { YDAY } from './fixtures'
-import { check, grabPoint, leg, must, openApp, rowState, slowDrag } from './harness'
+import { FIX, YDAY } from './fixtures'
+import { check, grabPoint, leg, openApp, rowState, slowDrag, waitCount } from './harness'
 
 /** window.__intakeCalls 的型別斷言（stub.ts 掛在 window 上，e2e 這邊只讀）。 */
 const intakeCalls = (page: import('@playwright/test').Page) =>
@@ -93,14 +93,14 @@ test('undo 跨日期 1 — 刪一筆後切到前一天，提示條仍在（換�
   await page.locator('.timeline .item-content').first().click()
   await page.waitForTimeout(300)
   await page.locator('.timeline .item-row.is-open .item-delete').click()
-  await page.waitForTimeout(300)
-  check((await page.locator('.timeline .item').count()) === before - 1, '刪除沒生效，測不了跨日期 undo')
-  await must(page, '.undo-bar', '刪除後應該有提示條')
+  await waitCount(page, '.timeline .item', before - 1, '刪除沒生效，測不了跨日期 undo')
+  await waitCount(page, '.undo-bar', 1, '刪除後應該有提示條')
 
   await page.click('button[aria-label="前一天"]')
-  await page.waitForTimeout(500)
-  check(
-    (await page.locator('.undo-bar').count()) === 1,
+  await waitCount(
+    page,
+    '.undo-bar',
+    1,
     '切到前一天後提示條不見了——undo 窗應該跨日期存活，不能一換日期就結清',
   )
 })
@@ -112,25 +112,29 @@ test('undo 跨日期 2 — 別天按復原不改別天清單，切回原本那�
   await page.locator('.timeline .item-content').first().click()
   await page.waitForTimeout(300)
   await page.locator('.timeline .item-row.is-open .item-delete').click()
-  await page.waitForTimeout(300)
-  check((await page.locator('.timeline .item').count()) === before - 1, '刪除沒生效')
+  await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
 
   await page.click('button[aria-label="前一天"]')
-  await page.waitForTimeout(500)
+  await waitCount(page, '.undo-bar', 1, '提示條應該跨日期還在')
+  /* ydayCount 不能用單次 count() 快照：品項列包在 AnimatePresence 裡，換日期時
+     「今天剩下那筆」的退場動畫跟「前一天那筆」的進場動畫會重疊一小段時間，這段重疊
+     期間 DOM 上同時看得到兩個 .item（真實計數，不是 race——重試也量得到同一個暫態值）。
+     用 waitCount 等它收斂到 fixtures 裡前一天真正的筆數（intakeYday.length），
+     等到的是動畫結束後的穩態，不是賭一個「應該夠久」的固定毫秒數。 */
+  await waitCount(page, '.timeline .item', FIX.intakeYday.length, '前一天的品項數應收斂到穩態')
   const ydayCount = await page.locator('.timeline .item').count()
-  await must(page, '.undo-bar', '提示條應該跨日期還在')
   await page.locator('.undo-bar button').click()
-  await page.waitForTimeout(300)
-  check((await page.locator('.undo-bar').count()) === 0, '按復原後提示條應該消失')
+  await waitCount(page, '.undo-bar', 0, '按復原後提示條應該消失')
   check(
     (await page.locator('.timeline .item').count()) === ydayCount,
     '在別天按復原不該動到別天目前畫面的清單筆數——不可以把 A 日那筆插進 B 日',
   )
 
   await page.click('button[aria-label="後一天"]')
-  await page.waitForTimeout(500)
-  check(
-    (await page.locator('.timeline .item').count()) === before,
+  await waitCount(
+    page,
+    '.timeline .item',
+    before,
     `切回原本那天品項數應回到 ${before}（那筆從沒被真的送出 DELETE）`,
   )
   const nameAfter = ((await page.locator('.timeline .item .nm').first().textContent()) ?? '').trim()
@@ -144,21 +148,21 @@ test('undo 跨日期 3 — 切走再切回、不按復原 → 那一筆仍不在
   await page.locator('.timeline .item-content').first().click()
   await page.waitForTimeout(300)
   await page.locator('.timeline .item-row.is-open .item-delete').click()
-  await page.waitForTimeout(300)
-  check((await page.locator('.timeline .item').count()) === before - 1, '刪除沒生效')
+  await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
 
   await page.click('button[aria-label="前一天"]')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(500) // 換日期要等 fetch 落地才有東西可切回去，這裡沒有立即斷言
   await page.click('button[aria-label="後一天"]')
-  await page.waitForTimeout(500)
 
-  check(
-    (await page.locator('.timeline .item').count()) === before - 1,
+  await waitCount(
+    page,
+    '.timeline .item',
+    before - 1,
     '切回原本那天後，被刪的那筆重新出現了——loadDay 應該把待刪那筆從撈回來的 rows 濾掉',
   )
   const names = await page.locator('.timeline .item .nm').allTextContents()
   check(!names.some((n) => n.trim() === firstName), `切回後仍看得到被刪的「${firstName}」`)
-  await must(page, '.undo-bar', '切回原本那天後提示條應該還在（還沒到 5 秒，計時器沒被切分頁動過）')
+  await waitCount(page, '.undo-bar', 1, '切回原本那天後提示條應該還在（還沒到 5 秒，計時器沒被切分頁動過）')
 })
 
 test('undo 跨日期 4 — 切分頁到設定，提示條消失（這一半沒變，鎖住不被順手改掉）', async ({ page }) => {
@@ -166,12 +170,10 @@ test('undo 跨日期 4 — 切分頁到設定，提示條消失（這一半沒�
   await page.locator('.timeline .item-content').first().click()
   await page.waitForTimeout(300)
   await page.locator('.timeline .item-row.is-open .item-delete').click()
-  await page.waitForTimeout(300)
-  await must(page, '.undo-bar', '刪除後應該有提示條')
+  await waitCount(page, '.undo-bar', 1, '刪除後應該有提示條')
 
   await page.locator('.tabbar .tab').nth(1).click()
-  await page.waitForTimeout(400)
-  check((await page.locator('.undo-bar').count()) === 0, '切到設定頁後復原提示條仍殘留——分頁這一路仍該結清')
+  await waitCount(page, '.undo-bar', 0, '切到設定頁後復原提示條仍殘留——分頁這一路仍該結清')
 })
 
 /* 日期快取（v2.6：切日期無感）。四條各自獨立 openApp()：
@@ -249,16 +251,16 @@ test('日期快取 4 — 刪一筆、切到前一天再切回來（走快取路�
   await page.locator('.timeline .item-content').first().click()
   await page.waitForTimeout(300)
   await page.locator('.timeline .item-row.is-open .item-delete').click()
-  await page.waitForTimeout(300)
-  check((await page.locator('.timeline .item').count()) === before - 1, '刪除沒生效，測不了快取路徑的濾除')
+  await waitCount(page, '.timeline .item', before - 1, '刪除沒生效，測不了快取路徑的濾除')
 
   await page.click('button[aria-label="前一天"]')
   await page.waitForTimeout(500) // 讓今天的快取穩定（此時待刪仍在 5 秒窗內，還沒真的送出 DELETE）
-  await page.click('button[aria-label="後一天"]')
-  await page.waitForTimeout(300) // 切回今天：這次要走快取命中路徑，不是 loadDay 的 fetch 路徑
+  await page.click('button[aria-label="後一天"]') // 切回今天：這次要走快取命中路徑，不是 loadDay 的 fetch 路徑
 
-  check(
-    (await page.locator('.timeline .item').count()) === before - 1,
+  await waitCount(
+    page,
+    '.timeline .item',
+    before - 1,
     '走快取路徑切回今天後，被刪的那筆重新出現了——快取命中的入口沒有套用跟 loadDay 一樣的待刪濾除',
   )
   const names = await page.locator('.timeline .item .nm').allTextContents()

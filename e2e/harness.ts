@@ -27,6 +27,16 @@ export async function must(page: Page, sel: string, label: string) {
   }
 }
 
+/* waitForTimeout 之後立刻 count() 一次是賭一個固定毫秒數在所有並行負載下都夠——
+   tally.spec.ts 同時起跑時 CPU 被搶，React 狀態更新／DOM 移除可能比那個數字慢，
+   斷言就會在「其實還沒到，只是還沒等到」的時候讀到舊值（2026-07-31 verifier 抓到，
+   e2e/interaction.spec.ts 的 undo 跨日期／日期快取 4 各掛過一次）。
+   改用 Playwright 內建的輪詢斷言：有明確的到達條件（count 等於期望值），
+   到了就馬上通過，沒到才等到 timeout 才真的失敗——不是「等更久」，是「等對事」。 */
+export async function waitCount(page: Page, sel: string, n: number, msg: string, timeout = 5000) {
+  await expect(page.locator(sel), msg).toHaveCount(n, { timeout })
+}
+
 export async function mustText(page: Page, sel: string, want: string, label: string) {
   const got = ((await page.locator(sel).first().textContent()) ?? '').trim()
   if (!got.includes(want)) throw new Error(`${label}：預期含「${want}」，實際「${got}」`)

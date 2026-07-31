@@ -19,6 +19,21 @@
    `import './index.css'` 之後，讓這裡的 :root 在最終樣式表的 cascade 順序上確實
    排在 shadcn 後面，同名 unlayered token 才會照 legacy 值生效。
    ═══════════════════════════════════════════════════ */
+/* 數字專用字體（v2.7）。Archivo 天生帶 tabular figures：十個數字量出來的寬度差只有
+   0.09px（Outfit 12.89px／Space Grotesk 8.88px／Manrope 9.68px／Sora 14.56px，且對它們
+   套 font-variant-numeric: tabular-nums 完全無效——Google Fonts 的靜態字重實例不帶那個
+   OpenType feature）。DESIGN.md 規定數字要用 tabular-nums 對齊，換成別的字體時間軸
+   每列的卡數會左右跳，這條約束不可退讓，見 DESIGN.md v2.7 版本紀錄。
+   只抓 600（唯一實際套用的字重），完整拉丁 woff2（不做數字 subset）：省下的十幾 KB
+   買不到「不用建 pipeline」的代價。放 src/assets/ 讓 Vite 處理（加 hash、有快取控制）。 */
+@font-face {
+  font-family: 'Archivo Num';
+  src: url('./assets/archivo-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* 表面 */
   --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
@@ -34,8 +49,10 @@
   /* 破表 */
   --over: #9A4330; --over-fill: #B8533A; --over-stripe: rgba(255,255,255,.22);
 
-  /* 全站單一字體。數字靠 tabular-nums 對齊，不用 mono */
+  /* 全站中文與一般文字用系統字體。數字為主的顯示元素另外套 --font-num（Archivo，
+     見上方 @font-face）——中文與數字混排的文字元素不套，兩種字體同一句話裡並排會破碎 */
   --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --font-num: 'Archivo Num', -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
   --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-lg: 1.25rem; --t-hero: 2.75rem;
   /* tracking 隨字級走：大字收緊、小字放開 */
@@ -73,7 +90,7 @@ body {
 [hidden] { display: none !important; }
 
 /* ── 數對（已吃/目標）· 前後做階層，否則兩個語意不同的數字長得一樣 ── */
-.pair { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pair { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pair .cur { color: var(--ink); font-weight: 600; }      /* 會變動、要盯的那個 */
 .pair .sep { color: var(--ink-muted); }                   /* 分隔符 */
 .pair .tgt { color: var(--ink-muted); }                   /* 固定的參考值 */
@@ -94,8 +111,8 @@ body {
 .gauge-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: var(--s-3); }
 .gauge-lead { font-size: var(--t-sm); color: var(--ink-muted); margin-bottom: 2px;
   letter-spacing: var(--track-xs); }
-.gauge-num { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
-  line-height: .95; font-variant-numeric: tabular-nums; }
+.gauge-num { font-family: var(--font-num); font-size: var(--t-hero); font-weight: 600;
+  letter-spacing: var(--track-hero); line-height: .95; font-variant-numeric: tabular-nums; }
 .gauge-unit { font-size: var(--t-sm); color: var(--ink-muted); margin-left: var(--s-1); }
 .gauge-side { font-size: var(--t-xs); text-align: right; line-height: 1.4;
   letter-spacing: var(--track-xs); }
@@ -162,8 +179,8 @@ body {
   border-radius: var(--s-1); }
 .node-name { font-weight: 700; font-size: var(--t-md); line-height: 1.2;
   letter-spacing: var(--track-md); }
-.node-kcal { font-size: var(--t-base); font-weight: 600; line-height: 1.2;
-  font-variant-numeric: tabular-nums; }
+.node-kcal { font-family: var(--font-num); font-size: var(--t-base); font-weight: 600;
+  line-height: 1.2; font-variant-numeric: tabular-nums; }
 .items { margin: var(--s-2) 0 0; padding: 0; list-style: none; }
 
 /* ── 品項列：左滑露出刪除鈕（v2.1：motion drag 手刻，取代 react-swipeable-list） ──
@@ -194,9 +211,9 @@ body {
   border-radius: var(--s-1); }
 .item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
 .item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item .qty { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.item .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
-  font-variant-numeric: tabular-nums; }
+.item .qty { font-family: var(--font-num); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.item .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
+  flex-shrink: 0; font-variant-numeric: tabular-nums; }
 /* iOS 提醒事項風格：紅圓鈕、白色垃圾桶圖示。它固定壓在列的右緣底下不動，
    靠上層 .item-slide 讓開才露出來。
    盒子 44px（觸控區），**紅圓畫在 ::before 上、inset 2px＝40px**：畫在盒子本身時圓會
@@ -416,10 +433,13 @@ body {
 .date-arrow:active { opacity: .5; }
 .date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .date-arrow:disabled { opacity: .3; cursor: default; }
-/* 日期本身是 h1（--t-lg/700），取代 v2.2 拿掉的靜態頁名「日記」。左右內距 --s-2
-   同時是膠囊內「箭頭緊貼日期兩側」的間距來源 */
-.date-title { position: relative; z-index: 1; font-size: var(--t-lg); font-weight: 700;
-  letter-spacing: var(--track-lg);
+/* 日期本身是 h1，取代 v2.2 拿掉的靜態頁名「日記」。左右內距 --s-2
+   同時是膠囊內「箭頭緊貼日期兩側」的間距來源。
+   v2.7：16px/600（原 20px/700 使用者實機回報「有點大、有點突兀」）——日期是導覽元素
+   不是標題，主角是下面 44px 的主數字；20px/700 跟頂欄左端 12.8px 的「回今天」落差太大，
+   是突兀感的來源，見 DESIGN.md v2.7 版本紀錄 */
+.date-title { position: relative; z-index: 1; font-size: var(--t-md); font-weight: 600;
+  letter-spacing: var(--track-md);
   margin: 0; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums;
   white-space: nowrap; padding: 0 var(--s-2); }
 /* 回今天（v2.4）：移到頂欄左端、拿掉前置 chevron（與膠囊內的 ‹ 同向重複）。
@@ -536,8 +556,8 @@ body {
 .food-row .nm { font-size: var(--t-base); display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .food-row .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
-.food-row .kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
-  font-variant-numeric: tabular-nums; }
+.food-row .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
+  flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
 /* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪底色會與 cream 打架）。
    input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
@@ -560,11 +580,19 @@ body {
    「觸控區 ≥44」與「整組上限 130px」兩條規則原本互不相容，程式默默選了後者；
    拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
 .qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule);
-  border-radius: var(--r-tab); background: var(--paper); font-family: inherit;
+  border-radius: var(--r-tab); background: var(--paper); font-family: var(--font-num);
   font-size: var(--t-md); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
   -webkit-appearance: none; appearance: none; }
 .qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 三顆緊貼（gap:0）但各自四角都套 --r-tab，接縫處兩邊的圓角各自往內側探——真機
+   實測量出鈕與鈕交界處的邊框線會在轉角附近交叉，讀起來像「疊在一起」（使用者回報）。
+   根因不是觸控區跟視覺尺寸對不齊（bounding box 量過，44/42/44 三顆邊界精準相接、
+   零重疊，跟刪除鈕紅圓那種「44px 觸控區包小圖形」是不同成因），單純是分段群組只有
+   最外側兩角該圓、朝內的角要收成直角，接縫才是一條乾淨直線。 */
+.qty-stepper .qty-btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.qty-stepper .qty-value { border-radius: 0; }
+.qty-stepper .qty-btn:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 
 /* 新增食物入口：只要搜尋框有輸入就常駐清單末尾，不是只在零結果時出現 */
 .search-empty-msg { padding: var(--s-4) var(--s-5) var(--s-1); text-align: center;
@@ -661,6 +689,25 @@ body {
 .field-float select + label {
   transform: translateY(var(--s-2)) scale(.82); letter-spacing: var(--track-xs); }
 .field-float .req { color: var(--over); margin-left: .15em; }
+
+/* 店家 Autocomplete 下拉。LogSheet.tsx 把 Autocomplete.Portal 的 container 指到
+   Drawer.Content（sheetRef），刻意不用 Base UI 預設的 document.body：vaul 的 Drawer
+   底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行 Dialog Content
+   自己的子樹——選單若掛在 body 下會落在被擋的那層，看得到但點不到（真機／e2e 都撞過，
+   見 DESIGN.md「店家欄位」條）。指到 sheetRef 之後，選單變成 .sheet 的子孫，跟表單其他
+   欄位共用同一份 pointer-events 豁免，也不必再跟 .sheet 的 z-index（11）比大小。
+   不設 z-index：.sheet 底下沒有任何子層自己設，選單靠 DOM 順序（Portal 內容排在最後）
+   本來就疊在最上面。原本留了一條防禦性的 z-index:1，precommit review 指出它沒有任何
+   行為依賴、也沒有情境驗證得了它在防什麼，已移除——日後真有互相蓋到的定位層，
+   屆時照實際堆疊順序決定會比現在猜得準。 */
+.vendor-popup { width: var(--anchor-width); max-width: var(--available-width);
+  max-height: min(240px, var(--available-height)); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-tab);
+  padding: var(--s-1) 0; }
+.vendor-item { padding: var(--s-2) var(--s-3); font-size: var(--t-md); color: var(--ink);
+  cursor: default; }
+.vendor-item[data-highlighted] { background: var(--accent-soft); }
+.vendor-empty { padding: var(--s-2) var(--s-3); font-size: var(--t-sm); color: var(--ink-muted); }
 .form-wrap .note { font-size: var(--t-xs); color: var(--ink-muted); margin: 0;
   line-height: 1.5; letter-spacing: var(--track-xs); }
 

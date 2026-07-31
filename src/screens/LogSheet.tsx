@@ -1,5 +1,6 @@
 /* 記一筆 sheet：vaul Drawer 承載，清單多選／搜尋／份量 stepper／新增食物／確認列。
-   行為與視覺 1:1 對齊 sample-log-entry.html 七屏定案樣張，程式邏輯照 legacy/app.js
+   行為與視覺依 DESIGN.md 元件規則表（2026-07-31 起是唯一真相來源，原本對齊的
+   sample-log-entry.html 樣張已隨該日的樣張退場一併移除），程式邏輯照 legacy/app.js
    的「記一筆 sheet」整段（openSheet／sheetListHtml／onSheetClick／onSheetInput／
    onSheetChange／submitPicks／submitFood）逐條搬，計算全部交給 src/lib 不重新推導。
 
@@ -7,7 +8,8 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要 legacy 那套
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useEffect, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { Autocomplete } from '@base-ui/react/autocomplete'
 import { Drawer } from 'vaul'
 import {
   listRecentIntake,
@@ -238,6 +240,12 @@ export default function LogSheet(props: LogSheetProps) {
   const [err, setErr] = useState<string | null>(null)
   const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FORM)
   const kcalInputRef = useRef<HTMLInputElement | null>(null)
+  /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
+     Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
+     Dialog Content 自己的子樹。預設 Portal 掛在 body 下等於掛在被擋的那層，選單看得到
+     但點不到（真機／e2e 都撞到這個，見 DESIGN.md「店家欄位」條）。指到 Drawer.Content
+     這個 ref 之後，選單變成 Dialog Content 的子孫，繼承同一份 pointer-events 豁免。 */
+  const sheetRef = useRef<HTMLDivElement | null>(null)
 
   /* 「常吃」＝該餐別歷史出現次數，順便記住每樣最近一次的份量——LogSheetProps 只給當天
      dayData，這份跨日期的歷史不在 props 契約裡（見回報「共用檔缺口清單」），這裡直接讀
@@ -423,6 +431,14 @@ export default function LogSheet(props: LogSheetProps) {
   const right = pickBarRight(isToday, eaten.kcal, targets.kcal, totals.kcal)
 
   const sortedFoods = foods ? [...foods].sort(byName) : null
+  /* 店家 Autocomplete 的選項來源：foods 上的 vendor 字串去重排序，不建專屬資料表——
+     去重就是清單，建表要付新表＋外鍵＋遷移＋RLS 的代價卻買不到東西。 */
+  const vendorOptions = useMemo(() => {
+    if (!foods) return []
+    const set = new Set<string>()
+    for (const f of foods) if (f.vendor) set.add(f.vendor)
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+  }, [foods])
   const trimmedQuery = filterQuery.trim()
   const pickedFoods = [...picks.keys()].map(foodById).filter((f): f is Food => !!f)
 
@@ -494,7 +510,7 @@ export default function LogSheet(props: LogSheetProps) {
       <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false}>
         <Drawer.Portal>
           <Drawer.Overlay className="scrim" />
-          <Drawer.Content className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
+          <Drawer.Content ref={sheetRef} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
             <Drawer.Handle className="handle" />
 
             {view === 'list' ? (
@@ -598,12 +614,38 @@ export default function LogSheet(props: LogSheetProps) {
                       value: foodForm.name,
                       onChange: (v) => setFoodForm((p) => ({ ...p, name: v })),
                     })}
-                    {renderField({
-                      id: 'f-vendor',
-                      label: '店家',
-                      value: foodForm.vendor,
-                      onChange: (v) => setFoodForm((p) => ({ ...p, vendor: v })),
-                    })}
+                    <div className="field-float">
+                      {/* 可自由輸入的 Autocomplete，不是受限 Combobox——使用者常打錯店家名，
+                          這裡讓既有店家可選，但打一個清單外的新名字一樣送得出去。
+                          Autocomplete.Root 不渲染自己的元素，input 緊接 label 是直接子節點，
+                          floating label 的 `input + label` CSS 選擇器因此照樣命中。
+                          IME 組字：Autocomplete 底層共用 combobox 的 AriaCombobox，
+                          composition 期間本來就不會把中間態送進 onValueChange，不需要
+                          比照食物搜尋另外做 query/filterQuery 雙 state。 */}
+                      <Autocomplete.Root
+                        items={vendorOptions}
+                        value={foodForm.vendor}
+                        onValueChange={(v) => setFoodForm((p) => ({ ...p, vendor: v }))}
+                        openOnInputClick
+                      >
+                        <Autocomplete.Input id="f-vendor" placeholder=" " />
+                        <label htmlFor="f-vendor">店家</label>
+                        <Autocomplete.Portal container={sheetRef}>
+                          <Autocomplete.Positioner sideOffset={4} className="vendor-positioner">
+                            <Autocomplete.Popup className="vendor-popup">
+                              <Autocomplete.Empty className="vendor-empty">沒有符合的店家，直接送出就會新增</Autocomplete.Empty>
+                              <Autocomplete.List className="vendor-list">
+                                {(vendor: string) => (
+                                  <Autocomplete.Item key={vendor} value={vendor} className="vendor-item">
+                                    {vendor}
+                                  </Autocomplete.Item>
+                                )}
+                              </Autocomplete.List>
+                            </Autocomplete.Popup>
+                          </Autocomplete.Positioner>
+                        </Autocomplete.Portal>
+                      </Autocomplete.Root>
+                    </div>
                   </div>
                   {renderField({
                     id: 'f-kcal',

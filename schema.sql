@@ -10,6 +10,11 @@ create table foods (
   fat        numeric(6,2) not null,
   carb       numeric(6,2) not null,
   vendor     text,
+  -- soft delete（2026-07-31）：封存的食物不再出現在記一筆的搜尋清單，但 intake 仍 join 得到
+  -- 它的品名與店家，歷史紀錄不會爛掉。這是 food_id 用 on delete restrict 的配套解法——
+  -- 真刪不可行（會擋住或毀掉歷史），所以改成不刪。
+  -- 既有資料庫補這欄：alter table foods add column archived boolean not null default false;
+  archived   boolean not null default false,
   created_at timestamptz not null default now()
 );
 
