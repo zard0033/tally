@@ -558,6 +558,12 @@ body {
 .food-row .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
 .food-row .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
   flex-shrink: 0; font-variant-numeric: tabular-nums; }
+/* 逐筆超標預警（DESIGN.md v2.10）：kc-wrap 讓 kc 數字與下面的 delta 小字垂直堆疊、
+   靠右對齊——delta 只在真的觸發時才出現，沒觸發時 kc-wrap 跟原本的 .kc 視覺一致 */
+.kc-wrap { flex-shrink: 0; text-align: right; }
+.kc-wrap .kc { display: block; }
+.kc-wrap .kc.over { color: var(--over); font-weight: 700; }
+.kc-delta { display: block; font-size: var(--t-xs); color: var(--over); white-space: nowrap; }
 
 /* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪底色會與 cream 打架）。
    input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
@@ -627,7 +633,15 @@ body {
   font-variant-numeric: tabular-nums; }
 .pick-bar .remain { font-size: var(--t-base); color: var(--ink-muted);
   font-variant-numeric: tabular-nums; }
-.pick-bar.is-over .remain { color: var(--over); }
+/* v2.10：超出量改掛在小計數字右邊，這時 .remain 不會渲染（見 pickBarRight），
+   .pick-bar.is-over .remain 這條因此永遠碰不到、不留著猜 */
+.pick-bar .over-delta { color: var(--over); font-weight: 700; }
+/* 底部確認列新增的蛋白/脂/碳誠實數字，判定跟今日頁三大營養素條同一條規則（DESIGN.md
+   「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——蛋白質那個
+   <span> 永遠不會拿到 .over class，不是這裡另外判過一次「不轉紅」 */
+.macro-line { display: flex; justify-content: space-between; gap: var(--s-3);
+  font-size: var(--t-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.macro-line .over { color: var(--over); font-weight: 700; }
 .pick-bar-btn { width: 100%; min-height: 52px; padding: 0 var(--s-5); border: none;
   border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent);
   font-family: inherit; font-size: var(--t-md); font-weight: 700;

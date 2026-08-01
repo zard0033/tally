@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeTargets,
+  formatOverAria,
+  formatOverDelta,
   macroExceeds,
   macroPercentagesSumTo100,
   normalizeMacroPercentages,
   num,
   pct,
+  pickBarRight,
+  rowOverage,
   sumIntake,
   type Profile,
+  type Targets,
 } from './formulas'
 
 /* 這組 profile 對應 legacy/app.js check() 裡 active.md 的定案值：
@@ -152,5 +157,79 @@ describe('三大比例驗證：DB 是 numeric(4,1)，先各自捨入再檢查和
   it('normalizeMacroPercentages 捨入到一位小數', () => {
     expect(normalizeMacroPercentages({ protein_pct: 33.333, fat_pct: 33.333, carb_pct: 33.334 }))
       .toEqual({ protein_pct: 33.3, fat_pct: 33.3, carb_pct: 33.3 })
+  })
+})
+
+describe('pickBarRight（DESIGN.md v2.10：超標時「剩」讓位給小計旁的 (+N)）', () => {
+  it('今日未超標：remainText 有值、deltaText 空、over 為 false', () => {
+    const r = pickBarRight(true, 900, 1860, 300)
+    expect(r).toMatchObject({ remainText: '剩 660', deltaText: '', over: false })
+  })
+  it('今日超標：deltaText 有值、remainText 讓位成空字串', () => {
+    const r = pickBarRight(true, 1500, 1860, 400)
+    expect(r).toMatchObject({ remainText: '', deltaText: '(+40)', over: true })
+  })
+  it('剛好打平（== 不算超標）：走 remainText 那條、不是 deltaText', () => {
+    const r = pickBarRight(true, 1000, 1860, 860)
+    expect(r).toMatchObject({ remainText: '剩 0', deltaText: '', over: false })
+  })
+  it('非今日（歷史日）：一律「共 X」，deltaText 恆空、over 恆 false', () => {
+    const r = pickBarRight(false, 1500, 1860, 400)
+    expect(r).toMatchObject({ remainText: '共 1900', deltaText: '', over: false })
+  })
+})
+
+const targets: Targets = { age: 0, bmr: 0, tdee: 0, kcal: 1860, protein: 126, fat: 56, carb: 214 }
+
+describe('rowOverage（逐筆超標預警，DESIGN.md v2.10——不含蛋白質）', () => {
+  it('三項都沒超標時全部回 0', () => {
+    const base = { kcal: 1000, protein: 60, fat: 20, carb: 100 }
+    expect(rowOverage(base, 100, 5, 20, targets)).toEqual({ kcal: 0, fat: 0, carb: 0 })
+  })
+  it('只有熱量被推過線，脂肪／碳水仍在範圍內', () => {
+    const base = { kcal: 1800, protein: 60, fat: 20, carb: 100 }
+    expect(rowOverage(base, 100, 5, 20, targets)).toEqual({ kcal: 40, fat: 0, carb: 0 })
+  })
+  it('已勾選的這一筆（base 已含它）——加 0/0/0 不重複疊加', () => {
+    const base = { kcal: 1900, protein: 60, fat: 60, carb: 100 }
+    expect(rowOverage(base, 0, 0, 0, targets)).toEqual({ kcal: 40, fat: 4, carb: 0 })
+  })
+  it('== 不算超標，判定用捨入後的值（同 macroExceeds 的粒度）', () => {
+    const base = { kcal: 1860, protein: 0, fat: 0, carb: 0 }
+    expect(rowOverage(base, 0, 0, 0, targets).kcal).toBe(0)
+  })
+})
+
+describe('formatOverDelta（視覺版，不含熱量——kc 數字變色已經是那個訊號，避免三重複）', () => {
+  it('三個都觸發：熱量不出現在文字裡，只列脂肪／碳水', () => {
+    expect(formatOverDelta({ kcal: 110, fat: 26, carb: 12 })).toBe('+26g脂 +12g碳')
+  })
+  it('只有熱量觸發、脂肪碳水都沒有：回空字串（kc 數字自己變色就夠了）', () => {
+    expect(formatOverDelta({ kcal: 110, fat: 0, carb: 0 })).toBe('')
+  })
+  it('只有脂肪觸發：其餘不出現', () => {
+    expect(formatOverDelta({ kcal: 0, fat: 7, carb: 0 })).toBe('+7g脂')
+  })
+  it('全部沒觸發：空字串，呼叫端據此不畫這一行', () => {
+    expect(formatOverDelta({ kcal: 0, fat: 0, carb: 0 })).toBe('')
+  })
+  it('超出量在 0.1~0.4 之間：捨到整數是 0，不該顯示「+0g」（precommit review 2026-08-01 抓到）', () => {
+    expect(formatOverDelta({ kcal: 0, fat: 0.3, carb: 0.4 })).toBe('')
+  })
+  it('超出量剛好到 0.5：捨入後是 1，該顯示', () => {
+    expect(formatOverDelta({ kcal: 0, fat: 0.5, carb: 0 })).toBe('+1g脂')
+  })
+})
+
+describe('formatOverAria（口語版，三項都照唸——螢幕閱讀器沒有顏色可以借）', () => {
+  it('三個都觸發：熱量也要唸出來，跟 formatOverDelta 不同', () => {
+    expect(formatOverAria({ kcal: 110, fat: 26, carb: 12 }))
+      .toBe('熱量會超出 110 大卡，脂肪會超出 26 克，碳水會超出 12 克')
+  })
+  it('只有熱量觸發：formatOverDelta 這時是空字串，但 aria 版仍要講', () => {
+    expect(formatOverAria({ kcal: 110, fat: 0, carb: 0 })).toBe('熱量會超出 110 大卡')
+  })
+  it('超出量在 0.1~0.4 之間：捨到整數是 0，不該唸「超出 0 克」', () => {
+    expect(formatOverAria({ kcal: 0.2, fat: 0, carb: 0 })).toBe('')
   })
 })

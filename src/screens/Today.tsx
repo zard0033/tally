@@ -191,7 +191,7 @@ export default function Today(props: TodayProps) {
         {rows === null ? (
           <p className="muted">載入中…</p>
         ) : (
-          renderTimeline(rows, { openId, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
+          renderTimeline(rows, currentDate, { openId, justAddedIds, onOpenSheet, toggleOpen, handleDelete })
         )}
       </div>
     </div>
@@ -321,7 +321,7 @@ function SwipeRow({
   )
 }
 
-function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
+function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
   const byMeal = new Map<MealKey, IntakeRow[]>(MEALS.map((m) => [m.key, []]))
   for (const r of rows) byMeal.get(r.meal as MealKey)?.push(r)
 
@@ -341,7 +341,7 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
         const nextDone = i < MEALS.length - 1 && (byMeal.get(nextMeal.key)?.length ?? 0) > 0
         return (
           <MealNode
-            key={meal.key}
+            key={`${meal.key}-${date}`}
             meal={meal}
             items={items}
             nextDone={nextDone}
@@ -361,7 +361,15 @@ function renderTimeline(rows: IntakeRow[], h: TimelineHelpers) {
    退場動畫連跑的機會都沒有（2026-07-31 實測：刪除後 10ms 內 `.todo-row` 就已經在畫面上，
    `.item` 完全沒有經過任何 opacity 過渡）。用 `lingering` 讓「翻成待記錄」延後到
    AnimatePresence 的 `onExitComplete` 才發生，其餘（2 筆以上互相 FLIP）不受影響——
-   那條路徑 `hasItems` 從頭到尾是 true，不會觸發這個分支。 */
+   那條路徑 `hasItems` 從頭到尾是 true，不會觸發這個分支。
+
+   **`lingering` 分不出「真的刪除」跟「切到另一天、那餐剛好是空的」**——後者也是
+   `items.length` 從正變 0，會被誤判成刪除、誤放退場動畫（precommit review 2026-08-01
+   抓到：`goToDate` 快取命中時不會 `setRows(null)`，時間軸不卸載，`MealNode` 本來只用
+   `meal.key` 當 key 會被留著跨日期複用）。修法是 `renderTimeline` 呼叫端把 `key` 併上
+   `date`（見上方 `key={`${meal.key}-${date}`}`）——換日期時每個 `MealNode` 強制重掛，
+   `lingering`／`prevHasItems` 這兩顆 local state 自然歸零，只有同一天內真的按刪除
+   才會觸發退場動畫。`AnimatePresence` 的 `initial={false}` 保證重掛不會誤放進場動畫。 */
 function MealNode({
   meal,
   items,

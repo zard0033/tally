@@ -18,7 +18,7 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import { localDate } from '@/lib/dates'
-import { num, sumIntake } from '@/lib/formulas'
+import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
@@ -79,33 +79,15 @@ function foodMatches(f: Food, q: string): boolean {
   return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)
 }
 
-function pickTotals(picks: Map<number, number>, foodById: (id: number) => Food | undefined) {
-  let n = 0
-  let kcal = 0
-  for (const [id, qty] of picks) {
-    const f = foodById(id)
-    if (!f) continue
-    n++
-    kcal += num(f.kcal) * qty
-  }
-  return { n, kcal }
-}
-
-/* 補記過去某天時「剩 479」是錯的語意——那天已經過完了，沒有「剩」可言，
-   歷史日看的是加進去之後那天總共吃了多少。剩餘／超出不用正負號，避免「+594」
-   被讀成「多攝取 594」。 */
-function pickBarRight(isToday: boolean, eatenKcal: number, targetKcal: number, picksKcal: number) {
-  if (!isToday) {
-    const total = Math.round(eatenKcal + picksKcal)
-    return { text: `共 ${total}`, ariaLabel: `共 ${total} 大卡`, over: false }
-  }
-  const left = Math.round(targetKcal) - Math.round(eatenKcal + picksKcal)
-  const over = left < 0
-  return {
-    text: over ? `超出 ${-left}` : `剩 ${left}`,
-    ariaLabel: over ? `超出 ${-left} 大卡` : `剩 ${left} 大卡`,
-    over,
-  }
+function pickTotals(
+  picks: Map<number, number>,
+  foodById: (id: number) => Food | undefined,
+): IntakeTotals & { n: number } {
+  const amounts = [...picks]
+    .map(([id, qty]) => ({ f: foodById(id), qty }))
+    .filter((x): x is { f: Food; qty: number } => !!x.f)
+  const totals = sumIntake(amounts.map(({ f, qty }) => ({ qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb })))
+  return { n: amounts.length, ...totals }
 }
 
 interface FoodRowHandlers {
@@ -115,6 +97,15 @@ interface FoodRowHandlers {
   onStep: (id: number, dir: 1 | -1) => void
   onQtyInput: (id: number, raw: string) => void
   onQtyBlur: (id: number, raw: string) => void
+  /* 逐筆超標預警的判定基準：今日已吃＋sheet 內已勾選的加總（不含這一筆本身，
+     由 renderFoodRow 依 picked 狀態決定要不要疊加），與 targets 一起傳，
+     免得每個呼叫端各自重算一次 */
+  combined: IntakeTotals
+  targets: Targets
+  /* 逐筆超標預警要用「勾下去實際會用的份量」試算，不能假設 1——togglePick 勾選時
+     用的就是這個函式（依該餐上次吃這樣東西的份量），兩邊要算同一個數字，
+     否則預告「不會超標」點下去卻超標（precommit review 抓到，2026-08-01）。 */
+  defaultQty: (foodId: number) => number
 }
 
 /* 一般函式、不是元件——用 fn(f) 呼叫而非 <Fn/>，React 才不會把它當成每次 render
@@ -171,16 +162,34 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
             </div>
           </div>
         ) : (
-          <button className="food-row" type="button" aria-pressed="false" onClick={() => h.onToggle(f.id)}>
-            <svg className="chk" viewBox="0 0 22 22" aria-hidden="true">
-              <circle cx="11" cy="11" r="9" />
-            </svg>
-            <div className="nm-wrap">
-              <span className="nm">{f.name}</span>
-              {f.vendor && <span className="sub">{f.vendor}</span>}
-            </div>
-            <span className="kc">{Math.round(num(f.kcal))}</span>
-          </button>
+          (() => {
+            const previewQty = h.defaultQty(f.id)
+            const over = rowOverage(h.combined, num(f.kcal) * previewQty, num(f.fat) * previewQty, num(f.carb) * previewQty, h.targets)
+            const delta = formatOverDelta(over)
+            const ariaText = formatOverAria(over)
+            const ariaSuffix = ariaText ? `，加入後${ariaText}` : ''
+            return (
+              <button
+                className="food-row"
+                type="button"
+                aria-pressed="false"
+                aria-label={`${f.name}${f.vendor ? '，' + f.vendor : ''}，${Math.round(num(f.kcal))} 大卡${ariaSuffix}`}
+                onClick={() => h.onToggle(f.id)}
+              >
+                <svg className="chk" viewBox="0 0 22 22" aria-hidden="true">
+                  <circle cx="11" cy="11" r="9" />
+                </svg>
+                <div className="nm-wrap" aria-hidden="true">
+                  <span className="nm">{f.name}</span>
+                  {f.vendor && <span className="sub">{f.vendor}</span>}
+                </div>
+                <div className="kc-wrap" aria-hidden="true">
+                  <span className={over.kcal > 0 ? 'kc over' : 'kc'}>{Math.round(num(f.kcal))}</span>
+                  {delta && <span className="kc-delta">{delta}</span>}
+                </div>
+              </button>
+            )
+          })()
         )}
       </div>
     </li>
@@ -429,6 +438,12 @@ export default function LogSheet(props: LogSheetProps) {
   const eaten = sumIntake(dayData.rows ?? [])
   const totals = pickTotals(picks, foodById)
   const right = pickBarRight(isToday, eaten.kcal, targets.kcal, totals.kcal)
+  const combined: IntakeTotals = {
+    kcal: eaten.kcal + totals.kcal,
+    protein: eaten.protein + totals.protein,
+    fat: eaten.fat + totals.fat,
+    carb: eaten.carb + totals.carb,
+  }
 
   const sortedFoods = foods ? [...foods].sort(byName) : null
   /* 店家 Autocomplete 的選項來源：foods 上的 vendor 字串去重排序，不建專屬資料表——
@@ -449,6 +464,9 @@ export default function LogSheet(props: LogSheetProps) {
     onStep: stepQty,
     onQtyInput: handleQtyInput,
     onQtyBlur: handleQtyBlur,
+    combined,
+    targets,
+    defaultQty: (foodId) => defaultQty(meal, foodId),
   }
 
   let browseBody: ReactNode = null
@@ -566,20 +584,45 @@ export default function LogSheet(props: LogSheetProps) {
                 </div>
 
                 {picks.size > 0 && (
-                  <div className={right.over ? 'pick-bar is-over' : 'pick-bar'}>
+                  <div className="pick-bar">
                     {err && (
                       <p className="sheet-error" role="alert">
                         存不進去：{err}
                       </p>
                     )}
-                    <div className="pick-line" aria-label={`${totals.n} 樣，共 ${Math.round(totals.kcal)} 大卡，${right.ariaLabel}`}>
+                    {/* role="group"：generic 的 <div> 禁止用 aria-label 命名（ARIA naming
+                        prohibited），子元素又全部 aria-hidden，沒有 role 這條 aria-label
+                        很可能整段被螢幕閱讀器忽略（precommit review 抓到，2026-08-01） */}
+                    <div role="group" className="pick-line" aria-label={`${totals.n} 樣，共 ${Math.round(totals.kcal)} 大卡，${right.ariaLabel}`}>
                       <span className="sub" aria-hidden="true">
                         {totals.n} 樣 · {Math.round(totals.kcal)} 卡
+                        {right.deltaText && <span className="over-delta"> {right.deltaText}</span>}
                       </span>
-                      <span className="remain" aria-hidden="true">
-                        {right.text}
-                      </span>
+                      {right.remainText && (
+                        <span className="remain" aria-hidden="true">
+                          {right.remainText}
+                        </span>
+                      )}
                     </div>
+                    {/* 蛋白/脂/碳三個誠實數字，判定規則跟今日頁的三大營養素條同一條（DESIGN.md
+                        「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——
+                        不是這裡不判定，是蛋白質那格本來就不該判（DESIGN.md v2.10「底部確認列」條）。
+                        role="group"：同上，generic <div> 不能靠 aria-label 命名。 */}
+                    {(() => {
+                      const fatOver = macroExceeds(combined.fat, targets.fat)
+                      const carbOver = macroExceeds(combined.carb, targets.carb)
+                      return (
+                        <div
+                          role="group"
+                          className="macro-line"
+                          aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克`}
+                        >
+                          <span aria-hidden="true">蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}</span>
+                          <span className={fatOver ? 'over' : undefined} aria-hidden="true">脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}</span>
+                          <span className={carbOver ? 'over' : undefined} aria-hidden="true">碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}</span>
+                        </div>
+                      )
+                    })()}
                     <button className="pick-bar-btn" type="button" disabled={busy} onClick={() => void submitPicks()}>
                       {busy ? '加入中…' : err ? '重試' : '加入'}
                     </button>
