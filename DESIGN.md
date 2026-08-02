@@ -305,6 +305,21 @@ leading 反向：大字緊（主數字 `.95`、餐別名 `1.2`），內文鬆（
   (5) 日期標題套用 Archivo——見「字體」章節「日期標題是例外」條，使用者拿放大截圖比對後裁定套用。
   (6) qty stepper 加減鈕與中間數字框邊界重疊（真機回報「小數才會重疊」，其實整數也會、只是打整數多半用 +/− 不會聚焦輸入框才沒發現）：`.qty-value:focus-visible` 原本 `outline-offset: 1px` 是正值外擴，三顆 `gap:0` 緊貼時外框直接蓋到左右鄰居的邊框上；改成 `-2px` 內縮（同手法見 `.item-delete:focus-visible`）。
   (7) App icon「黑底白T」：repo 內與 GitHub Pages 線上實測的 PNG 都已是 v2.5 綠底反轉配色，判斷是 iOS 對 `apple-touch-icon` 的快取太黏、單純移除重加不夠——`index.html` 的圖示連結加 `?v=2` 版本參數強制瀏覽器視為新資源重新抓取，使用者需重新「加入主畫面」一次驗證。
+- **v2.18 · 2026-08-02** — 今日頁編輯份量的長按觸發，真機回報「先看到刪除鈕（左滑 reveal）
+  閃一下，才掉編輯 sheet」，100% 重現、手指完全不動、閃出來的狀態會維持到 sheet 蓋上去。
+  根因是 iOS 的 click 事件合成常以 pointerdown 當下的目標為準（不像桌機在放開當下重新
+  hit-test），所以即使 sheet 的 scrim 已經蓋住這一列，補來的 click 仍可能命中底下的
+  `.item-content`，觸發 `onToggle()`。`blockClickUntil` 原本在長按計時器**觸發當下**
+  就設成 `now+150ms`，但真實使用者是「看到 sheet 才放手」，反應時間常態超過 150ms，
+  窗口早就過期。改成跟拖曳同一套 v3 手法：計時器觸發時先設 `Infinity`（放手前一律擋），
+  放手當下才收斂成 `now+CLICK_GRACE_MS`，grace window 永遠從真正放手那一刻算起。
+  **這個修法自己又引入一個迴歸，被同一輪 push 前 review 抓到**：sheet 一開整片 scrim
+  蓋住這一列，button 沒有 `setPointerCapture`，放手時 `pointerup` 會落在 scrim 上，
+  `.item-content` 自己的 `onPointerUp` 根本不會觸發——原本只有 `onPointerUp` 會把
+  `blockClickUntil` 收斂回有限值，`onPointerCancel`／`onPointerLeave` 只清計時器不碰
+  這個值，導致長按觸發後如果收尾走 cancel/leave（桌機滑鼠常態如此），`blockClickUntil`
+  會卡在 `Infinity` 永遠出不來，那一列的滑動 reveal 直到觸發一次 drag 前都打不開。
+  修法是讓 `onPointerCancel`／`onPointerLeave` 也走同一支收尾函式。
 - **v2.17 · 2026-08-02** — v2.16 的背景色調也被真機核可打回：使用者看過後認為「背景色塊跟整體風格不搭」——這個 app 一路是「不鋪底色、靠明度分層」的極簡路線（見「選取態不鋪底色」條），背景色塊即使 alpha 壓得很低，還是引入了一種這個 app 原本沒有的視覺語言。改用者提議的第三個方向：**完全不做視覺降權**，`.over-quota` 只剩排序與測試用的語意標記，靠既有的排序位置＋`.kc.over`／`.kc-delta` 紅字表達「這筆超標」，不新增任何顏色。連帶刪掉一條測試——原本驗「淡化列按下要有可辨的按壓回饋」的測試，因為它驗的行為（over-quota 列有自己的按壓樣式）已經不存在，不是留著改斷言、是整條移除。三個版本（opacity → 背景色調 → 無視覺處理）都留在這裡當紀錄，不要重蹈覆轍再試一次視覺降權。
 - **v2.16 · 2026-08-02** — v2.15 淡化機制的 opacity 改成背景色調，**廢除 opacity 降權**。真機用真實資料核可 v2.15 時，使用者回報某一餐幾乎全部超標、全部套同一個 `.9` opacity，肉眼完全看不出哪些被降權——為了讓「店家」子行過 WCAG AA 對比度而一路把 opacity 推到 `.9`，代價正是把淡化效果推到幾乎消失，數字再怎麼調都是死路。改成 `.food-item.over-quota .food-row { background: rgba(154,67,48,.07) }`（按下 `.14`），文字完全不動，對比度問題直接消失，不用再算。使用者當場在三個「不動文字透明度」的方向裡選了背景上色（另兩個是左側色條、完全不做視覺降權只排序），細節與理由見「元件規則」該條。
 - **v2.15 · 2026-08-02** — 記一筆 sheet 加「以今天剩餘的空間，我還能吃什麼」的排序＋淡化。三方案（A 硬篩選／B 軟性排序／C 門檻式）的本機 demo 比過後使用者裁決 B：不隱藏任何品項，只把符合今日額度的排前面、不符合的降視覺優先度，結構上不可能清空清單。全部食物／搜尋結果依「加這一筆還吃得下嗎」排序（判斷基準用 `eaten`，刻意跟逐列變色用的 `combined` 不同源——見「元件規則」新增條的完整理由）；常吃只淡化不重排，維持 recency 順序。新增 CSS `.food-item.over-quota .food-row`（`src/app.css`，opacity 定案 `.9`，過程見下方三處回修），複用既有的 `rowOverage`／逐筆超標預警機制判定，零新增顏色。**push 前 fresh-context verifier 兩輪複驗，共修三處**：① 淡化 opacity 原訂 `.55`，`--ink` 疊上去對 `--card` 只有 3.49:1，掉到 WCAG AA 文字門檻（4.5:1）以下——第一輪改成 `.64`（`--ink` 實測 4.53:1）；② `.food-item.over-quota .food-row`（0-3-0）的特異度蓋過既有 `.food-row:active`（0-2-0），淡化列在手機上按下去完全沒有按壓回饋（`:active` 是唯一訊號，沒有 hover）——補一條 `:active` 覆寫；③ 第二輪 verifier 逐一量了淡化列裡每個文字元素才發現 `.64` 只顧到 `.nm` 品名，`.sub` 店家（`--ink-muted`）只有 2.75:1——店家是「區分同名品項的唯一資訊」，這個退讓站不住（不像 `.kc-delta` 是輔助資訊，退讓可以接受）。**opacity 改定案 `.9`，`:active` 改 `.65`**，四個文字元素（`.nm`／`.sub`／`.kc`／`.kc-delta`）全部過 AA，實測數字見「元件規則」該條。

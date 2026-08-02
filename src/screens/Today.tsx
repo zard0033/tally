@@ -502,6 +502,20 @@ function SwipeRow({
     if (next !== open) onToggle()
   }
 
+  // 長按計時器觸發到使用者實際放手之間隔多久，因人而異（看到 sheet 彈出來的反應時間、
+  // 手指本來就沒那麼快抬起）——不能假設「觸發後 150ms 內一定會放手」。跟 handleDragEnd
+  // 同一套 v3 手法：計時器一觸發先把 blockClickUntil 設 Infinity（放手前一律擋），
+  // 放手當下（handlePointerUp）才改成「現在 + CLICK_GRACE_MS」讓它自然到期，這樣
+  // grace window 永遠是從「真的放手那一刻」起算，不會因為使用者按住比較久就提早過期、
+  // 讓補來的 click 漏網把底下這一列的滑動 reveal 切開（真機實測重現：長按開 sheet 前
+  // 會先看到刪除鈕一閃）。**pointerup／pointercancel／pointerleave 三個收尾事件都要走
+  // handlePointerUp**，不能只接 pointerup——sheet 一開就整片 scrim 蓋住這一列
+  // （z-index 10），button 沒有 setPointerCapture，放手時 hit-test 落在 scrim 上，
+  // 這顆按鈕自己的 onPointerUp 根本不會觸發，只會收到 leave／cancel；只接 pointerup
+  // 會讓 Infinity 卡死出不來，之後這一列的 tap-to-reveal 永久失效直到觸發一次 drag
+  // （precommit-review 抓到，這是這次修復自己引入的迴歸）。
+  const longPressFired = useRef(false)
+
   function startLongPress(e: ReactPointerEvent<HTMLButtonElement>) {
     // 只認主要輸入（左鍵／單一觸點）——沒有這道檢查，桌機按住右鍵、或多點觸控的
     // 第二根手指都會被當成長按觸發，且第二根手指的座標還會覆蓋 longPressStart，
@@ -509,13 +523,13 @@ function SwipeRow({
     if (e.button !== 0 || !e.isPrimary) return
     const opener = e.currentTarget
     if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current)
+    longPressFired.current = false
     longPressStart.current = { x: e.clientX, y: e.clientY }
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null
       longPressStart.current = null
-      // 長按觸發後緊接而來的 pointerup 通常會補一個 click——用既有的 blockClickUntil
-      // 擋掉，免得開編輯 sheet 的同一下又把這一列的滑動 reveal 切開
-      blockClickUntil.current = Date.now() + CLICK_GRACE_MS
+      longPressFired.current = true
+      blockClickUntil.current = Infinity
       onEdit(opener)
     }, LONG_PRESS_MS)
   }
@@ -525,6 +539,13 @@ function SwipeRow({
     if (Math.abs(e.clientX - start.x) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE) {
       clearLongPress()
     }
+  }
+  function handlePointerUp() {
+    if (longPressFired.current) {
+      blockClickUntil.current = Date.now() + CLICK_GRACE_MS
+      longPressFired.current = false
+    }
+    clearLongPress()
   }
 
   return (
@@ -570,9 +591,9 @@ function SwipeRow({
           }}
           onPointerDown={startLongPress}
           onPointerMove={handlePointerMove}
-          onPointerUp={clearLongPress}
-          onPointerCancel={clearLongPress}
-          onPointerLeave={clearLongPress}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onPointerLeave={handlePointerUp}
           onContextMenu={(e) => e.preventDefault()}
         >
           <span className="nm">
