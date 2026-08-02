@@ -24,8 +24,21 @@
    套 font-variant-numeric: tabular-nums 完全無效——Google Fonts 的靜態字重實例不帶那個
    OpenType feature）。DESIGN.md 規定數字要用 tabular-nums 對齊，換成別的字體時間軸
    每列的卡數會左右跳，這條約束不可退讓，見 DESIGN.md v2.7 版本紀錄。
-   只抓 600（唯一實際套用的字重），完整拉丁 woff2（不做數字 subset）：省下的十幾 KB
-   買不到「不用建 pipeline」的代價。放 src/assets/ 讓 Vite 處理（加 hash、有快取控制）。 */
+   完整拉丁 woff2（不做數字 subset）：省下的十幾 KB 買不到「不用建 subset pipeline」的代價。
+   放 src/assets/ 讓 Vite 處理（加 hash、有快取控制）。
+   v2.13：原本只抓 600 一個字重，副作用是任何請求較輕字重（`.item .kc`／`.pair .tgt` 這類
+   次要數字沒有另外設 font-weight，理論上該跟著環境繼承 400）的元素，瀏覽器都只有 600
+   這一張字形可用，實際全部長一樣粗，主次數字的視覺層級被字型切換這件事悄悄抹平了
+   （真機回報「字重應該要有分別」，2026-08-02）。補一份 400，兩個 CSS 規則都不用動——
+   沒特別設字重的元素本來就是要繼承 400，字形一到位它們自然分流，不用逐一補
+   font-weight。 */
+@font-face {
+  font-family: 'Archivo Num';
+  src: url('./assets/archivo-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: 'Archivo Num';
   src: url('./assets/archivo-600.woff2') format('woff2');
@@ -242,12 +255,13 @@ body {
 .item-content { position: relative; }
 .item-content::before { content: ''; position: absolute; inset: 0;
   border-radius: var(--s-1); background: var(--accent-soft); opacity: 0; pointer-events: none; }
-/* 1.2s 不是 --dur 的過場，是「看得到又不礙事」的停留時間：--dur(160ms) 太快，
-   回到今日頁時高亮已經消失，等於沒有確認訊號。
-   前 25% 先停住不動再開始衰減——沒有這段 hold，透明度一開始就往下掉，
-   真正「看得見」的時間比帳面短，尾巴又在 .05 以下白拖 */
-.item-content.just-added::before { animation: flash 1.2s cubic-bezier(.4, 0, 1, 1) forwards; }
-@keyframes flash { 0%, 25% { opacity: .9; } 100% { opacity: 0; } }
+/* v2.13：原本 .9 opacity 瞬間頂到、用 accelerate 曲線(.4,0,1,1) 撐 1.2s 才開始衰減，
+   等於整列被實色的薄荷綠淹掉、卡在那裡不動，是舊式「成功後整塊變綠」的廉價感來源
+   （真機回報，2026-08-02）。改成峰值降到 .55（是色調不是色塊）、用全站共用的 --ease
+   （非 accelerate）讓衰減本身就是漸緩，時間收到 700ms——留給 sheet 退場（--dur-mid
+   220ms）之後仍看得到的餘裕還在，但不再是「長留＋暴斃」的節奏 */
+.item-content.just-added::before { animation: flash 700ms var(--ease) forwards; }
+@keyframes flash { 0% { opacity: 0; } 15% { opacity: .55; } 100% { opacity: 0; } }
 
 /* ── 待記錄餐次（整行可點） ── */
 .todo-row { display: flex; align-items: center; justify-content: space-between;
@@ -437,8 +451,12 @@ body {
    同時是膠囊內「箭頭緊貼日期兩側」的間距來源。
    v2.7：16px/600（原 20px/700 使用者實機回報「有點大、有點突兀」）——日期是導覽元素
    不是標題，主角是下面 44px 的主數字；20px/700 跟頂欄左端 12.8px 的「回今天」落差太大，
-   是突兀感的來源，見 DESIGN.md v2.7 版本紀錄 */
-.date-title { position: relative; z-index: 1; font-size: var(--t-md); font-weight: 600;
+   是突兀感的來源，見 DESIGN.md v2.7 版本紀錄。
+   v2.13：改套 --font-num——v2.7 當初「中文數字混排不套用」的例子是「7月30日」這種數字被
+   中文字直接夾住的格式，現在的「週日 8/2」中文與數字中間隔了空格，是兩個獨立區塊而非
+   夾在一起，斷裂感的前提已經不成立；Archivo 沒有 CJK 字形，「週日」兩字會自動 fallback
+   回 --font-body 字型堆疊裡的系統字體，不必拆成兩個 span */
+.date-title { position: relative; z-index: 1; font-family: var(--font-num); font-size: var(--t-md); font-weight: 600;
   letter-spacing: var(--track-md);
   margin: 0; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums;
   white-space: nowrap; padding: 0 var(--s-2); }
@@ -590,7 +608,9 @@ body {
   font-size: var(--t-md); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
   -webkit-appearance: none; appearance: none; }
-.qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* offset 內縮：三顆 gap:0 緊貼，正 offset 的外框會蓋到左右鄰居的邊框上，
+   讀起來像邊框疊在一起（真機回報，2026-08-02；同手法見 .item-delete:focus-visible） */
+.qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 三顆緊貼（gap:0）但各自四角都套 --r-tab，接縫處兩邊的圓角各自往內側探——真機
    實測量出鈕與鈕交界處的邊框線會在轉角附近交叉，讀起來像「疊在一起」（使用者回報）。
    根因不是觸控區跟視覺尺寸對不齊（bounding box 量過，44/42/44 三顆邊界精準相接、
@@ -721,6 +741,10 @@ body {
   cursor: default; }
 .vendor-item[data-highlighted] { background: var(--accent-soft); }
 .vendor-empty { padding: var(--s-2) var(--s-3); font-size: var(--t-sm); color: var(--ink-muted); }
+/* Base UI 的 Autocomplete.Empty 不管有沒有符合結果都掛在 DOM 裡（aria-live 需要），
+   有結果時沒有子節點但自己的 padding 還在，變成清單上方一段死留白（真機回報，2026-08-02）。
+   :empty 剛好是「沒有符合結果的文字」那個狀態的反面，收掉留白不影響真的顯示訊息時的 padding。 */
+.vendor-empty:empty { padding: 0; }
 .form-wrap .note { font-size: var(--t-xs); color: var(--ink-muted); margin: 0;
   line-height: 1.5; letter-spacing: var(--track-xs); }
 

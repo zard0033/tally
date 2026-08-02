@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-02
+最後更新：2026-08-02（同日第二輪：真機第五輪回報回修，未 push）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；
 > 2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -50,6 +50,17 @@
   （webkit 393 寬）。deep precommit-review 全部 confirmed findings 修完，21 條 unverified-minor
   多數是可留的技術債（效能熱路徑、PWA manifest 未寫進 DESIGN.md 等），沒有逐條處理，見「零碎」。
 
+### 本輪改動（2026-08-02 第二輪，**尚未 push**）
+
+真機第五輪回報，DESIGN.md v2.13。全部驗證過（vitest 59/59、e2e 18/18、build／lint 過；e2e 全量並行跑時 `tally.spec.ts` 一次 flaky——單獨重跑穩定過，是既有的並行 CPU 搶佔問題，非本輪改動造成，細節見「未解失敗」）：
+1. 新增食物表單進場焦點原本跳去熱量、跳過店家——改成落在店家（`LogSheet.tsx`）。
+2. 店家下拉選單上方死留白——`Autocomplete.Empty` 沒結果時也佔 DOM 空間，`.vendor-empty:empty{padding:0}` 收掉。
+3. 「加入」後的高亮閃爍「看起來很廉價」——emil-design-eng 顧問後定案：峰值 `.9`→`.55`、accelerate 曲線→`--ease`、`1.2s`→`700ms`（app.css `.item-content.just-added`）。
+4. 字重層次補強：自架 Archivo 之前只裝 600，次要數字（`.item .kc` 等）沒有更輕字形可選、全部跟主數字一樣粗——補一份 `archivo-400.woff2`（Google Fonts 官方 latin 靜態實例，checksum 對過現有 600 檔確認下載方式一致），CSS 規則不用動，字形到位自動分流。
+5. qty stepper「小數才重疊」其實整數也會——真正原因是 `.qty-value:focus-visible` 的 `outline-offset: 1px` 正值外擴，三顆 `gap:0` 緊貼時外框蓋到左右鈕的邊框上；打小數必須聚焦輸入框才會看到，打整數多半用 +/− 按鈕不會聚焦，所以誤以為只有小數才會。改 `-2px` 內縮（同手法見 `.item-delete:focus-visible`）解掉。
+6. 日期標題「週日 8/2」改套 Archivo——v2.7 排除中文數字混排的例子是「7月30日」這種數字被 CJK 直接夾住的格式，現在的日期格式中間隔了空格，斷裂前提不成立；放大截圖比對後使用者裁定套用。
+7. App icon「黑底白T」——repo 內與 GitHub Pages 線上 PNG 都實測確認是 v2.5 綠底反轉配色，判斷是 iOS 快取住舊圖示、單純移除重加不夠沖掉——`index.html` 的圖示連結加 `?v=2` 版本參數強制重新抓取。**使用者需重新「加入主畫面」驗證是否解決，這條尚未拿到真機確認結果**。
+
 ## 已驗證事實
 
 - `foods.archived` 欄已在線上 DB（`schema.sql` 已同步），**前端還沒用它**——soft delete UI 是下一輪的事。
@@ -65,10 +76,12 @@
 - **scrim 分區變色（iPhone 真機，使用者裁定擱置）**：關 sheet 時頂部延遲變回底色。純視覺瑕疵、
   不影響資料，優先級低，診斷配方見 archive。
 - **vitest 在 Git Bash 集合階段全炸**：已定位 MSYS 環境特有，實務解＝本機一律 PowerShell 跑。
+- **`tally.spec.ts` 在 `npm run e2e` 全量並行跑（5 workers）時偶發 flaky**：2026-08-02 撞過一次
+  「刪除後焦點沒接到復原鈕，停在 BODY」，單獨跑（1 worker）穩定過，判斷是既有的 CPU 搶佔計時
+  問題（harness.ts 已有相關註解），非本輪改動造成，未進一步深挖。
 
 ## 待決問題
 
-- **Archivo 只嵌 600 字重，視覺層級變平**：三種修法要看實際畫面決定，下次連同真機驗收一起看。
 - **食品庫管理與設定頁重構（已走完 dev-flow 前段＋★核可，等 ui-design-flow ➊ 出樣張）**：
   決策全部拍板（設定頁改純入口列表、食品庫 soft delete＋「封存」、店家管理頁延後不取消、
   不建 vendors 表、食物搜尋維持手刻），細節見 `git log` 該輪討論。**這輪先做了額度預警提示
@@ -82,10 +95,15 @@
 
 ## 下次續點
 
-1. **真機看這幾輪已上線的東西**：Archivo 數字、日期字級、qty stepper 接縫、店家 Autocomplete、
-   新 icon、刪除退場動畫、額度預警提示的逐筆訊號與底部確認列（e2e 過不代表真機順）。
-2. **實作食品庫管理＋設定頁重構**：決策已拍板，下一步是 `ui-design-flow` ➊ 出決策樣張。
+1. **實作食品庫管理＋設定頁重構**：決策已拍板，下一步是 `ui-design-flow` ➊ 出決策樣張。
    建議開新對話，這輪 context 已經很長。
+2. **PWA / service worker（新排入待辦，2026-08-02）**：Tally 現在只有 manifest.webmanifest，
+   沒有 service worker——離線不能用、部署更新也沒有主動接手機制。`d:\Personal\Games\Gambit` 已用
+   `vite-plugin-pwa`（Workbox `generateSW`）做過同款需求，設計記在該 repo
+   `docs/architecture/adr-0016-pwa-caching-strategy.md`，可直接照搬：`registerType: 'autoUpdate'`
+   （鐵律，避免 SW 把使用者鎖在舊版本）、app shell 快取（JS/CSS/HTML/SVG）、**Supabase 請求刻意排除
+   在快取規則外**（Tally 也是 Supabase 後端，這條必抄，否則會出現「別台裝置改了、這台還在看舊
+   資料」）。屬中型改動（新依賴＋新 build 設定），下次開工先走 `dev-flow`，不要直接動手。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 

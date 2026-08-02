@@ -203,7 +203,6 @@ interface FieldOpts {
   numeric?: boolean
   value: string
   onChange: (v: string) => void
-  inputRef?: (el: HTMLInputElement | null) => void
 }
 
 /* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移（app.css
@@ -221,7 +220,6 @@ function renderField(opts: FieldOpts) {
         placeholder=" "
         value={opts.value}
         onChange={(e) => opts.onChange(e.target.value)}
-        ref={opts.inputRef}
       />
       <label htmlFor={opts.id}>
         {opts.label}
@@ -248,7 +246,7 @@ export default function LogSheet(props: LogSheetProps) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FORM)
-  const kcalInputRef = useRef<HTMLInputElement | null>(null)
+  const vendorInputRef = useRef<HTMLInputElement | null>(null)
   /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
      Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
      Dialog Content 自己的子樹。預設 Portal 掛在 body 下等於掛在被擋的那層，選單看得到
@@ -309,8 +307,10 @@ export default function LogSheet(props: LogSheetProps) {
     })()
   }, [open])
 
+  /* 進表單時品名已經是搜尋字串帶進來的（openFoodForm 的 prefillName），下一個該落焦的
+     是店家，不是熱量——原本直接focus 熱量會跳過店家，真機回報「順序不對」（2026-08-02）。 */
   useEffect(() => {
-    if (view === 'food-form') kcalInputRef.current?.focus()
+    if (view === 'food-form') vendorInputRef.current?.focus()
   }, [view])
 
   function togglePick(id: number) {
@@ -671,7 +671,7 @@ export default function LogSheet(props: LogSheetProps) {
                         onValueChange={(v) => setFoodForm((p) => ({ ...p, vendor: v }))}
                         openOnInputClick
                       >
-                        <Autocomplete.Input id="f-vendor" placeholder=" " />
+                        <Autocomplete.Input id="f-vendor" placeholder=" " ref={vendorInputRef} />
                         <label htmlFor="f-vendor">店家</label>
                         <Autocomplete.Portal container={sheetRef}>
                           <Autocomplete.Positioner sideOffset={4} className="vendor-positioner">
@@ -697,9 +697,6 @@ export default function LogSheet(props: LogSheetProps) {
                     numeric: true,
                     value: foodForm.kcal,
                     onChange: (v) => setFoodForm((p) => ({ ...p, kcal: v })),
-                    inputRef: (el) => {
-                      kcalInputRef.current = el
-                    },
                   })}
                   <div className="field-row">
                     {renderField({
