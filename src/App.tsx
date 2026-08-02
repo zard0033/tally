@@ -18,6 +18,7 @@ import {
   listIntake,
   onAuthStateChange,
   signOut as apiSignOut,
+  updateIntakeQty as apiUpdateIntakeQty,
   updateProfile as apiUpdateProfile,
   upsertWeight as apiUpsertWeight,
   type Food,
@@ -438,6 +439,28 @@ export default function App() {
     return created
   }, [])
 
+  /* 改份量：先送出再更新畫面（跟 handleCreateIntake/handleCreateFood 同一套慣例——
+   * 失敗 reject 給呼叫端的 sheet 就地顯示「存不進去：」，不走樂觀更新＋回滾）。
+   * kcal/protein/fat/carb 是單份快照不必重算，只需要 rows 與快取裡的 qty 跟著換。
+   *
+   * 寫入前先確認這個 id 還在「現在畫面看得到的那天」——編輯 sheet 開啟期間，使用者
+   * 有很多辦法讓那一列離開視圖而 sheet 還開著（換日期、把它刪掉…），不逐條路徑堵，
+   * 在真正送出 PATCH 這一刻統一擋（fresh-context verifier 2026-08-02 連兩輪抓到同一
+   * 病灶的兩個不同入口：F1 是長按計時器沒清、F2 是 sheet 已開著時底下的列被換掉——
+   * 兩者的共通點都是「送出當下，這筆早就不是畫面上那一筆了」，所以檢查點也該共通，
+   * 不是各自修各自的觸發路徑）。不在就靜靜跳過，不當錯誤處理——呼叫端（Today.tsx
+   * 的 submitEditQty）會照常把 sheet 關掉，使用者不會看到任何東西被寫錯。 */
+  const handleUpdateIntakeQty = useCallback(
+    async (id: number, qty: number) => {
+      if (!rows?.some((r) => r.id === id)) return
+      await apiUpdateIntakeQty(id, qty)
+      setRows((prev) => prev?.map((r) => (r.id === id ? { ...r, qty } : r)) ?? prev)
+      const cached = cacheRef.current.get(currentDate)
+      if (cached) cacheRef.current.set(currentDate, cached.map((r) => (r.id === id ? { ...r, qty } : r)))
+    },
+    [currentDate, rows],
+  )
+
   const handleSaveProfile = useCallback(
     async (patch: Partial<ProfileRow>) => {
       if (!profile) throw new Error('身體參數還沒載入')
@@ -551,6 +574,7 @@ export default function App() {
             onOpenSheet={openSheet}
             onDeleteIntake={handleDeleteIntake}
             justAddedIds={justAddedIds}
+            onUpdateIntakeQty={handleUpdateIntakeQty}
           />
         ) : (
           <Settings

@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-02（同日第二輪：真機第五輪回報回修，未 push）
+最後更新：2026-08-02（同日第三輪：「今日頁編輯份量」＋「記一筆軟性排序」都完成，未 push）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；
 > 2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -19,47 +19,25 @@
 - **`ui-design-flow` 規則本身改版**（使用者 2026-08-01 直接改的，非本輪施工）：五階段
   `⓪➊➋➌➍➎` 精簡成四階段 `➊➋➌➍`，依據是 15 天實測稽核（⓪ 兩次都跳過、➍➎ 從沒真的跑過）。
 
-### 本輪改動（2026-08-01～02，已 push：`ef650d6`，`f6a7926..ef650d6` 都已上線）
+### 已 push 的歷史輪次（施工細節看 `git log`，這裡只留結論）
 
-- **額度預警提示上線，兩個各自成立的機制，完全不用碰顏色系統**：
-  1. **逐筆超標預警**：記一筆清單每一列未勾選的食物，用 `defaultQty`（該食物在這一餐上次吃的
-     份量，不是固定 1）即時試算「加了會不會讓熱量/脂肪/碳水超標」。kc 數字變 `--over` 只反映
-     熱量本身；下面小字**只列脂肪／碳水**（`+26g脂`），熱量不重複顯示——kc 變色與底部確認列的
-     `(+N)` 已經講過。**不含蛋白質**，它的語意是「達標」不是「超標」。
-  2. **底部確認列**：超標時「超出」讓位給緊跟小計數字的 `(+40)`；新增蛋白/脂/碳三個數字
-     （`82/126`），**判定跟今日頁三大營養素條同一條規則**（脂肪／碳水各自 >100% 轉
-     `--over`，蛋白質不足不轉紅）——不是「三個都不判色」，v2.10 文件曾誤寫成這樣，v2.11 訂正。
-  - 純邏輯搬進 `src/lib/formulas.ts`（`rowOverage`／`pickBarRight`／`formatOverDelta`／
-    `formatOverAria`），`pickTotals` 留在 `LogSheet.tsx`（綁 `Food` 型別，搬去 `formulas.ts`
-    會跟 `api.ts→formulas.ts` 既有匯入方向形成循環）。
-  - **走完 `ui-design-flow` 四階段**（➊ 樣張迭代兩輪核可、➋ DESIGN.md v2.10、➌ 實作、
-    ➍ hallmark audit＋web-design-guidelines 並派——➍ 有紀錄以來第一次真的執行，抓到並修掉一個
-    aria-label 缺口，`--over` 對 `--card` 對比度 6.21:1 過 WCAG）。
-  - **真機拿真實資料試用後兩輪回修**（demo 樣張資料量太小測不出來）：v2.11 拿掉逐筆 delta 裡
-    重複的熱量文字、訂正誤寫的顏色判定規則。
-  - **push 前 `precommit-review`（deep）又抓到 6 個確認成立的問題，全修（v2.12）**：
-    aria-label 在「只有熱量超標」時整段消失（閘門誤判 `delta` 而非 `formatOverAria` 本身）、
-    超標 0.1~0.4 顯示「+0g脂」（判定與顯示精度沒對齊）、`.pick-line`／`.macro-line` 缺
-    `role="group"`（generic `<div>` 靠 `aria-label` 命名是 ARIA 禁止模式）、逐筆預警份量
-    改用 `defaultQty`、`MealNode` 換日期時 key 併上 `date`（修掉「切到快取住且那餐剛好是空的
-    日期」被誤判成「剛刪除」而誤放退場動畫——這條其實是上一輪 f6a7926 的既有 bug，這輪才抓到）。
-    零碎：拿掉 `.pick-bar` 沒有 CSS 依賴的 `is-over` class、`pickTotals` 兩段 `.map()` 合一。
-  - `design-flow：➋v2.12 ➍hallmark 0/0/0，web-design-guidelines 抓到 1 個 a11y 缺口已修＋
-    對比度 6.21:1 過`
-- 驗證：build／lint 過，vitest 59/59（新增 +0g 精度邊界測試），e2e 18/18。真機截圖確認過視覺
-  （webkit 393 寬）。deep precommit-review 全部 confirmed findings 修完，21 條 unverified-minor
-  多數是可留的技術債（效能熱路徑、PWA manifest 未寫進 DESIGN.md 等），沒有逐條處理，見「零碎」。
+- **2026-08-01～02（`ef650d6`）**：額度預警提示上線（逐筆超標預警＋底部確認列蛋白/脂/碳），
+  走完 `ui-design-flow` 四階段＋deep precommit-review 修 6 個問題，DESIGN.md → v2.12。
+- **2026-08-02 第二輪（`dffb3a0`，與 origin/main 同步）**：真機第五輪回報 7 項回修（表單焦點、
+  店家下拉留白、加入動畫太廉價、Archivo 400 字重、qty stepper 外框、日期標題字體、app icon
+  快取破解），DESIGN.md → v2.13。**app icon 修復尚未拿到真機確認結果**。
 
-### 本輪改動（2026-08-02 第二輪，**尚未 push**）
+### 本輪改動（2026-08-02 第三輪，**尚未 push**，DESIGN.md v2.14→v2.17）
 
-真機第五輪回報，DESIGN.md v2.13。全部驗證過（vitest 59/59、e2e 18/18、build／lint 過；e2e 全量並行跑時 `tally.spec.ts` 一次 flaky——單獨重跑穩定過，是既有的並行 CPU 搶佔問題，非本輪改動造成，細節見「未解失敗」）：
-1. 新增食物表單進場焦點原本跳去熱量、跳過店家——改成落在店家（`LogSheet.tsx`）。
-2. 店家下拉選單上方死留白——`Autocomplete.Empty` 沒結果時也佔 DOM 空間，`.vendor-empty:empty{padding:0}` 收掉。
-3. 「加入」後的高亮閃爍「看起來很廉價」——emil-design-eng 顧問後定案：峰值 `.9`→`.55`、accelerate 曲線→`--ease`、`1.2s`→`700ms`（app.css `.item-content.just-added`）。
-4. 字重層次補強：自架 Archivo 之前只裝 600，次要數字（`.item .kc` 等）沒有更輕字形可選、全部跟主數字一樣粗——補一份 `archivo-400.woff2`（Google Fonts 官方 latin 靜態實例，checksum 對過現有 600 檔確認下載方式一致），CSS 規則不用動，字形到位自動分流。
-5. qty stepper「小數才重疊」其實整數也會——真正原因是 `.qty-value:focus-visible` 的 `outline-offset: 1px` 正值外擴，三顆 `gap:0` 緊貼時外框蓋到左右鈕的邊框上；打小數必須聚焦輸入框才會看到，打整數多半用 +/− 按鈕不會聚焦，所以誤以為只有小數才會。改 `-2px` 內縮（同手法見 `.item-delete:focus-visible`）解掉。
-6. 日期標題「週日 8/2」改套 Archivo——v2.7 排除中文數字混排的例子是「7月30日」這種數字被 CJK 直接夾住的格式，現在的日期格式中間隔了空格，斷裂前提不成立；放大截圖比對後使用者裁定套用。
-7. App icon「黑底白T」——repo 內與 GitHub Pages 線上 PNG 都實測確認是 v2.5 綠底反轉配色，判斷是 iOS 快取住舊圖示、單純移除重加不夠沖掉——`index.html` 的圖示連結加 `?v=2` 版本參數強制重新抓取。**使用者需重新「加入主畫面」驗證是否解決，這條尚未拿到真機確認結果**。
+使用者提兩個新需求（午睡前交代，趁這段時間處理），兩個都做完了，都是 executor→verifier 多輪回修才收斂（真的 bug 全是 verifier 抓到、executor 修的，不是我自己驗的）：
+
+1. **今日頁品項可編輯份量**（三輪收斂）——長按品項（500ms）開自建 sheet 改 qty，不動既有左滑刪除手勢。`intake.qty` 是單份快照，只 PATCH `qty` 一欄。改動：`api.ts`／`App.tsx`／`types.ts`／`Today.tsx`／`app.css`／`e2e/qty-edit.spec.ts`（新檔 3 條）／`CLAUDE.md`／DESIGN.md v2.14。三驗 PASS。
+2. **記一筆彈窗「符合今日額度」排序**（方案 B，視覺降權機制連改三版才定案）——使用者看過三方案本機 demo 後選 B：不隱藏任何品項，符合今日剩餘額度的排前面，不符合的排後面＋降視覺優先度。「全部食物」／「搜尋結果」重排，「常吃」維持 recency 不重排；排序基準用 `eaten`（今日已吃）刻意跟逐列即時變色用的 `combined` 脫鉤，避免使用者在 sheet 裡勾選時清單跟著洗牌跳位。**視覺降權機制試了三版，前兩版都被真機核可打回**：v2.15 opacity——三輪 verifier 抓到對比度不足（`.55`→`--ink` 只 3.49:1，WCAG AA 需 4.5:1）、按壓回饋被 CSS 特異度蓋掉、「店家」子行（區分同名品項的唯一資訊）在回修後仍只有 2.75:1，最終被迫推到 `.9` 四個文字元素才全過 AA，代價是淡化到肉眼看不出來——使用者拿真實 Supabase 資料當場實測「點心」整餐幾乎全部超標、全部套同一個 `.9`，完全無感。v2.16 改背景色調（`rgba(154,67,48,.07)`）解掉對比度問題，但使用者看過後說「背景色塊跟整體風格不搭」（這個 app 一路是不鋪底色、靠明度分層的極簡路線）。**v2.17 定案：完全不做視覺降權**，`.over-quota` class 只剩排序/測試用的語意標記，不掛任何樣式，靠位置＋既有的 `.kc.over` 紅字／`.kc-delta` 超出量文字表達「這筆超標」。連帶刪掉一條測試（原本驗按壓回饋的，因為那個視覺行為已經不存在）。改動：`LogSheet.tsx`（排序邏輯不變）／`app.css`（`.over-quota` 最終無樣式）／`e2e/quota-warning.spec.ts`（3 條）／`CLAUDE.md`（e2e 條數）／DESIGN.md v2.15～v2.17（三版演變全部留在版本紀錄，不是抹掉重寫，避免以後重蹈覆轍再試一次視覺降權）。
+   - 原本刻的三方案比較 demo 是本機 HTML（不是 Artifact，使用者事後才說不可以用 Artifact 工具，兩件事不衝突）。
+
+驗證：兩個功能合併後 `npx vitest run` 59/59、`npm run build && npm run lint` 過、`npm run e2e` **24/24**（六個檔，`CLAUDE.md` 已同步更新條數；`tally.spec.ts` 全量並行跑時撞過一次既有的並行 flake，單獨隔離跑穩定過，非本輪改動造成）。
+
+**push 前 `precommit-review`（deep，`wf_93544908-e2d`）**：6 條 major 全被對抗性驗證反駁（含長按/scrim/click 抑制窗那組看似脆弱、實測有 framer 內建防護＋scrim 全覆蓋擋住），28 條 minor 未逐條處理，挑 4 條修了——e2e 排序斷言的空洞通過風險（`-1 < Infinity` 恆真，補存在性檢查）、`startLongPress` 補 `button/isPrimary` 檔右鍵與多點觸控、`dimIds`/`dimmed` 改名 `overQuotaIds`（v2.17 拿掉視覺降權後這名字語意過時，避免被當死碼砍掉連帶弄壞排序）、`qty-edit.spec.ts` 一句註解訂正成「這是現況不是規格」。其餘 24 條（記憶體 memoization、`friendlyError` 三處未統一、自建 sheet 第二份重複等）是既有模式或低急迫度，未修，理由見該輪 runId 記錄。
 
 ## 已驗證事實
 
@@ -70,6 +48,12 @@
   硬搬——要先查有沒有循環匯入風險（`api.ts` 已經匯入 `formulas.ts` 的 `Profile`，反向搬會 circular）。
 - **判定精度與顯示精度要對齊**：`rowOverage` 用 0.1 級精度判「有沒有超標」，顯示卻用整數捨入，
   0.1~0.4 的超標量會顯示成「+0」——這種兩層精度不一致的坑，兩支數字都要設，不能只設其中一支。
+- **「正在編輯的資料可能已經離開畫面」是要在寫入前守門的一類 bug，不是單一路徑補丁能擋完**：
+  今日頁編輯份量這輪連續踩到兩條路徑（長按計時器待觸發時列被卸載／編輯 sheet 開著時列被換走），
+  根因都是「送出當下沒人確認這筆還在畫面上」。最終解法是在 `App.tsx` 的 `handleUpdateIntakeQty`
+  寫入前加 `rows?.some(r => r.id === id)` 這道通用守門，兩條路徑一次擋住——**但這道防線目前只
+  服務這一個 mutation**，之後如果新增其他「開 sheet 編某一列」的入口，要記得在那個入口也補
+  同樣的檢查，不會自動套用到全 app。
 
 ## 未解失敗
 
@@ -79,6 +63,17 @@
 - **`tally.spec.ts` 在 `npm run e2e` 全量並行跑（5 workers）時偶發 flaky**：2026-08-02 撞過一次
   「刪除後焦點沒接到復原鈕，停在 BODY」，單獨跑（1 worker）穩定過，判斷是既有的 CPU 搶佔計時
   問題（harness.ts 已有相關註解），非本輪改動造成，未進一步深挖。
+- **長按編輯份量的實際取消門檻只有約 3px（WebKit＋滑鼠量出來的，未在真機觸控驗證）**：長按與
+  左滑手勢共用同一個 `motion.div drag`，framer 的拖曳辨識約 3px 位移就會判成「這是拖曳」而取消
+  長按計時器，遠比原本設計的 10px 容忍嚴格（那 10px 判斷實質上輪不到，已在 DESIGN.md／註解訂正
+  成如實描述）。500ms 內手指抖動很可能超過 3px，**真機上長按可能常態叫不出來**——需要使用者
+  實機試幾次才知道是不是真的問題，如果是，修法要動到拖曳辨識與長按計時器的耦合方式（`Today.tsx`
+  的 `SwipeRow`），屬於那段「三版血淚」易碎區域，動之前要謹慎。
+- **編輯份量目前只有長按（滑鼠/觸控）入口，沒有鍵盤可達的路徑**：純滑鼠/觸控 app 情境下不擋
+  上線，但如果之後要顧無障礙，這是缺口。
+- **守門檔下時是「偽成功」**：sheet 照常關閉、無錯誤訊息，使用者不會知道那筆其實沒被更新（多半
+  只會在極端操作下觸發，例如編輯 sheet 開著時跳去別的日期）。目前只有程式碼註解記載是刻意選擇，
+  沒有 UI 提示。優先級低，值得考慮加一句 Notice。
 
 ## 待決問題
 
@@ -95,9 +90,13 @@
 
 ## 下次續點
 
-1. **實作食品庫管理＋設定頁重構**：決策已拍板，下一步是 `ui-design-flow` ➊ 出決策樣張。
+1. **這輪兩個功能（今日頁編輯份量＋記一筆排序淡化）都通過驗收＋使用者親眼看過背景色調降權的
+   結果，等使用者確認要 commit + push**：不要自己動手 commit，照 CLAUDE.md 的 push 流程列訊息
+   給使用者確認。push 後請使用者順便真機測：(a) 長按編輯份量觸不觸得起來（見「未解失敗」3px
+   門檻疑慮）、(b) app icon 快取修復生效沒有。
+2. **實作食品庫管理＋設定頁重構**：決策已拍板，下一步是 `ui-design-flow` ➊ 出決策樣張。
    建議開新對話，這輪 context 已經很長。
-2. **PWA / service worker（新排入待辦，2026-08-02）**：Tally 現在只有 manifest.webmanifest，
+3. **PWA / service worker（新排入待辦，2026-08-02）**：Tally 現在只有 manifest.webmanifest，
    沒有 service worker——離線不能用、部署更新也沒有主動接手機制。`d:\Personal\Games\Gambit` 已用
    `vite-plugin-pwa`（Workbox `generateSW`）做過同款需求，設計記在該 repo
    `docs/architecture/adr-0016-pwa-caching-strategy.md`，可直接照搬：`registerType: 'autoUpdate'`

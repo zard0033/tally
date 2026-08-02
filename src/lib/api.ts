@@ -148,6 +148,13 @@ export async function deleteIntake(id: number): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/** 改份量：只更新 qty 這一欄。kcal/protein/fat/carb 是單份快照，qty 不影響它們，
+ *  渲染時才用 qty 相乘（Today.tsx），所以不需要一併重算或重寫營養值欄位。 */
+export async function updateIntakeQty(id: number, qty: number): Promise<void> {
+  const { error } = await supabase.from('intake').update({ qty }).eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
 /* ═══════════ weight ═══════════ */
 
 export interface Weight {

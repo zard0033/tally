@@ -18,7 +18,7 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import { localDate } from '@/lib/dates'
-import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type Targets } from '@/lib/formulas'
+import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
@@ -106,6 +106,13 @@ interface FoodRowHandlers {
      用的就是這個函式（依該餐上次吃這樣東西的份量），兩邊要算同一個數字，
      否則預告「不會超標」點下去卻超標（precommit review 抓到，2026-08-01）。 */
   defaultQty: (foodId: number) => number
+  /* 軟性排序（v2.15，視覺降權在 v2.17 拿掉）：不符合今日剩餘額度的品項所屬 id
+     集合，判斷基準是「今日已吃」（eaten），不含這次 sheet 內勾選中的品項——刻意
+     跟上面 combined（用來算逐列變色與 kc-delta）不同源，見 browseBody 旁的長註解。
+     `.over-quota` class 現在**只當排序分組與 e2e 測試用的語意標記，不掛任何樣式**
+     （見 app.css 同名 class 旁的註解）——不是死碼，刪掉會讓排序分組與既有測試斷言
+     一起失效。 */
+  overQuotaIds: Set<number>
 }
 
 /* 一般函式、不是元件——用 fn(f) 呼叫而非 <Fn/>，React 才不會把它當成每次 render
@@ -113,9 +120,10 @@ interface FoodRowHandlers {
 function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
   const qty = h.picks.get(f.id) ?? 1
   const draft = h.qtyDrafts.get(f.id) ?? String(qty)
+  const overQuota = !picked && h.overQuotaIds.has(f.id)
   return (
     <li key={f.id}>
-      <div className={picked ? 'food-item selected' : 'food-item'}>
+      <div className={picked ? 'food-item selected' : overQuota ? 'food-item over-quota' : 'food-item'}>
         {picked ? (
           <div className="food-line">
             <button className="food-row" type="button" aria-pressed="true" onClick={() => h.onToggle(f.id)}>
@@ -445,7 +453,49 @@ export default function LogSheet(props: LogSheetProps) {
     carb: eaten.carb + totals.carb,
   }
 
+  /* 軟性排序（v2.15，取代「篩選會清空清單」的疑慮；視覺降權在 v2.17 拿掉，見
+     renderFoodRow 旁的長註解）：全部食物／搜尋結果依「加上這一筆還吃得下嗎」排前面。
+     判斷基準刻意用 eaten（今日已吃，不含這次 sheet 內勾選中的品項）而不是 combined
+     （含勾選中）——如果用 combined，使用者每勾一個東西整批清單就重新排序一次，手指
+     還沒點完下一個就跳位，容易誤觸。逐列變色／kc-delta（renderFoodRow 既有邏輯）
+     維持用 combined 即時反應，這裡刻意跟那邊不同源，兩者互不干擾。「常吃」清單語意
+     是「這餐平常都吃這些」，不重排，所以這裡只算出 overQuotaIds 這個集合供
+     renderFoodRow 疊 class（純測試/分組標記），排序另外只在全部食物／搜尋結果套用
+     （見下面 byQuotaFit）。 */
+  function quotaOverage(f: Food): OverDelta {
+    const qty = defaultQty(meal, f.id)
+    return rowOverage(eaten, num(f.kcal) * qty, num(f.fat) * qty, num(f.carb) * qty, targets)
+  }
+  const fitsQuota = (over: OverDelta) => over.kcal === 0 && over.fat === 0 && over.carb === 0
+
   const sortedFoods = foods ? [...foods].sort(byName) : null
+  const overQuotaIds = new Set<number>()
+  // 超標品項的 OverDelta 順便存起來給 byQuotaFit 的排序分數用，不必為了 tie-break
+  // 對同一筆再呼叫一次 quotaOverage（precommit-review 抓到的重複運算）
+  const overAmounts = new Map<number, OverDelta>()
+  if (sortedFoods) {
+    for (const f of sortedFoods) {
+      const over = quotaOverage(f)
+      if (!fitsQuota(over)) {
+        overQuotaIds.add(f.id)
+        overAmounts.set(f.id, over)
+      }
+    }
+  }
+  /* 符合的排前面（維持原本 byName 順序，Array.sort 穩定排序）；不符合的排後面，
+     按超出總量（kcal ＋ 脂 ＋ 碳，三個單位不同但只拿來排序不顯示，不必為排序
+     另外換算成同一單位）由小到大。 */
+  function byQuotaFit(list: Food[]): Food[] {
+    return [...list].sort((a, b) => {
+      const aOver = overQuotaIds.has(a.id) ? 1 : 0
+      const bOver = overQuotaIds.has(b.id) ? 1 : 0
+      if (aOver !== bOver) return aOver - bOver
+      if (aOver === 0) return 0
+      const oa = overAmounts.get(a.id)!
+      const ob = overAmounts.get(b.id)!
+      return (oa.kcal + oa.fat + oa.carb) - (ob.kcal + ob.fat + ob.carb)
+    })
+  }
   /* 店家 Autocomplete 的選項來源：foods 上的 vendor 字串去重排序，不建專屬資料表——
      去重就是清單，建表要付新表＋外鍵＋遷移＋RLS 的代價卻買不到東西。 */
   const vendorOptions = useMemo(() => {
@@ -467,13 +517,14 @@ export default function LogSheet(props: LogSheetProps) {
     combined,
     targets,
     defaultQty: (foodId) => defaultQty(meal, foodId),
+    overQuotaIds,
   }
 
   let browseBody: ReactNode = null
   if (sortedFoods === null) {
     browseBody = <p className="muted">載入中…</p>
   } else if (trimmedQuery) {
-    const hits = sortedFoods.filter((f) => !picks.has(f.id) && foodMatches(f, trimmedQuery))
+    const hits = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && foodMatches(f, trimmedQuery)))
     browseBody = (
       <>
         <div className="sect-lb">搜尋結果</div>
@@ -498,7 +549,7 @@ export default function LogSheet(props: LogSheetProps) {
       .map(foodById)
       .filter((f): f is Food => !!f)
       .slice(0, 5)
-    const restFoods = sortedFoods.filter((f) => !picks.has(f.id) && !recentFoods.includes(f))
+    const restFoods = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && !recentFoods.includes(f)))
     browseBody = (
       <>
         {recentFoods.length > 0 && (

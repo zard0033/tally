@@ -482,7 +482,7 @@ body {
 /* 進場動畫只給 Settings 的手刻 sheet——LogSheet 的 scrim 是 vaul Overlay，動畫由
    vaul 的 [data-state] 單軌驅動（LogSheet.tsx 的覆寫塊）。base class 掛動畫會跟
    vaul 打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
-#settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
+#settings-sheet-root .scrim, #edit-qty-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
@@ -582,6 +582,17 @@ body {
 .kc-wrap .kc { display: block; }
 .kc-wrap .kc.over { color: var(--over); font-weight: 700; }
 .kc-delta { display: block; font-size: var(--t-xs); color: var(--over); white-space: nowrap; }
+
+/* 軟性排序（DESIGN.md v2.17）：`.over-quota` class 只是排序/測試用的語意標記，
+   **刻意不掛任何視覺樣式**。v2.15 先試 opacity 降權，為了讓「店家」子行過 WCAG AA
+   被迫推到 .90、淡化到肉眼看不出來；v2.16 改試背景色調，opacity 的對比度問題是
+   解決了，但使用者真機看過後認為背景色塊跟這個 app「不鋪底色、靠明度分層」的
+   極簡風格（見下面「選取態不鋪底色」那條同樣的顧慮）不搭。兩次視覺降權都被
+   否決後，v2.17 定案**完全不做額外視覺處理**：不符合的品項就是排在後面、
+   靠既有的 `.kc.over` 紅字與 `.kc-delta` 超出量文字（逐筆超標預警機制既有的
+   視覺語言）自然被看出來，不新增任何顏色或色塊。
+   **這個 class 唯一的消費者是 e2e 測試的排序/分組斷言（`quota-warning.spec.ts`）**——
+   下一輪清理看到這裡沒有對應規則，不要當成殘留死碼刪掉。 */
 
 /* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪底色會與 cream 打架）。
    input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
@@ -772,5 +783,5 @@ body {
   .item-content.just-added::before,
   .sheet.opening, .pick-bar,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
-  #settings-sheet-root .scrim { animation-duration: .01ms; }
+  #settings-sheet-root .scrim, #edit-qty-sheet-root .scrim { animation-duration: .01ms; }
 }
