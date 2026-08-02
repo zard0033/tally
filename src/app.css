@@ -224,7 +224,10 @@ body {
   border-radius: var(--s-1); }
 .item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
 .item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item .qty { font-family: var(--font-num); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* v2.19：份量原本跟 --ink-muted 一樣淡，改份量前後只看得出熱量數字變了，份量本身
+   不夠醒目（使用者真機回報）——改用 --ink 加粗，跟品名同一個色階但字重更重一階，
+   讓「這筆吃了幾份」在掃視列表時能一眼跟熱量變化對上，不用心算 */
+.item .qty { font-family: var(--font-num); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .item .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
   flex-shrink: 0; font-variant-numeric: tabular-nums; }
 /* iOS 提醒事項風格：紅圓鈕、白色垃圾桶圖示。它固定壓在列的右緣底下不動，

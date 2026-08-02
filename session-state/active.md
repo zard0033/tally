@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-02（同日第三輪：「今日頁編輯份量」＋「記一筆軟性排序」都完成，已 push：`61af147`）
+最後更新：2026-08-02（同日第五輪：app icon manifest 版本參數＋份量文字加粗，push 中）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；
 > 2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -14,8 +14,9 @@
   設定頁編輯＋記體重。資料在 Supabase（四表＋RLS）。Notion 一次性遷移已出貨，收尾（刪 Notion
   頁面）還沒做，細節見「待決問題」。
 - **測試**：`npx vitest run` 59/59（**必須用 PowerShell 跑**，Git Bash 全炸，見下方未解）；
-  `npm run e2e` ＝ 18 條，分五個檔（`tally.spec.ts` 全份回歸 ＋ `interaction.spec.ts` 互動路徑
-  ＋ `vendor-autocomplete.spec.ts` ＋ `meal-exit-animation.spec.ts` ＋ `quota-warning.spec.ts`）。
+  `npm run e2e` ＝ 26 條，分六個檔（`tally.spec.ts` 全份回歸 ＋ `interaction.spec.ts` 互動路徑
+  ＋ `vendor-autocomplete.spec.ts` ＋ `meal-exit-animation.spec.ts` ＋ `quota-warning.spec.ts`
+  ＋ `qty-edit.spec.ts`）。
 - **`ui-design-flow` 規則本身改版**（使用者 2026-08-01 直接改的，非本輪施工）：五階段
   `⓪➊➋➌➍➎` 精簡成四階段 `➊➋➌➍`，依據是 15 天實測稽核（⓪ 兩次都跳過、➍➎ 從沒真的跑過）。
 
@@ -26,7 +27,21 @@
 - **2026-08-02 第二輪（`dffb3a0`）**：真機第五輪回報 7 項回修（表單焦點、店家下拉留白、加入
   動畫太廉價、Archivo 400 字重、qty stepper 外框、日期標題字體、app icon 快取破解），
   DESIGN.md → v2.13。**app icon 修復尚未拿到真機確認結果**。
-- **2026-08-02 第三輪（`61af147`，與 origin/main 同步）**：兩個新功能，DESIGN.md → v2.17。
+- **2026-08-02 第五輪**：真機截圖確認 app icon 仍黑底白T，但 curl 核對三個部署圖示檔跟 repo
+  md5 完全一致，問題不在檔案——`manifest.webmanifest` 的 icons 陣列上一輪沒加版本參數（只有
+  `apple-touch-icon` 有），這個 PWA 是 standalone 模式，iOS 可能優先吃 manifest 那組，補上
+  版本參數＋manifest 連結本身也加版本。另外今日頁品項份量文字從 `--ink-muted` 改 `--ink`
+  加粗（真機回報編輯前後只看得出熱量變了看不出份量變了）。DESIGN.md → v2.19。**這輪 skip
+  了 precommit-review**（純設定/一行 CSS，22 行，已跑 vitest/build/lint/e2e 全綠，使用者
+  要休息了）。**app icon 與份量顯示都尚未拿到真機確認**。
+- **2026-08-02 第四輪（`b29a35c`）**：真機驗收第三輪回報「長按開編輯
+  sheet 前會先閃一下左滑刪除鈕」，100% 重現。根因是 iOS click 合成常以 pointerdown 當下
+  目標為準，即使 scrim 已蓋住該列，補來的 click 仍可能命中底下品項——`blockClickUntil`
+  改成跟拖曳同一套手法（放手當下才收斂，不是計時器觸發當下）。**修法本身在同一輪
+  precommit-review（light）被抓到一個新迴歸並一併修掉**：滑鼠收尾若走
+  `pointercancel`/`pointerleave` 而非 `pointerup`，防呆窗口會卡在 `Infinity` 永久出不來。
+  DESIGN.md → v2.18，e2e 26 條。**尚未拿到這輪修復的真機確認**。
+- **2026-08-02 第三輪（`61af147`）**：兩個新功能，DESIGN.md → v2.17。
   (1) **今日頁品項可編輯份量**——長按品項（500ms）開自建 sheet 改 qty，只 PATCH `qty` 一欄
   （單份快照乘 qty 才顯示）。三輪 executor→verifier 揪出並修好兩個資料寫入時序 bug（長按
   計時器未隨 unmount 清理、編輯 sheet 開著時目標列離開視圖仍會寫入），收斂成寫入前的通用
@@ -62,12 +77,9 @@
 - **`tally.spec.ts` 在 `npm run e2e` 全量並行跑（5 workers）時偶發 flaky**：2026-08-02 撞過一次
   「刪除後焦點沒接到復原鈕，停在 BODY」，單獨跑（1 worker）穩定過，判斷是既有的 CPU 搶佔計時
   問題（harness.ts 已有相關註解），非本輪改動造成，未進一步深挖。
-- **長按編輯份量的實際取消門檻只有約 3px（WebKit＋滑鼠量出來的，未在真機觸控驗證）**：長按與
-  左滑手勢共用同一個 `motion.div drag`，framer 的拖曳辨識約 3px 位移就會判成「這是拖曳」而取消
-  長按計時器，遠比原本設計的 10px 容忍嚴格（那 10px 判斷實質上輪不到，已在 DESIGN.md／註解訂正
-  成如實描述）。500ms 內手指抖動很可能超過 3px，**真機上長按可能常態叫不出來**——需要使用者
-  實機試幾次才知道是不是真的問題，如果是，修法要動到拖曳辨識與長按計時器的耦合方式（`Today.tsx`
-  的 `SwipeRow`），屬於那段「三版血淚」易碎區域，動之前要謹慎。
+- **長按觸發本身真機確認沒問題**（原本擔心的 3px 取消門檻太嚴，實測不影響觸發），但抓到並
+  修了另一個真的 bug（長按開 sheet 前會先閃一下左滑刪除鈕，見第四輪 `b29a35c`）——**這次
+  回修還沒拿到真機再確認**，下次真機驗收要看這個閃爍是否真的消失了。
 - **編輯份量目前只有長按（滑鼠/觸控）入口，沒有鍵盤可達的路徑**：純滑鼠/觸控 app 情境下不擋
   上線，但如果之後要顧無障礙，這是缺口。
 - **守門檔下時是「偽成功」**：sheet 照常關閉、無錯誤訊息，使用者不會知道那筆其實沒被更新（多半
@@ -89,8 +101,9 @@
 
 ## 下次續點
 
-1. **這輪已 push（`61af147`），請使用者真機驗收**：(a) 長按編輯份量觸不觸得起來（見「未解
-   失敗」3px 門檻疑慮）、(b) app icon 快取修復生效沒有、(c) 記一筆排序在真實資料上順不順手。
+1. **請使用者真機重新驗收這輪三件事**：長按誤閃 reveal 是否真的消失（`b29a35c`）、app icon
+   加了 manifest 版本參數後對不對（若還是黑的，先移除主畫面圖示＋清 Safari 網站資料再重加）、
+   份量文字加粗夠不夠醒目。
 2. **實作食品庫管理＋設定頁重構**：決策已拍板，下一步是 `ui-design-flow` ➊ 出決策樣張。
    建議開新對話，這輪 context 已經很長。
 3. **PWA / service worker（新排入待辦，2026-08-02）**：Tally 現在只有 manifest.webmanifest，
