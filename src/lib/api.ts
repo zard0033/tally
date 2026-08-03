@@ -64,6 +64,7 @@ export interface Food {
   protein: number
   fat: number
   carb: number
+  archived: boolean
 }
 
 export interface NewFood {
@@ -75,16 +76,32 @@ export interface NewFood {
   carb: number
 }
 
+const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived'
+
+/** 今日頁記一筆的挑選清單只給使用中的食物——封存是「以後不再用」的宣告，
+ *  不該讓它繼續冒出來讓人選到。 */
 export async function listFoods(): Promise<Food[]> {
-  return unwrap(await supabase.from('foods').select('id,name,vendor,kcal,protein,fat,carb').abortSignal(dbSignal()))
+  return unwrap(await supabase.from('foods').select(FOOD_COLS).eq('archived', false).abortSignal(dbSignal()))
+}
+
+/** 食品庫管理頁「已封存」分頁專用，其餘畫面不需要看到已封存的食物。 */
+export async function listArchivedFoods(): Promise<Food[]> {
+  return unwrap(await supabase.from('foods').select(FOOD_COLS).eq('archived', true).abortSignal(dbSignal()))
 }
 
 export async function createFood(food: NewFood): Promise<Food> {
-  const rows = unwrap<Food[]>(await supabase.from('foods').insert(food).select().abortSignal(dbSignal()))
+  const rows = unwrap<Food[]>(await supabase.from('foods').insert(food).select(FOOD_COLS).abortSignal(dbSignal()))
   const row = rows[0]
   /* 沒拿到新列就不能往下選取。食物其實已經建立了，講清楚讓呼叫端能引導使用者重開清單找到它 */
   if (!row) throw new Error('食物已建立，但沒拿到回傳資料')
   return row
+}
+
+/** 就地編輯與封存/復原共用一支：封存只是把 archived 這一欄改掉，不是真的刪列
+ *  （intake.food_id 是 restrict 外鍵，歷史紀錄要保留可查）。 */
+export async function updateFood(id: number, patch: Partial<NewFood & { archived: boolean }>): Promise<void> {
+  const { error } = await supabase.from('foods').update(patch).eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
 }
 
 /* ═══════════ intake ═══════════ */
@@ -185,6 +202,17 @@ export async function getLatestWeight(): Promise<Weight | null> {
     .limit(1)
     .abortSignal(dbSignal()))
   return rows[0] ?? null
+}
+
+/** 體重趨勢（sparkline＋獨立頁）用：由舊到新排序，量小（記錄頻率頂多一天一筆）不分頁。 */
+export async function listWeights(limit = 90): Promise<Weight[]> {
+  const rows = unwrap<Weight[]>(await supabase
+    .from('weight')
+    .select('weight_kg,measured_on,body_fat_pct')
+    .order('measured_on', { ascending: false })
+    .limit(limit)
+    .abortSignal(dbSignal()))
+  return rows.reverse()
 }
 
 export interface NewWeight {

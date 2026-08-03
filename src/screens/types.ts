@@ -68,12 +68,24 @@ export interface SettingsProps {
   profile: ProfileRow
   targets: Targets
   latestWeight: Weight
+  /** 使用中的食品庫（已排除封存），與 LogSheet 共用同一份 App state——食品庫管理頁的
+   *  「使用中」分頁直接拿這份，不必自己重撈一次。 */
+  foods: Food[] | null
   /** 儲存身體參數編輯（含自訂目標覆寫）。失敗 rejects，Settings 自己接住顯示錯誤。 */
   onSaveProfile: (patch: Partial<ProfileRow>) => Promise<void>
   /**
-   * 記體重。user_id 由 App 補上（Settings 不需要知道 profile.user_id 以外的細節），
+   * 記體重／體脂率（「更新身體數據」入口）。user_id 由 App 補上，
    * 同一天再記是覆蓋，語意交給 lib/api.ts 的 upsertWeight（on_conflict 已處理）。
    */
   onSaveWeight: (weight: Omit<NewWeight, 'user_id'>) => Promise<void>
+  /** 新增食物到食品庫（食品庫管理頁的 FAB／範本新增共用，跟 LogSheet 同一支）。 */
+  onCreateFood: (food: NewFood) => Promise<Food>
+  /** 就地編輯食物的品名／店家／營養值，不動 archived。 */
+  onUpdateFood: (id: number, patch: Partial<NewFood>) => Promise<void>
+  /** 封存（軟刪除）。呼叫端傳完整 Food 物件（清單上本來就握著），回傳封存後的完整列
+   *  供「復原」不必重撈就能插回畫面。 */
+  onArchiveFood: (food: Food) => Promise<Food>
+  /** 復原：把整筆連同 id 一起送回去解封存，App 的使用中清單同步插回並排序。 */
+  onUnarchiveFood: (food: Food) => Promise<void>
   onSignOut: () => void
 }

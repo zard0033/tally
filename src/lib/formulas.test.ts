@@ -11,6 +11,9 @@ import {
   numOrNull,
   pct,
   pickBarRight,
+  rateFromMode,
+  rateMonthlyToWeekly,
+  rateWeeklyToMonthly,
   rowOverage,
   sumIntake,
   type Profile,
@@ -136,23 +139,35 @@ describe('numOrNull', () => {
   })
 })
 
-describe('goalModeFrom／goalFromMode（目標＋變化速度合併選單的狀態機，往返一致性）', () => {
+describe('rateWeeklyToMonthly／rateMonthlyToWeekly（kg/週 ↔ kg/月，52 週/12 月換算）', () => {
+  it('往返一致', () => {
+    expect(rateMonthlyToWeekly(rateWeeklyToMonthly(0.3))).toBeCloseTo(0.3, 9)
+  })
+  it('1 kg/月 ≈ 0.2308 kg/週', () => {
+    expect(rateWeeklyToMonthly(0.2307692308)).toBeCloseTo(1, 6)
+  })
+})
+
+describe('goalModeFrom／goalFromMode／rateFromMode（目標＋變化速度合併選單，五個 kg/月 preset，無自訂）', () => {
   it('maintain 沒有速度可選', () => {
     expect(goalModeFrom('maintain', null)).toBe('maintain')
     expect(goalModeFrom('maintain', 0.5)).toBe('maintain')
+    expect(rateFromMode('maintain')).toBeNull()
   })
-  it('標準速度（0.5）回 _standard，其餘回 _custom', () => {
-    expect(goalModeFrom('cut', 0.5)).toBe('cut_standard')
-    expect(goalModeFrom('cut', 0.8)).toBe('cut_custom')
-    expect(goalModeFrom('cut', null)).toBe('cut_custom')
-    expect(goalModeFrom('bulk', 0.5)).toBe('bulk_standard')
-    expect(goalModeFrom('bulk', 0.3)).toBe('bulk_custom')
+  it('DB 的每週值換算回月，取最接近的 preset（1 kg/月 對應的週速度）', () => {
+    expect(goalModeFrom('cut', rateMonthlyToWeekly(1))).toBe('cut:1')
+    expect(goalModeFrom('bulk', rateMonthlyToWeekly(0.75))).toBe('bulk:0.75')
+  })
+  it('null（例如 migration 忘記回填）落在最小 preset，不是憑空選中間值', () => {
+    expect(goalModeFrom('cut', null)).toBe('cut:0.5')
   })
   it('goalFromMode 還原出正確的 goal（往返一致）', () => {
-    expect(goalFromMode(goalModeFrom('cut', 0.5))).toBe('cut')
-    expect(goalFromMode(goalModeFrom('cut', 0.9))).toBe('cut')
-    expect(goalFromMode(goalModeFrom('bulk', 0.5))).toBe('bulk')
-    expect(goalFromMode(goalModeFrom('maintain', null))).toBe('maintain')
+    expect(goalFromMode('cut:1.25')).toBe('cut')
+    expect(goalFromMode('bulk:0.5')).toBe('bulk')
+    expect(goalFromMode('maintain')).toBe('maintain')
+  })
+  it('rateFromMode 換算回要存進 DB 的 kg/週', () => {
+    expect(rateFromMode('cut:1.5')).toBeCloseTo(rateMonthlyToWeekly(1.5), 9)
   })
 })
 

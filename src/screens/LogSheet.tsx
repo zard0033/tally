@@ -14,10 +14,10 @@ import { Drawer } from 'vaul'
 import {
   listRecentIntake,
   type Food,
-  type NewFood,
   type NewIntake,
 } from '@/lib/api'
 import { localDate } from '@/lib/dates'
+import { BLANK_FOOD_FORM, validateFoodForm, type FoodForm } from '@/lib/foodForm'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty } from '@/lib/quantity'
@@ -58,17 +58,6 @@ const VAUL_TRANSITION_CSS = `
 `
 
 type View = 'list' | 'food-form'
-
-interface FoodForm {
-  name: string
-  vendor: string
-  kcal: string
-  protein: string
-  fat: string
-  carb: string
-}
-
-const BLANK_FORM: FoodForm = { name: '', vendor: '', kcal: '', protein: '', fat: '', carb: '' }
 
 const byName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
 
@@ -237,10 +226,6 @@ function renderField(opts: FieldOpts) {
   )
 }
 
-const fieldNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
-/* 選填數值留空當 0——無糖飲料的蛋白質與脂肪本來就是 0，不必逼人打出來 */
-const fieldOptNum = (v: string): number => (v.trim() === '' ? 0 : Number(v.trim()))
-
 export default function LogSheet(props: LogSheetProps) {
   const { open, meal: initialMeal, foods, dayData, targets, onClose, onCreateIntake, onCreateFood } = props
 
@@ -253,7 +238,7 @@ export default function LogSheet(props: LogSheetProps) {
   const composingRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FORM)
+  const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FOOD_FORM)
   const vendorInputRef = useRef<HTMLInputElement | null>(null)
   /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
      Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
@@ -289,7 +274,7 @@ export default function LogSheet(props: LogSheetProps) {
     setFilterQuery('')
     setBusy(false)
     setErr(null)
-    setFoodForm(BLANK_FORM)
+    setFoodForm(BLANK_FOOD_FORM)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -379,7 +364,7 @@ export default function LogSheet(props: LogSheetProps) {
   }
 
   function openFoodForm(prefillName: string) {
-    setFoodForm({ ...BLANK_FORM, name: prefillName })
+    setFoodForm({ ...BLANK_FOOD_FORM, name: prefillName })
     setErr(null)
     setView('food-form')
   }
@@ -411,21 +396,13 @@ export default function LogSheet(props: LogSheetProps) {
 
   async function submitFoodForm() {
     if (busy) return
-    const name = foodForm.name.trim()
-    const vendor = foodForm.vendor.trim() || null
-    const kcal = fieldNum(foodForm.kcal)
-    const protein = fieldOptNum(foodForm.protein)
-    const fat = fieldOptNum(foodForm.fat)
-    const carb = fieldOptNum(foodForm.carb)
-    if (!name) return setErr('品名要填')
-    if (!Number.isFinite(kcal) || kcal < 0) return setErr('熱量要填數字')
-    if ([protein, fat, carb].some((n) => !Number.isFinite(n) || n < 0)) return setErr('營養素要填數字或留空')
+    const validated = validateFoodForm(foodForm)
+    if ('error' in validated) return setErr(validated.error)
 
     setBusy(true)
     setErr(null)
-    const newFood: NewFood = { name, vendor, kcal, protein, fat, carb }
     try {
-      const created = await onCreateFood(newFood)
+      const created = await onCreateFood(validated.food)
       /* 新增完直接選起來，回清單由底部確認列承接——這顆按鈕只承諾「加入食品庫」，
          真正記進 intake 仍要按「加入」，兩件事分開才不會以為記完就關掉 app（跟 legacy
          submitFood 行為一致；sample-log-entry.html A-6 的按鈕文案「加入食品庫並記一筆」

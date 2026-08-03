@@ -77,19 +77,43 @@ export function numOrNull(v: unknown): number | null {
  *  screens/ 是因為它是「DB 欄位 ↔ 選單值」的純映射，跟 DOM 無關，vitest 測得到；
  *  放在 UI 層的話只有 e2e 測得到，這輪的表單重寫恰好還沒有 e2e 覆蓋（precommit-review
  *  抓到），先把邏輯挪到能被 vitest 釘住的地方比補 e2e 便宜。
- *  維持沒有速度可選，減重/增肌各有「標準 0.5kg/週」跟「自訂」兩個選項。 */
-export type GoalMode = 'maintain' | 'cut_standard' | 'cut_custom' | 'bulk_standard' | 'bulk_custom'
-export const STANDARD_RATE = 0.5
+ *  維持沒有速度可選，減重/增肌各是五個固定 kg/月選項的其中一個——**沒有自訂**（使用者
+ *  2026-08-03 裁決：只開放這五格，不留手動輸入escape hatch，跟活動量選單刻意不同款）。
+ *  DB 欄位 rate_kg_per_week 存的仍是「每週」（沿用既有 7700 卡/公斤的每日熱量差額公式，
+ *  不改 computeTargets），這裡只在 UI 邊界做 kg/月 ↔ kg/週 的換算，換算基準用
+ *  52 週/年 ÷ 12 個月，不是 4.3482…（365.25/12/7）——這個領域本來就是估算值的疊加
+ *  （7700 卡/公斤本身就不精確），沒有必要為換算常數多一位精度。 */
+export const RATE_PRESETS_KG_PER_MONTH = [0.5, 0.75, 1, 1.25, 1.5] as const
+type RatePreset = (typeof RATE_PRESETS_KG_PER_MONTH)[number]
+export type GoalMode = 'maintain' | `cut:${RatePreset}` | `bulk:${RatePreset}`
 
-export function goalModeFrom(goal: Goal, rate: number | null): GoalMode {
+const WEEKS_PER_MONTH = 52 / 12
+
+export const rateWeeklyToMonthly = (kgPerWeek: number): number => kgPerWeek * WEEKS_PER_MONTH
+export const rateMonthlyToWeekly = (kgPerMonth: number): number => kgPerMonth / WEEKS_PER_MONTH
+
+/** 讀資料庫的每週速度換算回月選單時，用最接近的 preset 對齊——DB numeric(3,2) 只存到
+ *  小數兩位，換算來回會有極小誤差（遠小於 preset 間距 0.25kg/月），直接比對浮點數相等
+ *  會找不到，取最近的才是正確作法。 */
+function nearestRatePreset(kgPerMonth: number): RatePreset {
+  return RATE_PRESETS_KG_PER_MONTH.reduce((best, p) =>
+    Math.abs(p - kgPerMonth) < Math.abs(best - kgPerMonth) ? p : best)
+}
+
+export function goalModeFrom(goal: Goal, rateKgPerWeek: number | null): GoalMode {
   if (goal === 'maintain') return 'maintain'
-  const isStandard = rate !== null && Math.abs(rate - STANDARD_RATE) < 1e-9
-  if (goal === 'cut') return isStandard ? 'cut_standard' : 'cut_custom'
-  return isStandard ? 'bulk_standard' : 'bulk_custom'
+  const monthly = rateKgPerWeek !== null ? rateWeeklyToMonthly(rateKgPerWeek) : RATE_PRESETS_KG_PER_MONTH[0]
+  return `${goal}:${nearestRatePreset(monthly)}`
 }
 
 export function goalFromMode(mode: GoalMode): Goal {
-  return mode === 'maintain' ? 'maintain' : mode.startsWith('cut') ? 'cut' : 'bulk'
+  return mode === 'maintain' ? 'maintain' : (mode.split(':')[0] as Goal)
+}
+
+/** mode 帶的 kg/月 preset 換算回要存進 DB 的 kg/週；maintain 沒有速度，回 null。 */
+export function rateFromMode(mode: GoalMode): number | null {
+  if (mode === 'maintain') return null
+  return rateMonthlyToWeekly(Number(mode.split(':')[1]))
 }
 
 /** 活動量選單的五個固定係數；不是這四個之一就是「自訂」。回傳原始數字而不是選單用的
