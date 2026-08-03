@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-03（今日頁品項改就地編輯，已跑完全量驗證，**尚未 push**）
+最後更新：2026-08-03（今日頁品項改就地編輯，已 push `823d929`，等真機驗收）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；
 > 2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -16,7 +16,7 @@
   `npm run e2e` 27 條分六檔（`tally` 全份回歸 ＋ `interaction`／`inline-edit`／`vendor-autocomplete`／
   `quota-warning`／`meal-exit-animation` 各自獨立可單跑）。
 
-### 本輪（2026-08-03，未 push）：今日頁品項就地編輯，DESIGN.md → v2.20
+### 本輪（2026-08-03，`823d929`）：今日頁品項就地編輯，DESIGN.md → v2.20
 
 走完 dev-flow（規模大）＋ ui-design-flow ➊➋➌。點按品項就地展開編輯區（份量 stepper ＋ 餐別
 分段控制器 ＋ 刪除），**長按開 sheet 整套移除**。完整決策與被否決的方案記在 DESIGN.md v2.20，
@@ -112,8 +112,8 @@
 
 ## 下次續點
 
-1. **這輪還沒 push**，但兩道 review 都跑完了。全量驗證：vitest 59/59、build、lint 0、
-   e2e 全綠、webkit 393×745 截圖與幾何量測看過。
+1. **本輪已 push（`823d929`，2026-08-03）**，兩道 review 都跑完。全量驗證：vitest 59/59、
+   build、lint 0、e2e 31/31、webkit 393×745 截圖與幾何量測看過。
    - **`ui-design-flow` ➍ 首次真的執行**：三個獨立 reviewer 並行（hallmark／impeccable／
      web-design-guidelines），38 條 findings，回修 16 條、實測推翻 2 條、附理由不修 5 條，
      明細記在 DESIGN.md v2.20。
