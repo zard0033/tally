@@ -18,17 +18,15 @@
 
 ### 本輪（2026-08-03，`823d929`）：今日頁品項就地編輯，DESIGN.md → v2.20
 
-走完 dev-flow（規模大）＋ ui-design-flow ➊➋➌。點按品項就地展開編輯區（份量 stepper ＋ 餐別
-分段控制器 ＋ 刪除），**長按開 sheet 整套移除**。完整決策與被否決的方案記在 DESIGN.md v2.20，
-這裡只留三個之後還用得到的結論：
+走完 dev-flow（規模大）＋ ui-design-flow ➊➋➌➍ ＋ precommit-review（light）。點按品項就地展開
+編輯區（份量 stepper ＋ 餐別分段控制器 ＋ 刪除），**長按開 sheet 整套移除**。完整決策、被否決的
+方案、兩道 review 的處置明細全部記在 DESIGN.md v2.20，這裡只留兩個之後還用得到的結論：
 
 - **需求追到底才發現問法是錯的**：使用者要的「編輯這筆紀錄的品名與熱量」在資料模型下走不通
   （`intake` 只存快照與 `food_id`，品名是 join `foods` 拿的），真正的解是「以現有食物為範本
-  新增食物」——已併進食品庫管理那一輪的範圍，不在這裡做。
+  新增食物」——已併進食品庫管理那一輪的範圍。
 - **拒絕了「長按改成拖曳換餐別」**：同元素兩套 drag ＋ 跨區段 hit-testing ＋ 小螢幕手指擋目標，
   換來的只是把「一個月幾次」的操作少一步。拖曳真正贏的場景是排序，Tally 沒有手動排序。
-- 三輪 A/B 樣張才收斂（刪除鈕位置 → 形狀家族與右緣對齊 → 內距與懸出），使用者兩次指出的
-  都是我沒看到的問題（形狀家族混用、12px 對齊差）。
 
 ## 已驗證事實
 
@@ -65,12 +63,18 @@
 
 ## 未解失敗
 
-- **app icon 真機仍顯示黑底白 T（2026-08-03 診斷，等使用者回報）**。伺服器端全部排除：Actions
-  五次部署皆 success、線上 `manifest.webmanifest` 帶 `?v=2`、`apple-touch-icon.png` 與 repo
-  md5 一致、**檔案打開看過是綠底白 T**。剩兩個嫌疑，都在 iOS 端：
-  ① **iOS 18 主畫面圖示外觀設定**（長按主畫面 → 編輯 → 自訂，選了「深色」或「色調」的話系統會
-  把沒提供深色版的圖示壓暗，綠底變黑、白 T 保留，跟回報一模一樣）——三秒可驗，先查這個；
-  ② Web Clip 圖示快取（要移除主畫面圖示 →「設定 › Safari › 清除瀏覽記錄與網站資料」→ 重加，缺一步都可能沒換）。
+- **app icon 在 iOS 深色主畫面下顯示黑底白 T**（使用者確認他刻意用深色模式，要的就是深色下也正確）。
+  進度：**伺服器端全部排除**（部署 success、線上檔與 repo md5 一致、圖檔本身是綠底白 T）。
+  **2026-08-03 逐像素檢查抓到一個實作違規並已修**：`icon-192.png`／`icon-512.png` 的角落是
+  `A0` 全透明（預先切了圓角），違反 DESIGN.md v2.5 自己寫的「PNG 一律方形滿版、不預先切圓角
+  ——透明角在暗色桌面上被合成成暗色」；只有 `apple-touch-icon.png` 合規。已把透明區合成到
+  `--accent` 底補成滿版，版本參數 bump `?v=3`。**等真機再驗**（要移除主畫面圖示 →
+  「設定 › Safari › 清除瀏覽記錄與網站資料」→ 重加，缺一步都可能沒換）。
+  **已查證的天花板**：web 端**無法**為 PWA 指定深色模式圖示變體——`prefers-color-scheme` 對
+  icon 無效（只對 splash screen 有效），iOS 18 的深色／色調圖示是原生 app 用 Xcode asset
+  catalog 提供的，web clip 沒有對應機制，也沒有退出系統處理的開關。所以「深色下跟淺色長一樣、
+  不要翻轉」在 web 端做不到。**若補滿版後仍不理想，剩下唯一的槓桿是把背景做成透明、只留 T 的
+  形狀**（讓系統填深色底 → 深底綠 T），代價是淺色模式的外觀也會跟著變成淺底綠 T，要使用者裁決。
 - **vitest 在 Git Bash 集合階段全炸**：已定位 MSYS 環境特有，實務解＝本機一律 PowerShell 跑。
 - **全量並行跑（5 workers）時偶發 flaky**：`tally.spec.ts` 撞過「刪除後焦點沒接到復原鈕」，
   `vendor-autocomplete.spec.ts` 撞過「打新店家送出」（2026-08-03）。兩者單獨跑都穩定過，
@@ -114,18 +118,11 @@
 
 1. **本輪已 push（`823d929`，2026-08-03）**，兩道 review 都跑完。全量驗證：vitest 59/59、
    build、lint 0、e2e 31/31、webkit 393×745 截圖與幾何量測看過。
-   - **`ui-design-flow` ➍ 首次真的執行**：三個獨立 reviewer 並行（hallmark／impeccable／
-     web-design-guidelines），38 條 findings，回修 16 條、實測推翻 2 條、附理由不修 5 條，
-     明細記在 DESIGN.md v2.20。
-   - **`precommit-review`（light，runId `wf_4b061f06-25f`）**：1 條 confirmed major
-     ＋ 8 條 unverified-minor ＋ 1 條被對抗性驗證駁回。confirmed 那條是**本輪自己引入的
-     迴歸**——失敗訊息提到 Today 層時，沒把 v2.14 sheet 每次開啟都 `setEditErr(null)` 這件事
-     帶過來，收合再展開同一列會重現上次的錯誤。已修並補 e2e 鎖（順帶擴充 `stub.ts` 加
-     `__failNext` 一次性寫入失敗注入，這環境 `page.route()` 不攔截，失敗路徑只能從 stub
-     內部注入）。另修 4 條 minor（async 回呼蓋掉別列、e2e 註解仍寫 FLIP、`.seg button:disabled`
-     死 CSS、`updateIntakeMeal` 型別收斂成 `MealKey`）、`.ed-error` 與 `.sheet-error` 合併。
-     2 條標理由不修（Supabase 原始錯誤訊息透傳＝與既有慣例一致且單人自用；`patchIntakeRow`
-     守門是刻意保留的 hedge，註解已誠實記帳）。
+   - **➍**（首次真的執行）：3 個獨立 reviewer，38 findings → 回修 16、實測推翻 2、附理由不修 5。
+   - **`precommit-review` light，runId `wf_4b061f06-25f`**：1 confirmed（本輪引入的迴歸：失敗
+     訊息提到 Today 層時漏帶舊 sheet 的 `setEditErr(null)`，收合再展開會重現舊錯誤）已修＋補
+     e2e 鎖；另修 4 minor、2 條標理由不修。**順帶擴充 `stub.ts` 的 `__failNext`**：一次性寫入
+     失敗注入，這環境 `page.route()` 完全不攔截，失敗路徑只能從 stub 內部注入。
    **實測補充**（AC7 鍵盤路徑的證據）：從品名列按一次 Tab，焦點落在「減少份量」按鈕
    （實測 `activeElement` 為 `.qty-btn[aria-label="減少份量"]`）；最後一列展開後編輯區
    底部 625、tabbar 頂部 682（viewport 745），`scrollIntoView({block:'nearest'})` 留下
