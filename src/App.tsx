@@ -18,6 +18,7 @@ import {
   listIntake,
   onAuthStateChange,
   signOut as apiSignOut,
+  updateIntakeMeal as apiUpdateIntakeMeal,
   updateIntakeQty as apiUpdateIntakeQty,
   updateProfile as apiUpdateProfile,
   upsertWeight as apiUpsertWeight,
@@ -439,26 +440,40 @@ export default function App() {
     return created
   }, [])
 
-  /* 改份量：先送出再更新畫面（跟 handleCreateIntake/handleCreateFood 同一套慣例——
-   * 失敗 reject 給呼叫端的 sheet 就地顯示「存不進去：」，不走樂觀更新＋回滾）。
-   * kcal/protein/fat/carb 是單份快照不必重算，只需要 rows 與快取裡的 qty 跟著換。
+  /* 單筆 intake 的就地編輯（份量、餐別）共用這一條：先送出再更新畫面，跟
+   * handleCreateIntake/handleCreateFood 同一套慣例——失敗 reject 給呼叫端就地顯示
+   * 「存不進去：」，不走樂觀更新＋回滾。kcal/protein/fat/carb 是單份快照，兩種編輯
+   * 都不必重算，只需要 rows 與快取裡對應的那一欄跟著換。
    *
-   * 寫入前先確認這個 id 還在「現在畫面看得到的那天」——編輯 sheet 開啟期間，使用者
-   * 有很多辦法讓那一列離開視圖而 sheet 還開著（換日期、把它刪掉…），不逐條路徑堵，
-   * 在真正送出 PATCH 這一刻統一擋（fresh-context verifier 2026-08-02 連兩輪抓到同一
-   * 病灶的兩個不同入口：F1 是長按計時器沒清、F2 是 sheet 已開著時底下的列被換掉——
-   * 兩者的共通點都是「送出當下，這筆早就不是畫面上那一筆了」，所以檢查點也該共通，
-   * 不是各自修各自的觸發路徑）。不在就靜靜跳過，不當錯誤處理——呼叫端（Today.tsx
-   * 的 submitEditQty）會照常把 sheet 關掉，使用者不會看到任何東西被寫錯。 */
-  const handleUpdateIntakeQty = useCallback(
-    async (id: number, qty: number) => {
+   * 寫入前先確認這個 id 還在「現在畫面看得到的那天」，擋下時靜靜跳過、不當錯誤處理。
+   * 這道守門是 v2.14 為長按 sheet 加的：那個 sheet 掛在畫面根節點下，底下那一列卸載了
+   * 它照樣開著，於是「送出當下這筆早就不是畫面上那一筆」有真實的觸發路徑（fresh-context
+   * verifier 當時連兩輪抓到同一病灶的兩個入口）。
+   *
+   * **v2.20 之後它降級成深度防禦**：就地編輯區是 .item-row 的子節點，那一列卸載它必然
+   * 一起走，UI 上已經構造不出那個狀態（改寫 e2e 時實測到——舊的重現手法現在會停在
+   * 「找不到 stepper」）。留著的理由是下一個編輯入口未必還有這個結構，而它的成本是一行。
+   * **寫成共用的 patchIntakeRow 而不是複製到每個 mutation**：v2.14 時它只服務改份量，
+   * 當時就在 session-state 記下「新增其他就地編輯入口要記得補同樣的檢查」——這輪加改餐別
+   * 就是那個新入口，與其再抄一次不如讓它們共用同一道門。 */
+  const patchIntakeRow = useCallback(
+    async (id: number, patch: Partial<IntakeRow>, send: () => Promise<void>) => {
       if (!rows?.some((r) => r.id === id)) return
-      await apiUpdateIntakeQty(id, qty)
-      setRows((prev) => prev?.map((r) => (r.id === id ? { ...r, qty } : r)) ?? prev)
+      await send()
+      const apply = (list: IntakeRow[]) => list.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      setRows((prev) => (prev ? apply(prev) : prev))
       const cached = cacheRef.current.get(currentDate)
-      if (cached) cacheRef.current.set(currentDate, cached.map((r) => (r.id === id ? { ...r, qty } : r)))
+      if (cached) cacheRef.current.set(currentDate, apply(cached))
     },
     [currentDate, rows],
+  )
+  const handleUpdateIntakeQty = useCallback(
+    (id: number, qty: number) => patchIntakeRow(id, { qty }, () => apiUpdateIntakeQty(id, qty)),
+    [patchIntakeRow],
+  )
+  const handleUpdateIntakeMeal = useCallback(
+    (id: number, meal: MealKey) => patchIntakeRow(id, { meal }, () => apiUpdateIntakeMeal(id, meal)),
+    [patchIntakeRow],
   )
 
   const handleSaveProfile = useCallback(
@@ -575,6 +590,7 @@ export default function App() {
             onDeleteIntake={handleDeleteIntake}
             justAddedIds={justAddedIds}
             onUpdateIntakeQty={handleUpdateIntakeQty}
+            onUpdateIntakeMeal={handleUpdateIntakeMeal}
           />
         ) : (
           <Settings

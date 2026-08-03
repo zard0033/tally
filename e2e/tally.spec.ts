@@ -17,7 +17,9 @@
    詳細對照與裁決記在委派回報，不重複寫在這裡）。 */
 import { test, expect } from '@playwright/test'
 import { mkdir, rm } from 'node:fs/promises'
-import { check, closeFirstRow, grabPoint, leg, must, mustText, numFrom, openApp, slowDrag } from './harness'
+import {
+  check, closeFirstRow, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, slowDrag,
+} from './harness'
 
 const SHOTS_DIR = 'e2e/shots'
 
@@ -200,30 +202,36 @@ test('Tally UI 回歸', async ({ page }) => {
     check((await page.locator('.sheet').count()) === 0, '送出成功後 sheet 應該關閉')
   })
 
-  await step('左滑刪除 — 點擊露出與自動關其他列（v2.1 motion drag 手刻）', async () => {
+  /* v2.20：點擊的語意從「露出刪除鈕」換成「展開就地編輯區」，所以這一步鎖的是
+     is-edit 而不是 is-open。**「自動關其他列」這條不變**——兩種活躍狀態共用同一顆
+     單值 active state，互斥仍然是它的自然結果，不靠任何 closeOthers 邏輯。
+     左滑露出刪除鈕那條手勢路徑沒有改動，覆蓋在 inline-edit.spec.ts 與下方的水平溢位斷言。 */
+  await step('點擊品項 — 展開就地編輯與自動收合其他列（v2.20）', async () => {
     await page.waitForSelector('.timeline .item-row', { timeout: 3000 })
     const rows = page.locator('.timeline .item-row')
     const rowCount = await rows.count()
     check(rowCount >= 2, `時間軸品項不足 2 筆（實際 ${rowCount}），測不了「自動關其他列」`)
-    // 真實點擊觸發 toggleManual（鍵盤／非觸控路徑），不合成手勢事件。
-    // .item-content 是 Today.tsx 裡呼叫 toggleManual 的按鈕。
     const items = page.locator('.timeline .item-content')
     check((await items.count()) >= 2, '時間軸可點品項不足 2 個')
     const [a, b] = [rows.nth(0), rows.nth(1)]
     await items.nth(0).click()
     await page.waitForTimeout(300)
-    check((await a.evaluate((el) => el.classList.contains('is-open'))), '點第一列後沒有 .is-open，刪除鈕沒露出')
+    check((await a.evaluate((el) => el.classList.contains('is-edit'))), '點第一列後沒有 .is-edit，編輯區沒展開')
     check(
-      (await a.locator('.item-delete').getAttribute('tabindex')) === '0',
-      '點第一列後刪除鈕不可 tab 到（tabindex 應為 0）',
+      (await a.locator('.item-editor .qty-stepper').count()) === 1,
+      '編輯區展開了卻沒有份量 stepper',
+    )
+    check(
+      (await a.locator('.item-editor .seg button').count()) === 4,
+      '編輯區的餐別分段控制器應該有四格',
     )
     await items.nth(1).click()
     await page.waitForTimeout(300)
     check(
-      !(await a.evaluate((el) => el.classList.contains('is-open'))),
-      '開第二列後第一列沒有自動關上（closeOthers 沒生效）',
+      !(await a.evaluate((el) => el.classList.contains('is-edit'))),
+      '開第二列後第一列沒有自動收合（單值 active state 沒生效）',
     )
-    check((await b.evaluate((el) => el.classList.contains('is-open'))), '第二列點了卻沒露出刪除鈕')
+    check((await b.evaluate((el) => el.classList.contains('is-edit'))), '第二列點了卻沒展開編輯區')
     // 滑開時 .item-slide 的內容會超出列寬，會計入祖先的 scrollable overflow；
     // .timeline 因 overflow-y:auto 使另一軸算成 auto，沒裁切就變成整條時間軸可橫向拖動
     // （捲軸被 scrollbar-width:none 藏起來，使用者只會看到版面莫名滑走）。
@@ -236,8 +244,8 @@ test('Tally UI 回歸', async ({ page }) => {
     check(before >= 2, `時間軸品項不足 2 筆（實際 ${before}），測不了刪除與復原`)
     const firstName = ((await page.locator('.timeline .item .nm').first().textContent()) ?? '').trim()
 
-    // 第二列此時是開的（上一條路徑點開的），刪除鈕已可點
-    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    // 第二列此時編輯區是展開的（上一條路徑點開的），裡面的刪除鈕已可點
+    await page.locator('.timeline .item-editor .ed-del').click()
     // ponytail: fixture 每餐只有一筆，刪掉等於整個 <ul> 隨餐次轉「待記錄」一起卸載，
     // AnimatePresence 的退場動畫其實不會跑（DOM 20ms 內就移除）。這個等待只是保險。
     // 要真的覆蓋退場動畫，fixture 得有某一餐兩筆以上——留給下次擴 fixture 時一起做。
@@ -266,9 +274,7 @@ test('Tally UI 回歸', async ({ page }) => {
 
     // 復原回來的那一列必須還能再刪一次。v2.1 第一版的 deletingIds 只加不減，
     // 復原後該列的刪除鈕永久 disabled——這條就是為了鎖住那個 bug
-    await page.locator('.timeline .item-content').first().click()
-    await page.waitForTimeout(300)
-    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    await deleteViaTap(page)
     await page.waitForTimeout(400)
     const afterRedelete = await page.locator('.timeline .item').count()
     check(afterRedelete === before - 1, `復原後再刪一次應剩 ${before - 1} 筆，實際 ${afterRedelete}——那一列刪不掉了`)
@@ -313,9 +319,7 @@ test('Tally UI 回歸', async ({ page }) => {
 
   await step('切分頁時待刪要結清、復原提示條不可殘留（v2.1 回歸鎖）', async () => {
     await closeFirstRow(page)
-    await page.locator('.timeline .item-content').first().click()
-    await page.waitForTimeout(300)
-    await page.locator('.timeline .item-row.is-open .item-delete').click()
+    await deleteViaTap(page)
     await page.waitForTimeout(400)
     await must(page, '.undo-bar', '刪除後的復原提示條')
     // 提示條掛在 <main> 下、與 Today／Settings 同層，且定位是照今日頁 CTA 高度算的，

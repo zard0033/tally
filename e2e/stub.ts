@@ -54,11 +54,16 @@ export async function seedFetchStub(
         __allFetches: string[]
         __blocked: string[]
         __intakeCalls: string[] // 每次 listIntake(date) 打中的日期，依序累積，量快取/計次用
+        /* 一次性寫入失敗注入。測試在畫面上設好狀態後把它設起來，下一個符合的寫入回 500
+         * 並自動清空——用來驗「失敗訊息怎麼呈現／有沒有殘留」這類只有失敗路徑才走得到的
+         * 分支。page.route() 在這個環境完全不攔截（見檔頭），所以只能從 stub 內部注入。 */
+        __failNext: { table: string; method: string } | null
       }
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
       w.__intakeCalls = []
+      w.__failNext = null
 
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -95,6 +100,12 @@ export async function seedFetchStub(
             body = opts.body ?? null
           }
           w.__writes.push({ path, table, method, body })
+
+          // 記錄在前、判失敗在後：要能斷言「確實送出了，但伺服器回錯」
+          if (w.__failNext && w.__failNext.table === table && w.__failNext.method === method) {
+            w.__failNext = null
+            return json({ message: '模擬的寫入失敗' }, 500)
+          }
 
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body

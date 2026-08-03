@@ -69,14 +69,27 @@ export const leg = (from: { x: number; y: number }, to: { x: number; y: number }
     y: from.y + ((to.y - from.y) * (i + 1)) / n,
   }))
 
-/* 累積狀態的路徑開場先把第一列正規化成關閉，斷言才不會建在上一條留下的中間狀態上 */
+/* 累積狀態的路徑開場先把第一列正規化成關閉，斷言才不會建在上一條留下的中間狀態上。
+   v2.20 起「活躍」有兩種樣子（is-open＝左滑露出刪除鈕、is-edit＝點按展開編輯區），
+   兩種都要收——點一下 .item-content 對兩者都是收合（同一顆 active state）。 */
 export async function closeFirstRow(page: Page) {
   const row = page.locator('.timeline .item-row').first()
   if ((await row.count()) === 0) return
-  if (await row.evaluate((el) => el.classList.contains('is-open'))) {
+  if (await row.evaluate((el) => el.classList.contains('is-open') || el.classList.contains('is-edit'))) {
     await page.locator('.timeline .item-content').first().click()
     await page.waitForTimeout(300)
   }
+}
+
+/** 不經手勢的刪除路徑：點品項展開編輯區 → 按裡面的刪除鈕。
+ *  v2.20 前是「點品項露出紅圓 → 按紅圓」；點按語意改成展開編輯區之後，鍵盤與
+ *  非觸控的刪除入口跟著搬進編輯區（左滑露出紅圓那條手勢路徑完全沒變）。
+ *  這裡集中一份，之後入口再搬只改這裡，不必回頭掃每一條刪除測試。 */
+export async function deleteViaTap(page: Page, n = 0) {
+  await page.locator('.timeline .item-content').nth(n).click()
+  const del = page.locator('.timeline .item-editor .ed-del')
+  await expect(del, '點品項後編輯區沒展開，找不到刪除鈕').toHaveCount(1)
+  await del.click()
 }
 
 /** 第 n 列的可觀察狀態。斷言與探針共用——量出來再改，不要用推理決定手勢的門檻。 */

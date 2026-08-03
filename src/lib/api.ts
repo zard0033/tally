@@ -7,6 +7,10 @@
 import { createClient, type Session, type AuthChangeEvent } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config'
 import type { Profile } from './formulas'
+/* 型別匯入不會產生循環：meals.ts 是純常數與純函式，不反向依賴 api.ts。
+   收斂成 MealKey 而不是裸 string，讓非法餐別在 TS 邊界就擋掉，不必等 DB 約束
+   （precommit review 的 code 與 security 兩個維度各提了一次）。 */
+import type { MealKey } from './meals'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -152,6 +156,14 @@ export async function deleteIntake(id: number): Promise<void> {
  *  渲染時才用 qty 相乘（Today.tsx），所以不需要一併重算或重寫營養值欄位。 */
 export async function updateIntakeQty(id: number, qty: number): Promise<void> {
   const { error } = await supabase.from('intake').update({ qty }).eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
+/** 改餐別：同樣只動一欄。餐別不影響營養快照，也不影響 eaten_on——
+ *  「記錯餐別」與「記錯日期」是兩件事，後者刻意不給編輯入口（刪掉重記更直觀，
+ *  且改日期會讓那一筆離開當前畫面，需要另一套「已移到 8/2」的回饋設計）。 */
+export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void> {
+  const { error } = await supabase.from('intake').update({ meal }).eq('id', id).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
 }
 

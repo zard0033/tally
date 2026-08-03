@@ -37,9 +37,11 @@ export interface TodayProps {
   onDeleteIntake: (id: number) => void
   /** 剛加入成功的 intake id，用來做「短暫高亮後淡出」；App 會在約 1.3s 後自動清空這個集合。 */
   justAddedIds: ReadonlySet<number>
-  /** 改單筆份量（長按品項觸發的編輯 sheet 用）。失敗 rejects，Today 自己接住顯示「存不進去：」，
+  /** 改單筆份量（點按品項展開的就地編輯區用）。失敗 rejects，Today 自己接住顯示「存不進去：」，
    *  跟 LogSheet 的 onCreateIntake／onCreateFood 是同一套失敗處理慣例。 */
   onUpdateIntakeQty: (id: number, qty: number) => Promise<void>
+  /** 改單筆餐別，同一個編輯區的第二排。失敗處理同 onUpdateIntakeQty。 */
+  onUpdateIntakeMeal: (id: number, meal: MealKey) => Promise<void>
 }
 
 export interface LogSheetProps {

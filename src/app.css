@@ -204,7 +204,10 @@ body {
 /* overflow:clip：滑開時 .item-slide 的內容會超出列寬，沒有裁切的話 .timeline
    （overflow-y:auto 使另一軸算成 auto）會多出可橫向拖動的寬度，捲軸還被藏起來。
    e2e 有一條 scrollWidth === clientWidth 的斷言鎖住這件事。 */
-.item-row { position: relative; border-radius: var(--r-tab); overflow: clip; }
+.item-row { border-radius: var(--r-tab); overflow: clip; }
+/* v2.20：品名列與刪除鈕的定位容器。紅圓靠 top/bottom + margin:auto 垂直置中，基準
+   若留在 .item-row 上，編輯區一展開它就會掉到整組的正中間（落在分段控制器那一行）。 */
+.item-main { position: relative; }
 /* 圓角要給「有底色的那一層」。滑開前這張卡看起來是圓的，其實是外層 .item-row 的
    overflow:clip 裁出來的；一滑開卡片右緣離開裁切區，就露出它自己的直角（真機回報）。 */
 .item-slide { position: relative; z-index: 1; }
@@ -223,11 +226,15 @@ body {
 .item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
 .item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
+/* v2.20：品名與份量拆成兩個 flex 子節點——只有品名該被 ellipsis 吃掉，份量不該。
+   放同一個 span 時 ×N 是最後一個子節點，長品名一截斷第一個消失的就是它。 */
+.nm-wrap { display: flex; align-items: baseline; gap: var(--s-1); min-width: 0; }
 .item .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* v2.19：份量原本跟 --ink-muted 一樣淡，改份量前後只看得出熱量數字變了，份量本身
    不夠醒目（使用者真機回報）——改用 --ink 加粗，跟品名同一個色階但字重更重一階，
    讓「這筆吃了幾份」在掃視列表時能一眼跟熱量變化對上，不用心算 */
-.item .qty { font-family: var(--font-num); color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.item .qty { font-family: var(--font-num); color: var(--ink); font-weight: 600;
+  font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .item .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
   flex-shrink: 0; font-variant-numeric: tabular-nums; }
 /* iOS 提醒事項風格：紅圓鈕、白色垃圾桶圖示。它固定壓在列的右緣底下不動，
@@ -265,6 +272,62 @@ body {
    220ms）之後仍看得到的餘裕還在，但不再是「長留＋暴斃」的節奏 */
 .item-content.just-added::before { animation: flash 700ms var(--ease) forwards; }
 @keyframes flash { 0% { opacity: 0; } 15% { opacity: .55; } 100% { opacity: 0; } }
+
+/* ── 就地編輯區（v2.20，取代 v2.14 的長按 sheet） ──
+   展開時品名列與編輯區連成一張卡：同 --raised 底、同寬，圓角只留在整組外緣，
+   讀起來是「這一列長高了」而不是「上面一條、下面疊一塊」。 */
+.item-row.is-edit .item-content { background-color: var(--raised);
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* 行距用 flex gap 宣告，不靠 .ed-line 的 min-height 擠出殘量——原本 48px 是硬編值
+   （既不在 4pt token 尺上、也不是 44px 觸控常數），兩排之間的實際間隙是「48 減內容高」
+   剩下的約 3px，比外圍內距窄 3-4 倍，兩塊控件因此糊成一整塊；而且改動 stepper 高度或
+   分段器邊框，這個節奏會無聲跑掉（hallmark 抓到）。 */
+.item-editor { background: var(--raised); border-radius: 0 0 var(--r-tab) var(--r-tab);
+  padding: var(--s-2) var(--s-3) var(--s-3);
+  display: flex; flex-direction: column; gap: var(--s-2); }
+.ed-line { display: flex; align-items: center; gap: var(--s-3); }
+
+/* 刪除：--over 是破表狀態的專用色，`.item-delete` 用實心紅圓沒問題是因為它只在左滑
+   時短暫出現；這一顆是展開期間常駐的，填色會讓警告色變成常態元素、也會壓過真正的
+   主角（改份量）。改成不填色的描邊圖示——對 --raised 實算 5.47:1（圖形需 3:1）。
+   負 margin 讓 44px 觸控區懸出容器的水平內距，圖示右緣因此與上一行的熱量數字對齊：
+   帶框的 stepper／分段器需要內距才不貼壁，無框的圖示不需要，兩者對齊基準本來就不同。 */
+/* 觸控區 44px 維持不變，但**圖示置中、整顆鈕往右推**，而不是「盒子不動、圖示靠右」——
+   後者會讓 focus ring 圈出一個左側空了 24px 的方框，環沒有貼合它指涉的東西
+   （hallmark 抓到）。位移量＝容器內距 12px ＋ 圖示在盒內的左右留白 12px，圖示右緣
+   因此仍與上一行的熱量數字同線。 */
+.ed-del { width: 44px; height: 44px; border: none; background: none; color: var(--over);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  margin-left: auto; margin-right: calc((var(--s-3) + var(--s-3)) * -1); cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.ed-del svg { width: 20px; height: 20px; }
+.ed-del:active { opacity: .6; }
+.ed-del:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
+  border-radius: var(--r-pill); }
+
+/* 餐別分段控制器：互斥四選一，與 stepper 同一個形狀家族（--r-tab、格與格緊貼、
+   接縫收直角）。記一筆 sheet 那排可捲動的 pill chip 不動——那裡是「切換瀏覽哪一餐」，
+   語意與這裡的「把這一筆改成哪一餐」不同。 */
+.seg { display: flex; flex: 1; min-width: 0; background: var(--card);
+  border: 1px solid var(--rule); border-radius: var(--r-tab); overflow: hidden; }
+.seg button { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s-1);
+  border: none; background: none; font-family: inherit; font-size: var(--t-sm);
+  color: var(--ink-muted); white-space: nowrap; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.seg button + button { border-left: 1px solid var(--rule); }
+/* 選中態：--accent-soft 對 --card 只有 1.22:1，跟分頁列同一筆帳——顏色只買到色相差，
+   所以另配字重 600 當非顏色訊號（分頁列用的是描邊加粗，同一個原則的不同手段）。 */
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
+  font-weight: 600; }
+.seg button:active { opacity: .6; }
+/* offset 內縮：.seg 是 overflow:hidden，往外長的外框會被裁掉 */
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 與 .sheet-error 共用色與字級，只有外距分岔——兩份幾乎相同的規則是樣式漂移的起點
+   （precommit review 抓到：改錯誤文字顏色時很容易只改到其中一個） */
+.ed-error { margin: var(--s-2) 0 0; }
 
 /* ── 待記錄餐次（整行可點） ── */
 .todo-row { display: flex; align-items: center; justify-content: space-between;
@@ -485,7 +548,7 @@ body {
 /* 進場動畫只給 Settings 的手刻 sheet——LogSheet 的 scrim 是 vaul Overlay，動畫由
    vaul 的 [data-state] 單軌驅動（LogSheet.tsx 的覆寫塊）。base class 掛動畫會跟
    vaul 打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
-#settings-sheet-root .scrim, #edit-qty-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
+#settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
@@ -611,9 +674,19 @@ body {
 .qty-btn svg { width: 16px; height: 16px; }
 .qty-btn:active { opacity: .6; }
 /* 份量下限是 1，減到底時把減號停用。原本按下去完全沒反應——「按了什麼都沒發生」
-   永遠會被讀成壞掉 */
-.qty-btn:disabled { opacity: .35; cursor: default; }
-.qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+   永遠會被讀成壞掉。
+   **v2.20：只淡化圖示，不淡整顆鈕**。原本 `opacity: .35` 蓋掉整個元素（含 --card 底與
+   --rule 邊框），在記一筆 sheet 的 --card/--paper 底上讀起來是「這顆按不得」，但就地
+   編輯區的底是更深的 --raised，半透明的底與邊框一起被洗掉，三格 stepper 看起來像缺了
+   一格、左端圓角憑空消失，像元件沒渲染完——而 qty=1 是絕大多數品項的常態，等於「點開
+   品項」的預設畫面永遠帶著這個破圖感（hallmark 抓到）。
+   通則：`opacity` 是相對於背景的，同一個值在不同 surface token 上是兩件事。 */
+.qty-btn:disabled { cursor: default; }
+.qty-btn:disabled svg { opacity: .35; }
+/* offset 內縮：三顆 gap:0 緊貼，正 offset 的外框會蓋到左右鄰居的邊框上。v2.13 已為
+   .qty-value 修過同一個幾何問題，但同組的 .qty-btn 當時漏掉（impeccable 抓到，
+   證物 r3 可見焦點框橫跨減號與數字框的接縫）。 */
+.qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 42px：把加減鈕之間的間距收成 0，44＋42＋44 剛好 130px 上限，數字框從 34 長到 42。
    「觸控區 ≥44」與「整組上限 130px」兩條規則原本互不相容，程式默默選了後者；
    拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
@@ -686,7 +759,8 @@ body {
 .pick-bar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .pick-bar-btn:disabled { opacity: .6; cursor: default; }
 /* 寫入失敗就地可見，已選內容不清空——記錄的地點正好是收訊最差的地方 */
-.sheet-error { color: var(--over); font-size: var(--t-sm); margin: 0; }
+.sheet-error, .ed-error { color: var(--over); font-size: var(--t-sm); }
+.sheet-error { margin: 0; }
 
 /* ═══════════ 表單（新增食物／設定編輯／記體重） ═══════════ */
 .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
@@ -776,7 +850,7 @@ body {
   .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
   .chip, .icon-btn, .date-arrow, .date-today-btn, .pick-bar-btn, .field-float label,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
-  .qty-btn { transition-duration: .01ms; }
+  .qty-btn, .ed-del, .seg button { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
      單獨的 class 選擇器贏不過，要原樣列出來才壓得過。
      .item-slide 的位移是 motion 在 JS 端驅動的，降速在 Today.tsx 走 reduceMotion() */
@@ -786,5 +860,5 @@ body {
   .item-content.just-added::before,
   .sheet.opening, .pick-bar,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
-  #settings-sheet-root .scrim, #edit-qty-sheet-root .scrim { animation-duration: .01ms; }
+  #settings-sheet-root .scrim { animation-duration: .01ms; }
 }

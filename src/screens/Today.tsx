@@ -3,7 +3,7 @@
    左滑刪除自 v2.1 改用 motion drag 手刻（取代 react-swipeable-list——那個套件拖曳中
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
@@ -26,32 +26,11 @@ const FULL_AT = 0.45
 const CLICK_GRACE_MS = 150
 const EASE = [0.4, 0, 0.2, 1] as const
 
-/* 編輯份量的觸發是「無位移的長按」，刻意不擴寬 item-content 塞第二顆按鈕、也不碰
-   滑動刪除那段（REVEAL/OPEN_AT/FULL_AT）——那段手勢邏輯已經是三版血淚換來的穩定態，
-   長按走的是完全獨立的 pointerdown/pointerup 計時器，跟 drag 手勢只有「互相取消」這一條
-   耦合（見 SwipeRow 的 clearLongPress 呼叫點）。500ms 是常見的長按門檻（iOS/Android
-   系統手勢都落在這附近），短於它容易跟「按住看外框」的正常停留誤觸。 */
-const LONG_PRESS_MS = 500
-/** 手指/滑鼠移動超過這個距離就不算長按——這是**備援**門檻，不是實際生效的那一道。
- *  真正先擋下大部分「移動」的是 framer 自己的手勢辨識：drag="x" 一旦判定成拖曳，
- *  onDragStart／onDrag 會立刻呼叫 clearLongPress()，而 framer 內部判定拖曳的位移門檻
- *  遠小於這裡的 10px（fresh-context verifier 逐級量測：3px 起 framer 就會搶先取消，
- *  10px 這道判斷實務上幾乎輪不到它生效，2026-08-02 收案前發現）。**保留它的理由**：
- *  drag="x" 搭配 dragDirectionLock 讓瀏覽器保留原生垂直觸控捲動，那種情況下 framer
- *  完全不會介入（不 setPointerCapture、onDragStart 也不會觸發），此時就只剩這裡的
- *  pointermove 在擋——這是它唯一真正派上用場的場景，不是「10px 容忍」的一般性描述。 */
-const LONG_PRESS_MOVE_TOLERANCE = 10
-
-/** 動效時長讀 app.css 的 token，reduced-motion 時降到近乎 0——跟 Settings.tsx 的
- *  tokenMs 同一套做法（該檔案自建 sheet 沒有共用元件可以 import，這裡編輯份量 sheet
- *  同樣是自建覆蓋層，就地複製這一小段，不為了三行邏輯拉一個新的共用檔）。 */
-function tokenMs(name: string, fallback: number): number {
-  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return 0.01
-  const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name))
-  return Number.isFinite(t) ? t : fallback
-}
-const editCloseDurationMs = () => tokenMs('--dur-mid', 220)
-const editScrimFadeMs = () => tokenMs('--dur-fast', 100)
+/* v2.20：編輯份量從「長按開全屏 sheet」改成「點按就地展開」，長按整套（500ms 計時器、
+   位移備援門檻、與 drag 手勢的互相取消、開合／退場動畫的 token 讀取）連同 sheet 一起移除。
+   拆掉的理由不只是版面——長按與 drag="x" 共用同一次 pointerdown，兩套手勢的仲裁是這個
+   元件翻船最多次的地方（誤閃 reveal 修了兩輪仍在真機上重現）。點按走的是原生 click，
+   沒有仲裁問題。左滑刪除那組手勢（REVEAL/OPEN_AT/FULL_AT）完全不動。 */
 
 const DeleteIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -70,6 +49,7 @@ export default function Today(props: TodayProps) {
     onDeleteIntake,
     justAddedIds,
     onUpdateIntakeQty,
+    onUpdateIntakeMeal,
   } = props
 
   const rows = dayData.rows
@@ -81,13 +61,26 @@ export default function Today(props: TodayProps) {
   const dateRegionRef = useRef<HTMLDivElement>(null)
   const willLandOnToday = (days: number) => shiftDate(currentDate, days) === localDate()
 
-  /* 左滑刪除只有一個狀態：哪一列是開的。v2.0 曾拆成 raisedId／openingId／manualOpenId
-     三個並行 id，是因為當時的套件沒有程式化開合 API，觸控與鍵盤只能各走各的路；
-     改成自己控制 x 位移之後，兩條路徑寫的是同一個 openId，「開一列自動關他列」
-     也就不必再維護一份 close 函式的 Map——單值 state 天生只能有一列是開的。 */
-  const [openId, setOpenId] = useState<number | null>(null)
+  /* 品項列同時只有一列是「活躍」的，而活躍有兩種樣子：左滑露出刪除鈕（swipe）、
+     點按展開就地編輯（edit）。v2.0 曾拆成 raisedId／openingId／manualOpenId 三個並行
+     id，v2.1 收斂成單一 openId；v2.20 加入編輯區後仍維持單值——把 mode 併進同一顆
+     state（而不是再開一個 editingId），「開一列自動關他列」「同一列不會同時滑開又展開」
+     這兩件事就都是單值 state 的自然結果，不必寫任何互斥邏輯。 */
+  const [active, setActive] = useState<{ id: number; mode: 'swipe' | 'edit' } | null>(null)
 
-  const toggleOpen = useCallback((id: number) => setOpenId((prev) => (prev === id ? null : id)), [])
+  /* 點品項：已展開就收合；正滑開著則先收回滑動（iOS 的慣例是列滑開時點它等於取消），
+     不直接跳進編輯——那一下點擊使用者多半是想關掉刪除鈕。 */
+  const toggleEdit = useCallback((id: number) => {
+    setEditErr(null)
+    setActive((prev) => (prev?.id === id ? null : { id, mode: 'edit' }))
+  }, [])
+  const setSwipe = useCallback((id: number, open: boolean) => {
+    setActive((prev) => (open ? { id, mode: 'swipe' } : prev?.id === id ? null : prev))
+  }, [])
+  const closeActive = useCallback(() => {
+    setEditErr(null)
+    setActive(null)
+  }, [])
 
   /* 沒有 deletingIds 這種「刪除中」旗標了：刪除已改成樂觀移除，按下去那一列當場離開
      清單，不存在「按了沒反應所以再按一次」的窗口。連點同一列的守衛改放在 App.tsx
@@ -96,99 +89,58 @@ export default function Today(props: TodayProps) {
      旗標只加不減，而復原會把那一列放回來（verifier 實測抓到）。 */
   const handleDelete = useCallback(
     (id: number) => {
-      setOpenId((prev) => (prev === id ? null : prev))
+      setActive((prev) => (prev?.id === id ? null : prev))
       onDeleteIntake(id)
     },
     [onDeleteIntake],
   )
 
-  /* 編輯份量 sheet：自建覆蓋層，不走 vaul（跟 Settings.tsx 的記體重／身體參數 sheet
-     同一套地基裁決，理由一樣——這裡只需要一顆 qty stepper 加一顆存入鈕，不值得為它
-     多背 LogSheet 那整套 Drawer.Root/Portal/VAUL_TRANSITION_CSS）。開合／退場動畫
-     直接複製 Settings.tsx 的 opening/closing + inline animation shorthand 那一套。 */
-  const [editing, setEditing] = useState<{ id: number; name: string } | null>(null)
-  const [editClosing, setEditClosing] = useState(false)
-  const [editBusy, setEditBusy] = useState(false)
-  const [editErr, setEditErr] = useState<string | null>(null)
-  const [editQty, setEditQty] = useState(1)
-  const [editQtyDraft, setEditQtyDraft] = useState('1')
-  const editOpenerRef = useRef<HTMLElement | null>(null)
-  const editDialogRef = useRef<HTMLDivElement>(null)
-  const editCloseTimer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => {
-    if (editCloseTimer.current !== undefined) window.clearTimeout(editCloseTimer.current)
-  }, [])
-
-  // sheet 開啟時把焦點交給對話框本身，跟 Settings.tsx 一致
-  useEffect(() => {
-    if (editing && !editClosing) editDialogRef.current?.focus()
-  }, [editing, editClosing])
-
-  // Esc 關閉：手勢／點遮罩之外的鍵盤路徑
-  useEffect(() => {
-    if (!editing) return
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeEditQtySheet()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, editClosing])
-
-  const openEditQty = useCallback((row: IntakeRow, name: string, opener: HTMLElement | null) => {
-    if (editCloseTimer.current !== undefined) window.clearTimeout(editCloseTimer.current)
-    editOpenerRef.current = opener
-    setEditErr(null)
-    setEditBusy(false)
-    setEditClosing(false)
-    const q = num(row.qty)
-    setEditQty(q)
-    setEditQtyDraft(String(q))
-    setEditing({ id: row.id, name })
-  }, [])
-
-  function closeEditQtySheet() {
-    if (!editing || editClosing) return
-    setEditClosing(true)
-    const opener = editOpenerRef.current
-    if (editCloseTimer.current !== undefined) window.clearTimeout(editCloseTimer.current)
-    editCloseTimer.current = window.setTimeout(() => {
-      setEditing(null)
-      setEditClosing(false)
-      opener?.focus()
-    }, editCloseDurationMs())
-  }
-
-  // 打字途中不正規化，理由與 LogSheet 的 handleQtyInput 相同：中間態被改掉游標會跳走
-  function handleEditQtyInput(raw: string) {
-    setEditQtyDraft(raw)
-    const n = Number(raw.trim())
-    if (Number.isFinite(n) && n > 0) setEditQty(n)
-  }
-  function handleEditQtyBlur(raw: string) {
-    const n = normalizeQty(raw)
-    setEditQty(n)
-    setEditQtyDraft(String(n))
-  }
-  function stepEditQty(dir: 1 | -1) {
-    const next = normalizeQty(editQty + dir)
-    setEditQty(next)
-    setEditQtyDraft(String(next))
-  }
-
-  async function submitEditQty() {
-    if (!editing || editBusy) return
-    setEditBusy(true)
-    setEditErr(null)
+  /* 就地編輯的失敗訊息存在**這一層**，不存在 ItemEditor 裡。
+     `patchIntakeRow` 是「先送出、成功才更新畫面」，而 ItemEditor 會在收合／左滑／點另一列
+     時卸載——錯誤若只活在它的 local state，「按了 + → 途中收合 → PATCH 失敗」這條路徑上
+     `setErr` 會打在已卸載的元件上（no-op），`setRows` 也因為失敗沒跑，畫面靜靜退回舊值，
+     使用者剛親眼看到 stepper 變 2，於是認定存好了（impeccable critique 抓到）。
+     修法是把錯誤提到 Today：失敗時把那一列拉回展開，訊息才有地方顯示、也才活得比編輯區久。 */
+  const [editErr, setEditErr] = useState<{ id: number; msg: string } | null>(null)
+  const runEdit = useCallback(async (id: number, send: () => Promise<void>) => {
     try {
-      await onUpdateIntakeQty(editing.id, editQty)
-      closeEditQtySheet()
+      await send()
+      setEditErr((prev) => (prev?.id === id ? null : prev))
     } catch (e) {
-      setEditBusy(false)
-      setEditErr(e instanceof Error ? e.message : String(e))
+      setEditErr({ id, msg: e instanceof Error ? e.message : String(e) })
+      /* 訊息要有地方顯示，把那一列拉回來——但**不能蓋掉使用者這期間已經切去的別列**：
+         這是 async 回呼的典型競態（送出 A 之後、reject 之前使用者點開了 B），窗口窄但
+         代價是把他正在操作的編輯區突然關掉（precommit review 抓到）。 */
+      setActive((prev) => (prev && prev.id !== id ? prev : { id, mode: 'edit' }))
+      throw e // 讓 ItemEditor 回滾自己的樂觀值
     }
-  }
+  }, [])
+
+  const handleChangeQty = useCallback(
+    (id: number, qty: number) => runEdit(id, () => onUpdateIntakeQty(id, qty)),
+    [runEdit, onUpdateIntakeQty],
+  )
+
+  /* 改餐別成功後收合編輯區。**原本寫「讓 FLIP layout 動畫帶著它移動、使用者看得到去向」
+     是錯的宣稱**：那一筆會進到另一個 MealNode 的 <ul>，React 只能卸載舊實例＋掛載新實例，
+     裸 `layout` 跨不過去（能跨的只有 `layoutId`）。實測蓋章追蹤：+80ms 時同一筆同時存在
+     兩份、來源餐別標題顯示「午餐 0」，+160ms 舊的消失、新的憑空出現（`initial={false}`
+     連進場都沒有）。所以「看得到去向」要靠別的機制——成功後把新位置捲進視野並把焦點帶
+     過去，這在真實密度（一餐 3–5 筆、時間軸可視高度只剩約 430px）下更重要：目的地餐別
+     多半根本不在畫面上，不捲的話那一筆就是「消失」。 */
+  const handleChangeMeal = useCallback(
+    async (id: number, meal: MealKey) => {
+      await runEdit(id, () => onUpdateIntakeMeal(id, meal))
+      setActive((prev) => (prev?.id === id ? null : prev))
+      // 等 React 把它掛到新的餐別區段之後才找得到節點
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-row="${id}"]`)
+        el?.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' })
+        el?.querySelector<HTMLButtonElement>('.item-content')?.focus({ preventScroll: true })
+      })
+    },
+    [runEdit, onUpdateIntakeMeal],
+  )
 
   const eaten = rows ? sumIntake(rows) : null
   const eatenKcal = eaten ? Math.round(eaten.kcal) : null
@@ -278,7 +230,13 @@ export default function Today(props: TodayProps) {
         {(['protein', 'fat', 'carb'] as const).map((key) => {
           const cur = eaten ? eaten[key] : null
           const target = targets[key]
-          const macroOver = cur !== null && macroExceeds(cur, target)
+          /* 蛋白質永遠不轉破表（v2.20 訂正，使用者裁決）。DESIGN.md 的「三大營養素判定」
+             一直只列舉脂肪與碳水，LogSheet 的逐筆預警條也明講「不含蛋白質——它的語意是
+             『達標』不是『超標』」，但這裡的實作對三項一視同仁，於是減脂使用者好不容易
+             把蛋白質吃到 136.5/126，畫面回他一條紅色斜紋警告。同一份 DESIGN.md 拒絕做
+             綠色達標的理由是「六天資料從沒達標過」，現在達標了卻被當成錯誤，方向剛好相反。
+             （hallmark 視覺稽核抓到，屬既有 bug 不是本輪引入。） */
+          const macroOver = key !== 'protein' && cur !== null && macroExceeds(cur, target)
           const curTxt = cur === null ? '—' : cur.toFixed(1)
           const tgtTxt = String(Math.round(target))
           return (
@@ -291,7 +249,9 @@ export default function Today(props: TodayProps) {
               </div>
               <div
                 className="val pair"
-                aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '超出目標' : '目標'} ${tgtTxt} 克`}
+                /* 「超出目標 126 克」會被讀成「超出了 126 克」，但 126 是目標值本身。
+                   拆成兩個子句消歧義（v2.20，同樣的寫法要記得同步 LogSheet 的 macro-line）。 */
+                aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克`}
               >
                 <span aria-hidden="true">
                   <span className="cur">{curTxt}</span>
@@ -309,138 +269,79 @@ export default function Today(props: TodayProps) {
           <p className="muted">載入中…</p>
         ) : (
           renderTimeline(rows, currentDate, {
-            openId,
+            active,
             justAddedIds,
             onOpenSheet,
-            toggleOpen,
+            toggleEdit,
+            setSwipe,
+            closeActive,
             handleDelete,
-            openEditQty,
+            handleChangeQty,
+            handleChangeMeal,
+            editErr,
           })
         )}
       </div>
-
-      {editing && (
-        <div id="edit-qty-sheet-root">
-          <button
-            type="button"
-            className="scrim"
-            aria-label="關閉"
-            style={
-              editClosing
-                ? { animation: `scrim-out ${editScrimFadeMs()}ms var(--ease-sheet) both` }
-                : undefined
-            }
-            onClick={closeEditQtySheet}
-          />
-          <div
-            ref={editDialogRef}
-            className={`sheet${editClosing ? '' : ' opening'}`}
-            style={
-              editClosing
-                ? { animation: `sheet-out ${editCloseDurationMs()}ms var(--ease-sheet) both` }
-                : undefined
-            }
-            role="dialog"
-            aria-modal="true"
-            aria-label={`編輯份量：${editing.name}`}
-            tabIndex={-1}
-          >
-            <div className="handle" aria-hidden="true" />
-            <div className="sheet-head">
-              <span className="sheet-title">編輯份量</span>
-              <button type="button" className="icon-btn" aria-label="關閉" onClick={closeEditQtySheet}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </div>
-            <div className="form-wrap">
-              <p className="note">{editing.name}</p>
-              <div className="qty-stepper">
-                <button
-                  className="qty-btn"
-                  type="button"
-                  disabled={editQty <= 1}
-                  aria-label="減少份量"
-                  onClick={() => stepEditQty(-1)}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M5 12h14" />
-                  </svg>
-                </button>
-                <input
-                  className="qty-value"
-                  type="text"
-                  inputMode="decimal"
-                  aria-label="份量"
-                  value={editQtyDraft}
-                  onChange={(e) => handleEditQtyInput(e.target.value)}
-                  onBlur={(e) => handleEditQtyBlur(e.target.value)}
-                />
-                <button
-                  className="qty-btn"
-                  type="button"
-                  aria-label="增加份量"
-                  onClick={() => stepEditQty(1)}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="confirm-wrap">
-              {editErr && (
-                <p className="sheet-error" role="alert">
-                  存不進去：{editErr}
-                </p>
-              )}
-              <button type="button" className="pick-bar-btn" disabled={editBusy} onClick={() => void submitEditQty()}>
-                {editBusy ? '存入中…' : '存入'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
 interface TimelineHelpers {
-  openId: number | null
+  active: { id: number; mode: 'swipe' | 'edit' } | null
   justAddedIds: ReadonlySet<number>
   onOpenSheet: (meal: MealKey) => void
-  toggleOpen: (id: number) => void
+  toggleEdit: (id: number) => void
+  setSwipe: (id: number, open: boolean) => void
+  closeActive: () => void
   handleDelete: (id: number) => void
-  openEditQty: (row: IntakeRow, name: string, opener: HTMLElement | null) => void
+  handleChangeQty: (id: number, qty: number) => Promise<void>
+  handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
+  editErr: { id: number; msg: string } | null
 }
 
 /* 一列品項。位移層是 motion.div（純 transform，不動 layout），刪除鈕壓在它底下，
    滑開才露出來——這是「覆蓋式」的反面做法：實際上是內容讓開，不是鈕蓋上去，
-   但視覺結果一樣而且不必在鈕上做位移動畫。開合狀態由父層的 openId 單一決定，
-   `animate` 負責放手後吸附到位，拖曳中則由 drag 手勢直接接管 x。 */
+   但視覺結果一樣而且不必在鈕上做位移動畫。開合狀態由父層的 active 單一決定，
+   `animate` 負責放手後吸附到位，拖曳中則由 drag 手勢直接接管 x。
+
+   **v2.20：品名列與刪除鈕包進 `.item-main`，展開的編輯區是它的兄弟**。刪除鈕靠
+   `position:absolute` ＋ `top:0;bottom:0;margin:auto 0` 垂直置中，定位基準若還是整個
+   `.item-row`，編輯區一展開它就會掉到「品名列＋編輯區」的正中間去（實際上會落在
+   分段控制器那一行）。多包這一層，紅圓永遠只以品名列為基準。 */
 function SwipeRow({
   row,
   name,
   vendor,
   qty,
   open,
+  editing,
   justAdded,
-  onToggle,
+  onTap,
+  onSwipeTo,
+  onCollapse,
   onDelete,
-  onEdit,
+  onQty,
+  onMeal,
+  err,
 }: {
   row: IntakeRow
   name: string
   vendor: string | null
   qty: number
   open: boolean
+  editing: boolean
   justAdded: boolean
-  onToggle: () => void
+  onTap: () => void
+  onSwipeTo: (next: boolean) => void
+  onCollapse: () => void
   onDelete: () => void
-  onEdit: (opener: HTMLElement | null) => void
+  onQty: (qty: number) => Promise<void>
+  onMeal: (meal: MealKey) => Promise<void>
+  err: string | null
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLButtonElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   /* 「這次指標互動是不是拖曳」的旗標，dragStart 立起、dragEnd 之後延遲清掉。三個版本的血淚：
      v1 用純旗標、唯一歸零點是 click——拖曳後瀏覽器不保證補 click，漏一次旗標就永遠停在 true，
        之後每次真正的點擊都被靜默吃掉（precommit review 抓到）。
@@ -452,26 +353,6 @@ function SwipeRow({
   const blockClickUntil = useRef(0)
   const [armed, setArmed] = useState(false)
   const quick = reduceMotion()
-
-  /* 編輯份量走長按，跟左滑刪除是兩條獨立的觸發路徑，只在「取消對方」這一點耦合：
-     drag 一旦被判定成真的拖曳（onDragStart／onDrag），長按計時器就要被取消，
-     不然放手時兩件事一起發生。反過來，長按計時器本身完全不碰 x／REVEAL 那組手勢邏輯。 */
-  const longPressTimer = useRef<number | null>(null)
-  const longPressStart = useRef<{ x: number; y: number } | null>(null)
-  const clearLongPress = useCallback(() => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-    longPressStart.current = null
-  }, [])
-  /* 沒有這個 unmount 清理，計時器會在這一列已經卸載之後（換日期、退場動畫跑完、
-     刪除…任何讓這個 SwipeRow 從樹上消失的原因）繼續倒數，時間到了照樣對一個
-     使用者畫面上早就看不到的品項開編輯 sheet，存入時送出的 PATCH 是打對 id，
-     但畫面停在切走前的快照，直到重整頁面才會發現資料其實已經被改了
-     （fresh-context verifier 用真實 pointerdown → 卸載 → 等計時器觸發重現，
-     2026-08-02 收案前抓到）。 */
-  useEffect(() => clearLongPress, [clearLongPress])
 
   /* 門檻一律讀「這一列實際位移了多少」，不讀指標的原始位移 info.offset.x。
      dragDirectionLock 判定成縱向捲動時列根本不會動，但 offset.x 照樣累積——
@@ -495,115 +376,288 @@ function SwipeRow({
     // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔。
     // 速度也要配 moved < 0 把關，否則縱向甩動時的 velocity.x 雜訊會誤判成開啟
     const flung = info.velocity.x < -320 && moved < 0
-    onToggleTo(moved < -OPEN_AT || flung)
+    onSwipeTo(moved < -OPEN_AT || flung)
   }
 
-  function onToggleTo(next: boolean) {
-    if (next !== open) onToggle()
-  }
+  const editorId = `item-editor-${row.id}`
 
-  // 長按計時器觸發到使用者實際放手之間隔多久，因人而異（看到 sheet 彈出來的反應時間、
-  // 手指本來就沒那麼快抬起）——不能假設「觸發後 150ms 內一定會放手」。跟 handleDragEnd
-  // 同一套 v3 手法：計時器一觸發先把 blockClickUntil 設 Infinity（放手前一律擋），
-  // 放手當下（handlePointerUp）才改成「現在 + CLICK_GRACE_MS」讓它自然到期，這樣
-  // grace window 永遠是從「真的放手那一刻」起算，不會因為使用者按住比較久就提早過期、
-  // 讓補來的 click 漏網把底下這一列的滑動 reveal 切開（真機實測重現：長按開 sheet 前
-  // 會先看到刪除鈕一閃）。**pointerup／pointercancel／pointerleave 三個收尾事件都要走
-  // handlePointerUp**，不能只接 pointerup——sheet 一開就整片 scrim 蓋住這一列
-  // （z-index 10），button 沒有 setPointerCapture，放手時 hit-test 落在 scrim 上，
-  // 這顆按鈕自己的 onPointerUp 根本不會觸發，只會收到 leave／cancel；只接 pointerup
-  // 會讓 Infinity 卡死出不來，之後這一列的 tap-to-reveal 永久失效直到觸發一次 drag
-  // （precommit-review 抓到，這是這次修復自己引入的迴歸）。
-  const longPressFired = useRef(false)
+  return (
+    /* Escape 掛在 .item-row 這一層，不掛在編輯區上：展開後焦點停在 .item-content，
+       它是編輯區的**兄弟**不是祖先，事件只往上冒泡不會橫向傳——掛在編輯區時「展開後
+       直接按 Esc」完全沒反應，得先 Tab 進 stepper 才有效（impeccable 抓到，實測確認）。 */
+    <div
+      className={`item-row${open ? ' is-open' : ''}${editing ? ' is-edit' : ''}${armed ? ' is-armed' : ''}`}
+      onKeyDown={(e) => {
+        if (editing && e.key === 'Escape') {
+          e.stopPropagation()
+          onCollapse()
+        }
+      }}
+    >
+      <div className="item-main" ref={rowRef}>
+        <button
+          className="item-delete"
+          type="button"
+          tabIndex={open ? 0 : -1}
+          aria-hidden={!open}
+          aria-label={`刪除 ${name} 這一筆`}
+          onClick={onDelete}
+        >
+          <DeleteIcon />
+        </button>
+        <motion.div
+          className="item-slide"
+          style={{ x }}
+          drag="x"
+          dragDirectionLock
+          dragMomentum={false}
+          dragConstraints={{ left: -280, right: 0 }}
+          dragElastic={{ left: 0.4, right: 0 }}
+          animate={{ x: open ? -REVEAL : 0 }}
+          transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
+          onDragStart={() => {
+            blockClickUntil.current = Infinity
+            // 編輯區不在 .item-slide 裡（它不跟著位移），拖曳中留著會變成「上半條在動、
+            // 下面那塊釘住不動」，所以一判定成拖曳就收合
+            if (editing) onCollapse()
+          }}
+          onDrag={() => setArmed(x.get() < -fullSwipeAt())}
+          onDragEnd={handleDragEnd}
+        >
+          <button
+            ref={contentRef}
+            className={`item-content${justAdded ? ' just-added' : ''}`}
+            type="button"
+            aria-expanded={editing}
+            aria-controls={editing ? editorId : undefined}
+            onClick={() => {
+              // 拖曳期間／剛結束時瀏覽器補的那個 click 吃掉，免得滑開的同時又展開編輯區
+              if (Date.now() < blockClickUntil.current) return
+              onTap()
+            }}
+          >
+            {/* ×N 必須在會 ellipsis 的 .nm **外面**：它原本是 .nm 的最後一個子節點，
+                長品名（真實資料常態是「雞胸餐盒 大心」這種帶店家的）一截斷，第一個被吃掉
+                的就是份量標記——正好是這輪核心功能唯一的畫面回饋。照 .kc 的做法給
+                flex-shrink:0 保護（hallmark 抓到；v2.19 才剛為了同一個抱怨把 .qty 改成
+                --ink 加粗，長品名上等於原封不動地回來）。 */}
+            <span className="nm-wrap">
+              <span className="nm">
+                {name}
+                {vendor && <span className="vendor"> {vendor}</span>}
+              </span>
+              {qty !== 1 && <span className="qty">×{qty}</span>}
+            </span>
+            <span className="kc">{Math.round(num(row.kcal) * qty)}</span>
+          </button>
+        </motion.div>
+      </div>
+      {/* height auto 是這裡唯一動 layout 屬性的地方（DESIGN.md 的「只動 transform／
+          opacity」是為了列表重排的效能，展開一列不是重排）。overflow:hidden 掛在
+          motion.div 自己身上，不靠 .item-row 的 overflow:clip——後者是為了裁掉左滑
+          時的水平溢位，兩件事不該互相牽制。 */}
+      <AnimatePresence initial={false}>
+        {editing && (
+          <motion.div
+            key="editor"
+            ref={editorRef}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={quick ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
+            style={{ overflow: 'hidden' }}
+            /* 展開最後一列時整塊會被底部列擋住。等動畫跑完才滾——展開途中高度還在
+               0→auto 的路上，那時算出來的可見範圍是錯的。`height === 'auto'` 用來
+               區分展開與收合兩個方向（收合時 definition 是 exit 那組，不該滾）。 */
+            onAnimationComplete={(def) => {
+              if ((def as { height?: unknown })?.height !== 'auto') return
+              editorRef.current?.scrollIntoView({ block: 'nearest', behavior: quick ? 'auto' : 'smooth' })
+            }}
+          >
+            <ItemEditor
+              id={editorId}
+              row={row}
+              name={name}
+              qty={qty}
+              openerRef={contentRef}
+              onQty={onQty}
+              onMeal={onMeal}
+              onDelete={onDelete}
+              err={err}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
-  function startLongPress(e: ReactPointerEvent<HTMLButtonElement>) {
-    // 只認主要輸入（左鍵／單一觸點）——沒有這道檢查，桌機按住右鍵、或多點觸控的
-    // 第二根手指都會被當成長按觸發，且第二根手指的座標還會覆蓋 longPressStart，
-    // 讓位移偵測基準跑掉（precommit-review 抓到）
-    if (e.button !== 0 || !e.isPrimary) return
-    const opener = e.currentTarget
-    if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current)
-    longPressFired.current = false
-    longPressStart.current = { x: e.clientX, y: e.clientY }
-    longPressTimer.current = window.setTimeout(() => {
-      longPressTimer.current = null
-      longPressStart.current = null
-      longPressFired.current = true
-      blockClickUntil.current = Infinity
-      onEdit(opener)
-    }, LONG_PRESS_MS)
-  }
-  function handlePointerMove(e: ReactPointerEvent<HTMLButtonElement>) {
-    const start = longPressStart.current
-    if (!start) return
-    if (Math.abs(e.clientX - start.x) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE) {
-      clearLongPress()
+/* 就地編輯區（v2.20，取代 v2.14 的長按 sheet）。兩排都是 --r-tab 的分段家族：
+   上排 qty stepper ＋ 刪除，下排餐別分段控制器。刪除鈕用負 margin 懸出容器的水平
+   內距，讓圖示與上一行的熱量數字落在同一條垂直線上——帶框的 stepper／分段器需要
+   內距才不會貼壁，無框的圖示不需要，兩者的對齊基準本來就不同。 */
+function ItemEditor({
+  id,
+  row,
+  name,
+  qty,
+  openerRef,
+  onQty,
+  onMeal,
+  onDelete,
+  err,
+}: {
+  id: string
+  row: IntakeRow
+  name: string
+  qty: number
+  openerRef: React.RefObject<HTMLButtonElement | null>
+  onQty: (qty: number) => Promise<void>
+  onMeal: (meal: MealKey) => Promise<void>
+  onDelete: () => void
+  err: string | null
+}) {
+  const [localQty, setLocalQty] = useState(qty)
+  const [draft, setDraft] = useState(String(qty))
+  /* 餐別也走樂觀：按下當場就渲染成選中，不等往返。原本 aria-current 綁 row.meal（伺服器
+     真值）＋ disabled 只改 cursor，於是慢網路下按「晚餐」畫面上一個 pixel 都不會變，
+     使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。專案在隔壁對
+     同一情境已有相反裁決：.item-delete:disabled 設 opacity .6，註解寫「破壞性動作＋慢網路，
+     按下去毫無變化的話很容易再按第二次」。 */
+  const [localMeal, setLocalMeal] = useState<MealKey>(row.meal as MealKey)
+  const [busy, setBusy] = useState(false)
+  const [said, setSaid] = useState('')
+
+  /* 收合時把焦點還給品名列。**但只在焦點還在編輯區裡時才搶**，而且 preventScroll——
+     這個 cleanup 會在每一條收合路徑上跑（點別列、開始拖曳、Escape、刪除），無條件
+     focus() 會順帶把視窗捲回剛離開的那一列：往下捲到第 5 列點它 → 第 1 列的編輯區卸載
+     → 捲動跳回第 1 列 → 第 5 列的 onAnimationComplete 再捲一次，一次點擊兩段互打的捲動
+     （impeccable 抓到）。改餐別那條路徑由 handleChangeMeal 自己把焦點送到新位置，
+     這裡不插手。 */
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(
+    () => () => {
+      if (rootRef.current?.contains(document.activeElement)) {
+        openerRef.current?.focus({ preventScroll: true })
+      }
+    },
+    [openerRef],
+  )
+
+  /* ponytail: 每按一次 +／− 就直接送一次 PATCH，不做 debounce。連按會送出多個請求，
+     但每個都是「完整覆寫 qty」而不是增量，同一條連線下到達順序即發送順序，最後一次
+     獲勝。升級路徑：真的遇到畫面與 DB 對不上，再加 300ms debounce ＋ 收合時 flush——
+     那需要多一組 timer 生命週期，而這個元件已經在 timer 清理上翻船過兩次（長按計時器
+     沒隨 unmount 清、sheet 關閉計時器），先不引入第三組。 */
+  async function commitQty(next: number) {
+    const prevQty = localQty
+    const prevDraft = draft
+    setLocalQty(next)
+    setDraft(String(next))
+    try {
+      await onQty(next)
+      setSaid(`份量已改為 ${next}`)
+    } catch {
+      setLocalQty(prevQty)
+      setDraft(prevDraft)
+      // 訊息由 Today 層的 editErr 供應（它活得比這個元件久），這裡只負責回滾自己的值
     }
   }
-  function handlePointerUp() {
-    if (longPressFired.current) {
-      blockClickUntil.current = Date.now() + CLICK_GRACE_MS
-      longPressFired.current = false
+
+  // 打字途中不正規化，理由與 LogSheet 的 handleQtyInput 相同：中間態被改掉游標會跳走
+  function handleInput(raw: string) {
+    setDraft(raw)
+    const n = Number(raw.trim())
+    if (Number.isFinite(n) && n > 0) setLocalQty(n)
+  }
+
+  async function pickMeal(key: MealKey) {
+    if (key === localMeal || busy) return
+    const prev = localMeal
+    setLocalMeal(key)
+    setBusy(true)
+    try {
+      await onMeal(key)
+      // 成功後這個元件會被收合卸載，setState 不會有機會跑到；失敗才走下面
+    } catch {
+      setLocalMeal(prev)
+      setBusy(false)
     }
-    clearLongPress()
   }
 
   return (
-    <div className={`item-row${open ? ' is-open' : ''}${armed ? ' is-armed' : ''}`} ref={rowRef}>
-      <button
-        className="item-delete"
-        type="button"
-        tabIndex={open ? 0 : -1}
-        aria-hidden={!open}
-        aria-label={`刪除 ${name} 這一筆`}
-        onClick={onDelete}
-      >
-        <DeleteIcon />
-      </button>
-      <motion.div
-        className="item-slide"
-        style={{ x }}
-        drag="x"
-        dragDirectionLock
-        dragMomentum={false}
-        dragConstraints={{ left: -280, right: 0 }}
-        dragElastic={{ left: 0.4, right: 0 }}
-        animate={{ x: open ? -REVEAL : 0 }}
-        transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
-        onDragStart={() => {
-          blockClickUntil.current = Infinity
-          clearLongPress()
-        }}
-        onDrag={() => {
-          setArmed(x.get() < -fullSwipeAt())
-          clearLongPress()
-        }}
-        onDragEnd={handleDragEnd}
-      >
-        <button
-          className={`item-content${justAdded ? ' just-added' : ''}`}
-          type="button"
-          aria-expanded={open}
-          onClick={() => {
-            // 拖曳期間／剛結束時瀏覽器補的那個 click 吃掉，免得滑開的同時又切一次開合
-            if (Date.now() < blockClickUntil.current) return
-            onToggle()
-          }}
-          onPointerDown={startLongPress}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <span className="nm">
-            {name}
-            {vendor && <span className="vendor"> {vendor}</span>}
-            {qty !== 1 && <span className="qty"> ×{qty}</span>}
-          </span>
-          <span className="kc">{Math.round(num(row.kcal) * qty)}</span>
+    <div className="item-editor" id={id} ref={rootRef} role="group" aria-label={`編輯 ${name}`}>
+      <div className="ed-line">
+        <div className="qty-stepper">
+          <button
+            className="qty-btn"
+            type="button"
+            disabled={localQty <= 1}
+            aria-label="減少份量"
+            onClick={() => void commitQty(normalizeQty(localQty - 1))}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+          <input
+            className="qty-value"
+            type="text"
+            inputMode="decimal"
+            aria-label="份量"
+            value={draft}
+            onChange={(e) => handleInput(e.target.value)}
+            onBlur={(e) => void commitQty(normalizeQty(e.target.value))}
+          />
+          <button
+            className="qty-btn"
+            type="button"
+            aria-label="增加份量"
+            onClick={() => void commitQty(normalizeQty(localQty + 1))}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+        <button className="ed-del" type="button" aria-label={`刪除 ${name} 這一筆`} onClick={onDelete}>
+          <DeleteIcon />
         </button>
-      </motion.div>
+      </div>
+      <div className="ed-line">
+        {/* 餐別是互斥的四選一，用分段控制器而不是記一筆 sheet 那排可捲動的 pill chip。
+            **選中態用 aria-pressed，不用 aria-current**：後者的規範語意是「目前所在的
+            頁面／步驟／位置」，用在一個按下去會改變資料值的控制項上是誤用（a11y 稽核
+            抓到；LogSheet 既有的同款 chip 也有一樣的問題，範圍外，記進待決）。
+            沒有升級成 radiogroup 是刻意的取捨：APG 的 radiogroup 契約要 roving tabindex
+            ＋方向鍵導航，半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟。
+            另配字重 600 當非顏色訊號——--accent-soft 對 --card 只有 1.22:1。
+            **不用原生 disabled 擋重入**：那會讓正被按下、正持有焦點的那顆瞬間失焦，
+            失敗時焦點就掉到 body 再也回不來（a11y 稽核抓到）；改用 busy 邏輯守衛。 */}
+        <div className="seg" role="group" aria-label="餐別">
+          {MEALS.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={m.key === localMeal}
+              onClick={() => void pickMeal(m.key)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {err && (
+        <p className="sheet-error ed-error" role="alert">
+          存不進去：{err}
+        </p>
+      )}
+      {/* 改份量／改餐別成功後畫面只有數字變動，螢幕閱讀器聽不到任何確認（WCAG 4.1.3）。
+          改餐別的播報由 handleChangeMeal 把焦點送到新位置代勞（VoiceOver 會唸出整列），
+          這裡負責份量。 */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {said}
+      </span>
     </div>
   )
 }
@@ -711,15 +765,21 @@ function MealNode({
                       transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
                     >
                       <SwipeRow
+                        key={r.id}
                         row={r}
                         name={name}
                         vendor={dup}
                         qty={num(r.qty)}
-                        open={h.openId === r.id}
+                        open={h.active?.id === r.id && h.active.mode === 'swipe'}
+                        editing={h.active?.id === r.id && h.active.mode === 'edit'}
                         justAdded={h.justAddedIds.has(r.id)}
-                        onToggle={() => h.toggleOpen(r.id)}
+                        onTap={() => h.toggleEdit(r.id)}
+                        onSwipeTo={(next) => h.setSwipe(r.id, next)}
+                        onCollapse={h.closeActive}
                         onDelete={() => h.handleDelete(r.id)}
-                        onEdit={(opener) => h.openEditQty(r, name, opener)}
+                        onQty={(q) => h.handleChangeQty(r.id, q)}
+                        onMeal={(m) => h.handleChangeMeal(r.id, m)}
+                        err={h.editErr?.id === r.id ? h.editErr.msg : null}
                       />
                     </motion.li>
                   )
