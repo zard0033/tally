@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageOn, localDate, shiftDate, weekdayDate } from './dates'
+import { ageFromYear, localDate, shiftDate, weekdayDate } from './dates'
 
 describe('localDate', () => {
   it('本地時區 yyyy-mm-dd，不受 UTC 偏移影響', () => {
@@ -32,11 +32,11 @@ describe('weekdayDate', () => {
   })
 })
 
-describe('ageOn', () => {
-  it('生日前一天：還沒滿歲', () => {
-    expect(ageOn('1993-07-29', new Date(2026, 6, 28))).toBe(32)
+describe('ageFromYear', () => {
+  it('今年減出生年', () => {
+    expect(ageFromYear(1993, new Date(2026, 6, 29))).toBe(33)
   })
-  it('生日當天：已經滿歲', () => {
-    expect(ageOn('1993-07-29', new Date(2026, 6, 29))).toBe(33)
+  it('無效輸入（NaN）回 NaN，不擋、不丟錯——由呼叫端（computeTargets → App.tsx 的 kcal 檢查）守門', () => {
+    expect(Number.isNaN(ageFromYear(NaN, new Date(2026, 6, 29)))).toBe(true)
   })
 })

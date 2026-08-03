@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activityChoiceFrom,
   computeTargets,
   formatOverAria,
   formatOverDelta,
+  goalFromMode,
+  goalModeFrom,
   macroExceeds,
-  macroPercentagesSumTo100,
-  normalizeMacroPercentages,
   num,
+  numOrNull,
   pct,
   pickBarRight,
   rowOverage,
@@ -15,94 +17,155 @@ import {
   type Targets,
 } from './formulas'
 
-/* 這組 profile 對應 legacy/app.js check() 裡 active.md 的定案值：
-   75.95kg → BMR 1690.9 → 1860 kcal / P126 / F56 / C214（公式鏈本身的自我一致性驗證） */
 const baseProfile: Profile = {
   sex: 'male',
-  birth_date: '1993-01-01',
+  birth_year: 1993,
   height_cm: 175,
   activity_factor: 1.375,
   goal: 'cut',
-  protein_pct: 27,
-  fat_pct: 27,
-  carb_pct: 46,
+  rate_kg_per_week: 0.5,
+  protein_g_per_kg: 2.0,
+  use_custom_targets: false,
+  custom_kcal: null,
+  custom_protein_g: null,
+  custom_fat_g: null,
+  custom_carb_g: null,
 }
+const today = new Date(2026, 0, 1) // 年齡＝2026－1993＝33，固定注入不受測試執行日期影響
 
-describe('computeTargets 公式鏈自我一致性', () => {
-  const t = computeTargets(baseProfile, 75.95)
+describe('computeTargets：Mifflin-St Jeor（沒有體脂率）', () => {
+  const t = computeTargets(baseProfile, 75.95, null, today)
 
+  it('年齡 = 今年－出生年', () => {
+    expect(t.age).toBe(33)
+  })
   it('BMR = Mifflin-St Jeor', () => {
-    expect(t.bmr).toBeCloseTo(10 * 75.95 + 6.25 * 175 - 5 * t.age + 5, 2)
+    expect(t.bmr).toBeCloseTo(10 * 75.95 + 6.25 * 175 - 5 * 33 + 5, 2)
   })
   it('TDEE = BMR × activity_factor', () => {
-    expect(t.tdee).toBeCloseTo(t.bmr * 1.375, 2)
+    expect(t.tdee).toBeCloseTo((t.bmr as number) * 1.375, 2)
   })
-  it('kcal = TDEE × 0.8（減重）', () => {
-    expect(t.kcal).toBeCloseTo(t.tdee * 0.8, 2)
+  it('減重：TDEE 減每日熱量差額（0.5 kg/週 × 7700 ÷ 7）', () => {
+    const delta = (0.5 * 7700) / 7
+    expect(t.kcal).toBeCloseTo((t.tdee as number) - delta, 2)
   })
-  it('三大營養素未捨入熱量總和 = kcal', () => {
+  it('蛋白質 = 體重 × g/kg', () => {
+    expect(t.protein).toBeCloseTo(75.95 * 2.0, 2)
+  })
+  it('脂肪／碳水分剩餘熱量（減重 35/65），未捨入熱量總和 = kcal', () => {
+    const remaining = t.kcal - t.protein * 4
+    expect(t.fat).toBeCloseTo((remaining * 0.35) / 9, 2)
+    expect(t.carb).toBeCloseTo((remaining * 0.65) / 4, 2)
     expect(t.protein * 4 + t.fat * 9 + t.carb * 4).toBeCloseTo(t.kcal, 2)
-  })
-  it('P@1860/F@1860/C@1860 落在 active.md 定案值 ±0.5 內', () => {
-    expect(Math.abs((1860 * 0.27) / 4 - 126)).toBeLessThanOrEqual(0.5)
-    expect(Math.abs((1860 * 0.27) / 9 - 56)).toBeLessThanOrEqual(0.5)
-    expect(Math.abs((1860 * 0.46) / 4 - 214)).toBeLessThanOrEqual(0.5)
-  })
-
-  it('比例改讀 profile：換一組比例，目標跟著動，但熱量不變', () => {
-    const t2 = computeTargets({ ...baseProfile, protein_pct: 40, fat_pct: 20, carb_pct: 40 }, 75.95)
-    expect(t2.protein).toBeCloseTo((t2.kcal * 0.4) / 4, 2)
-    expect(t2.kcal).toBeCloseTo(t.kcal, 2)
-  })
-
-  it('goal=bulk：TDEE + 500', () => {
-    const tb = computeTargets({ ...baseProfile, goal: 'bulk' }, 75.95)
-    expect(tb.kcal).toBeCloseTo(tb.tdee + 500, 2)
-  })
-
-  it('goal=maintain：不調整', () => {
-    const tm = computeTargets({ ...baseProfile, goal: 'maintain' }, 75.95)
-    expect(tm.kcal).toBeCloseTo(tm.tdee, 2)
   })
 })
 
-/* 已驗證的線上實值：profile = 體重 75.95、身高 173、年齡 31、activity_factor 1.375、
-   目標減重、pct 27/27/46 時 → BMR 1691 → TDEE 2325 → 目標 1860 kcal / P126 / F56 / C214。
-   用固定 today 注入把「年齡 31」釘死，不受測試執行日期影響。 */
-describe('公式鏈整合斷言（已驗證的線上實值）', () => {
-  const today = new Date(2026, 0, 1) // 2026-01-01
-  const profile: Profile = {
-    sex: 'male',
-    birth_date: '1995-01-01', // 在 today 當天剛好滿 31 歲
-    height_cm: 173,
-    activity_factor: 1.375,
-    goal: 'cut',
-    protein_pct: 27,
-    fat_pct: 27,
-    carb_pct: 46,
-  }
-  const t = computeTargets(profile, 75.95, today)
+describe('computeTargets：Katch-McArdle（有體脂率）', () => {
+  it('BMR 用去脂體重算，且與 Mifflin-St Jeor 不同值', () => {
+    const withFat = computeTargets(baseProfile, 75.95, 22, today)
+    const withoutFat = computeTargets(baseProfile, 75.95, null, today)
+    const leanMass = 75.95 * (1 - 22 / 100)
+    expect(withFat.bmr).toBeCloseTo(370 + 21.6 * leanMass, 2)
+    expect(withFat.bmr).not.toBeCloseTo(withoutFat.bmr as number, 0)
+  })
+})
 
-  it('年齡 31', () => {
-    expect(t.age).toBe(31)
+describe('computeTargets：目標調整', () => {
+  it('goal=bulk：TDEE 加每日熱量差額', () => {
+    const t = computeTargets({ ...baseProfile, goal: 'bulk' }, 75.95, null, today)
+    const delta = (0.5 * 7700) / 7
+    expect(t.kcal).toBeCloseTo((t.tdee as number) + delta, 2)
   })
-  it('BMR ≈ 1691', () => {
-    expect(Math.round(t.bmr)).toBe(1691)
+  it('goal=maintain：不調整，rate 欄位不使用', () => {
+    const t = computeTargets({ ...baseProfile, goal: 'maintain', rate_kg_per_week: null }, 75.95, null, today)
+    expect(t.kcal).toBeCloseTo(t.tdee as number, 2)
   })
-  it('TDEE ≈ 2325', () => {
-    expect(Math.round(t.tdee)).toBe(2325)
+  it('三種目標各自對應對照表裡的脂肪／碳水比例', () => {
+    const cut = computeTargets({ ...baseProfile, goal: 'cut' }, 75.95, null, today)
+    const maintain = computeTargets({ ...baseProfile, goal: 'maintain', rate_kg_per_week: null }, 75.95, null, today)
+    const bulk = computeTargets({ ...baseProfile, goal: 'bulk' }, 75.95, null, today)
+    expect(cut.fat).toBeCloseTo(((cut.kcal - cut.protein * 4) * 0.35) / 9, 2)
+    expect(maintain.fat).toBeCloseTo(((maintain.kcal - maintain.protein * 4) * 0.40) / 9, 2)
+    expect(bulk.fat).toBeCloseTo(((bulk.kcal - bulk.protein * 4) * 0.30) / 9, 2)
   })
-  it('目標熱量 ≈ 1860 kcal', () => {
-    expect(Math.round(t.kcal)).toBe(1860)
+})
+
+describe('computeTargets：自訂目標', () => {
+  it('use_custom_targets=true 時直接回傳四個自訂值，不跑公式', () => {
+    const t = computeTargets({
+      ...baseProfile,
+      use_custom_targets: true,
+      custom_kcal: 1800,
+      custom_protein_g: 150,
+      custom_fat_g: 60,
+      custom_carb_g: 180,
+    }, 75.95, 22, today)
+    expect(t).toMatchObject({ bmr: null, tdee: null, kcal: 1800, protein: 150, fat: 60, carb: 180 })
   })
-  it('蛋白質 ≈ 126 g', () => {
-    expect(Math.round(t.protein)).toBe(126)
+})
+
+describe('computeTargets：邊界情況（precommit-review 抓到的兩個真實案例）', () => {
+  it('remainingKcal 夾住 0——蛋白質熱量吃光目標熱量時，脂肪／碳水不會變負數', () => {
+    // 55kg／輕度活動／減重 1.0 kg 週／2.0 g/kg：TDEE≈1487，kcal≈387，蛋白質 110g=440卡，
+    // 未夾住的話 remainingKcal 會是負的
+    const t = computeTargets(
+      { ...baseProfile, activity_factor: 1.2, rate_kg_per_week: 1.0, protein_g_per_kg: 2.0 },
+      55,
+      null,
+      today,
+    )
+    expect(t.fat).toBeGreaterThanOrEqual(0)
+    expect(t.carb).toBeGreaterThanOrEqual(0)
   })
-  it('脂肪 ≈ 56 g', () => {
-    expect(Math.round(t.fat)).toBe(56)
+
+  it('goal≠maintain 但 rate 是 null（例如 migration 忘記回填）：kcal 變 NaN，不靜默當成維持態', () => {
+    const t = computeTargets({ ...baseProfile, goal: 'cut', rate_kg_per_week: null }, 75.95, null, today)
+    expect(Number.isFinite(t.kcal)).toBe(false)
   })
-  it('碳水 ≈ 214 g', () => {
-    expect(Math.round(t.carb)).toBe(214)
+})
+
+describe('numOrNull', () => {
+  it('null/undefined/非數字字串回 null', () => {
+    expect(numOrNull(null)).toBeNull()
+    expect(numOrNull(undefined)).toBeNull()
+    expect(numOrNull('abc')).toBeNull()
+  })
+  it('有效數字（含數字字串）原樣回傳', () => {
+    expect(numOrNull(1993)).toBe(1993)
+    expect(numOrNull('1993')).toBe(1993)
+  })
+})
+
+describe('goalModeFrom／goalFromMode（目標＋變化速度合併選單的狀態機，往返一致性）', () => {
+  it('maintain 沒有速度可選', () => {
+    expect(goalModeFrom('maintain', null)).toBe('maintain')
+    expect(goalModeFrom('maintain', 0.5)).toBe('maintain')
+  })
+  it('標準速度（0.5）回 _standard，其餘回 _custom', () => {
+    expect(goalModeFrom('cut', 0.5)).toBe('cut_standard')
+    expect(goalModeFrom('cut', 0.8)).toBe('cut_custom')
+    expect(goalModeFrom('cut', null)).toBe('cut_custom')
+    expect(goalModeFrom('bulk', 0.5)).toBe('bulk_standard')
+    expect(goalModeFrom('bulk', 0.3)).toBe('bulk_custom')
+  })
+  it('goalFromMode 還原出正確的 goal（往返一致）', () => {
+    expect(goalFromMode(goalModeFrom('cut', 0.5))).toBe('cut')
+    expect(goalFromMode(goalModeFrom('cut', 0.9))).toBe('cut')
+    expect(goalFromMode(goalModeFrom('bulk', 0.5))).toBe('bulk')
+    expect(goalFromMode(goalModeFrom('maintain', null))).toBe('maintain')
+  })
+})
+
+describe('activityChoiceFrom（活動量選單，五選一 preset 比對）', () => {
+  it('四個 preset 值精準比對回原數字', () => {
+    expect(activityChoiceFrom(1.2)).toBe(1.2)
+    expect(activityChoiceFrom(1.375)).toBe(1.375)
+    expect(activityChoiceFrom(1.55)).toBe(1.55)
+    expect(activityChoiceFrom(1.725)).toBe(1.725)
+  })
+  it('不是這四個之一回 custom', () => {
+    expect(activityChoiceFrom(1.4)).toBe('custom')
+    expect(activityChoiceFrom(2.0)).toBe('custom')
   })
 })
 
@@ -141,22 +204,6 @@ describe('macroExceeds（破表判定要跟顯示同粒度）', () => {
   })
   it('126.04 捨入後相等，不該判破表', () => {
     expect(macroExceeds(126.04, 126)).toBe(false)
-  })
-})
-
-describe('三大比例驗證：DB 是 numeric(4,1)，先各自捨入再檢查和＝100', () => {
-  it('33.33 × 3 應該被擋下（捨入後 99.9）', () => {
-    expect(macroPercentagesSumTo100({ protein_pct: 33.33, fat_pct: 33.33, carb_pct: 33.34 })).toBe(false)
-  })
-  it('27/27/46 應該通過', () => {
-    expect(macroPercentagesSumTo100({ protein_pct: 27, fat_pct: 27, carb_pct: 46 })).toBe(true)
-  })
-  it('一位小數（30.5/24.5/45）應該通過', () => {
-    expect(macroPercentagesSumTo100({ protein_pct: 30.5, fat_pct: 24.5, carb_pct: 45 })).toBe(true)
-  })
-  it('normalizeMacroPercentages 捨入到一位小數', () => {
-    expect(normalizeMacroPercentages({ protein_pct: 33.333, fat_pct: 33.333, carb_pct: 33.334 }))
-      .toEqual({ protein_pct: 33.3, fat_pct: 33.3, carb_pct: 33.3 })
   })
 })
 

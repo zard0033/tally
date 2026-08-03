@@ -172,13 +172,15 @@ export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void>
 export interface Weight {
   weight_kg: number
   measured_on: string
-  body_fat_pct?: number | null
+  body_fat_pct: number | null
 }
 
+/** body_fat_pct 一併撈：目標計算（Katch-McArdle）要用最新一筆的體脂率，
+ *  沒有就是沒有，呼叫端不再往回找更舊的值（見 formulas.ts computeTargets 註解）。 */
 export async function getLatestWeight(): Promise<Weight | null> {
   const rows = unwrap<Weight[]>(await supabase
     .from('weight')
-    .select('weight_kg,measured_on')
+    .select('weight_kg,measured_on,body_fat_pct')
     .order('measured_on', { ascending: false })
     .limit(1)
     .abortSignal(dbSignal()))
@@ -216,10 +218,7 @@ export async function getProfile(): Promise<ProfileRow | null> {
   return rows[0] ?? null
 }
 
-/**
- * 只負責寫入，三大比例的捨入／相加＝100 驗證交給呼叫端先跑
- * formulas.ts 的 normalizeMacroPercentages／macroPercentagesSumTo100（語意與 legacy 一致）。
- */
+/** 只負責寫入，欄位驗證（出生年範圍、自訂目標必填等）交給呼叫端先做。 */
 export async function updateProfile(userId: string, patch: Partial<ProfileRow>): Promise<void> {
   const { error } = await supabase.from('profile').update(patch).eq('user_id', userId).abortSignal(dbSignal())
   if (error) throw new Error(error.message)

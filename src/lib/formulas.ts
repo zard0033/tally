@@ -1,27 +1,52 @@
-/* 目標熱量公式鏈：BMR（Mifflin-St Jeor）→ TDEE → 目標熱量 → 三大營養素。
-   捨入時機、pct 的 clamp／驗證語意一律照 legacy/app.js 逐字搬，任何一個捨入點都不能改。 */
-import { ageOn } from './dates'
+/* 目標熱量公式鏈（2026-08-03 重新設計）：
+   BMR：有體脂率（去脂體重）→ Katch-McArdle；沒有 → Mifflin-St Jeor。
+   TDEE = BMR × 活動係數。
+   目標熱量：減重/增肌依 rate_kg_per_week 換算的每日熱量差額在 TDEE 上加減
+   （7700 卡／公斤是常見估算值），維持＝TDEE。
+   蛋白質 = 體重 × protein_g_per_kg；脂肪／碳水依目標對照表分「剩餘熱量」
+   （減重 35/65、維持 40/60、增肌 30/70）——這兩個比例不開放使用者調整，寫死在這裡。
+   use_custom_targets 開著時完全繞過以上公式，直接回傳 custom_* 四個數字。
+   捨入時機：只在最終顯示時捨入，這裡的計算鏈全程不捨入。 */
+import { ageFromYear } from './dates'
+
+export type Goal = 'cut' | 'maintain' | 'bulk'
 
 export interface Profile {
-  birth_date: string
+  birth_year: number | string | null
   height_cm: number | string | null
   activity_factor: number | string | null
   sex: string
-  goal: string
-  protein_pct: number | string | null
-  fat_pct: number | string | null
-  carb_pct: number | string | null
+  goal: Goal
+  rate_kg_per_week: number | string | null
+  protein_g_per_kg: number | string | null
+  use_custom_targets: boolean
+  custom_kcal: number | string | null
+  custom_protein_g: number | string | null
+  custom_fat_g: number | string | null
+  custom_carb_g: number | string | null
 }
 
 export interface Targets {
   age: number
-  bmr: number
-  tdee: number
+  bmr: number | null
+  tdee: number | null
   kcal: number
   protein: number
   fat: number
   carb: number
 }
+
+/** 減重/增肌時，脂肪／碳水分「剩餘熱量」（扣掉蛋白質熱量後）的比例。維持態也需要一組，
+ *  蛋白質同樣先扣，只是熱量差額為 0。常見健身社群比例，非嚴謹公式，跟 Mifflin-St Jeor
+ *  不同級別——這點要在畫面的「計算依據」老實寫出來，不能包裝成同等硬科學。 */
+const GOAL_MACRO_PRESET: Record<Goal, { fatPct: number; carbPct: number }> = {
+  cut: { fatPct: 35, carbPct: 65 },
+  maintain: { fatPct: 40, carbPct: 60 },
+  bulk: { fatPct: 30, carbPct: 70 },
+}
+
+/** 1 公斤體脂肪 ≈ 7700 大卡的常見估算值，用來把「每週想變化幾公斤」換算成每天的熱量差額。 */
+const KCAL_PER_KG = 7700
 
 export interface IntakeTotals {
   kcal: number
@@ -41,24 +66,93 @@ export interface IntakeAmount {
 /** null/undefined 一律回 NaN，其餘交給 Number()——DB 的 numeric 欄位可能回字串。 */
 export const num = (v: unknown): number => (v === null || v === undefined ? NaN : Number(v))
 
+/** num() 的 nullable 版——欄位可能沒填，區分「沒填」（null）跟「填了但看不懂」（NaN）
+ *  在初始化表單狀態時有意義，但送去 computeTargets 前一律再走一次 num()。 */
+export function numOrNull(v: unknown): number | null {
+  const n = num(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 目標＋變化速度合併選單的狀態機（Settings.tsx 表單 UI 用）。放在 lib 層而不是
+ *  screens/ 是因為它是「DB 欄位 ↔ 選單值」的純映射，跟 DOM 無關，vitest 測得到；
+ *  放在 UI 層的話只有 e2e 測得到，這輪的表單重寫恰好還沒有 e2e 覆蓋（precommit-review
+ *  抓到），先把邏輯挪到能被 vitest 釘住的地方比補 e2e 便宜。
+ *  維持沒有速度可選，減重/增肌各有「標準 0.5kg/週」跟「自訂」兩個選項。 */
+export type GoalMode = 'maintain' | 'cut_standard' | 'cut_custom' | 'bulk_standard' | 'bulk_custom'
+export const STANDARD_RATE = 0.5
+
+export function goalModeFrom(goal: Goal, rate: number | null): GoalMode {
+  if (goal === 'maintain') return 'maintain'
+  const isStandard = rate !== null && Math.abs(rate - STANDARD_RATE) < 1e-9
+  if (goal === 'cut') return isStandard ? 'cut_standard' : 'cut_custom'
+  return isStandard ? 'bulk_standard' : 'bulk_custom'
+}
+
+export function goalFromMode(mode: GoalMode): Goal {
+  return mode === 'maintain' ? 'maintain' : mode.startsWith('cut') ? 'cut' : 'bulk'
+}
+
+/** 活動量選單的五個固定係數；不是這四個之一就是「自訂」。回傳原始數字而不是選單用的
+ *  字串，UI 層自己決定怎麼呈現——標籤文字（久坐/輕度…）是畫面用詞，不是這裡的事。 */
+export const ACTIVITY_FACTOR_PRESETS = [1.2, 1.375, 1.55, 1.725] as const
+
+export function activityChoiceFrom(af: number): number | 'custom' {
+  const preset = ACTIVITY_FACTOR_PRESETS.find((p) => Math.abs(p - af) < 1e-9)
+  return preset ?? 'custom'
+}
+
 /**
- * Mifflin-St Jeor → ×活動係數 → 目標調整。三大比例讀 profile。
- * today 只給測試注入固定日期用；正常呼叫不帶，年齡一律以目前時間計算（跟 legacy 一致）。
+ * weightKg／bodyFatPct 一律取 weight 表最新一筆（呼叫端負責查）；bodyFatPct 那一筆若沒填
+ * 傳 null，不找更舊的值——體脂率會隨時間變，用舊資料騙自己比老實承認沒有更糟。
+ * today 只給測試注入固定日期用；正常呼叫不帶，年齡一律以目前時間計算。
  */
-export function computeTargets(profile: Profile, weightKg: number, today: Date = new Date()): Targets {
-  const age = ageOn(profile.birth_date, today)
+export function computeTargets(
+  profile: Profile,
+  weightKg: number,
+  bodyFatPct: number | null,
+  today: Date = new Date(),
+): Targets {
+  const age = ageFromYear(num(profile.birth_year), today)
+
+  if (profile.use_custom_targets) {
+    return {
+      age, bmr: null, tdee: null,
+      kcal: num(profile.custom_kcal),
+      protein: num(profile.custom_protein_g),
+      fat: num(profile.custom_fat_g),
+      carb: num(profile.custom_carb_g),
+    }
+  }
+
   const h = num(profile.height_cm)
   const af = num(profile.activity_factor)
-  const bmr = 10 * weightKg + 6.25 * h - 5 * age + (profile.sex === 'male' ? 5 : -161)
+  const bmr = bodyFatPct !== null && Number.isFinite(bodyFatPct)
+    ? 370 + 21.6 * weightKg * (1 - bodyFatPct / 100) // Katch-McArdle：去脂體重
+    : 10 * weightKg + 6.25 * h - 5 * age + (profile.sex === 'male' ? 5 : -161) // Mifflin-St Jeor
   const tdee = bmr * af
-  const kcal = profile.goal === 'cut' ? tdee * 0.8
-    : profile.goal === 'bulk' ? tdee + 500
+
+  // rate 缺失或非數字時刻意不 fallback 成 0——goal≠maintain 卻沒有速度是資料不完整，
+  // 讓它以 NaN 傳染到 kcal，App.tsx 既有的 Number.isFinite(t.kcal) 守門會擋下並顯示
+  // 「目標熱量算不出來」，而不是靜默把減重/增肌算成維持態（precommit-review 抓到的
+  // 真實案例：migration 沒補 rate_kg_per_week 的既有使用者會落入這個狀態）。
+  // maintain 態不受影響——kcal 分支不讀 dailyDelta，rate 是否有值都無所謂。
+  const rate = num(profile.rate_kg_per_week)
+  const dailyDelta = (rate * KCAL_PER_KG) / 7
+  const kcal = profile.goal === 'cut' ? tdee - dailyDelta
+    : profile.goal === 'bulk' ? tdee + dailyDelta
     : tdee
+
+  const protein = num(profile.protein_g_per_kg) * weightKg
+  // 蛋白質熱量可能大於目標熱量（例如 rate/protein_g_per_kg 兩個獨立輸入剛好交叉），
+  // 剩餘熱量不夾住 0 的話會變負數，脂肪／碳水目標跟著變負，rowOverage 會把每一筆
+  // 食物都判成超標——夾住比讓它算出一個誤導性的負目標誠實。
+  const remainingKcal = Math.max(0, kcal - protein * 4)
+  const preset = GOAL_MACRO_PRESET[profile.goal]
+
   return {
-    age, bmr, tdee, kcal,
-    protein: kcal * (num(profile.protein_pct) / 100) / 4,
-    fat: kcal * (num(profile.fat_pct) / 100) / 9,
-    carb: kcal * (num(profile.carb_pct) / 100) / 4,
+    age, bmr, tdee, kcal, protein,
+    fat: (remainingKcal * preset.fatPct / 100) / 9,
+    carb: (remainingKcal * preset.carbPct / 100) / 4,
   }
 }
 
@@ -162,26 +256,3 @@ export function formatOverAria(over: OverDelta): string {
   return parts.join('，')
 }
 
-export interface MacroPercentages {
-  protein_pct: number
-  fat_pct: number
-  carb_pct: number
-}
-
-/**
- * DB 欄位是 numeric(4,1)，會先把每個值各自捨入到一位小數再檢查相加＝100。
- * 驗證要用同一個粒度，否則 33.33/33.33/33.34 前端算出剛好 100、存進去卻變成 99.9 被退回。
- */
-export function normalizeMacroPercentages(p: MacroPercentages): MacroPercentages {
-  return {
-    protein_pct: roundTo1(p.protein_pct),
-    fat_pct: roundTo1(p.fat_pct),
-    carb_pct: roundTo1(p.carb_pct),
-  }
-}
-
-/** 三大比例（各自先捨入到一位小數）相加是否等於 100。 */
-export function macroPercentagesSumTo100(p: MacroPercentages): boolean {
-  const n = normalizeMacroPercentages(p)
-  return Math.abs(n.protein_pct + n.fat_pct + n.carb_pct - 100) <= 1e-9
-}

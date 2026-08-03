@@ -1,5 +1,5 @@
-/* 設定頁：身體參數編輯＋記體重＋登出。1:1 對齊 legacy/app.js 的 renderSettings／
-   openSheet('weight'|'profile')／submitWeight／submitProfile。
+/* 設定頁：身體參數編輯（含目標計算方式：公式估算／自訂目標）＋記體重＋登出。1:1 對齊
+   legacy/app.js 的 renderSettings／openSheet('weight'|'profile')／submitWeight／submitProfile。
 
    編輯與記體重不共用 LogSheet 的 Drawer（地基裁決）——這裡自建一個獨立的 sheet 覆蓋層，
    照 legacy 的呈現方式重用 app.css 既有的 .scrim/.sheet/.field-float 等 class
@@ -9,17 +9,58 @@
    這裡改用另一個 id 掛容器，退場動畫直接用 inline style 套用同一組 keyframes
    （sheet-out／scrim-out 在 app.css 是全域定義，不需要重複宣告）。
 
-   表單一律用 uncontrolled input（ref 讀值），送出前才一次讀完全部欄位——
-   跟 legacy 的 withBusy 坑等效：busy=true 觸發的重繪不會讓已讀到的值變成別的東西。 */
+   2026-08-03「每日目標」計算方式重新設計：公式估算改用 Katch-McArdle（weight 表最新一筆
+   有體脂率時）或 Mifflin-St Jeor（沒有時），蛋白質改 g/kg 體重、脂肪／碳水依目標對照表
+   （寫死在 formulas.ts）分剩餘熱量，不再開放使用者調整三大比例；新增變化速度控制減重/
+   增肌的每日熱量差額；新增自訂目標開關，開著時完全繞過公式直接填四個數字。
+   這輪只接計算引擎（範圍已跟使用者確認）：維持現有單頁＋sheet 架構，不做「每日目標」
+   獨立入口頁、不做即時預覽——存檔後跟現有記體重／編輯身體參數一樣，靠 App.tsx 的
+   load() 重新整包算一次。
+
+   表單一律用 uncontrolled input（ref 讀值），送出前才一次讀完全部欄位——跟 legacy 的
+   withBusy 坑等效：busy=true 觸發的重繪不會讓已讀到的值變成別的東西。例外：目標＋變化
+   速度合併選單、活動量選單各自要 reactive state 決定「自訂」子欄位顯不顯示，這兩個不是
+   最終送出值本身（送出時仍讀 ref／select.value），純粹控制條件渲染，跟自訂目標開關
+   （useCustom）同一類。 */
 import { useEffect, useRef, useState } from 'react'
 import { localDate } from '@/lib/dates'
-import { macroPercentagesSumTo100, normalizeMacroPercentages, num, roundTo1 } from '@/lib/formulas'
+import {
+  activityChoiceFrom as activityFactorChoiceFrom,
+  goalFromMode,
+  goalModeFrom,
+  num,
+  numOrNull,
+  STANDARD_RATE,
+  type GoalMode,
+} from '@/lib/formulas'
 import type { SettingsProps } from './types'
 
 type SheetKind = 'weight' | 'profile'
 
 const GOAL_LABEL: Record<string, string> = { cut: '減重', maintain: '維持', bulk: '增肌' }
-const GOAL_NOTE: Record<string, string> = { cut: '減重再乘 0.8', maintain: '維持不調整', bulk: '增肌再加 500' }
+
+const ACTIVITY_PRESETS = [
+  { value: '1.2', label: '久坐（1.2）' },
+  { value: '1.375', label: '輕度（1.375）' },
+  { value: '1.55', label: '中度（1.55）' },
+  { value: '1.725', label: '高度（1.725）' },
+]
+
+/** activityFactorChoiceFrom（formulas.ts）回傳數字或 'custom'，這裡的選單值是字串
+ *  （HTML select option 天生只吃字串）——薄薄轉一層，實際判斷邏輯留在 lib 層可測。 */
+function activityChoiceFrom(af: number): string {
+  const preset = activityFactorChoiceFrom(af)
+  return preset === 'custom' ? 'custom' : String(preset)
+}
+
+function Kv({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="kv">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  )
+}
 
 /** 動效時長讀 app.css 的 token（與 LogSheet 同一來源），reduced-motion 時降到近乎 0。
  *  sheet 退場 --dur-mid；scrim 退場 --dur-fast——暗幕要比 sheet 先清，否則 sheet 滑走
@@ -31,15 +72,6 @@ function tokenMs(name: string, fallback: number): number {
 }
 const closeDurationMs = () => tokenMs('--dur-mid', 220)
 const scrimFadeMs = () => tokenMs('--dur-fast', 100)
-
-function Kv({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="kv">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  )
-}
 
 /** 必填數值：空白或非數字回 NaN，由呼叫端一次擋掉。 */
 function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
@@ -55,18 +87,26 @@ export default function Settings(props: SettingsProps) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
+  /* 三顆條件渲染用的 reactive state，不是最終送出值本身——送出時仍讀對應的 ref／
+     select.value，這幾顆只負責「自訂」子欄位顯不顯示。 */
+  const [useCustom, setUseCustom] = useState(profile.use_custom_targets)
+  const [goalMode, setGoalMode] = useState<GoalMode>(goalModeFrom(profile.goal, numOrNull(profile.rate_kg_per_week)))
+  const [activityChoice, setActivityChoice] = useState(activityChoiceFrom(num(profile.activity_factor)))
+
   const openerRef = useRef<HTMLElement | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<number | undefined>(undefined)
 
-  const pBirth = useRef<HTMLInputElement>(null)
+  const pBirthYear = useRef<HTMLInputElement>(null)
   const pHeight = useRef<HTMLInputElement>(null)
   const pSex = useRef<HTMLSelectElement>(null)
-  const pGoal = useRef<HTMLSelectElement>(null)
-  const pAf = useRef<HTMLInputElement>(null)
-  const pProtein = useRef<HTMLInputElement>(null)
-  const pFat = useRef<HTMLInputElement>(null)
-  const pCarb = useRef<HTMLInputElement>(null)
+  const pCustomRate = useRef<HTMLInputElement>(null)
+  const pCustomActivity = useRef<HTMLInputElement>(null)
+  const pProteinPerKg = useRef<HTMLInputElement>(null)
+  const pCustomKcal = useRef<HTMLInputElement>(null)
+  const pCustomProtein = useRef<HTMLInputElement>(null)
+  const pCustomFat = useRef<HTMLInputElement>(null)
+  const pCustomCarb = useRef<HTMLInputElement>(null)
 
   const wDate = useRef<HTMLInputElement>(null)
   const wKg = useRef<HTMLInputElement>(null)
@@ -101,6 +141,11 @@ export default function Settings(props: SettingsProps) {
     setErr(null)
     setBusy(false)
     setClosing(false)
+    // 每次重開都對齊目前的 profile——Settings 元件本身不會在開合 sheet 之間卸載，
+    // 這幾顆 state 若不重設，上次編輯到一半沒存就關掉的殘值會在下次打開時還在。
+    setUseCustom(profile.use_custom_targets)
+    setGoalMode(goalModeFrom(profile.goal, numOrNull(profile.rate_kg_per_week)))
+    setActivityChoice(activityChoiceFrom(num(profile.activity_factor)))
     setSheetKind(kind)
   }
 
@@ -126,7 +171,11 @@ export default function Settings(props: SettingsProps) {
     if (!Number.isFinite(kg) || kg <= 0) return setErr('體重要填數字')
     if (!on) return setErr('量測日要填')
     const fat = fatVal === '' ? null : Number(fatVal)
-    if (fat !== null && !Number.isFinite(fat)) return setErr('體脂要填數字或留空')
+    // 體脂率 2026-08-03 起會餵進 Katch-McArdle 算 BMR，範圍收在生理合理值——0 或
+    // >100 會讓去脂體重算出負數或超過體重本身，不是單純「記錄用途」時可以放行的錯字。
+    if (fat !== null && (!Number.isFinite(fat) || fat < 3 || fat > 70)) {
+      return setErr('體脂要填 3–70 之間的數字，或留空')
+    }
 
     setBusy(true)
     setErr(null)
@@ -141,43 +190,80 @@ export default function Settings(props: SettingsProps) {
 
   async function submitProfile() {
     if (busy) return
-    const p = {
-      birth_date: pBirth.current?.value.trim() ?? '',
-      height_cm: reqNum(pHeight),
-      sex: pSex.current?.value ?? '',
-      goal: pGoal.current?.value ?? '',
-      activity_factor: reqNum(pAf),
-      protein_pct: reqNum(pProtein),
-      fat_pct: reqNum(pFat),
-      carb_pct: reqNum(pCarb),
+    const birthYear = reqNum(pBirthYear)
+    const thisYear = new Date().getFullYear()
+    if (!Number.isFinite(birthYear) || birthYear < 1900 || birthYear > thisYear) {
+      return setErr('出生年要填合理的西元年')
+    }
+    const height = reqNum(pHeight)
+    if (!Number.isFinite(height) || height <= 0) return setErr('身高要填數字')
+    const sex = pSex.current?.value ?? ''
+
+    if (useCustom) {
+      const kcal = reqNum(pCustomKcal)
+      const proteinG = reqNum(pCustomProtein)
+      const fatG = reqNum(pCustomFat)
+      const carbG = reqNum(pCustomCarb)
+      // 熱量是 0 沒有意義（進度條、剩餘量全部跟著失真），三大營養素留 0 合理
+      // （無糖飲料的蛋白脂肪本來就是 0，跟新增食物表單同一條規則）。
+      if (!Number.isFinite(kcal) || kcal <= 0) return setErr('熱量要填數字')
+      if (![proteinG, fatG, carbG].every((n) => Number.isFinite(n) && n >= 0)) {
+        return setErr('蛋白質／脂肪／碳水都要填數字')
+      }
+      setBusy(true)
+      setErr(null)
+      try {
+        // 只送自訂相關欄位＋基本資料，公式模式那組（goal/activity_factor/...）不動，
+        // 之後切回公式估算時原本填過的還在，不必重打一次。
+        await onSaveProfile({
+          birth_year: birthYear,
+          height_cm: height,
+          sex,
+          use_custom_targets: true,
+          custom_kcal: kcal,
+          custom_protein_g: proteinG,
+          custom_fat_g: fatG,
+          custom_carb_g: carbG,
+        })
+        closeSheet()
+      } catch (e) {
+        setBusy(false)
+        setErr(e instanceof Error ? e.message : String(e))
+      }
+      return
     }
 
-    if (!p.birth_date) return setErr('生日要填')
-    if (!Number.isFinite(p.height_cm) || p.height_cm <= 0) return setErr('身高要填數字')
-    if (!Number.isFinite(p.activity_factor) || p.activity_factor <= 0) return setErr('活動係數要填數字')
-    if ([p.protein_pct, p.fat_pct, p.carb_pct].some((n) => !Number.isFinite(n) || n < 0)) {
-      return setErr('三大比例要填數字')
+    const goal = goalFromMode(goalMode)
+    let rate: number | null = null
+    if (goal !== 'maintain') {
+      rate = goalMode.endsWith('custom') ? reqNum(pCustomRate) : STANDARD_RATE
+      // 上限對齊 schema 的 check（numeric(3,2) 欄位本身能存到 9.99，但生理上一週瘦/
+      // 增 3 公斤已經不合理）——擋在前端比讓 PostgREST 丟一句英文 22003 錯誤好懂。
+      if (!Number.isFinite(rate) || rate <= 0 || rate > 3) return setErr('變化速度要填 0–3 之間的數字')
     }
-
-    // DB 欄位 numeric(4,1)：先各自捨入到一位小數再驗和＝100，粒度要跟寫入一致
-    const normalized = normalizeMacroPercentages(p)
-    if (!macroPercentagesSumTo100(p)) {
-      const sum = roundTo1(normalized.protein_pct + normalized.fat_pct + normalized.carb_pct)
-      return setErr(`三大比例相加要等於 100（目前 ${sum}）`)
+    const activityFactor = activityChoice === 'custom' ? reqNum(pCustomActivity) : num(activityChoice)
+    if (!Number.isFinite(activityFactor) || activityFactor <= 0 || activityFactor > 3) {
+      return setErr('活動係數要填 0–3 之間的數字')
+    }
+    const proteinPerKg = reqNum(pProteinPerKg)
+    if (!Number.isFinite(proteinPerKg) || proteinPerKg <= 0 || proteinPerKg > 5) {
+      return setErr('攝取蛋白質要填 0–5 之間的數字')
     }
 
     setBusy(true)
     setErr(null)
     try {
+      // 同樣只送公式模式相關欄位，custom_* 那組不動——自訂數字保留，不因為切回
+      // 公式估算就被清空。
       await onSaveProfile({
-        birth_date: p.birth_date,
-        height_cm: p.height_cm,
-        sex: p.sex,
-        goal: p.goal,
-        activity_factor: p.activity_factor,
-        protein_pct: normalized.protein_pct,
-        fat_pct: normalized.fat_pct,
-        carb_pct: normalized.carb_pct,
+        birth_year: birthYear,
+        height_cm: height,
+        sex,
+        goal,
+        rate_kg_per_week: rate,
+        activity_factor: activityFactor,
+        protein_g_per_kg: proteinPerKg,
+        use_custom_targets: false,
       })
       closeSheet()
     } catch (e) {
@@ -186,9 +272,11 @@ export default function Settings(props: SettingsProps) {
     }
   }
 
-  const goal = GOAL_LABEL[profile.goal] ?? profile.goal
-  const ratio = [profile.protein_pct, profile.fat_pct, profile.carb_pct].map((v) => String(num(v))).join(' / ')
-  const sheetTitle = sheetKind === 'weight' ? '記體重' : '身體參數'
+  const isCustom = profile.use_custom_targets
+  const goalLabel = GOAL_LABEL[profile.goal] ?? profile.goal
+  const bodyFatPct = latestWeight.body_fat_pct
+  const bmrFormulaLabel = bodyFatPct !== null ? 'Katch-McArdle' : 'Mifflin-St Jeor'
+  const sheetTitle = sheetKind === 'weight' ? '記體重' : '編輯身體參數'
   // 退場覆寫整個 animation shorthand（不能只改 duration）：.scrim 平時的 animation 是
   // scrim-in，只改時長會讓它用縮短的時間重播「進場」而不是播放「退場」
   const scrimExitStyle = closing ? { animation: `scrim-out ${scrimFadeMs()}ms var(--ease-sheet) both` } : undefined
@@ -210,21 +298,31 @@ export default function Settings(props: SettingsProps) {
         </dl>
 
         <h2>怎麼算出來的</h2>
-        <dl>
-          <Kv label="最新體重" value={`${num(latestWeight.weight_kg).toFixed(2)} kg`} />
-          <Kv label="量測日" value={latestWeight.measured_on} />
-          <Kv label="身高" value={`${num(profile.height_cm).toFixed(1)} cm`} />
-          <Kv label="年齡" value={`${targets.age} 歲`} />
-          <Kv label="BMR" value={`${Math.round(targets.bmr)} 卡`} />
-          <Kv label="活動係數" value={String(num(profile.activity_factor))} />
-          <Kv label="TDEE" value={`${Math.round(targets.tdee)} 卡`} />
-          <Kv label="目標" value={goal} />
-          <Kv label="三大比例" value={ratio} />
-        </dl>
-        <p className="note">
-          Mifflin-St Jeor 公式算 BMR，乘活動係數得 TDEE，{GOAL_NOTE[profile.goal] ?? ''}
-          。三大營養素按 {ratio} 拆分。體重取最新一筆，數值變動時目標會跟著動。
-        </p>
+        {isCustom ? (
+          <p className="note">這是你自己設定的目標，沒有套用任何公式。</p>
+        ) : (
+          <>
+            <dl>
+              <Kv label="最新體重" value={`${num(latestWeight.weight_kg).toFixed(2)} kg`} />
+              {bodyFatPct !== null && <Kv label="體脂率" value={`${num(bodyFatPct).toFixed(1)} %`} />}
+              <Kv label="身高" value={`${num(profile.height_cm).toFixed(1)} cm`} />
+              <Kv label="年齡" value={`${targets.age} 歲`} />
+              <Kv label="BMR" value={`${Math.round(targets.bmr ?? 0)} 卡`} />
+              <Kv label="活動係數" value={String(num(profile.activity_factor))} />
+              <Kv label="TDEE" value={`${Math.round(targets.tdee ?? 0)} 卡`} />
+              <Kv label="目標" value={goalLabel} />
+              {profile.goal !== 'maintain' && numOrNull(profile.rate_kg_per_week) !== null && (
+                <Kv label="變化速度" value={`${num(profile.rate_kg_per_week)} kg/週`} />
+              )}
+              <Kv label="攝取蛋白質" value={`${num(profile.protein_g_per_kg)} g/kg`} />
+            </dl>
+            <p className="note">
+              {bmrFormulaLabel} 公式算 BMR，乘活動係數得 TDEE
+              {profile.goal !== 'maintain' ? `，${goalLabel}依變化速度調整每日熱量` : ''}
+              。蛋白質＝體重 × 攝取量，脂肪／碳水依目標自動配好比例分剩餘熱量。
+            </p>
+          </>
+        )}
 
         <button
           className="link-btn"
@@ -290,7 +388,7 @@ export default function Settings(props: SettingsProps) {
                     <input ref={wFat} id="w-fat" type="text" inputMode="decimal" placeholder=" " />
                     <label htmlFor="w-fat">體脂 %</label>
                   </div>
-                  <p className="note">存體脂計原始讀數，不做校正。同一天再記一次會覆蓋當天那筆。</p>
+                  <p className="note">存體脂計原始讀數，不做校正。同一天再記一次會覆蓋當天那筆。填了體脂率，公式估算會用更準的 Katch-McArdle；這次沒填，目標就會改用不看體脂率的 Mifflin-St Jeor 算，熱量目標可能因此跟著變。</p>
                 </div>
                 <div className="confirm-wrap">
                   {err && (
@@ -306,9 +404,27 @@ export default function Settings(props: SettingsProps) {
             ) : (
               <>
                 <div className="form-wrap">
+                  <div className="seg" role="group" aria-label="目標計算方式" style={{ marginBottom: 'var(--s-4)' }}>
+                    <button type="button" aria-pressed={!useCustom} onClick={() => setUseCustom(false)}>
+                      公式估算
+                    </button>
+                    <button type="button" aria-pressed={useCustom} onClick={() => setUseCustom(true)}>
+                      自訂目標
+                    </button>
+                  </div>
+
                   <div className="field-float">
-                    <input ref={pBirth} id="p-birth" type="date" defaultValue={profile.birth_date} />
-                    <label htmlFor="p-birth">生日</label>
+                    <input
+                      ref={pBirthYear}
+                      id="p-birth-year"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder=" "
+                      defaultValue={numOrNull(profile.birth_year) ?? ''}
+                    />
+                    <label htmlFor="p-birth-year">
+                      出生年<span className="req">*</span>
+                    </label>
                   </div>
                   <div className="field-row">
                     <div className="field-float">
@@ -332,71 +448,142 @@ export default function Settings(props: SettingsProps) {
                       <label htmlFor="p-sex">性別</label>
                     </div>
                   </div>
-                  <div className="field-row">
-                    <div className="field-float">
-                      <select ref={pGoal} id="p-goal" defaultValue={profile.goal}>
-                        <option value="cut">減重</option>
-                        <option value="maintain">維持</option>
-                        <option value="bulk">增肌</option>
-                      </select>
-                      <label htmlFor="p-goal">目標</label>
-                    </div>
-                    <div className="field-float">
-                      <input
-                        ref={pAf}
-                        id="p-af"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder=" "
-                        defaultValue={String(num(profile.activity_factor))}
-                      />
-                      <label htmlFor="p-af">
-                        活動係數<span className="req">*</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="field-row">
-                    <div className="field-float">
-                      <input
-                        ref={pProtein}
-                        id="p-protein"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder=" "
-                        defaultValue={String(num(profile.protein_pct))}
-                      />
-                      <label htmlFor="p-protein">
-                        蛋白 %<span className="req">*</span>
-                      </label>
-                    </div>
-                    <div className="field-float">
-                      <input
-                        ref={pFat}
-                        id="p-fat"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder=" "
-                        defaultValue={String(num(profile.fat_pct))}
-                      />
-                      <label htmlFor="p-fat">
-                        脂肪 %<span className="req">*</span>
-                      </label>
-                    </div>
-                    <div className="field-float">
-                      <input
-                        ref={pCarb}
-                        id="p-carb"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder=" "
-                        defaultValue={String(num(profile.carb_pct))}
-                      />
-                      <label htmlFor="p-carb">
-                        碳水 %<span className="req">*</span>
-                      </label>
-                    </div>
-                  </div>
-                  <p className="note">活動係數：久坐 1.2、輕度 1.375、中度 1.55、高度 1.725。三大比例相加要等於 100。</p>
+
+                  {useCustom ? (
+                    <>
+                      <div className="field-float">
+                        <input
+                          ref={pCustomKcal}
+                          id="p-custom-kcal"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder=" "
+                          defaultValue={numOrNull(profile.custom_kcal) ?? ''}
+                        />
+                        <label htmlFor="p-custom-kcal">
+                          熱量（卡）<span className="req">*</span>
+                        </label>
+                      </div>
+                      <div className="field-row">
+                        <div className="field-float">
+                          <input
+                            ref={pCustomProtein}
+                            id="p-custom-protein"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.custom_protein_g) ?? ''}
+                          />
+                          <label htmlFor="p-custom-protein">蛋白質 g</label>
+                        </div>
+                        <div className="field-float">
+                          <input
+                            ref={pCustomFat}
+                            id="p-custom-fat"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.custom_fat_g) ?? ''}
+                          />
+                          <label htmlFor="p-custom-fat">脂肪 g</label>
+                        </div>
+                        <div className="field-float">
+                          <input
+                            ref={pCustomCarb}
+                            id="p-custom-carb"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.custom_carb_g) ?? ''}
+                          />
+                          <label htmlFor="p-custom-carb">碳水 g</label>
+                        </div>
+                      </div>
+                      <p className="note">存成你自己設定的目標，不套用任何公式。關掉「自訂目標」會退回公式估算；存檔後這幾個數字會留著，下次切回來還在（同一次編輯中來回切換不會保留，只有存檔會）。</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="field-float">
+                        <select
+                          id="p-goal-mode"
+                          value={goalMode}
+                          onChange={(e) => setGoalMode(e.target.value as GoalMode)}
+                        >
+                          <option value="maintain">維持</option>
+                          <option value="cut_standard">減重（標準・0.5 kg/週）</option>
+                          <option value="cut_custom">減重（自訂速度…）</option>
+                          <option value="bulk_standard">增肌（標準・0.5 kg/週）</option>
+                          <option value="bulk_custom">增肌（自訂速度…）</option>
+                        </select>
+                        <label htmlFor="p-goal-mode">
+                          目標<span className="req">*</span>
+                        </label>
+                      </div>
+                      {(goalMode === 'cut_custom' || goalMode === 'bulk_custom') && (
+                        <div className="field-float">
+                          <input
+                            ref={pCustomRate}
+                            id="p-custom-rate"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.rate_kg_per_week) ?? STANDARD_RATE}
+                          />
+                          <label htmlFor="p-custom-rate">
+                            變化速度 kg/週<span className="req">*</span>
+                          </label>
+                        </div>
+                      )}
+                      <div className="field-row">
+                        <div className="field-float">
+                          <select
+                            id="p-activity"
+                            value={activityChoice}
+                            onChange={(e) => setActivityChoice(e.target.value)}
+                          >
+                            {ACTIVITY_PRESETS.map((p) => (
+                              <option key={p.value} value={p.value}>
+                                {p.label}
+                              </option>
+                            ))}
+                            <option value="custom">自訂…</option>
+                          </select>
+                          <label htmlFor="p-activity">
+                            活動量<span className="req">*</span>
+                          </label>
+                        </div>
+                        <div className="field-float">
+                          <input
+                            ref={pProteinPerKg}
+                            id="p-protein-per-kg"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.protein_g_per_kg) ?? ''}
+                          />
+                          <label htmlFor="p-protein-per-kg">
+                            攝取蛋白質 g/kg<span className="req">*</span>
+                          </label>
+                        </div>
+                      </div>
+                      {activityChoice === 'custom' && (
+                        <div className="field-float">
+                          <input
+                            ref={pCustomActivity}
+                            id="p-custom-activity"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder=" "
+                            defaultValue={numOrNull(profile.activity_factor) ?? ''}
+                          />
+                          <label htmlFor="p-custom-activity">
+                            自訂係數<span className="req">*</span>
+                          </label>
+                        </div>
+                      )}
+                      <p className="note">攝取蛋白質建議 1.6–2.2 g/kg 體重。</p>
+                    </>
+                  )}
                 </div>
                 <div className="confirm-wrap">
                   {err && (

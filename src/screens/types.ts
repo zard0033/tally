@@ -68,11 +68,7 @@ export interface SettingsProps {
   profile: ProfileRow
   targets: Targets
   latestWeight: Weight
-  /**
-   * 儲存身體參數編輯。三大比例的捨入／相加＝100 驗證要先呼叫
-   * formulas.ts 的 normalizeMacroPercentages／macroPercentagesSumTo100 過一輪再送，
-   * 語意跟 legacy submitProfile 一致。失敗 rejects，Settings 自己接住顯示錯誤。
-   */
+  /** 儲存身體參數編輯（含自訂目標覆寫）。失敗 rejects，Settings 自己接住顯示錯誤。 */
   onSaveProfile: (patch: Partial<ProfileRow>) => Promise<void>
   /**
    * 記體重。user_id 由 App 補上（Settings 不需要知道 profile.user_id 以外的細節），

@@ -184,12 +184,12 @@ export default function App() {
         const detail = !p && !w
           ? '這個帳號的身體參數與體重紀錄都是空的。若之前用另一組帳號登入過，資料可能掛在那組帳號下——請確認登入的是同一個 Google 帳號。'
           : !p
-            ? '還沒有身高、生日這些身體參數，算不出目標熱量。'
+            ? '還沒有身高、出生年這些身體參數，算不出目標熱量。'
             : '還沒有任何體重紀錄，算不出目標熱量。'
         showNotice('還沒有身體參數', detail, '重新載入', () => void load(date))
         return
       }
-      const t = computeTargets(p, num(w.weight_kg))
+      const t = computeTargets(p, num(w.weight_kg), w.body_fat_pct)
       if (!Number.isFinite(t.kcal)) {
         showNotice('目標熱量算不出來', '身體參數有缺漏或格式不對，算出來的目標不是有效數字。', '重新載入', () => void load(date))
         return

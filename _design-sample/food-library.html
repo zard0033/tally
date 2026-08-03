@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>➊ 樣張 v3 — 設定頁改版 ＋ 食品庫管理 ＋ 範本新增食物</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 960px; line-height: 1.6; }
+  .frames { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; }
+  .frame-note { font-size: 12px; color: #9A4330; max-width: 393px; line-height: 1.5; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px;
+    box-shadow: 0 12px 28px rgba(61,34,16,.25); border: 1px solid #D8C9AE; position: relative; }
+  .device > .screen { height: 745px; }
+
+  /* ── 設定頁 entry list（沿用 v2） ── */
+  .entry-list { margin: var(--s-2) var(--s-5) 0; border-radius: var(--r-tab); overflow: clip;
+    background: var(--card); border: 1px solid var(--rule-subtle); }
+  .entry-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+    width: 100%; min-height: 60px; padding: var(--s-2) var(--s-4); border: none; background: none;
+    border-bottom: 1px solid var(--rule-subtle); text-align: left; font-family: inherit;
+    color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+  .entry-row:last-child { border-bottom: none; }
+  .entry-row .lb-wrap { min-width: 0; flex: 1; }
+  .entry-row .lb { display: block; font-size: var(--t-base); font-weight: 600; }
+  .entry-row .lb-sub { display: block; font-size: var(--t-xs); color: var(--ink-muted);
+    margin-top: 2px; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+    letter-spacing: var(--track-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
+  .entry-row .spark { width: 72px; height: 24px; flex-shrink: 0; margin-left: var(--s-2); }
+
+  /* ── 每日目標：分組卡片（不用陰影，靠 --card/--raised 分層 + 1px 邊框） ── */
+  .lib-topbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0; }
+  .lib-topbar h1 { flex: 1; min-width: 0; font-weight: 700; font-size: var(--t-md);
+    letter-spacing: var(--track-md); margin: 0; }
+  .goal-group { margin: 0 0 var(--s-4); border-radius: var(--r-tab); background: var(--card);
+    border: 1px solid var(--rule-subtle); overflow: clip; }
+  .goal-group-title { padding: var(--s-3) var(--s-4) var(--s-1); font-size: var(--t-xs);
+    font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .goal-row { display: flex; align-items: center; gap: var(--s-2); min-height: 48px;
+    padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
+  .goal-group-title + .goal-row { border-top: none; }
+  .goal-row .ic { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
+  .goal-row .lb { flex: 1; color: var(--ink-muted); }
+  .goal-row .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .goal-src { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
+    background: var(--raised); }
+  .goal-src .t { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
+    letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
+  .goal-src ul { margin: 0; padding-left: 1.1em; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.7; }
+
+  .trend-card { margin: var(--s-2) var(--s-5) 0; padding: var(--s-4); border-radius: var(--r-tab);
+    background: var(--card); border: 1px dashed var(--rule-field); text-align: center; }
+  .trend-card .ph { height: 120px; display: flex; align-items: center; justify-content: center;
+    color: var(--ink-faint); font-size: var(--t-xs); border-radius: var(--r-tab); background: var(--raised); }
+  .trend-card p { font-size: var(--t-xs); color: var(--ink-muted); margin: var(--s-2) 0 0; line-height: 1.5; }
+
+  /* ── 食品庫：店家分組卡片 ── */
+  .search-wrap-demo { padding: var(--s-3) var(--s-5) 0; flex-shrink: 0; }
+  .tabrow { display: flex; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; flex-shrink: 0; }
+  .lib-group { margin: 0 var(--s-5) var(--s-3); border-radius: var(--r-tab); background: var(--card);
+    border: 1px solid var(--rule-subtle); overflow: clip; }
+  .lib-group-title { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--t-xs);
+    font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .lib-row-v2 { border-top: 1px solid var(--rule-subtle); }
+  .lib-group-title + ul .lib-row-v2:first-child, .lib-group ul:first-child .lib-row-v2:first-child { border-top: none; }
+  .lib-row-main-v2 { display: flex; align-items: center; gap: var(--s-1); min-height: 52px; padding: 0 var(--s-3); }
+  .lib-row-main-v2 .nm-wrap { flex: 1; min-width: 0; }
+  .lib-row-main-v2 .nm { font-size: var(--t-base); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lib-row-main-v2 .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
+  .lib-row-main-v2 .icon-btn { width: 40px; height: 40px; color: var(--ink-muted); }
+  .lib-row-main-v2 .icon-btn svg { width: 17px; height: 17px; }
+
+  .lib-edit { padding: 0 var(--s-3) var(--s-3); background: var(--raised); }
+  .lib-edit .field-float { margin-bottom: var(--s-3); }
+  .lib-edit .field-float:first-child { padding-top: var(--s-3); }
+  .lib-edit .field-row { display: flex; gap: var(--s-2); }
+  .lib-edit-actions { display: flex; gap: var(--s-2); padding-top: var(--s-1); }
+  .lib-edit-actions .pick-bar-btn { min-height: 44px; font-size: var(--t-sm); }
+  .lib-edit-actions .cancel-btn { flex: 0 0 88px; min-height: 44px; border-radius: var(--r-btn);
+    border: none; background: none; color: var(--ink-muted); font-family: inherit; font-size: var(--t-sm); font-weight: 600; }
+
+  .lib-fab { position: absolute; right: var(--s-5); bottom: var(--s-5); z-index: 5;
+    width: 56px; height: 56px; border-radius: var(--r-pill); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 16px rgba(28,112,89,.35); }
+  .lib-fab svg { width: 22px; height: 22px; stroke-width: 2.2; }
+
+  .undo-pill-demo { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-4);
+    border-radius: var(--r-pill); background: var(--ink); color: var(--paper); font-size: var(--t-sm); font-weight: 600; }
+  .undo-pill-demo svg { width: 16px; height: 16px; }
+
+  /* ── 自訂目標開關（重用今日頁既有的 .seg 分段控制器語言，不新發明元件） ── */
+  .goal-seg-wrap { padding: 0 var(--s-5) var(--s-3); flex-shrink: 0; }
+  .goal-link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+    min-height: 44px; padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle);
+    color: var(--accent); font-size: var(--t-sm); font-weight: 600; }
+  .goal-link-row svg { width: 14px; height: 14px; }
+  .goal-note-box { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
+    background: var(--raised); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+  .goal-hero { text-align: center; padding: var(--s-4) 0; }
+  .goal-hero-macros { margin-top: var(--s-2); font-size: var(--t-sm); color: var(--ink-muted);
+    font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .goal-detail { margin-top: var(--s-2); }
+  .goal-hero-live { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<h1 class="harness-title">➊ 設計樣張 v3 — 食品庫管理與設定頁重構</h1>
+<p class="harness-sub">
+  這輪的重點是「參考小資算熱量的分組卡片感、但走 Tally 自己的語言」＋「食品庫改三顆純圖示、就地編輯、拿掉分組凸出感」。
+  <b style="color:#3D2210">紅字仍是待你確認的點</b>，其餘已按你的指示直接改定。
+</p>
+
+<div class="frames">
+
+  <!-- ═══ A. 設定頁 ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">A. 設定頁</div>
+    <div class="frame-note">
+      「體重趨勢搬到主頁」——我的建議是<b>折衷版</b>：入口列下方放一條極簡 sparkline（純示意，不是
+      正式圖表，沒有座標軸／刻度），完整圖表留在獨立頁。理由：設定頁這輪定的調性是「入口列表」，
+      整張圖表卡片會打斷這個一致性，變成「列表＋一張圖」的混合版面；小小一條線只是「有資料」的
+      暗示，不會搶走列表的乾淨感。<b>如果你要的其實是完整圖表直接放這裡</b>，我可以照做，但那樣
+      這頁的定位會從「入口列表」變成「儀表板＋列表」的混合，要先講好要不要接受這個轉向。
+    </div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper)">
+        <header class="topbar"><h1 class="today">設定</h1></header>
+        <div class="settings">
+          <div class="entry-list">
+            <button class="entry-row" type="button">
+              <span class="lb-wrap">
+                <span class="lb">每日目標</span>
+                <span class="lb-sub">1860 卡・蛋白 140g・脂 62g・碳水 210g</span>
+              </span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+            <button class="entry-row" type="button">
+              <span class="lb-wrap"><span class="lb">食品庫管理</span></span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+            <button class="entry-row" type="button">
+              <span class="lb-wrap"><span class="lb">更新身體數據</span></span>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+            <button class="entry-row" type="button">
+              <span class="lb-wrap">
+                <span class="lb">體重趨勢</span>
+                <span class="lb-sub">最新 68.4 kg（8/2）</span>
+              </span>
+              <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="0,22 20,24 40,17 60,20 80,10 100,13 120,6" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+          <button class="signout" type="button" style="margin-top:32px">登出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ A3. 體重趨勢（獨立頁，圖表仍是佔位） ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">A3. 體重趨勢（獨立頁）</div>
+    <div class="frame-note">主頁那條 sparkline 只是暗示，完整圖表（含座標軸、時間範圍切換）還是留在這頁，本輪不畫。</div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper)">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>體重趨勢</h1>
+        </div>
+        <div class="trend-card">
+          <div class="ph">〔完整圖表區域〕</div>
+          <p>近 30 天／90 天／全部，體脂要不要同框——留到圖表定案時再決定。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ B. 食品庫管理 — 使用中（含就地編輯展開） ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">B. 食品庫管理 — 使用中</div>
+    <div class="frame-note">
+      三顆純圖示（編輯／以此為範本新增／封存），不寫字，<code>aria-label</code> 補無障礙名稱。
+      <b>編輯改成就地展開</b>——同今日頁 v2.20 的品項就地編輯語言，不再跳頁不再開 sheet；
+      表單欄位<b>改回一列一欄</b>（品名/店家並排、熱量整行、三大營養素三欄並排），就是沿用
+      LogSheet「新增食物」現有那套版式，不再試四欄合併。店家分組改成<b>卡片包裹</b>（`--card`
+      底 ＋ 邊框），組跟組之間留間距，不會再有東西「凸出來」。封存比照今日頁刪除的
+      <b>樂觀 + 5 秒復原</b>語言，不彈確認對話框。
+    </div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper);position:relative">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>食品庫管理</h1>
+        </div>
+        <div class="search-wrap-demo">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>
+            <input type="text" placeholder="搜尋品名或店家" aria-label="搜尋食品庫" />
+          </div>
+        </div>
+        <div class="tabrow" role="tablist" aria-label="食品庫篩選">
+          <button class="chip" aria-current="true" type="button">使用中</button>
+          <button class="chip" type="button">已封存</button>
+        </div>
+        <div class="settings" style="padding-top:var(--s-2);padding-bottom:80px">
+
+          <div class="lib-group">
+            <div class="lib-group-title">7-11</div>
+            <ul style="list-style:none;margin:0;padding:0">
+              <li class="lib-row-v2">
+                <div class="lib-row-main-v2">
+                  <div class="nm-wrap"><span class="nm">溏心蛋</span></div>
+                  <button class="icon-btn" type="button" aria-label="編輯 溏心蛋">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="以 溏心蛋 為範本新增">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="11" height="11" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="封存 溏心蛋">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
+                  </button>
+                </div>
+                <!-- 就地編輯展開態示範 -->
+                <div class="lib-edit">
+                  <div class="field-row">
+                    <div class="field-float" style="flex:1"><input type="text" value="溏心蛋" /><label>品名<span class="req">*</span></label></div>
+                    <div class="field-float" style="flex:1"><input type="text" value="7-11" /><label>店家</label></div>
+                  </div>
+                  <div class="field-float"><input type="text" value="80" /><label>熱量（卡）<span class="req">*</span></label></div>
+                  <div class="field-row">
+                    <div class="field-float" style="flex:1"><input type="text" value="6" /><label>蛋白質 g</label></div>
+                    <div class="field-float" style="flex:1"><input type="text" value="5" /><label>脂肪 g</label></div>
+                    <div class="field-float" style="flex:1"><input type="text" value="1" /><label>碳水 g</label></div>
+                  </div>
+                  <div class="lib-edit-actions">
+                    <button class="cancel-btn" type="button">取消</button>
+                    <button class="pick-bar-btn" type="button" style="flex:1">儲存</button>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="lib-group">
+            <div class="lib-group-title">全聯</div>
+            <ul style="list-style:none;margin:0;padding:0">
+              <li class="lib-row-v2">
+                <div class="lib-row-main-v2">
+                  <div class="nm-wrap"><span class="nm">原味雞胸 85g</span></div>
+                  <button class="icon-btn" type="button" aria-label="編輯 原味雞胸 85g">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="以 原味雞胸 85g 為範本新增">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="11" height="11" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="封存 原味雞胸 85g">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="lib-group">
+            <div class="lib-group-title">未標店家</div>
+            <ul style="list-style:none;margin:0;padding:0">
+              <li class="lib-row-v2">
+                <div class="lib-row-main-v2">
+                  <div class="nm-wrap"><span class="nm">無糖豆漿</span></div>
+                  <button class="icon-btn" type="button" aria-label="編輯 無糖豆漿">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="以 無糖豆漿 為範本新增">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="11" height="11" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1"/></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="封存 無糖豆漿">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+        </div>
+        <button class="lib-fab" type="button" aria-label="新增食物">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ C. 封存後的復原提示 ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">C. 按下封存後（樂觀 + 5 秒復原）</div>
+    <div class="frame-note">「溏心蛋」按下封存的瞬間：那一列從清單移除，底部浮出復原 pill——跟今日頁刪除品項同一套語言，不新發明。</div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper);position:relative">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>食品庫管理</h1>
+        </div>
+        <div class="search-wrap-demo">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></svg>
+            <input type="text" placeholder="搜尋品名或店家" aria-label="搜尋食品庫" />
+          </div>
+        </div>
+        <div class="tabrow" role="tablist" aria-label="食品庫篩選">
+          <button class="chip" aria-current="true" type="button">使用中</button>
+          <button class="chip" type="button">已封存</button>
+        </div>
+        <div class="settings" style="padding-top:var(--s-2)">
+          <div class="lib-group">
+            <div class="lib-group-title">全聯</div>
+            <ul style="list-style:none;margin:0;padding:0">
+              <li class="lib-row-v2">
+                <div class="lib-row-main-v2">
+                  <div class="nm-wrap"><span class="nm">原味雞胸 85g</span></div>
+                  <button class="icon-btn" type="button" aria-label="編輯"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                  <button class="icon-btn" type="button" aria-label="以此為範本新增"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="11" height="11" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1"/></svg></button>
+                  <button class="icon-btn" type="button" aria-label="封存"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg></button>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="undo-pill-demo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          已封存「溏心蛋」・復原
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ D. 以此為範本新增食物（一列一欄） ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">D. 以此為範本新增食物</div>
+    <div class="frame-note">改回一列一欄——就是 LogSheet 現有「新增食物」那套版式，這裡直接沿用，不另外設計。</div>
+    <div class="device">
+      <div class="screen" style="background:var(--card);display:flex;flex-direction:column">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回食品庫管理">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>以「溏心蛋」為範本新增</h1>
+        </div>
+        <div class="form-wrap">
+          <p class="note" style="margin-bottom:var(--s-4)">存成一筆新的食物，原先的「溏心蛋」不會異動。</p>
+          <div class="field-row" style="display:flex;gap:var(--s-3)">
+            <div class="field-float" style="flex:1"><input type="text" value="溏心蛋" /><label>品名<span class="req">*</span></label></div>
+            <div class="field-float" style="flex:1"><input type="text" value="7-11" /><label>店家</label></div>
+          </div>
+          <div class="field-float"><input type="text" value="80" /><label>熱量（卡）<span class="req">*</span></label></div>
+          <div class="field-row" style="display:flex;gap:var(--s-3)">
+            <div class="field-float" style="flex:1"><input type="text" value="6" /><label>蛋白質 g</label></div>
+            <div class="field-float" style="flex:1"><input type="text" value="5" /><label>脂肪 g</label></div>
+            <div class="field-float" style="flex:1"><input type="text" value="1" /><label>碳水 g</label></div>
+          </div>
+        </div>
+        <div class="confirm-wrap"><button class="pick-bar-btn" type="button">加入食品庫</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ A2-off. 每日目標（公式估算，含記體重捷徑） ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">A2（公式估算態）— 定案版</div>
+    <div class="frame-note">
+      頂部多一條「公式估算／自訂目標」分段控制器（沿用今日頁 v2.20 已有的 <code>.seg</code>，不是新元件）。
+      「身體數據」卡片底部的捷徑改叫「更新身體數據」（原本寫「記體重」不準確，那顆入口同時處理
+      體重跟體脂率）。「編輯身體參數」展開後：<b>出生年</b>取代生日；<b>活動量改五選一選單</b>，
+      文字後面直接帶數字（如「輕度（1.375）」）——你要看到底層數字，不遮起來；多一個「自訂」選項，
+      選了才跳出手動輸入框，原本「打一個數字」的路徑沒有被拿掉，只是變成選單裡的一個選項。
+    </div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper);display:flex;flex-direction:column">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>每日目標</h1>
+        </div>
+        <div class="goal-seg-wrap" style="padding-top:var(--s-2)">
+          <div class="seg" role="group" aria-label="目標計算方式">
+            <button type="button" aria-pressed="true">公式估算</button>
+            <button type="button" aria-pressed="false">自訂目標</button>
+          </div>
+        </div>
+        <div class="form-wrap" style="padding-top:0">
+          <div class="goal-hero">
+            <div class="gauge-num">1860<span class="gauge-unit">卡</span></div>
+            <div class="goal-hero-macros">蛋白 140g・脂肪 62g・碳水 210g</div>
+            <div class="goal-hero-live">改下面任何一格，這裡會即時跟著算，不用先按儲存</div>
+          </div>
+
+          <div class="goal-group">
+            <div class="goal-group-title">身體數據</div>
+            <div class="goal-row"><span class="lb">最新體重</span><span class="val">68.40 kg</span></div>
+            <div class="goal-row"><span class="lb">體脂率</span><span class="val">22.0 %</span></div>
+            <button class="goal-link-row" type="button">
+              <span>更新身體數據</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+
+          <button class="link-btn" type="button" style="margin-top:var(--s-2)">編輯身體參數 ▾</button>
+
+          <div class="goal-group">
+            <div class="goal-group-title">基本資料</div>
+            <div style="padding:0 var(--s-4) var(--s-3)">
+              <div class="field-float" style="margin-bottom:0"><input type="text" inputMode="numeric" value="1992" /><label>出生年<span class="req">*</span></label></div>
+              <div class="field-row" style="display:flex;gap:var(--s-3);margin-top:var(--s-3)">
+                <div class="field-float" style="flex:1;margin-bottom:0"><input type="text" value="172" /><label>身高 cm<span class="req">*</span></label></div>
+                <div class="field-float" style="flex:1;margin-bottom:0"><select><option>男</option></select><label>性別</label></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="goal-group">
+            <div class="goal-group-title">活動與目標</div>
+            <div style="padding:0 var(--s-4) var(--s-3)">
+              <div class="field-float" style="margin-bottom:0">
+                <select>
+                  <option>維持</option>
+                  <option selected>減重（標準・0.5 kg/週）</option>
+                  <option>減重（自訂速度…）</option>
+                  <option>增肌（標準・0.5 kg/週）</option>
+                  <option>增肌（自訂速度…）</option>
+                </select>
+                <label>目標<span class="req">*</span></label>
+              </div>
+              <div class="field-row" style="display:flex;gap:var(--s-3);margin-top:var(--s-3)">
+                <div class="field-float" style="flex:1;margin-bottom:0">
+                  <select>
+                    <option>久坐（1.2）</option>
+                    <option selected>輕度（1.375）</option>
+                    <option>中度（1.55）</option>
+                    <option>高度（1.725）</option>
+                    <option>自訂…</option>
+                  </select>
+                  <label>活動量<span class="req">*</span></label>
+                </div>
+                <div class="field-float" style="flex:1;margin-bottom:0"><input type="text" value="2.0" /><label>攝取蛋白質 g/kg</label></div>
+              </div>
+              <p class="note" style="margin:var(--s-2) 0 0">攝取蛋白質建議 1.6–2.2 g/kg 體重。</p>
+            </div>
+          </div>
+
+          <button class="link-btn" type="button" style="margin-top:0">詳細 ▾</button>
+          <div class="goal-detail">
+            <div class="goal-src">
+              <div class="t">計算依據</div>
+              <ul>
+                <li>有填體脂率（最新一筆記錄）：用 Katch-McArdle 公式，以去脂體重計算 BMR；沒填則用 Mifflin-St Jeor</li>
+                <li>TDEE ＝ BMR × 活動係數</li>
+                <li>減重／增肌依變化速度（7700 卡／公斤換算）在 TDEE 上加減每日熱量差額；維持＝TDEE</li>
+                <li>蛋白質＝體重 × g/kg；脂肪／碳水依目標自動配好比例分剩餘熱量（減重 35/65、維持 40/60、增肌 30/70），不開放個別調整</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="confirm-wrap"><button class="pick-bar-btn" type="button">儲存</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ A2-on. 每日目標（自訂目標開著） ═══ -->
+  <div class="frame-block">
+    <div class="frame-label">A2（自訂目標態）— 回答「有點難想像」</div>
+    <div class="frame-note">
+      切到「自訂目標」：「今日目標」卡片從唯讀變成四個可編輯欄位（先用克數示範，
+      <b>百分比 vs 克數還沒定案，這是 Q5</b>）；「身體數據」原樣保留（體重/體脂率仍然是有用的資訊，
+      跟要不要用公式無關，就不顯示了）；「怎麼算出來的」整組換成一句誠實話——沒有公式可以
+      展示，就不假裝有。
+    </div>
+    <div class="device">
+      <div class="screen" style="background:var(--paper);display:flex;flex-direction:column">
+        <div class="lib-topbar">
+          <button class="icon-btn" type="button" aria-label="返回設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <h1>每日目標</h1>
+        </div>
+        <div class="goal-seg-wrap" style="padding-top:var(--s-2)">
+          <div class="seg" role="group" aria-label="目標計算方式">
+            <button type="button" aria-pressed="false">公式估算</button>
+            <button type="button" aria-pressed="true">自訂目標</button>
+          </div>
+        </div>
+        <div class="form-wrap" style="padding-top:0">
+          <div class="goal-group-title" style="padding-left:0">今日目標（自己填）</div>
+          <div class="field-float"><input type="text" value="1860" /><label>熱量（卡）<span class="req">*</span></label></div>
+          <div class="field-float"><input type="text" value="140" /><label>蛋白質 g</label></div>
+          <div class="field-float"><input type="text" value="62" /><label>脂肪 g</label></div>
+          <div class="field-float"><input type="text" value="210" /><label>碳水 g</label></div>
+
+          <div class="goal-note-box">這是你自己設定的目標，沒有套用任何公式，跟身體數據無關。關掉「自訂目標」會退回公式估算——這幾個數字會留著，下次切回來還在。</div>
+        </div>
+        <div class="confirm-wrap"><button class="pick-bar-btn" type="button">儲存</button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

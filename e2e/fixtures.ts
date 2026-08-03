@@ -25,16 +25,20 @@ export const FIX = {
     {
       user_id: USER_ID,
       sex: 'male',
-      birth_date: '1993-01-01',
+      birth_year: 1993,
       height_cm: 175,
       activity_factor: 1.375,
       goal: 'cut',
-      protein_pct: 27,
-      fat_pct: 27,
-      carb_pct: 46,
+      rate_kg_per_week: 0.5,
+      protein_g_per_kg: 1.8,
+      use_custom_targets: false,
+      custom_kcal: null,
+      custom_protein_g: null,
+      custom_fat_g: null,
+      custom_carb_g: null,
     },
   ],
-  weight: [{ weight_kg: 75.95, measured_on: '2026-07-24' }],
+  weight: [{ weight_kg: 75.95, measured_on: '2026-07-24', body_fat_pct: null }],
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。
   // 8 筆涵蓋：同一店家多筆食物（減醣廚房、全家各兩筆，測店家 Autocomplete 去重）、
   // vendor 為 null（乳清／地瓜／香蕉三筆，測「留空仍可送出」與去重時 null 不算進選項）。

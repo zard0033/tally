@@ -43,15 +43,32 @@ test('逐筆超標預警與底部確認列——熱量脂肪推過線後，delta
   await expect(unpickedDelta).not.toContainText('卡')
 })
 
-/* 軟性排序（DESIGN.md v2.15）的迴歸鎖。固定 fixture 的 eaten（540 大卡）離目標
-   （約 1862 大卡）太遠，沒有任何食物加下去會超標，驗不到排序。這裡複製一份 fixture、
-   只覆寫 intake 讓 eaten 貼近額度上緣，其餘欄位（foods／history）不動——刻意不改
-   共用 e2e/fixtures.ts，免得動到其他測試的基準值。算出來的結果（見下方各 test 開頭
-   註解的算式）：加「無糖豆漿」「溫泉蛋」都還吃得下，加其餘六筆都會推過熱量或碳水線。 */
+/* 軟性排序（DESIGN.md v2.15）的迴歸鎖。固定 fixture 的 eaten 離目標太遠，沒有任何食物
+   加下去會超標，驗不到排序。這裡複製一份 fixture、只覆寫 intake 讓 eaten 貼近額度上緣，
+   其餘欄位（foods／history）不動——刻意不改共用 e2e/fixtures.ts，免得動到其他測試的
+   基準值。
+
+   2026-08-03「每日目標」公式重新設計後，公式估算模式的目標會隨 `computeTargets` 內部
+   用 `new Date()` 算的年齡每年 1/1 跳一次（precommit-review 抓到：舊校準的餘裕只剩
+   5.2 卡，2027 年就會紅）。這裡改用 **自訂目標模式**（`use_custom_targets: true`）
+   把目標數字直接釘死，繞過公式與年齡計算，測試的目標值不再受執行日期影響。
+   目標 kcal=1800／fat=50／carb=200，eaten=1705/100/30/150：加「無糖豆漿」（+90/+4/+5）、
+   「溫泉蛋」（+80/+5/+1）都還在額度內；加其餘六筆（雞胸餐盒·減醣廚房、乳清、地瓜、
+   香蕉、拿鐵）熱量都會被推過線。 */
 const HEAVY_FIX = {
   ...FIX,
+  profile: [
+    {
+      ...FIX.profile[0],
+      use_custom_targets: true,
+      custom_kcal: 1800,
+      custom_protein_g: 130,
+      custom_fat_g: 50,
+      custom_carb_g: 200,
+    },
+  ],
   intake: [
-    { id: 501, meal: 'lunch', qty: 1, kcal: 1750, protein: 100, fat: 50, carb: 200, foods: { name: '測試基準', vendor: null } },
+    { id: 501, meal: 'lunch', qty: 1, kcal: 1705, protein: 100, fat: 30, carb: 150, foods: { name: '測試基準', vendor: null } },
   ],
 }
 
@@ -69,9 +86,9 @@ test('軟性排序——全部食物：符合今日剩餘額度的排前面，�
   await page.locator('.chip', { hasText: '午餐' }).click()
 
   // 「全部食物」（午餐常吃只有雞胸餐盒/健康盒 id11，其餘 7 筆都在這裡）：
-  // 目標 kcal≈1862.6／fat≈55.9／carb≈214.2，eaten=1750/50/200。
-  // 無糖豆漿（+90/+4/+5）、溫泉蛋（+80/+5/+1）三項都還在額度內——排前面。
-  // 其餘（雞胸餐盒·減醣廚房、乳清、地瓜、香蕉、拿鐵）至少一項會被推過線——排後面。
+  // 目標（自訂目標釘死）kcal=1800／fat=50／carb=200，eaten=1705/100/30/150。
+  // 無糖豆漿（+90/+4/+5）、溫泉蛋（+80/+5/+1）兩項都還在額度內——排前面。
+  // 其餘（雞胸餐盒·減醣廚房、乳清、地瓜、香蕉、拿鐵）熱量都會被推過線——排後面。
   const restList = page.locator('.sect-lb', { hasText: '全部食物' }).locator('xpath=following-sibling::ul[1]')
   const names = await restList.locator('.food-row .nm').allTextContents()
   const fitNames = new Set(['無糖豆漿', '溫泉蛋'])
@@ -123,7 +140,7 @@ test('軟性排序——常吃：只淡化不重排，維持原本的常吃順�
   await page.locator('.chip', { hasText: '早餐' }).click()
 
   // 早餐常吃＝乳清、無糖豆漿（fixture history 的既有順序）。
-  // eaten=1750/50/200：加乳清（+120/+1.5/+2）會把 kcal 推過線（不符合）；
+  // eaten=1705/100/30/150：加乳清（+120/+1.5/+2）會把 kcal 推過線（不符合）；
   // 加無糖豆漿（+90/+4/+5）三項都還在額度內（符合）。順序仍應維持乳清在前——
   // 排序基準只用在「全部食物」／「搜尋結果」，「常吃」語意是常吃順序，不能被額度打亂。
   const recentList = page.locator('.sect-lb', { hasText: '早餐常吃' }).locator('xpath=following-sibling::ul[1]')
