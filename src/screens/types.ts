@@ -88,4 +88,7 @@ export interface SettingsProps {
   /** 復原：把整筆連同 id 一起送回去解封存，App 的使用中清單同步插回並排序。 */
   onUnarchiveFood: (food: Food) => Promise<void>
   onSignOut: () => void
+  /** 進入／離開次級頁面（每日目標／食品庫管理／體重趨勢）時回報，App 據此隱藏底部
+   *  navbar——這幾頁自己有返回鍵，主導覽同時存在會讓使用者以為還在設定頁根層。 */
+  onSubViewChange: (isSubView: boolean) => void
 }

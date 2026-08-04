@@ -47,10 +47,19 @@ export default function Settings(props: SettingsProps) {
   const {
     profile, targets, latestWeight, foods,
     onSaveProfile, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSignOut,
+    onSubViewChange,
   } = props
 
   const [view, setView] = useState<View>('list')
   const [weights, setWeights] = useState<Weight[] | null>(null)
+
+  /* 離開這個元件（切回今日頁分頁）時要還原 navbar，不能只靠 view 變化——cleanup
+   * 保證無論怎麼離開都會補一次 onSubViewChange(false)，把 navbar 還原。 */
+  useEffect(() => {
+    onSubViewChange(view !== 'list')
+    return () => onSubViewChange(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view])
 
   const refreshWeights = () => void listWeights().then(setWeights).catch(() => setWeights([]))
   useEffect(refreshWeights, [])
@@ -157,7 +166,8 @@ export default function Settings(props: SettingsProps) {
             <input ref={wFat} id="w-fat" type="text" inputMode="decimal" placeholder=" " />
             <label htmlFor="w-fat">體脂 %</label>
           </div>
-          <p className="note">存體脂計原始讀數，不做校正。同一天再記一次會覆蓋當天那筆。填了體脂率，公式估算會用更準的 Katch-McArdle；這次沒填，目標就會改用不看體脂率的 Mifflin-St Jeor 算，熱量目標可能因此跟著變。</p>
+          <p className="note">同一天再記一次會覆蓋當天那筆。</p>
+          <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
         </div>
         <div className="confirm-wrap">
           {err && <p className="sheet-error" role="alert">{err}</p>}

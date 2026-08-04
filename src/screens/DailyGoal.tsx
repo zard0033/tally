@@ -5,45 +5,42 @@
    畫面就跳錯誤。 */
 import { useRef, useState } from 'react'
 import {
-  activityChoiceFrom as activityFactorChoiceFrom,
+  ACTIVITY_FACTOR_PRESETS,
   computeTargets,
-  goalFromMode,
-  goalModeFrom,
+  nearestPreset,
   num,
   numOrNull,
-  rateFromMode,
+  PROTEIN_G_PER_KG_PRESETS,
+  rateMonthlyToWeekly,
+  rateWeeklyToMonthly,
   RATE_PRESETS_KG_PER_MONTH,
-  type GoalMode,
+  type Goal,
   type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
 
-const ACTIVITY_PRESETS = [
-  { value: '1.2', label: '久坐（1.2）' },
-  { value: '1.375', label: '輕度（1.375）' },
-  { value: '1.55', label: '中度（1.55）' },
-  { value: '1.725', label: '高度（1.725）' },
-]
+/** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
+const ACTIVITY_LABELS = ['久坐不動', '輕度活動', '中度活動', '高度活動', '非常活躍']
+const ACTIVITY_PRESETS = ACTIVITY_FACTOR_PRESETS.map((v, i) => ({ value: String(v), label: `${ACTIVITY_LABELS[i]}（${v}）` }))
+const PROTEIN_PRESETS = PROTEIN_G_PER_KG_PRESETS.map((v) => ({ value: String(v), label: `${v} g/kg` }))
+const RATE_PRESETS = RATE_PRESETS_KG_PER_MONTH.map((v) => ({ value: String(v), label: `${v} kg/月` }))
 
-function activityChoiceFrom(af: number): string {
-  const preset = activityFactorChoiceFrom(af)
-  return preset === 'custom' ? 'custom' : String(preset)
-}
-
-const GOAL_MODE_OPTIONS: { value: GoalMode; label: string }[] = [
+/** 目標跟變化速度是兩個獨立欄位（2026-08-04 從合併的單一下拉拆開，理由見 formulas.ts
+ *  該段落註解）：目標永遠顯示，速度只在非「維持」時才顯示第二個 select。 */
+const GOAL_OPTIONS: { value: Goal; label: string }[] = [
+  { value: 'cut', label: '減重' },
   { value: 'maintain', label: '維持' },
-  ...RATE_PRESETS_KG_PER_MONTH.map((p) => ({ value: `cut:${p}` as GoalMode, label: `減重（${p} kg/月）` })),
-  ...RATE_PRESETS_KG_PER_MONTH.map((p) => ({ value: `bulk:${p}` as GoalMode, label: `增肌（${p} kg/月）` })),
+  { value: 'bulk', label: '增肌' },
 ]
 
 interface DraftForm {
   birthYear: string
   height: string
   sex: string
-  goalMode: GoalMode
+  goal: Goal
+  rateChoice: string
   activityChoice: string
-  customActivity: string
-  proteinPerKg: string
+  proteinChoice: string
   useCustom: boolean
   customKcal: string
   customProtein: string
@@ -52,14 +49,16 @@ interface DraftForm {
 }
 
 function draftFrom(profile: ProfileRow): DraftForm {
+  const rateKgPerWeek = numOrNull(profile.rate_kg_per_week)
+  const rateKgPerMonth = rateKgPerWeek !== null ? rateWeeklyToMonthly(rateKgPerWeek) : RATE_PRESETS_KG_PER_MONTH[0]
   return {
     birthYear: String(numOrNull(profile.birth_year) ?? ''),
     height: String(numOrNull(profile.height_cm) ?? ''),
     sex: profile.sex,
-    goalMode: goalModeFrom(profile.goal, numOrNull(profile.rate_kg_per_week)),
-    activityChoice: activityChoiceFrom(num(profile.activity_factor)),
-    customActivity: String(numOrNull(profile.activity_factor) ?? ''),
-    proteinPerKg: String(numOrNull(profile.protein_g_per_kg) ?? ''),
+    goal: profile.goal,
+    rateChoice: String(nearestPreset(RATE_PRESETS_KG_PER_MONTH, rateKgPerMonth)),
+    activityChoice: String(nearestPreset(ACTIVITY_FACTOR_PRESETS, num(profile.activity_factor))),
+    proteinChoice: String(nearestPreset(PROTEIN_G_PER_KG_PRESETS, num(profile.protein_g_per_kg))),
     useCustom: profile.use_custom_targets,
     customKcal: String(numOrNull(profile.custom_kcal) ?? ''),
     customProtein: String(numOrNull(profile.custom_protein_g) ?? ''),
@@ -77,17 +76,18 @@ const reqNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
 
 /** 即時預覽用：把 draft 表單字串盡量轉成 Profile 餵給 computeTargets，算不出來（欄位
  *  還沒填完）就讓它自然變成 NaN——呼叫端用 Number.isFinite 判斷要不要顯示 —，不在
- *  這裡擋，那是送出時才做的事。 */
-function draftToProfile(d: DraftForm): Profile {
-  const activityFactor = d.activityChoice === 'custom' ? reqNum(d.customActivity) : num(d.activityChoice)
+ *  這裡擋，那是送出時才做的事。activityFactor／proteinPerKg 由呼叫端算好傳進來
+ *  （effectiveActivityFactor／effectiveProteinPerKg，跟 rate 同一套「沒碰過選單就沿用
+ *  原始值」的規則，不是單純讀 draft 的選單字串）。 */
+function draftToProfile(d: DraftForm, activityFactor: number, proteinPerKg: number): Profile {
   return {
     birth_year: reqNum(d.birthYear),
     height_cm: reqNum(d.height),
     activity_factor: activityFactor,
     sex: d.sex,
-    goal: goalFromMode(d.goalMode),
-    rate_kg_per_week: rateFromMode(d.goalMode),
-    protein_g_per_kg: reqNum(d.proteinPerKg),
+    goal: d.goal,
+    rate_kg_per_week: d.goal === 'maintain' ? null : rateMonthlyToWeekly(Number(d.rateChoice)),
+    protein_g_per_kg: proteinPerKg,
     use_custom_targets: false,
     custom_kcal: null,
     custom_protein_g: null,
@@ -135,35 +135,50 @@ export default function DailyGoal(props: DailyGoalProps) {
   const { profile, latestWeight, onSaveProfile, onBack, onOpenBodyUpdate } = props
 
   const [draft, setDraft] = useState<DraftForm>(() => draftFrom(profile))
-  const [showDetail, setShowDetail] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   /** DB 的 rate_kg_per_week 換算回 kg/月選單時，若不是剛好落在五個 preset 上（例如既有
-   *  使用者的 0.5 kg/週 ≈ 2.17 kg/月，超出這輪選單的上限 1.5），goalModeFrom 只能取最接近
+   *  使用者的 0.5 kg/週 ≈ 2.17 kg/月，超出這輪選單的上限 1.5），draftFrom 只能取最接近
    *  的 preset 顯示。**這個「取最接近」只該影響選單怎麼畫，不該悄悄改掉使用者還沒碰過的
-   *  真實數值**——沒有這個 ref，live 預覽與送出都會直接拿 rateFromMode(draft.goalMode) 算，
-   *  使用者什麼都沒改、只是進來看一眼就按儲存，DB 裡的速度會被四捨五入成不同的值，且畫面
+   *  真實數值**——沒有這個 ref，live 預覽與送出都會直接拿 rateMonthlyToWeekly(draft.rateChoice)
+   *  算，使用者什麼都沒改、只是進來看一眼就按儲存，DB 裡的速度會被四捨五入成不同的值，且畫面
    *  同時間會跟今日頁／設定頁入口顯示的目標熱量對不上（precommit-review 抓到）。只要使用者
-   *  沒有手動動過「目標」選單，一律沿用 profile 上的原始 rate_kg_per_week。 */
-  const goalModeTouchedRef = useRef(false)
+   *  沒有手動動過「變化速度」選單，一律沿用 profile 上的原始 rate_kg_per_week。目標欄位本身
+   *  不需要這套——goal 在 DB 裡永遠精準是 cut/maintain/bulk 三者之一，沒有「取最接近」的
+   *  近似問題。 */
+  const rateTouchedRef = useRef(false)
   const initialRateKgPerWeek = numOrNull(profile.rate_kg_per_week)
 
+  /* 活動量／蛋白質這輪拿掉自訂選項，既有值改用「取最接近的 preset」顯示——跟上面
+   * rate_kg_per_week 同一個風險：使用者沒碰過選單就按儲存，不該讓近似值悄悄覆寫
+   * 真實資料。同一套 touched-ref 規則照搬一次。 */
+  const activityTouchedRef = useRef(false)
+  const initialActivityFactor = numOrNull(profile.activity_factor)
+  const proteinTouchedRef = useRef(false)
+  const initialProteinPerKg = numOrNull(profile.protein_g_per_kg)
+
   const patch = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
-    if (key === 'goalMode') goalModeTouchedRef.current = true
+    if (key === 'rateChoice') rateTouchedRef.current = true
+    if (key === 'activityChoice') activityTouchedRef.current = true
+    if (key === 'proteinChoice') proteinTouchedRef.current = true
     setDraft((p) => ({ ...p, [key]: value }))
   }
 
   const effectiveRateKgPerWeek = (): number | null => {
-    if (goalFromMode(draft.goalMode) === 'maintain') return null
-    if (!goalModeTouchedRef.current && initialRateKgPerWeek !== null) return initialRateKgPerWeek
-    return rateFromMode(draft.goalMode)
+    if (draft.goal === 'maintain') return null
+    if (!rateTouchedRef.current && initialRateKgPerWeek !== null) return initialRateKgPerWeek
+    return rateMonthlyToWeekly(Number(draft.rateChoice))
   }
+  const effectiveActivityFactor = (): number =>
+    !activityTouchedRef.current && initialActivityFactor !== null ? initialActivityFactor : num(draft.activityChoice)
+  const effectiveProteinPerKg = (): number =>
+    !proteinTouchedRef.current && initialProteinPerKg !== null ? initialProteinPerKg : num(draft.proteinChoice)
 
   const rawPreview = draft.useCustom
     ? null
     : computeTargets(
-        { ...draftToProfile(draft), rate_kg_per_week: effectiveRateKgPerWeek() },
+        { ...draftToProfile(draft, effectiveActivityFactor(), effectiveProteinPerKg()), rate_kg_per_week: effectiveRateKgPerWeek() },
         num(latestWeight.weight_kg),
         latestWeight.body_fat_pct,
       )
@@ -171,7 +186,7 @@ export default function DailyGoal(props: DailyGoalProps) {
 
   const bodyFatPct = latestWeight.body_fat_pct
   const bmrFormulaLabel = bodyFatPct !== null ? 'Katch-McArdle' : 'Mifflin-St Jeor'
-  const goal = goalFromMode(draft.goalMode)
+  const goal = draft.goal
   const goalLabel = goal === 'cut' ? '減重' : goal === 'bulk' ? '增肌' : '維持'
 
   async function submit() {
@@ -203,35 +218,35 @@ export default function DailyGoal(props: DailyGoalProps) {
       return
     }
 
-    const birthYear = reqNum(draft.birthYear)
-    const thisYear = new Date().getFullYear()
-    if (!Number.isFinite(birthYear) || birthYear < 1900 || birthYear > thisYear) {
-      return setErr('出生年要填合理的西元年')
+    // 活動量／蛋白質一律來自固定 preset（select 保證合法值），不必再驗證範圍。
+    const patchBase: Partial<ProfileRow> = {
+      goal,
+      rate_kg_per_week: effectiveRateKgPerWeek(),
+      activity_factor: effectiveActivityFactor(),
+      protein_g_per_kg: effectiveProteinPerKg(),
+      use_custom_targets: false,
     }
-    const height = reqNum(draft.height)
-    if (!Number.isFinite(height) || height <= 0) return setErr('身高要填數字')
-    const activityFactor = draft.activityChoice === 'custom' ? reqNum(draft.customActivity) : num(draft.activityChoice)
-    if (!Number.isFinite(activityFactor) || activityFactor <= 0 || activityFactor > 3) {
-      return setErr('活動係數要填 0–3 之間的數字')
-    }
-    const proteinPerKg = reqNum(draft.proteinPerKg)
-    if (!Number.isFinite(proteinPerKg) || proteinPerKg <= 0 || proteinPerKg > 5) {
-      return setErr('攝取蛋白質要填 0–5 之間的數字')
+
+    // 出生年／身高／性別只在 Mifflin-St Jeor 分支（沒填體脂率）才用得到——Katch-McArdle
+    // 只吃體重與體脂率。有體脂率時這三格整卡都不渲染，維持 DB 既有值不動，不逼使用者
+    // 補填跟這次計算無關的資料。
+    if (bodyFatPct === null) {
+      const birthYear = reqNum(draft.birthYear)
+      const thisYear = new Date().getFullYear()
+      if (!Number.isFinite(birthYear) || birthYear < 1900 || birthYear > thisYear) {
+        return setErr('出生年要填合理的西元年')
+      }
+      const height = reqNum(draft.height)
+      if (!Number.isFinite(height) || height <= 0) return setErr('身高要填數字')
+      patchBase.birth_year = birthYear
+      patchBase.height_cm = height
+      patchBase.sex = draft.sex
     }
 
     setBusy(true)
     setErr(null)
     try {
-      await onSaveProfile({
-        birth_year: birthYear,
-        height_cm: height,
-        sex: draft.sex,
-        goal,
-        rate_kg_per_week: effectiveRateKgPerWeek(),
-        activity_factor: activityFactor,
-        protein_g_per_kg: proteinPerKg,
-        use_custom_targets: false,
-      })
+      await onSaveProfile(patchBase)
       setBusy(false)
     } catch (e) {
       setBusy(false)
@@ -298,46 +313,68 @@ export default function DailyGoal(props: DailyGoalProps) {
               {bodyFatPct !== null && (
                 <div className="goal-row"><span className="lb">體脂率</span><span className="val">{num(bodyFatPct).toFixed(1)} %</span></div>
               )}
+              <div className="goal-row"><span className="lb">BMR</span><span className="val">{preview && preview.bmr !== null ? Math.round(preview.bmr) : '—'} 卡</span></div>
+              <p className="goal-hint">
+                依 {bmrFormulaLabel} 公式估算{bodyFatPct !== null ? '（有體脂率，只需體重）' : '（沒有體脂率，改用身高／年齡／性別）'}
+              </p>
               <button className="goal-link-row" type="button" onClick={onOpenBodyUpdate}>
                 <span>更新身體數據</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
               </button>
             </div>
 
-            <div className="goal-group">
-              <div className="goal-group-title">基本資料</div>
-              <div style={{ padding: '0 var(--s-4) var(--s-3)' }}>
-                {field({ id: 'g-birth-year', label: '出生年', required: true, value: draft.birthYear, onChange: (v) => patch('birthYear', v) })}
-                <div className="field-row" style={{ marginTop: 'var(--s-3)' }}>
-                  {field({ id: 'g-height', label: '身高 cm', required: true, value: draft.height, onChange: (v) => patch('height', v) })}
-                  <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
-                    <select id="g-sex" value={draft.sex} onChange={(e) => patch('sex', e.target.value)}>
-                      <option value="male">男</option>
-                      <option value="female">女</option>
-                    </select>
-                    <label htmlFor="g-sex">性別</label>
+            {bodyFatPct === null && (
+              <div className="goal-group">
+                <div className="goal-group-title">基本資料</div>
+                <div style={{ padding: '0 var(--s-4) var(--s-3)' }}>
+                  {field({ id: 'g-birth-year', label: '出生年', required: true, value: draft.birthYear, onChange: (v) => patch('birthYear', v) })}
+                  <div className="field-row" style={{ marginTop: 'var(--s-3)' }}>
+                    {field({ id: 'g-height', label: '身高 cm', required: true, value: draft.height, onChange: (v) => patch('height', v) })}
+                    <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
+                      <select id="g-sex" value={draft.sex} onChange={(e) => patch('sex', e.target.value)}>
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                      </select>
+                      <label htmlFor="g-sex">性別</label>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="goal-group">
               <div className="goal-group-title">活動與目標</div>
               <div style={{ padding: '0 var(--s-4) var(--s-3)' }}>
                 <div className="field-float" style={{ marginBottom: 0 }}>
                   <select
-                    id="g-goal-mode"
-                    value={draft.goalMode}
-                    onChange={(e) => patch('goalMode', e.target.value as GoalMode)}
+                    id="g-goal"
+                    value={draft.goal}
+                    onChange={(e) => patch('goal', e.target.value as Goal)}
                   >
-                    {GOAL_MODE_OPTIONS.map((o) => (
+                    {GOAL_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
-                  <label htmlFor="g-goal-mode">
+                  <label htmlFor="g-goal">
                     目標<span className="req">*</span>
                   </label>
                 </div>
+                {draft.goal !== 'maintain' && (
+                  <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
+                    <select
+                      id="g-rate"
+                      value={draft.rateChoice}
+                      onChange={(e) => patch('rateChoice', e.target.value)}
+                    >
+                      {RATE_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                    <label htmlFor="g-rate">
+                      變化速度<span className="req">*</span>
+                    </label>
+                  </div>
+                )}
                 <div className="field-row" style={{ marginTop: 'var(--s-3)' }}>
                   <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
                     <select
@@ -348,47 +385,38 @@ export default function DailyGoal(props: DailyGoalProps) {
                       {ACTIVITY_PRESETS.map((p) => (
                         <option key={p.value} value={p.value}>{p.label}</option>
                       ))}
-                      <option value="custom">自訂…</option>
                     </select>
                     <label htmlFor="g-activity">
                       活動量<span className="req">*</span>
                     </label>
                   </div>
-                  {draft.activityChoice === 'custom' ? (
-                    <div style={{ flex: 1 }}>
-                      {field({ id: 'g-custom-activity', label: '自訂係數', required: true, value: draft.customActivity, onChange: (v) => patch('customActivity', v) })}
-                    </div>
-                  ) : (
-                    <div style={{ flex: 1 }}>
-                      {field({ id: 'g-protein-per-kg', label: '攝取蛋白質 g/kg', required: true, value: draft.proteinPerKg, onChange: (v) => patch('proteinPerKg', v) })}
-                    </div>
-                  )}
-                </div>
-                {draft.activityChoice === 'custom' && (
-                  <div style={{ marginTop: 'var(--s-3)' }}>
-                    {field({ id: 'g-protein-per-kg-2', label: '攝取蛋白質 g/kg', required: true, value: draft.proteinPerKg, onChange: (v) => patch('proteinPerKg', v) })}
+                  <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
+                    <select
+                      id="g-protein"
+                      value={draft.proteinChoice}
+                      onChange={(e) => patch('proteinChoice', e.target.value)}
+                    >
+                      {PROTEIN_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                    <label htmlFor="g-protein">
+                      攝取蛋白質<span className="req">*</span>
+                    </label>
                   </div>
-                )}
-                <p className="note" style={{ margin: 'var(--s-2) 0 0' }}>攝取蛋白質建議 1.6–2.2 g/kg 體重。</p>
+                </div>
               </div>
             </div>
 
-            <button className="link-btn" type="button" style={{ marginTop: 0 }} onClick={() => setShowDetail((v) => !v)}>
-              詳細 {showDetail ? '▴' : '▾'}
-            </button>
-            {showDetail && (
-              <div className="goal-detail">
-                <div className="goal-src">
-                  <div className="t">計算依據</div>
-                  <ul>
-                    <li>有填體脂率（最新一筆記錄）：用 {bmrFormulaLabel} 公式算 BMR{bodyFatPct !== null ? '（以去脂體重計算）' : '（沒填則不用去脂體重）'}</li>
-                    <li>TDEE ＝ BMR × 活動係數</li>
-                    <li>減重／增肌依變化速度（7700 卡／公斤換算）在 TDEE 上加減每日熱量差額；維持＝TDEE。{goal !== 'maintain' && `目前是${goalLabel}`}</li>
-                    <li>蛋白質＝體重 × g/kg；脂肪／碳水依目標自動配好比例分剩餘熱量（減重 35/65、維持 40/60、增肌 30/70），不開放個別調整</li>
-                  </ul>
-                </div>
-              </div>
-            )}
+            <div className="goal-src">
+              <div className="t">計算依據</div>
+              <ul>
+                <li>有填體脂率（最新一筆記錄）：用 {bmrFormulaLabel} 公式算 BMR{bodyFatPct !== null ? '（以去脂體重計算）' : '（沒填則不用去脂體重）'}</li>
+                <li>TDEE ＝ BMR × 活動係數</li>
+                <li>減重／增肌依變化速度（7700 卡／公斤換算）在 TDEE 上加減每日熱量差額；維持＝TDEE。{goal !== 'maintain' && `目前是${goalLabel}`}</li>
+                <li>蛋白質＝體重 × g/kg；脂肪＝體重 × 0.85 g/kg（固定，不隨目標變動）；碳水＝扣掉蛋白質與脂肪熱量後的剩餘熱量 ÷ 4，不開放個別調整</li>
+              </ul>
+            </div>
           </>
         )}
       </div>

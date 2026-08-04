@@ -313,7 +313,12 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         <FoodFormFields form={editForm} onChange={setEditForm} />
                         <div className="lib-edit-actions">
                           <button className="cancel-btn" type="button" onClick={() => setEditingId(null)}>取消</button>
-                          <button className="pick-bar-btn" type="button" disabled={editBusy} onClick={() => void saveEdit(f.id)}>
+                          {/* 手機上按下就立刻 disabled 的按鈕，觸控結束事件不會正常送達，
+                           *  部分行動瀏覽器會讓按下瞬間的 :active 深色視覺卡住，看起來像
+                           *  「一直按著」，直到重新整理才恢復——即使資料其實已經存進去
+                           *  （使用者 2026-08-04 真機回報）。點下當下先手動 blur 一次，
+                           *  跳過對「disabled 元素還能不能收到後續事件」的依賴。 */}
+                          <button className="pick-bar-btn" type="button" disabled={editBusy} onClick={(e) => { e.currentTarget.blur(); void saveEdit(f.id) }}>
                             {editBusy ? '儲存中…' : '儲存'}
                           </button>
                         </div>
@@ -328,9 +333,14 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         )}
       </div>
 
-      <button className="lib-fab" type="button" aria-label="新增食物" onClick={() => openAdd(null)}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-      </button>
+      {/* 編輯中隱藏：FAB 是 fixed 定位，展開的編輯區一長，操作列剛好捲到 FAB 那個
+       *  高度時兩者會疊在一起，儲存鈕被蓋住一半（使用者截圖回報）。編輯時本來就用不到
+       *  「新增食物」，藏起來比調整捲動位置或搶 z-index 乾淨。 */}
+      {editingId === null && (
+        <button className="lib-fab" type="button" aria-label="新增食物" onClick={() => openAdd(null)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+      )}
 
       {undo && (
         <button className="undo-pill" type="button" onClick={() => void undoArchive()}>

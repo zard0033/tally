@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  activityChoiceFrom,
+  ACTIVITY_FACTOR_PRESETS,
   computeTargets,
   formatOverAria,
   formatOverDelta,
-  goalFromMode,
-  goalModeFrom,
   macroExceeds,
+  nearestPreset,
   num,
   numOrNull,
   pct,
   pickBarRight,
-  rateFromMode,
   rateMonthlyToWeekly,
   rateWeeklyToMonthly,
   rowOverage,
@@ -55,10 +53,9 @@ describe('computeTargets：Mifflin-St Jeor（沒有體脂率）', () => {
   it('蛋白質 = 體重 × g/kg', () => {
     expect(t.protein).toBeCloseTo(75.95 * 2.0, 2)
   })
-  it('脂肪／碳水分剩餘熱量（減重 35/65），未捨入熱量總和 = kcal', () => {
-    const remaining = t.kcal - t.protein * 4
-    expect(t.fat).toBeCloseTo((remaining * 0.35) / 9, 2)
-    expect(t.carb).toBeCloseTo((remaining * 0.65) / 4, 2)
+  it('脂肪＝體重 × 0.85 g/kg（固定）；碳水吃剩餘熱量，未捨入熱量總和 = kcal', () => {
+    expect(t.fat).toBeCloseTo(75.95 * 0.85, 2)
+    expect(t.carb).toBeCloseTo((t.kcal - t.protein * 4 - t.fat * 9) / 4, 2)
     expect(t.protein * 4 + t.fat * 9 + t.carb * 4).toBeCloseTo(t.kcal, 2)
   })
 })
@@ -83,13 +80,15 @@ describe('computeTargets：目標調整', () => {
     const t = computeTargets({ ...baseProfile, goal: 'maintain', rate_kg_per_week: null }, 75.95, null, today)
     expect(t.kcal).toBeCloseTo(t.tdee as number, 2)
   })
-  it('三種目標各自對應對照表裡的脂肪／碳水比例', () => {
+  it('脂肪不受目標影響，三種目標的脂肪目標相同（都是體重 × 0.85）', () => {
     const cut = computeTargets({ ...baseProfile, goal: 'cut' }, 75.95, null, today)
     const maintain = computeTargets({ ...baseProfile, goal: 'maintain', rate_kg_per_week: null }, 75.95, null, today)
     const bulk = computeTargets({ ...baseProfile, goal: 'bulk' }, 75.95, null, today)
-    expect(cut.fat).toBeCloseTo(((cut.kcal - cut.protein * 4) * 0.35) / 9, 2)
-    expect(maintain.fat).toBeCloseTo(((maintain.kcal - maintain.protein * 4) * 0.40) / 9, 2)
-    expect(bulk.fat).toBeCloseTo(((bulk.kcal - bulk.protein * 4) * 0.30) / 9, 2)
+    expect(cut.fat).toBeCloseTo(75.95 * 0.85, 2)
+    expect(maintain.fat).toBeCloseTo(75.95 * 0.85, 2)
+    expect(bulk.fat).toBeCloseTo(75.95 * 0.85, 2)
+    expect(cut.carb).toBeLessThan(maintain.carb) // 目標熱量的增減全部反映在碳水
+    expect(maintain.carb).toBeLessThan(bulk.carb)
   })
 })
 
@@ -108,17 +107,17 @@ describe('computeTargets：自訂目標', () => {
 })
 
 describe('computeTargets：邊界情況（precommit-review 抓到的兩個真實案例）', () => {
-  it('remainingKcal 夾住 0——蛋白質熱量吃光目標熱量時，脂肪／碳水不會變負數', () => {
-    // 55kg／輕度活動／減重 1.0 kg 週／2.0 g/kg：TDEE≈1487，kcal≈387，蛋白質 110g=440卡，
-    // 未夾住的話 remainingKcal 會是負的
+  it('碳水夾住 0——蛋白質＋脂肪熱量吃光目標熱量時，碳水不會變負數', () => {
+    // 55kg／輕度活動／減重 1.0 kg 週／2.0 g/kg：TDEE≈1483.75，kcal≈680.5，
+    // 蛋白質 110g=440卡＋脂肪 46.75g=420.75卡，未夾住的話碳水會是負的
     const t = computeTargets(
       { ...baseProfile, activity_factor: 1.2, rate_kg_per_week: 1.0, protein_g_per_kg: 2.0 },
       55,
       null,
       today,
     )
-    expect(t.fat).toBeGreaterThanOrEqual(0)
-    expect(t.carb).toBeGreaterThanOrEqual(0)
+    expect(t.fat).toBeCloseTo(55 * 0.85, 2) // 脂肪固定，不參與夾住
+    expect(t.carb).toBe(0)
   })
 
   it('goal≠maintain 但 rate 是 null（例如 migration 忘記回填）：kcal 變 NaN，不靜默當成維持態', () => {
@@ -148,39 +147,17 @@ describe('rateWeeklyToMonthly／rateMonthlyToWeekly（kg/週 ↔ kg/月，52 週
   })
 })
 
-describe('goalModeFrom／goalFromMode／rateFromMode（目標＋變化速度合併選單，五個 kg/月 preset，無自訂）', () => {
-  it('maintain 沒有速度可選', () => {
-    expect(goalModeFrom('maintain', null)).toBe('maintain')
-    expect(goalModeFrom('maintain', 0.5)).toBe('maintain')
-    expect(rateFromMode('maintain')).toBeNull()
+describe('nearestPreset（活動量／蛋白質選單拿掉自訂後，既有值取最接近的 preset）', () => {
+  it('精準命中時原樣回傳', () => {
+    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.375)).toBe(1.375)
   })
-  it('DB 的每週值換算回月，取最接近的 preset（1 kg/月 對應的週速度）', () => {
-    expect(goalModeFrom('cut', rateMonthlyToWeekly(1))).toBe('cut:1')
-    expect(goalModeFrom('bulk', rateMonthlyToWeekly(0.75))).toBe('bulk:0.75')
+  it('落在中間時取最接近的一個', () => {
+    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.5)).toBe(1.55)
+    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.3)).toBe(1.375)
   })
-  it('null（例如 migration 忘記回填）落在最小 preset，不是憑空選中間值', () => {
-    expect(goalModeFrom('cut', null)).toBe('cut:0.5')
-  })
-  it('goalFromMode 還原出正確的 goal（往返一致）', () => {
-    expect(goalFromMode('cut:1.25')).toBe('cut')
-    expect(goalFromMode('bulk:0.5')).toBe('bulk')
-    expect(goalFromMode('maintain')).toBe('maintain')
-  })
-  it('rateFromMode 換算回要存進 DB 的 kg/週', () => {
-    expect(rateFromMode('cut:1.5')).toBeCloseTo(rateMonthlyToWeekly(1.5), 9)
-  })
-})
-
-describe('activityChoiceFrom（活動量選單，五選一 preset 比對）', () => {
-  it('四個 preset 值精準比對回原數字', () => {
-    expect(activityChoiceFrom(1.2)).toBe(1.2)
-    expect(activityChoiceFrom(1.375)).toBe(1.375)
-    expect(activityChoiceFrom(1.55)).toBe(1.55)
-    expect(activityChoiceFrom(1.725)).toBe(1.725)
-  })
-  it('不是這四個之一回 custom', () => {
-    expect(activityChoiceFrom(1.4)).toBe('custom')
-    expect(activityChoiceFrom(2.0)).toBe('custom')
+  it('超出兩端範圍時取最近的邊界值', () => {
+    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 0.9)).toBe(1.2)
+    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 2.5)).toBe(1.9)
   })
 })
 

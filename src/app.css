@@ -521,6 +521,7 @@ body {
 .goal-group-title + .goal-row { border-top: none; }
 .goal-row .lb { flex: 1; color: var(--ink-muted); }
 .goal-row .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.goal-hint { padding: var(--s-1) var(--s-4) var(--s-3); margin: 0; font-size: var(--t-xs); color: var(--ink-faint); }
 .goal-src { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
   background: var(--raised); }
 .goal-src .t { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
@@ -539,7 +540,6 @@ body {
 .goal-hero { text-align: center; padding: var(--s-4) 0; }
 .goal-hero-macros { margin-top: var(--s-2); font-size: var(--t-sm); color: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.goal-detail { margin-top: var(--s-2); }
 /* 即時預覽提示：改欄位當場算，不用先按儲存——只在公式估算態出現 */
 .goal-hero-live { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-faint); }
 
@@ -568,9 +568,8 @@ body {
 .lib-row-main .icon-btn svg { width: 17px; height: 17px; }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
-.lib-edit { padding: 0 var(--s-3) var(--s-3); background: var(--raised); }
+.lib-edit { padding: var(--s-3); background: var(--raised); }
 .lib-edit .field-float { margin-bottom: var(--s-3); }
-.lib-edit .field-float:first-child { padding-top: var(--s-3); }
 .lib-edit .field-row { display: flex; gap: var(--s-2); }
 .lib-edit-actions { display: flex; gap: var(--s-2); padding-top: var(--s-1); }
 .lib-edit-actions .pick-bar-btn { min-height: 44px; font-size: var(--t-sm); }
@@ -946,6 +945,7 @@ body {
 .vendor-empty:empty { padding: 0; }
 .form-wrap .note { font-size: var(--t-xs); color: var(--ink-muted); margin: 0;
   line-height: 1.5; letter-spacing: var(--track-xs); }
+.form-wrap .note + .note { margin-top: var(--s-2); }
 
 /* 設定頁的次要動作：與登出同一種（不填色、accent 文字） */
 .settings .link-btn { display: block; width: 100%; min-height: 44px; margin-top: var(--s-4);

@@ -1,10 +1,11 @@
-/* 目標熱量公式鏈（2026-08-03 重新設計）：
+/* 目標熱量公式鏈（2026-08-04 脂肪／碳水改版）：
    BMR：有體脂率（去脂體重）→ Katch-McArdle；沒有 → Mifflin-St Jeor。
    TDEE = BMR × 活動係數。
    目標熱量：減重/增肌依 rate_kg_per_week 換算的每日熱量差額在 TDEE 上加減
    （7700 卡／公斤是常見估算值），維持＝TDEE。
-   蛋白質 = 體重 × protein_g_per_kg；脂肪／碳水依目標對照表分「剩餘熱量」
-   （減重 35/65、維持 40/60、增肌 30/70）——這兩個比例不開放使用者調整，寫死在這裡。
+   蛋白質 = 體重 × protein_g_per_kg；脂肪 = 體重 × FAT_G_PER_KG（固定 0.85，不隨目標變動）；
+   碳水 = 扣掉蛋白質與脂肪熱量後的剩餘熱量 ÷ 4——目標（減重/維持/增肌）只影響總熱量，
+   不再影響脂肪／碳水的分配比例。
    use_custom_targets 開著時完全繞過以上公式，直接回傳 custom_* 四個數字。
    捨入時機：只在最終顯示時捨入，這裡的計算鏈全程不捨入。 */
 import { ageFromYear } from './dates'
@@ -36,14 +37,10 @@ export interface Targets {
   carb: number
 }
 
-/** 減重/增肌時，脂肪／碳水分「剩餘熱量」（扣掉蛋白質熱量後）的比例。維持態也需要一組，
- *  蛋白質同樣先扣，只是熱量差額為 0。常見健身社群比例，非嚴謹公式，跟 Mifflin-St Jeor
- *  不同級別——這點要在畫面的「計算依據」老實寫出來，不能包裝成同等硬科學。 */
-const GOAL_MACRO_PRESET: Record<Goal, { fatPct: number; carbPct: number }> = {
-  cut: { fatPct: 35, carbPct: 65 },
-  maintain: { fatPct: 40, carbPct: 60 },
-  bulk: { fatPct: 30, carbPct: 70 },
-}
+/** 脂肪固定抓體重 × 0.85 g/kg，不隨目標（減重/維持/增肌）變動——常見健身社群抓法落在
+ *  0.6–1.0 g/kg 區間，0.85 是使用者裁決值（2026-08-04）。碳水拿走扣掉蛋白質與脂肪後的
+ *  剩餘熱量，所以目標熱量的增減全部反映在碳水，不是脂肪。 */
+const FAT_G_PER_KG = 0.85
 
 /** 1 公斤體脂肪 ≈ 7700 大卡的常見估算值，用來把「每週想變化幾公斤」換算成每天的熱量差額。 */
 const KCAL_PER_KG = 7700
@@ -73,56 +70,37 @@ export function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** 目標＋變化速度合併選單的狀態機（Settings.tsx 表單 UI 用）。放在 lib 層而不是
- *  screens/ 是因為它是「DB 欄位 ↔ 選單值」的純映射，跟 DOM 無關，vitest 測得到；
- *  放在 UI 層的話只有 e2e 測得到，這輪的表單重寫恰好還沒有 e2e 覆蓋（precommit-review
- *  抓到），先把邏輯挪到能被 vitest 釘住的地方比補 e2e 便宜。
+/** 目標（減重/維持/增肌）跟變化速度（kg/月）是 DB 上本來就分開的兩個欄位
+ *  （goal／rate_kg_per_week），2026-08-04 前的版本曾經在 UI 合併成一個 `cut:1` 這種
+ *  模板字面量選單，使用者實測後覺得不好用（一個下拉塞兩件事），這輪拆回兩個獨立欄位，
+ *  UI 層各自一個 select，不再需要合併型別跟往返轉換函式。
  *  維持沒有速度可選，減重/增肌各是五個固定 kg/月選項的其中一個——**沒有自訂**（使用者
- *  2026-08-03 裁決：只開放這五格，不留手動輸入escape hatch，跟活動量選單刻意不同款）。
+ *  2026-08-03 裁決：只開放這五格，不留手動輸入escape hatch，跟活動量選單刻意不同款；
+ *  這條決策沒有被這輪的拆欄位推翻，拆的只是「目標」跟「速度」兩個欄位要不要擠在同一個
+ *  select，不是要不要開放自訂）。
  *  DB 欄位 rate_kg_per_week 存的仍是「每週」（沿用既有 7700 卡/公斤的每日熱量差額公式，
  *  不改 computeTargets），這裡只在 UI 邊界做 kg/月 ↔ kg/週 的換算，換算基準用
  *  52 週/年 ÷ 12 個月，不是 4.3482…（365.25/12/7）——這個領域本來就是估算值的疊加
  *  （7700 卡/公斤本身就不精確），沒有必要為換算常數多一位精度。 */
 export const RATE_PRESETS_KG_PER_MONTH = [0.5, 0.75, 1, 1.25, 1.5] as const
-type RatePreset = (typeof RATE_PRESETS_KG_PER_MONTH)[number]
-export type GoalMode = 'maintain' | `cut:${RatePreset}` | `bulk:${RatePreset}`
 
 const WEEKS_PER_MONTH = 52 / 12
 
 export const rateWeeklyToMonthly = (kgPerWeek: number): number => kgPerWeek * WEEKS_PER_MONTH
 export const rateMonthlyToWeekly = (kgPerMonth: number): number => kgPerMonth / WEEKS_PER_MONTH
 
-/** 讀資料庫的每週速度換算回月選單時，用最接近的 preset 對齊——DB numeric(3,2) 只存到
- *  小數兩位，換算來回會有極小誤差（遠小於 preset 間距 0.25kg/月），直接比對浮點數相等
- *  會找不到，取最近的才是正確作法。 */
-function nearestRatePreset(kgPerMonth: number): RatePreset {
-  return RATE_PRESETS_KG_PER_MONTH.reduce((best, p) =>
-    Math.abs(p - kgPerMonth) < Math.abs(best - kgPerMonth) ? p : best)
-}
+/** 活動量選單的五個固定係數（衛福部標準活動量表），沒有自訂逃生口——理由跟
+ *  RATE_PRESETS_KG_PER_MONTH 同一輪裁決（2026-08-04）：只開放這五格。 */
+export const ACTIVITY_FACTOR_PRESETS = [1.2, 1.375, 1.55, 1.725, 1.9] as const
 
-export function goalModeFrom(goal: Goal, rateKgPerWeek: number | null): GoalMode {
-  if (goal === 'maintain') return 'maintain'
-  const monthly = rateKgPerWeek !== null ? rateWeeklyToMonthly(rateKgPerWeek) : RATE_PRESETS_KG_PER_MONTH[0]
-  return `${goal}:${nearestRatePreset(monthly)}`
-}
+/** 攝取蛋白質 g/kg 選單的四個固定值，同樣沒有自訂。 */
+export const PROTEIN_G_PER_KG_PRESETS = [1.4, 1.6, 1.8, 2.0] as const
 
-export function goalFromMode(mode: GoalMode): Goal {
-  return mode === 'maintain' ? 'maintain' : (mode.split(':')[0] as Goal)
-}
-
-/** mode 帶的 kg/月 preset 換算回要存進 DB 的 kg/週；maintain 沒有速度，回 null。 */
-export function rateFromMode(mode: GoalMode): number | null {
-  if (mode === 'maintain') return null
-  return rateMonthlyToWeekly(Number(mode.split(':')[1]))
-}
-
-/** 活動量選單的五個固定係數；不是這四個之一就是「自訂」。回傳原始數字而不是選單用的
- *  字串，UI 層自己決定怎麼呈現——標籤文字（久坐/輕度…）是畫面用詞，不是這裡的事。 */
-export const ACTIVITY_FACTOR_PRESETS = [1.2, 1.375, 1.55, 1.725] as const
-
-export function activityChoiceFrom(af: number): number | 'custom' {
-  const preset = ACTIVITY_FACTOR_PRESETS.find((p) => Math.abs(p - af) < 1e-9)
-  return preset ?? 'custom'
+/** 讀資料庫的既有值對不上任何 preset 時（例如這輪拿掉自訂前存過的舊值，或速度換算
+ *  kg/週 ↔ kg/月 有微誤差），取最接近的一個顯示——呼叫端要記得比照 xTouchedRef 的做法：
+ *  使用者沒碰過選單就不要用這個近似值覆寫真實資料。 */
+export function nearestPreset(presets: readonly number[], value: number): number {
+  return presets.reduce((best, p) => (Math.abs(p - value) < Math.abs(best - value) ? p : best))
 }
 
 /**
@@ -167,17 +145,13 @@ export function computeTargets(
     : tdee
 
   const protein = num(profile.protein_g_per_kg) * weightKg
-  // 蛋白質熱量可能大於目標熱量（例如 rate/protein_g_per_kg 兩個獨立輸入剛好交叉），
-  // 剩餘熱量不夾住 0 的話會變負數，脂肪／碳水目標跟著變負，rowOverage 會把每一筆
-  // 食物都判成超標——夾住比讓它算出一個誤導性的負目標誠實。
-  const remainingKcal = Math.max(0, kcal - protein * 4)
-  const preset = GOAL_MACRO_PRESET[profile.goal]
+  const fat = FAT_G_PER_KG * weightKg
+  // 蛋白質＋脂肪熱量可能大於目標熱量（例如 rate/protein_g_per_kg 兩個獨立輸入剛好交叉），
+  // 剩餘熱量不夾住 0 的話碳水會變負數，rowOverage 會把每一筆食物都判成超標——
+  // 夾住比讓它算出一個誤導性的負目標誠實。
+  const carb = Math.max(0, kcal - protein * 4 - fat * 9) / 4
 
-  return {
-    age, bmr, tdee, kcal, protein,
-    fat: (remainingKcal * preset.fatPct / 100) / 9,
-    carb: (remainingKcal * preset.carbPct / 100) / 4,
-  }
+  return { age, bmr, tdee, kcal, protein, fat, carb }
 }
 
 /**

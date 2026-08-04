@@ -96,6 +96,9 @@ export default function App() {
   const [foods, setFoods] = useState<Food[] | null>(null)
 
   const [tab, setTab] = useState<Tab>('today')
+  /** 設定頁的次級頁面（每日目標／食品庫管理／體重趨勢）自己有返回鍵，主 navbar 同時
+   *  存在會讓人以為還在設定頁根層——Settings 進出次級頁時回報，這裡據此隱藏底部列。 */
+  const [settingsSubView, setSettingsSubView] = useState(false)
   const [failed, setFailed] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
 
@@ -631,6 +634,7 @@ export default function App() {
             onArchiveFood={handleArchiveFood}
             onUnarchiveFood={handleUnarchiveFood}
             onSignOut={handleSignOut}
+            onSubViewChange={setSettingsSubView}
           />
         )}
         {/* 刪除的可復原提示。role=status＋aria-live=polite：讀屏會播報，但不搶焦點——
@@ -672,6 +676,7 @@ export default function App() {
       {/* 底部列本身是純版面容器（div），<nav> 只包分頁——CTA 是「開記一筆表單」的動作，
           不是導覽項；把它放進 aria-label="主要導覽" 的 landmark 裡，讀屏使用者跳到導覽時
           會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
+      {!settingsSubView && (
       <div className="bottom-bar">
         <nav className="tabbar" aria-label="主要導覽">
           {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
@@ -739,6 +744,7 @@ export default function App() {
           </button>
         )}
       </div>
+      )}
 
       {ready && (
         <LogSheet
