@@ -75,9 +75,9 @@ test('就地編輯：展開表單改熱量後儲存，只送出一筆 PATCH 且�
 
   const editor = first.locator('.lib-edit')
   await expect(editor).toBeVisible()
-  await expect(editor.locator('#lf-name')).toHaveValue(name)
+  await expect(editor.locator('#le-name')).toHaveValue(name)
 
-  await editor.locator('#lf-kcal').fill('321')
+  await editor.locator('#le-kcal').fill('321')
   await editor.locator('.pick-bar-btn').click()
 
   await expect.poll(async () => (await foodWrites(page)).length).toBe(1)
@@ -114,7 +114,7 @@ test('就地編輯的儲存鈕不可以溢出卡片，且與輸入框右緣切�
       innerR: +inner.r.toFixed(1),
       saveR: +r(edit.querySelector('.pick-bar-btn')!).right.toFixed(1),
       cancelL: +r(edit.querySelector('.cancel-btn')!).left.toFixed(1),
-      inputR: +r(edit.querySelector('#lf-kcal')!).right.toFixed(1),
+      inputR: +r(edit.querySelector('#le-kcal')!).right.toFixed(1),
     }
   })
 
@@ -148,6 +148,28 @@ test('三顆列操作圖示的筆畫重心都落在 viewBox 中央，並排才�
     expect(Math.abs(i.cy - 12), `「${i.label}」的筆畫重心 y=${i.cy}，偏離 viewBox 中央 12`).toBeLessThanOrEqual(1)
     expect(Math.abs(i.cx - 12), `「${i.label}」的筆畫重心 x=${i.cx}，偏離 viewBox 中央 12`).toBeLessThanOrEqual(1)
   }
+})
+
+/* 迴歸鎖（v2.29 precommit-review 抓到，是 v2.28 自己引入的）：pill 從「封頂半個螢幕」
+   放寬成整行之後，長品名會水平覆蓋到右下角的 FAB，而 pill 的 z-index(6) 高於 FAB(5)——
+   那 5 秒內想按新增會變成誤觸復原。修法沿用「編輯中隱藏 FAB」同一套語言。
+   這條同時鎖住「藏起來」與「事後回得來」，只驗前者的話 FAB 一去不返也不會有人發現。 */
+test('復原提示出現時隱藏 FAB：pill 放寬到整行後會蓋住它，z-index 也比它高', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  await expect(page.locator('.lib-fab')).toBeVisible()
+
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="封存 ${name}"]`).click()
+
+  await expect(page.locator('.undo-pill')).toBeVisible()
+  await expect(page.locator('.lib-fab'), '復原提示會壓在 FAB 上，那 5 秒按新增等於誤觸復原').toHaveCount(0)
+
+  await page.locator('.undo-pill').click()
+  await expect(page.locator('.undo-pill')).toHaveCount(0)
+  await expect(page.locator('.lib-fab'), '復原之後 FAB 沒回來').toBeVisible()
 })
 
 test('編輯中隱藏 FAB：展開的表單一長，fixed 定位的新增鈕會蓋住儲存鈕（真機回報）', async ({ page }) => {
@@ -213,8 +235,17 @@ test('封存提示：長品名不會撐破膠囊，只截品名不截「復原�
 
   const pill = page.locator('.undo-pill')
   await expect(pill).toBeVisible()
-  await expect(pill, '封存對螢幕閱讀器沒有任何回饋').toHaveAttribute('role', 'status')
-  await expect(pill).toHaveAttribute('aria-live', 'polite')
+  /* role=status 必須在**外層**：掛在 button 上會取代掉按鈕的隱含 role，讀屏就找不到
+     這顆唯一的復原入口了（v2.28 一度寫錯，v2.29 review 抓到）。所以這裡兩件事都要驗：
+     外層有播報、內層仍然是一顆沒有被覆寫 role 的 button。 */
+  const wrap = page.locator('.undo-pill-wrap')
+  await expect(wrap, '封存對螢幕閱讀器沒有任何回饋').toHaveAttribute('role', 'status')
+  await expect(wrap).toHaveAttribute('aria-live', 'polite')
+  expect(await pill.evaluate((el) => el.tagName), '復原不是 button 了').toBe('BUTTON')
+  expect(
+    await pill.evaluate((el) => el.getAttribute('role')),
+    'role 又被掛回 button 上，按鈕語意會被取代掉',
+  ).toBeNull()
 
   const geo = await page.evaluate(() => {
     const p = document.querySelector('.undo-pill') as HTMLElement
@@ -231,12 +262,72 @@ test('封存提示：長品名不會撐破膠囊，只截品名不截「復原�
 
   expect(geo.hasNmSpan, '品名沒有包在 .nm 裡，過長時會把「・復原」一起截掉').toBe(true)
   // 換行的話高度會從 44 長高——這正是修之前真實品名會發生的事
-  expect(geo.short.h, '品名一長膠囊就換行了').toBe(44)
+  expect(geo.short.h, '一般長度的品名就把膠囊撐高了').toBe(44)
   expect(geo.long.h, '極長品名把膠囊撐高了').toBe(44)
   // 短品名時要能用超過半個螢幕的寬度（left: 50% 的寫法會把它卡在 196.5px）
   expect(geo.short.w, '寬度又被卡在半個螢幕，文字會在膠囊裡換行').toBeGreaterThan(geo.viewportW / 2)
   expect(geo.long.nmClipped, '極長品名沒有走 ellipsis').toBe(true)
   expect(geo.long.w, '膠囊超出畫面寬度').toBeLessThanOrEqual(geo.viewportW)
+})
+
+/* v2.29：新增／範本新增從整頁改成 sheet。這條鎖「是覆蓋層不是換頁」——底下的清單必須
+   還在，而且三種關法都要能用。舊的整頁 marker 一併驗它消失，否則兩套並存不會有人發現。 */
+test('新增走 sheet 不是換頁：底下清單還在，關閉鈕／Esc 都能關', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  const listRows = await rows(page).count()
+  await page.locator('.lib-fab').click()
+
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await expect(page.locator('[data-screen="food-library-add"]'), '舊的整頁新增畫面還在，兩套並存了').toHaveCount(0)
+  await expect(rows(page), 'sheet 是覆蓋層，底下的清單不該被換掉').toHaveCount(listRows)
+
+  await sheet.locator('.icon-btn[aria-label="關閉"]').click()
+  await expect(sheet).toHaveCount(0)
+
+  await page.locator('.lib-fab').click()
+  await expect(sheet).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet, 'Esc 關不掉，鍵盤使用者會被困在 sheet 裡').toHaveCount(0)
+})
+
+/* v2.29：食品庫的店家欄位補上 Autocomplete。在這之前它是純 text input——同一件事從
+   「記一筆」進去能搜既有店家、從食品庫進去不能，是能力差異不是風格差異。
+
+   **這條真正在守的是 portal**：vaul 的 Drawer 會把 body 設成 pointer-events:none，
+   店家下拉若掛在預設的 document.body 就會**看得到、點不到**（DESIGN.md「店家欄位」條，
+   LogSheet 撞過一次）。所以這裡一定要真的 click 選項並驗值，不能只驗選單出現。 */
+test('新增 sheet 的店家是 Autocomplete，且下拉選項在 sheet 裡點得到', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  await page.locator('.lib-fab').click()
+  await expect(page.locator('[data-screen="food-add-sheet"]')).toBeVisible()
+
+  const vendor = page.locator('#lf-vendor')
+  await vendor.click()
+  await expect(page.locator('.vendor-popup'), '店家欄位沒有下拉，還是純 text input').toBeVisible()
+
+  const option = page.locator('.vendor-item', { hasText: '減醣廚房' })
+  expect(await option.count(), '「減醣廚房」選項應該只出現一次（去重）').toBe(1)
+  await option.first().click()
+  expect(await vendor.inputValue(), '點得到卻選不進去——portal 掛錯層的典型症狀').toBe('減醣廚房')
+})
+
+/* 補遺 3 的裁決：新增有自動完成、編輯沒有，等於用一個分岔換掉另一個。 */
+test('就地編輯的店家欄位同樣是 Autocomplete', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="編輯 ${name}"]`).click()
+
+  const vendor = page.locator('#le-vendor')
+  await vendor.click()
+  await expect(page.locator('.vendor-popup'), '就地編輯的店家還是純 text input').toBeVisible()
 })
 
 test('以現有食物為範本新增：表單預填來源的值，送出是 POST 新增而不是改到原本那筆', async ({ page }) => {
@@ -247,14 +338,16 @@ test('以現有食物為範本新增：表單預填來源的值，送出是 POST
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
   await first.locator(`[aria-label="以 ${name} 為範本新增"]`).click()
 
-  await expect(page.locator('[data-screen="food-library-add"]')).toBeVisible()
-  await expect(page.locator('.lib-topbar h1')).toContainText(`以「${name}」為範本新增`)
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.locator('.sheet-title')).toContainText(`以「${name}」為範本新增`)
   await expect(page.locator('#lf-name'), '範本沒有預填來源的品名').toHaveValue(name)
 
   await page.locator('#lf-name').fill(`${name}（大份）`)
-  await page.locator('.confirm-wrap .pick-bar-btn').click()
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
 
-  await expect(page.locator('[data-screen="food-library"]')).toBeVisible()
+  // 送出成功要把 sheet 關掉（清單一直都在，驗清單可見等於沒驗）
+  await expect(sheet, '送出後 sheet 沒關').toHaveCount(0)
   const writes = await foodWrites(page)
   expect(writes, '不該動到原本那筆，只該新增一筆').toHaveLength(1)
   expect(writes[0].method).toBe('POST')
@@ -266,11 +359,13 @@ test('新增必填擋在送出前：品名留空時顯示錯誤且不送出', as
   await openLibrary(page)
 
   await page.locator('.lib-fab').click()
-  await expect(page.locator('[data-screen="food-library-add"]')).toBeVisible()
+  await expect(page.locator('[data-screen="food-add-sheet"]')).toBeVisible()
 
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
   await page.locator('#lf-kcal').fill('200')
-  await page.locator('.confirm-wrap .pick-bar-btn').click()
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
 
-  await expect(page.locator('.sheet-error')).toBeVisible()
+  await expect(sheet.locator('.sheet-error')).toBeVisible()
+  await expect(sheet, '驗證沒過卻把 sheet 關掉了，使用者要重打一遍').toBeVisible()
   expect(await foodWrites(page), '驗證沒過卻送出了新增').toHaveLength(0)
 })

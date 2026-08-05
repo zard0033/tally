@@ -9,53 +9,20 @@
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要 legacy 那套
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
-import { Autocomplete } from '@base-ui/react/autocomplete'
 import { Drawer } from 'vaul'
+import FoodFormFields from '@/components/FoodFormFields'
 import {
   listRecentIntake,
   type Food,
   type NewIntake,
 } from '@/lib/api'
 import { localDate } from '@/lib/dates'
-import { BLANK_FOOD_FORM, validateFoodForm, type FoodForm } from '@/lib/foodForm'
+import { BLANK_FOOD_FORM, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
 
-/* vaul 內建動效走 CSS 動畫（[data-vaul-drawer]/[data-vaul-overlay] 的 data-state 屬性），
-   不是 legacy 那種掛 .opening／.closing class 手動控制的寫法，所以「用 CSS 覆寫其 data
-   屬性動畫」是唯一路徑：vaul 自己的規則用 [data-vaul-drawer][data-state=...] 這組選擇器
-   （二個屬性選擇器，優先權 (0,0,2,0)），這裡用相同優先權的選擇器覆寫，靠 !important
-   保證勝出（vaul 的 <style> 插入時機不保證在這份元件的 <style> 之前）。
-   進場沿用 --dur-sheet/--ease-sheet（DESIGN.md v1.9 動效階梯）；drawer 退場 --dur-mid
-   （退場比進場降一級；原 200ms 真機體感「像直接消失」）；scrim 退場另走 --dur-fast，
-   比 drawer 短——暗幕先清，否則滑走掀開的區域與頂部帶淡出起點不同，分區變色（下方詳註）。
-   scrim（Drawer.Overlay）的動畫只有這一軌——app.css 的 .scrim base class 不掛動畫。 */
-const VAUL_TRANSITION_CSS = `
-[data-vaul-drawer][data-state="open"], [data-vaul-overlay][data-state="open"] {
-  animation-duration: var(--dur-sheet, 280ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-[data-vaul-drawer][data-state="closed"] {
-  animation-duration: var(--dur-mid, 220ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-/* overlay 退場比 sheet 短：兩者同速時，sheet 滑走「掀開」的區域露出的是淡到一半的
-   scrim，而頂部 96px 從全黑開始淡——真機看起來就是頂部延遲變色（2026-07-29 實測）。
-   暗幕先清、sheet 慢滑，掀開處已是乾淨背景，不一致感即消失 */
-[data-vaul-overlay][data-state="closed"] {
-  animation-duration: var(--dur-fast, 100ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-/* reduced-motion 要在這裡自帶一份：上面幾條都掛著 !important，app.css 的全域
-   reduced-motion 區塊（無 !important）壓不過，只能同權重就地覆寫 */
-@media (prefers-reduced-motion: reduce) {
-  [data-vaul-drawer][data-state], [data-vaul-overlay][data-state] {
-    animation-duration: .01ms !important;
-  }
-}
-`
 
 type View = 'list' | 'food-form'
 
@@ -193,39 +160,6 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
   )
 }
 
-interface FieldOpts {
-  id: string
-  label: string
-  required?: boolean
-  numeric?: boolean
-  value: string
-  onChange: (v: string) => void
-}
-
-/* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移（app.css
-   .field-float 那組規則）。placeholder=" " 只是給 :placeholder-shown 當開關用的空白值，
-   不是拿 placeholder 冒充 label（WCAG 3.3.2）。
-   iOS AutoFill 灌值時 :placeholder-shown 正確翻轉、標籤不壓字——2026-07-29 真機驗證通過
-   （legacy 同一處也標了這條，行為照搬），真機發現標籤壓字時改用 input 事件加 class 判斷。 */
-function renderField(opts: FieldOpts) {
-  return (
-    <div className="field-float">
-      <input
-        id={opts.id}
-        type="text"
-        inputMode={opts.numeric ? 'decimal' : undefined}
-        placeholder=" "
-        value={opts.value}
-        onChange={(e) => opts.onChange(e.target.value)}
-      />
-      <label htmlFor={opts.id}>
-        {opts.label}
-        {opts.required && <span className="req">*</span>}
-      </label>
-    </div>
-  )
-}
-
 export default function LogSheet(props: LogSheetProps) {
   const { open, meal: initialMeal, foods, dayData, targets, onClose, onCreateIntake, onCreateFood } = props
 
@@ -239,7 +173,6 @@ export default function LogSheet(props: LogSheetProps) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FOOD_FORM)
-  const vendorInputRef = useRef<HTMLInputElement | null>(null)
   /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
      Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
      Dialog Content 自己的子樹。預設 Portal 掛在 body 下等於掛在被擋的那層，選單看得到
@@ -301,10 +234,9 @@ export default function LogSheet(props: LogSheetProps) {
   }, [open])
 
   /* 進表單時品名已經是搜尋字串帶進來的（openFoodForm 的 prefillName），下一個該落焦的
-     是店家，不是熱量——原本直接focus 熱量會跳過店家，真機回報「順序不對」（2026-08-02）。 */
-  useEffect(() => {
-    if (view === 'food-form') vendorInputRef.current?.focus()
-  }, [view])
+     是店家，不是熱量——原本直接 focus 熱量會跳過店家，真機回報「順序不對」（2026-08-02）。
+     這個行為現在由 FoodFormFields 的 `vendorAutoFocus` 承擔（表單是在 view 切過去時才
+     掛載的，元件自己的 mount effect 等價於原本這個 [view] effect）。 */
 
   function togglePick(id: number) {
     setErr(null)
@@ -474,13 +406,9 @@ export default function LogSheet(props: LogSheetProps) {
     })
   }
   /* 店家 Autocomplete 的選項來源：foods 上的 vendor 字串去重排序，不建專屬資料表——
-     去重就是清單，建表要付新表＋外鍵＋遷移＋RLS 的代價卻買不到東西。 */
-  const vendorOptions = useMemo(() => {
-    if (!foods) return []
-    const set = new Set<string>()
-    for (const f of foods) if (f.vendor) set.add(f.vendor)
-    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant-u-co-stroke'))
-  }, [foods])
+     去重就是清單，建表要付新表＋外鍵＋遷移＋RLS 的代價卻買不到東西。
+     規則本體在 lib（食品庫那邊也要用同一套，v2.29 precommit-review 抓到重複實作）。 */
+  const vendorOptions = useMemo(() => vendorOptionsOf(foods), [foods])
   const trimmedQuery = filterQuery.trim()
   const pickedFoods = [...picks.keys()].map(foodById).filter((f): f is Food => !!f)
 
@@ -552,7 +480,6 @@ export default function LogSheet(props: LogSheetProps) {
 
   return (
     <>
-      <style>{VAUL_TRANSITION_CSS}</style>
       <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false}>
         <Drawer.Portal>
           <Drawer.Overlay className="scrim" />
@@ -677,78 +604,18 @@ export default function LogSheet(props: LogSheetProps) {
                 </div>
 
                 <div className="form-wrap">
-                  <div className="field-row">
-                    {renderField({
-                      id: 'f-name',
-                      label: '品名',
-                      required: true,
-                      value: foodForm.name,
-                      onChange: (v) => setFoodForm((p) => ({ ...p, name: v })),
-                    })}
-                    <div className="field-float">
-                      {/* 可自由輸入的 Autocomplete，不是受限 Combobox——使用者常打錯店家名，
-                          這裡讓既有店家可選，但打一個清單外的新名字一樣送得出去。
-                          Autocomplete.Root 不渲染自己的元素，input 緊接 label 是直接子節點，
-                          floating label 的 `input + label` CSS 選擇器因此照樣命中。
-                          IME 組字：Autocomplete 底層共用 combobox 的 AriaCombobox，
-                          composition 期間本來就不會把中間態送進 onValueChange，不需要
-                          比照食物搜尋另外做 query/filterQuery 雙 state。 */}
-                      <Autocomplete.Root
-                        items={vendorOptions}
-                        value={foodForm.vendor}
-                        onValueChange={(v) => setFoodForm((p) => ({ ...p, vendor: v }))}
-                        openOnInputClick
-                      >
-                        <Autocomplete.Input id="f-vendor" placeholder=" " ref={vendorInputRef} />
-                        <label htmlFor="f-vendor">店家</label>
-                        <Autocomplete.Portal container={sheetRef}>
-                          <Autocomplete.Positioner sideOffset={4} className="vendor-positioner">
-                            <Autocomplete.Popup className="vendor-popup">
-                              <Autocomplete.Empty className="vendor-empty">沒有符合的店家，直接送出就會新增</Autocomplete.Empty>
-                              <Autocomplete.List className="vendor-list">
-                                {(vendor: string) => (
-                                  <Autocomplete.Item key={vendor} value={vendor} className="vendor-item">
-                                    {vendor}
-                                  </Autocomplete.Item>
-                                )}
-                              </Autocomplete.List>
-                            </Autocomplete.Popup>
-                          </Autocomplete.Positioner>
-                        </Autocomplete.Portal>
-                      </Autocomplete.Root>
-                    </div>
-                  </div>
-                  {renderField({
-                    id: 'f-kcal',
-                    label: '熱量（卡）',
-                    required: true,
-                    numeric: true,
-                    value: foodForm.kcal,
-                    onChange: (v) => setFoodForm((p) => ({ ...p, kcal: v })),
-                  })}
-                  <div className="field-row">
-                    {renderField({
-                      id: 'f-protein',
-                      label: '蛋白質 g',
-                      numeric: true,
-                      value: foodForm.protein,
-                      onChange: (v) => setFoodForm((p) => ({ ...p, protein: v })),
-                    })}
-                    {renderField({
-                      id: 'f-fat',
-                      label: '脂肪 g',
-                      numeric: true,
-                      value: foodForm.fat,
-                      onChange: (v) => setFoodForm((p) => ({ ...p, fat: v })),
-                    })}
-                    {renderField({
-                      id: 'f-carb',
-                      label: '碳水 g',
-                      numeric: true,
-                      value: foodForm.carb,
-                      onChange: (v) => setFoodForm((p) => ({ ...p, carb: v })),
-                    })}
-                  </div>
+                  {/* portalContainer 一定要傳 sheetRef：vaul 的 Drawer 開啟時會把 body 設成
+                      pointer-events:none，店家下拉的 Portal 掛在預設的 body 下就會看得到、
+                      點不到（見元件檔頭與 DESIGN.md「店家欄位」條）。
+                      vendorAutoFocus：品名已經是搜尋字串帶進來的，下一個該落焦的是店家。 */}
+                  <FoodFormFields
+                    form={foodForm}
+                    onChange={setFoodForm}
+                    idPrefix="f-"
+                    vendorOptions={vendorOptions}
+                    portalContainer={sheetRef}
+                    vendorAutoFocus
+                  />
                 </div>
 
                 <div className="confirm-wrap">

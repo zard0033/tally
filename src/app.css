@@ -635,9 +635,13 @@ body {
       算出來需要 226px，文字就在固定 44px 高的膠囊裡換行溢出。改成左右都給邊界、
       `width: fit-content` ＋ `margin: 0 auto` 置中，可用寬度變成整行。
    ③ 品名過長時只截品名（`.nm` 的 ellipsis），不能讓「・復原」被切掉——那是唯一的動作。 */
-.undo-pill { position: absolute; left: var(--s-4); right: var(--s-4); margin: 0 auto;
-  width: fit-content; max-width: calc(100% - var(--s-4) * 2);
+/* 定位與播報在外層、按鈕本體在內層——同今日頁的 .undo-bar。分層不是為了好看：
+   `role="status"` 掛在 button 上會取代掉它的按鈕語意（v2.29 precommit-review 抓到）。
+   `pointer-events: none` 讓外層的空白區不攔截底下清單的點擊，只有 pill 自己可點。 */
+.undo-pill-wrap { position: absolute; left: var(--s-4); right: var(--s-4);
   bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); z-index: 6;
+  display: flex; justify-content: center; pointer-events: none; }
+.undo-pill { pointer-events: auto; max-width: 100%;
   display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-4);
   border-radius: var(--r-pill); background: var(--ink); color: var(--paper); font-size: var(--t-sm);
   font-weight: 600; border: none; cursor: pointer; font-family: inherit; white-space: nowrap;
@@ -1043,3 +1047,40 @@ body {
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
   #settings-sheet-root .scrim { animation-duration: .01ms; }
 }
+
+/* ── vaul sheet 的動效覆寫 ──
+   vaul 內建動效走 CSS 動畫（[data-vaul-drawer]/[data-vaul-overlay] 的 data-state 屬性），
+   不是 legacy 那種掛 .opening／.closing class 手動控制的寫法，所以「用 CSS 覆寫其 data
+   屬性動畫」是唯一路徑：vaul 自己的規則用 [data-vaul-drawer][data-state=...] 這組選擇器
+   （二個屬性選擇器，優先權 (0,0,2,0)），這裡用相同優先權的選擇器覆寫，靠 !important
+   保證勝出（vaul 的 <style> 插入時機不保證在這份元件的 <style> 之前）。
+   進場沿用 --dur-sheet/--ease-sheet（DESIGN.md v1.9 動效階梯）；drawer 退場 --dur-mid
+   （退場比進場降一級；原 200ms 真機體感「像直接消失」）；scrim 退場另走 --dur-fast，
+   比 drawer 短——暗幕先清，否則滑走掀開的區域與頂部帶淡出起點不同，分區變色（下方詳註）。
+   scrim（Drawer.Overlay）的動畫只有這一軌——app.css 的 .scrim base class 不掛動畫。 */
+[data-vaul-drawer][data-state="open"], [data-vaul-overlay][data-state="open"] {
+  animation-duration: var(--dur-sheet, 280ms) !important;
+  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
+}
+[data-vaul-drawer][data-state="closed"] {
+  animation-duration: var(--dur-mid, 220ms) !important;
+  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
+}
+/* overlay 退場比 sheet 短：兩者同速時，sheet 滑走「掀開」的區域露出的是淡到一半的
+   scrim，而頂部 96px 從全黑開始淡——真機看起來就是頂部延遲變色（2026-07-29 實測）。
+   暗幕先清、sheet 慢滑，掀開處已是乾淨背景，不一致感即消失 */
+[data-vaul-overlay][data-state="closed"] {
+  animation-duration: var(--dur-fast, 100ms) !important;
+  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
+}
+/* reduced-motion 要在這裡自帶一份：上面幾條都掛著 !important，app.css 的全域
+   reduced-motion 區塊（無 !important）壓不過，只能同權重就地覆寫 */
+@media (prefers-reduced-motion: reduce) {
+  [data-vaul-drawer][data-state], [data-vaul-overlay][data-state] {
+    animation-duration: .01ms !important;
+  }
+}
+/* 2026-08-05 從 LogSheet 的內嵌 <style> 搬來這裡：選擇器本來就是全域的，而食品庫的
+   新增 sheet（同樣走 vaul）在設定分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
+   會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
+

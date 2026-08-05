@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-05（v2.24–v2.26 已 push、icon 結案；v2.27 待 push＝真機回報的三處排版修正）
+最後更新：2026-08-05（v2.24–v2.27 已 push；v2.28／v2.29 待 push＝封存提示修復、食品庫新增改 sheet ＋ 食物表單合併共用元件）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；2026-07-30 手術前的
 > 完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -11,10 +11,10 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎（v2.21→
   v2.23 三輪演進）＋食品庫管理與設定頁重構（v2.22）。細節見 DESIGN.md 版本紀錄。
-  **v2.24–v2.26 已 push**（`cbc930c`）；**v2.27 待 push**＝真機回報的三處排版修正
-  （食品庫儲存鈕溢出、範本圖示筆畫偏高、全站 select 沒有下拉箭頭）。
+  **v2.24–v2.27 已 push**（`fcf4270`）；**v2.28／v2.29 待 push**＝封存提示的四個缺陷修復、
+  食品庫新增改 sheet ＋ 三處食物表單合併成 `src/components/FoodFormFields.tsx`。
 - **測試**：`npx vitest run` 60/60；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **53/53 全綠**（約 1.5 分；原 31 ＋ v2.24 新增 18 ＋ v2.27 新增 4）。長年偶發的
+  **58/58 全綠**（約 1.5 分；原 31 ＋ v2.24 新增 18 ＋ v2.27 新增 4 ＋ v2.28 新增 1 ＋ v2.29 新增 4）。長年偶發的
   `meal-exit-animation` flaky 在 worker 壓到 2 之後也穩定了——根因是並行壓力，不是動畫時序。
 - **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
   **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
@@ -23,8 +23,10 @@
     DB 原值、動過選單就改用選單值、即時預覽顯示 — 不跳錯誤、計算依據常駐無 toggle 且有項目
     符號、BMR 說明 popover、自訂目標繞過公式、**select 有箭頭而 input 沒有**、
     **每個選單的最長選項都放得下**
-  - `food-library.spec.ts` 9 條——搜尋比對品名＋店家、空狀態、就地編輯、編輯中隱藏 FAB、
-    封存＋復原、範本新增、必填擋送出、**儲存鈕不溢出卡片**、**三顆圖示筆畫重心置中**
+  - `food-library.spec.ts` 14 條——搜尋比對品名＋店家、空狀態、就地編輯、編輯中隱藏 FAB、
+    封存＋復原、範本新增、必填擋送出、儲存鈕不溢出卡片、三顆圖示筆畫重心置中、
+    **封存提示長品名不撐破膠囊＋無障礙播報**、**新增走 sheet 不換頁**、
+    **新增 sheet 的店家下拉點得到**、**就地編輯的店家也是 Autocomplete**
   - `settings-nav.spec.ts` 3 條——三入口導覽往返、底部列收起與還原、入口熱量與目標頁一致
 
 ## 已驗證事實
@@ -64,6 +66,17 @@
   ③ SpringBoard 快取（移除重加後仍舊）④ alpha 通道（改 RGB 後仍舊）。**別再重試這四條。**
   **教訓**：症狀出現在單一 app 上，不代表原因在那個 app——問一句「別的 app 也這樣嗎」
   可以省掉四輪。這題從頭到尾缺的就是那個對照組。
+- **食物表單三處共用一份 JSX（v2.29）**：`src/components/FoodFormFields.tsx`。抽出來的
+  觸發點不是「看起來重複」，是**已經分岔過兩次**——品名欄漏 `inputMode`（手機打不出中文）、
+  食品庫那份沒有店家 Autocomplete。純邏輯早在 `src/lib/foodForm.ts` 共用，UI 那半拖到現在。
+  **判準記著**：兩份長得像不構成抽出來的理由，「兩邊本來就該一致、而且已經開始不一致」才是。
+- **修分岔的那一輪，最容易製造新的分岔**（v2.29 deep review 抓到三條，兩條是本輪自造）：
+  ① 一邊把表單 JSX 抽成共用元件，一邊在食品庫照抄了一份跟 LogSheet 逐字相同的
+  `vendorOptions` 去重邏輯——已改走 `src/lib/foodForm.ts` 的 `vendorOptionsOf()`。
+  ② 修無障礙時把 `role="status"` 直接掛在 `<button>` 上，**顯式 role 會取代隱含 role**，
+  讀屏反而找不到那顆按鈕——正確結構是外層帶播報、內層留乾淨的 button（今日頁一直是這樣）。
+  ③ 把 undo pill 放寬成整行，長品名就水平蓋住 FAB 且 z-index 更高，5 秒內按新增變誤觸。
+  **共同形狀：改動的當下只盯著要修的那個缺陷，沒有重新檢查它跟周圍元件的關係。**
 - **新測試做過 mutation 檢查才收**（兩輪都做）：v2.24 那輪把 `effectiveRateKgPerWeek` 改成
   永遠讀選單值、`FAT_G_PER_KG` 改回舊比例；v2.27 那輪把儲存鈕的 flex 覆寫、範本圖示座標、
   select 箭頭選擇器三處各自改回舊行為——每次都是對應測試變紅、其餘不誤報。
@@ -105,10 +118,10 @@
 
 ## 下次續點
 
-1. **push v2.27**（未提交：`src/app.css`、`DailyGoal.tsx`、`FoodLibrary.tsx`、
-   兩份 spec、DESIGN.md、本檔）。push 前照全域 `rules/git-push.md` 走 review。
-2. 沒有進行中的任務——app icon、e2e 基礎設施、變化速度三條都已結案。下一輪可以挑
-   「待決問題」裡的任一項開工（體重趨勢圖表要先過 `dataviz`；PWA/SW 屬中型，先走 `dev-flow`）。
+1. **push v2.28／v2.29**（v2.28 已本地 commit；v2.29 未提交）。push 前照全域
+   `rules/git-push.md` 走 review。
+2. 沒有進行中的任務。下一輪可以挑「待決問題」裡的任一項開工（體重趨勢圖表要先過
+   `dataviz`；PWA/SW 屬中型，先走 `dev-flow`）。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 
