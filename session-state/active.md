@@ -1,7 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-05（v2.22＋v2.23 已 push；補上三個新畫面的 e2e 覆蓋、驗過 v2.23 視覺、
-查清 app icon 黑底白 T 的真因）
+最後更新：2026-08-05（v2.24 已 push；v2.25 待 push＝icon 改透明底綠 T ＋ e2e 改跑靜態 preview）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；2026-07-30 手術前的
 > 完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -12,11 +11,14 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎（v2.21→
   v2.23 三輪演進）＋食品庫管理與設定頁重構（v2.22）。細節見 DESIGN.md 版本紀錄。
-  **v2.22／v2.23 已 push**（`5b2b860`，本機與 origin/main 同步）。
+  **v2.24 已 push**（`f9df19a`）；**v2.25 待 push**（icon 改透明底＋`#2A9D7A` 綠 T、
+  e2e 改跑 build 後的靜態 preview）。
 - **測試**：`npx vitest run` 60/60；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **49/49 全綠**（55 秒；原 31 ＋ 本輪新增 18）。長年偶發的 `meal-exit-animation` flaky
-  在 worker 壓到 4 之後也穩定了——那條的根因其實是並行壓力，不是動畫時序。
-- **本輪新增的 e2e**（三個檔，補齊 v2.22/v2.23 新畫面）：
+  **49/49 全綠**（約 1.1 分；原 31 ＋ 新增 18）。長年偶發的 `meal-exit-animation` flaky
+  在 worker 壓到 2 之後也穩定了——那條的根因其實是並行壓力，不是動畫時序。
+- **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
+  **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
+- **新增的 e2e**（三個檔，補齊 v2.22/v2.23 新畫面）：
   - `daily-goal.spec.ts` 8 條——目標/速度兩個獨立 select、脂肪固定 g/kg、touched-ref 不覆寫
     DB 原值、動過選單就改用選單值（換算成 kg/週）、即時預覽顯示 — 不跳錯誤、計算依據常駐
     無 toggle 且有項目符號、BMR 說明 popover、自訂目標繞過公式
@@ -34,13 +36,13 @@
   **第二層（前端）**：壓到 4 之後 server 活了，換 WebKit 自己倒——
   `Cannot find parent object page@…`、`browserContext.newPage: … has been closed`。
   量了才知道原因：機器 31.7 GB 但當下**只剩 5.0 GB 可用**（VS Code 2.2G、Figma 三支 2.6G、
-  dwm 1.3G、vmmem 0.9G），4 個 WebKit 實例塞不下。**壓到 `workers: 2` 後 49/49 綠、1.2 分鐘。**
-  2 不是效能取捨，是這台機器在一般桌面負載下的實際容量。
+  dwm 1.3G、vmmem 0.9G），4 個 WebKit 實例塞不下。**`workers: 2` 後 49/49 綠。**
   **教訓**：兩層都表現成「Playwright 壞了」，但兩次的真兇都不在 Playwright——
   先讀 `[WebServer]` 那幾行、再量機器餘裕，比改測試碼快得多。
-  另一個陷阱：`reuseExistingServer: true` 會接手 port 5500 上任何既有 server 卻不管它的
-  生死——用 `TaskStop` 停背景 `npm run dev` 只會殺掉 npm 外殼，vite 變孤兒活著，
-  playwright 接手後那個孤兒死掉就整輪掛住。跑 e2e 前先確認 5500 是空的。
+  **兩層都已從根上處理（v2.25）**：後端改跑 build 後的 `vite preview`（沒有現場轉譯就沒有
+  OOM），port 分到 5501（e2e 不走 OAuth，不受 5500 白名單約束），因此 `reuseExistingServer`
+  得以改成 `false`——孤兒 server 的陷阱從「靠 CLAUDE.md 一句人工提醒」變成機械上不可能發生。
+  `workers: 2` 保留，它守的是瀏覽器端容量，跟 server 怎麼跑無關。
 - **app icon 黑底白 T 已結案：是 iOS 系統行為，不是 Tally 的缺陷**（2026-08-05）。
   使用者的主畫面「圖示外觀」設定是**深色**——那個模式下 iOS 把**全機每一顆圖示**都染深。
   原生 app 能用 Xcode asset catalog 交深色變體讓系統改用，**web clip 沒有這個機制**
@@ -81,14 +83,6 @@
   減重速度 0.5 → 0.346 kg/週。**尚未執行，等他決定要不要接受這個變化。**
   （參考：1.5 kg/月 ＝ 體重的 0.46%/週，低於一般建議的 0.5–1%/週區間下緣；
   他原本的 0.5 kg/週 ＝ 0.66%/週 落在區間中段。這是選單窄、不是他的值激進。）
-- **e2e 的 webServer 要不要改跑 `vite preview`**（precommit-review 建議）：現在跑
-  `npm run dev`，每個 worker 都讓 dev server 現場轉譯整張模組圖，這是上面兩層 OOM 的
-  共同上游。改成 build 後的靜態 preview 可以把壓力歸零，順帶讓 e2e 驗到真正會部署的
-  產物而不是 dev 中介層；代價是每輪多一次 build、且失去 HMR。本輪不動。
-- **`reuseExistingServer: true` 要不要改 false**（同上）：改了就由 Playwright 自己起自己收，
-  孤兒 server 的陷阱機械消失；代價是「dev server 開著時直接跑 e2e」這個習慣會變成硬失敗
-  （strictPort）。目前靠 CLAUDE.md 一句人工提醒擋著——而這正是本專案在 icon 那條剛承認過
-  會失效的模式（規則寫在文件裡不等於照做）。留給使用者裁決。
 - **`activityFactor`／`proteinPerKg` 送出前的範圍檢查已移除**，只信任 select 選項合法值
   （v2.22 起）。light review 標 minor/low，要補防禦深度就是一道輕量 clamp。
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` skill 定案才能做，樣張在
@@ -99,12 +93,11 @@
 
 ## 下次續點
 
-1. **commit ＋ push 本輪**（未提交：3 個新 spec 檔、DailyGoal popover、app.css、
-   playwright.config.ts 的 workers、三個 icon PNG、CLAUDE.md／DESIGN.md／本檔）。
-   push 前照全域 `rules/git-push.md` 走 review。
-2. **變化速度**：等使用者決定要不要把速度改成選單裡的一檔（目標熱量會從 1778 變 1947）。
-3. **app icon 若使用者仍想在深色主畫面看到綠底**：唯一槓桿是背景做透明只留 T 形狀，
-   代價是淺色模式外觀跟著變——需他裁決，不要自行動手。
+1. **push v2.25 後請使用者在實機重加一次主畫面圖示**，看透明底＋綠 T 在深色主畫面的
+   實際效果。**這是本輪唯一還沒被驗證的假設**：iOS 會把透明底填成黑還是白，現有資料
+   互相矛盾；深色模式下會不會再對它做一次處理也不知道。選 `#2A9D7A` 就是為了兩種都撐得住，
+   但實機看過才算數。若結果仍不理想，下一步不是再猜——是請他截圖，看實際被填成什麼色。
+2. **變化速度**：使用者說他自己處理了，下次確認一下 DB 值是否已落在選單五檔上。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 
