@@ -4,6 +4,7 @@
    就顯示 —），送出才擋不合理值，避免使用者打到一半（例如刪掉出生年準備打新的）
    畫面就跳錯誤。 */
 import { useRef, useState } from 'react'
+import { Popover } from '@base-ui/react/popover'
 import {
   ACTIVITY_FACTOR_PRESETS,
   computeTargets,
@@ -185,7 +186,6 @@ export default function DailyGoal(props: DailyGoalProps) {
   const preview = rawPreview && Number.isFinite(rawPreview.kcal) ? rawPreview : null
 
   const bodyFatPct = latestWeight.body_fat_pct
-  const bmrFormulaLabel = bodyFatPct !== null ? 'Katch-McArdle' : 'Mifflin-St Jeor'
   const goal = draft.goal
   const goalLabel = goal === 'cut' ? '減重' : goal === 'bulk' ? '增肌' : '維持'
 
@@ -313,10 +313,35 @@ export default function DailyGoal(props: DailyGoalProps) {
               {bodyFatPct !== null && (
                 <div className="goal-row"><span className="lb">體脂率</span><span className="val">{num(bodyFatPct).toFixed(1)} %</span></div>
               )}
-              <div className="goal-row"><span className="lb">BMR</span><span className="val">{preview && preview.bmr !== null ? Math.round(preview.bmr) : '—'} 卡</span></div>
-              <p className="goal-hint">
-                依 {bmrFormulaLabel} 公式估算{bodyFatPct !== null ? '（有體脂率，只需體重）' : '（沒有體脂率，改用身高／年齡／性別）'}
-              </p>
+              <div className="goal-row">
+                <span className="lb">
+                  BMR
+                  {/* 公式說明原本是 BMR 底下一段常駐的 .goal-hint，中文折成兩行、把整張卡撐高，
+                      而它是「想確認才看」的資訊，不是每次都要讀的。收進 popover：**不是 tooltip**
+                      ——tooltip 靠 hover/focus 觸發，手機沒有 hover 就打不開，這個 app 是手機為主。 */}
+                  <Popover.Root>
+                    <Popover.Trigger className="info-btn" aria-label="BMR 是怎麼算的">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 11v5" />
+                        <path d="M12 7.6v.5" />
+                      </svg>
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Positioner side="bottom" align="start" sideOffset={8} collisionPadding={12}>
+                        {/* Popup 帶 dialog 語意，沒有可及名稱時讀屏會播報一個沒有名字的
+                            dialog——聽不出這是什麼的說明（precommit-review 抓到）。 */}
+                        <Popover.Popup className="info-popup" aria-label="BMR 是怎麼算的">
+                          {bodyFatPct !== null
+                            ? '有體脂率，所以用 Katch-McArdle 公式：以去脂體重推 BMR，比只看身高年齡的公式準。哪天沒有體脂率可用，會自動退回 Mifflin-St Jeor。'
+                            : '目前沒有體脂率，用 Mifflin-St Jeor 公式：看的是體重、身高、年齡、性別。記一次體脂率之後會自動改用更準的 Katch-McArdle，以去脂體重計算。'}
+                        </Popover.Popup>
+                      </Popover.Positioner>
+                    </Popover.Portal>
+                  </Popover.Root>
+                </span>
+                <span className="val">{preview && preview.bmr !== null ? Math.round(preview.bmr) : '—'} 卡</span>
+              </div>
               <button className="goal-link-row" type="button" onClick={onOpenBodyUpdate}>
                 <span>更新身體數據</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
@@ -411,7 +436,10 @@ export default function DailyGoal(props: DailyGoalProps) {
             <div className="goal-src">
               <div className="t">計算依據</div>
               <ul>
-                <li>有填體脂率（最新一筆記錄）：用 {bmrFormulaLabel} 公式算 BMR{bodyFatPct !== null ? '（以去脂體重計算）' : '（沒填則不用去脂體重）'}</li>
+                {/* 原本這條寫「有填體脂率（…）：用 X 公式算 BMR（沒填則…）」——前綴寫死「有填
+                    體脂率」但公式名隨狀態變，沒填體脂率時整句自相矛盾，而且兩層括號讓它折成
+                    三行。改成只陳述規則、不講「目前」：現在是哪個公式由 BMR 那顆 ⓘ 負責講。 */}
+                <li>BMR 依有沒有體脂率選公式（Katch-McArdle／Mifflin-St Jeor）</li>
                 <li>TDEE ＝ BMR × 活動係數</li>
                 <li>減重／增肌依變化速度（7700 卡／公斤換算）在 TDEE 上加減每日熱量差額；維持＝TDEE。{goal !== 'maintain' && `目前是${goalLabel}`}</li>
                 <li>蛋白質＝體重 × g/kg；脂肪＝體重 × 0.85 g/kg（固定，不隨目標變動）；碳水＝扣掉蛋白質與脂肪熱量後的剩餘熱量 ÷ 4，不開放個別調整</li>

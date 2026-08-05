@@ -10,6 +10,21 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  /* 平行單位是「檔案」（fullyParallel: false），所以 worker 數會跟著 spec 檔數長。
+     2026-08-05 加到第 9 個檔時撞牆：九個 worker 同時要求模組轉換，**Vite dev server
+     自己 OOM 死掉**（`FATAL ERROR: Zone Allocation failed - process out of memory`），
+     server 沒了之後每個 worker 一 navigate 就炸成 `Could not connect to server` 與
+     `Cannot find parent object page@…`，看起來像瀏覽器崩潰，其實是後端先倒。
+     壓到 4 讓 dev server 活下來，但**瀏覽器端接著在同一個地方倒**：4 個 WebKit 實例
+     在開發機的實際餘裕下（實測當下 31.7 GB 只剩 5.0 GB 可用——VS Code、Figma、dwm、
+     vmmem 先吃掉一大半）撐不住，症狀變成 `Cannot find parent object page@…` 與
+     `browserContext.newPage: Target page, context or browser has been closed`。
+     所以 **2 不是效能取捨，是這台機器在一般桌面負載下的實際容量**——會在別人開著
+     編輯器與設計工具時偶發紅的測試等於沒有測試。加 spec 檔不會再把 worker 數推上去
+     （這是上限不是檔數的函數），但它也不是安全常數：模組圖變重或機器更擠時要重測。
+     真正把壓力歸零的做法是 webServer 改跑 build 後的 `vite preview`（worker 只抓靜態檔，
+     順帶讓 e2e 驗到真正會部署的產物），已記進 session-state 待決，本輪不動。 */
+  workers: 2,
   retries: 0,
   /* 15 條路徑跑在同一個 test() 裡（狀態累積，見 spec 檔頭），所以 timeout 是整份的總時長，
      不是單一路徑。預設 30s 在加到 15 條時就撞牆了——調高而不是拆成多個 test，

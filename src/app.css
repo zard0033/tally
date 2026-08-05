@@ -519,14 +519,44 @@ body {
 .goal-row { display: flex; align-items: center; gap: var(--s-2); min-height: 48px;
   padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
 .goal-group-title + .goal-row { border-top: none; }
-.goal-row .lb { flex: 1; color: var(--ink-muted); }
+/* `.lb` 一般只放純文字（最新體重／體脂率兩列就是），BMR 那列是唯一在裡面塞互動元素
+   （ⓘ Popover.Trigger）的例外——`display: flex` 是為了那顆按鈕的垂直對齊，對純文字的
+   兩列沒有視覺影響。要在別的 `.lb` 裡加圖示的話，對齊已經備好了。 */
+.goal-row .lb { flex: 1; display: flex; align-items: center; color: var(--ink-muted); }
 .goal-row .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.goal-hint { padding: var(--s-1) var(--s-4) var(--s-3); margin: 0; font-size: var(--t-xs); color: var(--ink-faint); }
+
+/* 說明用的 ⓘ 觸發鈕。命中區 44px、看得見的只有 16px 圖示——手法同刪除鈕的 ::before 與
+   日期膠囊：撐開命中區，不放大視覺。負的左外距把 44px 盒子往回收，讓「BMR」與圖示之間
+   的**視覺**間隔落在 6px（44px 盒內左右各 14px 留白，14-8=6）。 */
+.info-btn { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; margin: -8px 0 -8px -8px; padding: 0; border: none;
+  background: none; color: var(--ink-faint); cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.info-btn svg { width: 16px; height: 16px; }
+.info-btn:active { opacity: .6; }
+/* 裸 button ＋ appearance: none 之後，WebKit 的預設焦點環表現不穩；這顆有鍵盤路徑
+   （Esc 關閉已有測試），焦點停在哪就必須看得見。同 .lib-fab 的規格。 */
+.info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: var(--r-pill); }
+/* 深色底：這是疊在卡片上的臨時說明，用 --card 會跟底下的卡片糊在一起分不出層。
+   同 undo pill 的處理（--ink 底 ＋ --paper 字）。 */
+.info-popup { max-width: 264px; padding: var(--s-3); border-radius: var(--r-tab);
+  background: var(--ink); color: var(--paper); font-size: var(--t-xs); line-height: 1.6;
+  box-shadow: 0 8px 24px rgb(61 34 16 / .24);
+  /* 明釘層級而不是靠 Portal 的 DOM 順序：本頁現在沒有別的浮層，但「更新身體數據」sheet
+     （.scrim 10／.sheet 11）就掛在同一棵樹下，隔壁頁已經有會蓋過來的東西。12 疊在 sheet 上。 */
+  z-index: 12; }
 .goal-src { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
   background: var(--raised); }
 .goal-src .t { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
-.goal-src ul { margin: 0; padding-left: 1.1em; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.7; }
+/* Tailwind preflight 把 ul 的 list-style 清成 none，所以只留 padding-left 會是一個空的
+   縮排、四條依據黏成一片文字牆（v2.23 拿掉收合 toggle、改常駐顯示之後才看得出來）。
+   明釘 disc 並把 marker 調成更淡的 --ink-faint：項目符號只需要標示邊界，不必跟內文搶。
+   每條之間補 --s-1，讓折成兩三行的長句子看得出來哪裡換一條。 */
+.goal-src ul { margin: 0; padding-left: 1.1em; font-size: var(--t-xs); color: var(--ink-muted);
+  line-height: 1.7; list-style: disc; }
+.goal-src li + li { margin-top: var(--s-1); }
+.goal-src li::marker { color: var(--ink-faint); }
 
 .goal-seg-wrap { padding: 0 var(--s-3) var(--s-3); flex-shrink: 0; }
 .goal-link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
