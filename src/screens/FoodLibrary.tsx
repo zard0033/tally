@@ -254,9 +254,13 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         </div>
       </div>
 
-      <div className="tabrow" role="tablist" aria-label="食品庫篩選">
-        <button className="chip" type="button" role="tab" aria-current={tab === 'active' ? 'true' : undefined} onClick={() => setTab('active')}>使用中</button>
-        <button className="chip" type="button" role="tab" aria-current={tab === 'archived' ? 'true' : undefined} onClick={() => setTab('archived')}>已封存</button>
+      {/* 這兩顆比 LogSheet 的餐別 chip 更像真的分頁（確實在換清單內容），但同樣不掛
+          role="tab"：完整 tablist 要 roving tabindex ＋ 方向鍵 ＋ aria-controls 指向一個
+          role="tabpanel" 的容器，為兩顆篩選鈕做半套只會讓讀屏使用者期待方向鍵可用。
+          兩顆互斥的篩選開關用 aria-pressed 表達完整且誠實，跟 LogSheet／Today 一致。 */}
+      <div className="tabrow" role="group" aria-label="食品庫篩選">
+        <button className="chip" type="button" aria-pressed={tab === 'active'} onClick={() => setTab('active')}>使用中</button>
+        <button className="chip" type="button" aria-pressed={tab === 'archived'} onClick={() => setTab('archived')}>已封存</button>
       </div>
 
       <div className="settings" style={{ paddingTop: 'var(--s-2)', paddingBottom: 96 }}>

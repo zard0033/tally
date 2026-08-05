@@ -28,6 +28,28 @@ const foodWrites = (page: Page) =>
 
 const rows = (page: Page) => page.locator('.lib-row')
 
+/* v2.30 語意修正的迴歸鎖：兩顆篩選鈕原本是 role="tab" ＋ aria-current（tab 角色的選中態
+   屬性應該是 aria-selected，而完整 tablist 契約這裡沒實作），改成 aria-pressed。
+   資料差異仍測不到（見檔頭），但「選中態有沒有正確播報」跟 stub 無關，測得了。 */
+test('使用中／已封存兩顆篩選鈕用 aria-pressed 表達選中態，且互斥', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  const active = page.locator('.tabrow .chip', { hasText: '使用中' })
+  const archived = page.locator('.tabrow .chip', { hasText: '已封存' })
+
+  await expect(active, '預設沒有停在「使用中」').toHaveAttribute('aria-pressed', 'true')
+  await expect(archived).toHaveAttribute('aria-pressed', 'false')
+
+  await archived.click()
+  await expect(archived, '點了「已封存」但選中態沒跟上').toHaveAttribute('aria-pressed', 'true')
+  await expect(active, '兩顆同時是選中態').toHaveAttribute('aria-pressed', 'false')
+
+  // 殘留的 tab 角色會讓讀屏期待方向鍵導航，而這裡沒有實作
+  await expect(page.locator('.tabrow [role="tab"]'), '篩選鈕殘留 role="tab"').toHaveCount(0)
+  await expect(page.locator('.tabrow[role="tablist"]'), '容器殘留 role="tablist"').toHaveCount(0)
+})
+
 test('搜尋同時比對品名與店家，清空後全部回來', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)

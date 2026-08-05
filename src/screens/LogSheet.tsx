@@ -489,14 +489,22 @@ export default function LogSheet(props: LogSheetProps) {
             {view === 'list' ? (
               <>
                 <div className="chip-bar">
-                  <div className="chiprow" role="tablist" aria-label="餐別">
+                  {/* 選中態用 aria-pressed，不是 aria-current，容器也不是 tablist
+                      （2026-08-05 補；Today.tsx 的餐別分段控制器早一輪就是這樣，那裡的註解
+                      已標記這排 chip 有同樣的問題）。這排 chip 選的是「這筆要記到哪一餐」，
+                      按下去改的是資料值，不是換頁——aria-current 的規範語意是「目前所在的
+                      頁面／步驟／位置」，用在這裡是誤用。
+                      **role="tab" 一併拿掉**：tab 角色的選中態屬性是 aria-selected，而完整的
+                      APG tablist 契約還要 roving tabindex ＋ 方向鍵導航 ＋ aria-controls 指向
+                      tabpanel。半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟——這是
+                      Today.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
+                  <div className="chiprow" role="group" aria-label="餐別">
                     {MEALS.map((m) => (
                       <button
                         key={m.key}
                         className="chip"
                         type="button"
-                        role="tab"
-                        aria-current={meal === m.key ? 'true' : undefined}
+                        aria-pressed={meal === m.key}
                         onClick={() => setMeal(m.key)}
                       >
                         {m.label}

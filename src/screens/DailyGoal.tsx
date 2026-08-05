@@ -7,6 +7,7 @@ import { useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
 import {
   ACTIVITY_FACTOR_PRESETS,
+  clampToPresetRange,
   computeTargets,
   nearestPreset,
   num,
@@ -171,10 +172,20 @@ export default function DailyGoal(props: DailyGoalProps) {
     if (!rateTouchedRef.current && initialRateKgPerWeek !== null) return initialRateKgPerWeek
     return rateMonthlyToWeekly(Number(draft.rateChoice))
   }
+  /* clampToPresetRange 是防禦深度，不是主要防線：選單那條路徑本來就只會給合法值，
+     夾的是「沿用 DB 原值」那條——舊版開放過自訂輸入，也可能被手改過，而那個值會直接
+     餵進 computeTargets 又原封寫回 DB。夾範圍而不吸附到某一格，是為了不破壞
+     xTouchedRef 守著的那條規則（沒碰過選單就不覆寫真實值）。 */
   const effectiveActivityFactor = (): number =>
-    !activityTouchedRef.current && initialActivityFactor !== null ? initialActivityFactor : num(draft.activityChoice)
+    clampToPresetRange(
+      ACTIVITY_FACTOR_PRESETS,
+      !activityTouchedRef.current && initialActivityFactor !== null ? initialActivityFactor : num(draft.activityChoice),
+    )
   const effectiveProteinPerKg = (): number =>
-    !proteinTouchedRef.current && initialProteinPerKg !== null ? initialProteinPerKg : num(draft.proteinChoice)
+    clampToPresetRange(
+      PROTEIN_G_PER_KG_PRESETS,
+      !proteinTouchedRef.current && initialProteinPerKg !== null ? initialProteinPerKg : num(draft.proteinChoice),
+    )
 
   const rawPreview = draft.useCustom
     ? null

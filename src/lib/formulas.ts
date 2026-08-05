@@ -103,6 +103,16 @@ export function nearestPreset(presets: readonly number[], value: number): number
   return presets.reduce((best, p) => (Math.abs(p - value) < Math.abs(best - value) ? p : best))
 }
 
+/** 送進公式／寫回 DB 前的最後一道防線。select 只保證「使用者動過選單」那條路徑合法，
+ *  **xTouchedRef 沒被碰過時走的是 DB 原值**，那個值沒有人驗過範圍——舊版曾開放自訂輸入，
+ *  也可能被手改過。夾到 preset 的上下界之間（不吸附到某一格，那會把 nearestPreset
+ *  刻意避開的「悄悄覆寫真實資料」又做回來），NaN 退回第一個 preset。
+ *  不假設 presets 已排序。 */
+export function clampToPresetRange(presets: readonly number[], value: number): number {
+  if (!Number.isFinite(value)) return presets[0]
+  return Math.min(Math.max(value, Math.min(...presets)), Math.max(...presets))
+}
+
 /**
  * weightKg／bodyFatPct 一律取 weight 表最新一筆（呼叫端負責查）；bodyFatPct 那一筆若沒填
  * 傳 null，不找更舊的值——體脂率會隨時間變，用舊資料騙自己比老實承認沒有更糟。

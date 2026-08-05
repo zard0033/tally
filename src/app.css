@@ -766,7 +766,9 @@ body {
   -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 .chip:active { opacity: .6; }
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.chip[aria-current="true"] { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* v2.30：選擇器從 [aria-current="true"] 換成 [aria-pressed="true"]——語意修正，
+   視覺完全不變（見 LogSheet.tsx／FoodLibrary.tsx 該處註解）。 */
+.chip[aria-pressed="true"] { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .sect-lb { padding: var(--s-4) var(--s-5) var(--s-1); font-size: var(--t-xs);
   color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }

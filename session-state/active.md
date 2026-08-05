@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-05（v2.24–v2.27 已 push；v2.28／v2.29 待 push＝封存提示修復、食品庫新增改 sheet ＋ 食物表單合併共用元件）
+最後更新：2026-08-05（v2.24–v2.29 全數已 push，main 與 origin 同步於 `e70dce2`）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；2026-07-30 手術前的
 > 完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -11,8 +11,8 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎（v2.21→
   v2.23 三輪演進）＋食品庫管理與設定頁重構（v2.22）。細節見 DESIGN.md 版本紀錄。
-  **v2.24–v2.27 已 push**（`fcf4270`）；**v2.28／v2.29 待 push**＝封存提示的四個缺陷修復、
-  食品庫新增改 sheet ＋ 三處食物表單合併成 `src/components/FoodFormFields.tsx`。
+  **最新已上線＝v2.29**（`e70dce2`）＝封存提示的四個缺陷修復、食品庫新增改 sheet ＋
+  三處食物表單合併成 `src/components/FoodFormFields.tsx`。
 - **測試**：`npx vitest run` 60/60；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **58/58 全綠**（約 1.5 分；原 31 ＋ v2.24 新增 18 ＋ v2.27 新增 4 ＋ v2.28 新增 1 ＋ v2.29 新增 4）。長年偶發的
   `meal-exit-animation` flaky 在 worker 壓到 2 之後也穩定了——根因是並行壓力，不是動畫時序。
@@ -31,97 +31,112 @@
 
 ## 已驗證事實
 
-- **e2e 的 worker 數會跟著 spec 檔數長，第 9 個檔就撞牆——而且連撞兩層**（2026-08-05）：
-  `fullyParallel: false` 下平行單位是**檔案**，加到 9 檔就是 9 個 worker。
-  **第一層（後端）**：9 個 worker 同時要求模組轉換，Vite dev server 自己
-  `FATAL ERROR: Zone Allocation failed - process out of memory` 死掉；瀏覽器端看到的卻是
-  `Could not connect to server`，**症狀在前端、死因在後端**。
-  **第二層（前端）**：壓到 4 之後 server 活了，換 WebKit 自己倒——
-  `Cannot find parent object page@…`、`browserContext.newPage: … has been closed`。
-  量了才知道原因：機器 31.7 GB 但當下**只剩 5.0 GB 可用**（VS Code 2.2G、Figma 三支 2.6G、
-  dwm 1.3G、vmmem 0.9G），4 個 WebKit 實例塞不下。**`workers: 2` 後 49/49 綠。**
-  **教訓**：兩層都表現成「Playwright 壞了」，但兩次的真兇都不在 Playwright——
-  先讀 `[WebServer]` 那幾行、再量機器餘裕，比改測試碼快得多。
-  **兩層都已從根上處理（v2.25）**：後端改跑 build 後的 `vite preview`（沒有現場轉譯就沒有
-  OOM），port 分到 5501（e2e 不走 OAuth，不受 5500 白名單約束），因此 `reuseExistingServer`
-  得以改成 `false`——孤兒 server 的陷阱從「靠 CLAUDE.md 一句人工提醒」變成機械上不可能發生。
-  `workers: 2` 保留，它守的是瀏覽器端容量，跟 server 怎麼跑無關。
-- **iOS 深色主畫面對 web clip 的處理是「換掉背景、保留前景的顏色」**（2026-08-05 兩輪實測定論）：
-  原圖「綠底＋米白 T」在深色模式變成「黑底＋米白 T」，米白原封不動。
-  **透明底不是解法**：實測 iOS 把透明區填黑，而且**淺色模式也填黑**——v2.25 試過，
-  兩種模式都變黑底，淺色模式比原本更差，一輪即退回。（先前查到的「iOS 18 改填白」
-  說法在實機上不成立，別再引用。）
-  **正解＝不透明淺色底**：淺色模式看到米白底綠 T，深色模式由 iOS 換底、綠 T 留著。
-  **v2.26 已由使用者實機確認無誤，此題結案**——「換底留前景」不再是推論，是實測定論。
-  **方法論**：這題連五輪都在「對 iOS 行為做假設 → 部署 → 手機重加驗證」，每輪成本很高；
-  真正縮短路徑的兩次都是**回頭看已經觀察到什麼**——先是「別的 app 也這樣嗎」定位到系統設定，
-  再是「原圖在深色模式怎麼變的」推出換底留前景。**手上的觀察比新的猜測值錢。**
-- **app icon 黑底白 T 的根因：是 iOS 系統行為，不是 Tally 的缺陷**（2026-08-05）。
-  使用者的主畫面「圖示外觀」設定是**深色**——那個模式下 iOS 把**全機每一顆圖示**都染深。
-  原生 app 能用 Xcode asset catalog 交深色變體讓系統改用，**web clip 沒有這個機制**
-  （`prefers-color-scheme` 對 icon 無效，只對 splash screen 有效），iOS 只能自動生成。
-  **沒有 web 端的開關可以退出**——所以只能選一組在兩種模式下都可接受的配色（見上一條）。
-  排除過的四條假設，都是在找「我們做錯什麼」，而答案是「什麼都沒做錯」：
-  ① 透明像素（v2.19 修過）② 檔案沒部署（sha256 三檔全 MATCH、Content-Type 正確）
-  ③ SpringBoard 快取（移除重加後仍舊）④ alpha 通道（改 RGB 後仍舊）。**別再重試這四條。**
-  **教訓**：症狀出現在單一 app 上，不代表原因在那個 app——問一句「別的 app 也這樣嗎」
-  可以省掉四輪。這題從頭到尾缺的就是那個對照組。
-- **食物表單三處共用一份 JSX（v2.29）**：`src/components/FoodFormFields.tsx`。抽出來的
-  觸發點不是「看起來重複」，是**已經分岔過兩次**——品名欄漏 `inputMode`（手機打不出中文）、
-  食品庫那份沒有店家 Autocomplete。純邏輯早在 `src/lib/foodForm.ts` 共用，UI 那半拖到現在。
-  **判準記著**：兩份長得像不構成抽出來的理由，「兩邊本來就該一致、而且已經開始不一致」才是。
+- **e2e 撞牆兩層，兩層都已從根上處理（v2.25）**：`fullyParallel: false` 下平行單位是**檔案**，
+  加到第 9 個 spec 檔就是 9 個 worker。**後端**——Vite dev server 自己 OOM 死掉，但瀏覽器端
+  看到的是 `Could not connect to server`（**症狀在前端、死因在後端**）；已改跑 build 後的
+  `vite preview`（沒有現場轉譯就沒有 OOM），port 分到 5501，因此 `reuseExistingServer` 得以
+  改成 `false`，孤兒 server 的陷阱從人工提醒變成機械上不可能。**前端**——WebKit 自己倒
+  （`Cannot find parent object page@…`），量了才知道機器當下只剩 5.0 GB 可用塞不下 4 個實例；
+  `workers: 2` 守的是這層，跟 server 怎麼跑無關，**別拿掉**。
+  **教訓**：兩層都表現成「Playwright 壞了」，真兇兩次都不在 Playwright——先讀 `[WebServer]`
+  那幾行、再量機器餘裕，比改測試碼快得多。
+- **app icon 已結案（v2.26 實機確認）**：黑底白 T 的根因是 iOS 系統的深色圖示設定會染全機
+  每一顆圖示，**不是 Tally 的缺陷**，web clip 沒有任何退出機制。iOS 對 web clip 的行為是
+  **換掉背景、保留前景顏色**，所以正解＝不透明淺色底（淺色見米白底綠 T，深色由 iOS 換底、
+  綠 T 留著）。**透明底反而更糟**（兩種模式都被填黑），別再試。已排除且不必重試的四條假設：
+  透明像素／檔案沒部署／SpringBoard 快取／alpha 通道。細節見 v2.19–v2.26 commit 訊息。
+  **兩個可複用的教訓**：① 症狀只出現在單一 app 不代表原因在那個 app——「別的 app 也這樣嗎」
+  這個對照組省得掉四輪。② 高成本驗證迴圈（每輪要部署＋真機重加）裡，**回頭看已經觀察到什麼
+  比生一個新猜測值錢**——兩次縮短路徑的都是重讀舊觀察。
+- **食物表單三處共用一份 JSX（v2.29）**：`src/components/FoodFormFields.tsx`。抽出來的觸發點
+  不是「看起來重複」，是**已經分岔過兩次**（品名欄漏 `inputMode`、食品庫那份沒有店家
+  Autocomplete）。**判準**：兩份長得像不構成抽出來的理由，「本來就該一致、且已經開始不一致」才是。
 - **修分岔的那一輪，最容易製造新的分岔**（v2.29 deep review 抓到三條，兩條是本輪自造）：
-  ① 一邊把表單 JSX 抽成共用元件，一邊在食品庫照抄了一份跟 LogSheet 逐字相同的
-  `vendorOptions` 去重邏輯——已改走 `src/lib/foodForm.ts` 的 `vendorOptionsOf()`。
-  ② 修無障礙時把 `role="status"` 直接掛在 `<button>` 上，**顯式 role 會取代隱含 role**，
-  讀屏反而找不到那顆按鈕——正確結構是外層帶播報、內層留乾淨的 button（今日頁一直是這樣）。
-  ③ 把 undo pill 放寬成整行，長品名就水平蓋住 FAB 且 z-index 更高，5 秒內按新增變誤觸。
+  抽共用元件的同時又照抄一份去重邏輯；修無障礙時把 `role="status"` 掛在 `<button>` 上
+  （**顯式 role 取代隱含 role**，讀屏反而找不到那顆按鈕）；放寬 undo pill 導致蓋住 FAB。
   **共同形狀：改動的當下只盯著要修的那個缺陷，沒有重新檢查它跟周圍元件的關係。**
-- **新測試做過 mutation 檢查才收**（兩輪都做）：v2.24 那輪把 `effectiveRateKgPerWeek` 改成
-  永遠讀選單值、`FAT_G_PER_KG` 改回舊比例；v2.27 那輪把儲存鈕的 flex 覆寫、範本圖示座標、
-  select 箭頭選擇器三處各自改回舊行為——每次都是對應測試變紅、其餘不誤報。
-  綠色測試不等於有效測試，這一步值得每次補測試都做一次。
-- **版面問題要量對東西**（2026-08-05 三處真機回報的共同教訓）：
-  ① 圖示「看起來沒對齊」時，量元素框永遠查不出來——三顆 `.icon-btn` 的 44px 盒與 17px 畫布
-  完全一致，偏的是 SVG **筆畫**在 viewBox 裡的位置（`getBBox()` 重心 y=8.5 而非 12）。
-  ② `select` 文字放不下時**不會有 ellipsis，只是安靜切掉**，肉眼 review 抓不到，只能量
-  「最長選項需要多寬」對「欄位給多寬」。③ 全域元件搬進新容器要重驗：`.pick-bar-btn` 的
-  `width: 100%` ＋ `flex-shrink: 0` 在底部確認列是對的，進到 flex row 就溢出 96px。
-  **這三題若照肉眼判斷去改，第①題會改錯地方（調 CSS 對齊而不是修 SVG 座標），
-  第③題會漏掉活動量截斷這個附帶災情。**
-- **e2e 的 fetch stub（`e2e/stub.ts`）完全不看 query 參數/filter**，只按 table+method 分流回
-  同一份 fixture——所以 `food-library.spec.ts` 全部斷言只用「使用中」分頁，兩個分頁的
-  資料差異在 stub 升級前測不了（測了只會鎖住 stub 的行為）。
-- **screens 目錄下新增子頁不必上 router 套件**：Settings.tsx 自己管一個 `view` state 切換
-  entry-list／DailyGoal／FoodLibrary／WeightTrend，跟 App.tsx 的 `tab` 同一種「沒有 URL 的路由」。
-  代價是 `Settings.tsx` 那行 unmount cleanup（`onSubViewChange(false)`）目前 **UI 走不到**
-  ——底部列已收起、分頁鈕點不到、也沒有 URL 可繞，所以刻意沒為它寫測試。
+- **新測試一律做 mutation 檢查才收**（v2.24／v2.27／v2.30 三輪都做）：把受測行為改回舊樣子，
+  確認對應測試變紅、其餘不誤報。**綠色測試不等於有效測試**，每次補測試都值得做這一步。
+- **版面問題要量對東西**（2026-08-05 三處真機回報的共同教訓）：① 圖示「看起來沒對齊」時量
+  元素框永遠查不出來，偏的是 SVG **筆畫**在 viewBox 裡的位置（用 `getBBox()` 量重心）。
+  ② `select` 文字放不下**不會有 ellipsis，只是安靜切掉**，肉眼 review 抓不到，只能量
+  「最長選項需要多寬」對「欄位給多寬」。③ 全域元件搬進新容器要重驗（`.pick-bar-btn` 在
+  底部確認列對、進 flex row 溢出 96px）。**照肉眼判斷去改，①會改錯地方、③會整條漏掉。**
+- **e2e 的 fetch stub（`e2e/stub.ts`）完全不看 query 參數/filter**，只按 table+method 分流回同一份
+  fixture——所以 `food-library.spec.ts` 的資料斷言只用「使用中」分頁，兩個分頁的資料差異在
+  stub 升級前測不了（測了只會鎖住 stub 的行為）。
+- **screens 目錄下新增子頁不必上 router 套件**：Settings.tsx 自己管一個 `view` state，跟 App.tsx
+  的 `tab` 同一種「沒有 URL 的路由」。代價是那行 unmount cleanup（`onSubViewChange(false)`）
+  目前 **UI 走不到**（底部列已收起、也沒有 URL 可繞），所以刻意沒為它寫測試。
 - **把 DB 上分開的兩個欄位在 UI 層合併成模板字面量聯集型別（v2.22 的 `GoalMode`）**短期型別
   安全漂亮，但使用者實際用起來覺得「一個選單塞兩件事」不好用；拆回兩欄位要跨 formulas.ts
   ／DailyGoal.tsx／test 三處，事後拆比想像中貴。設計合併型 UI 前先想清楚。
 
+- **RLS 已驗，此題結案**（2026-08-05，使用者在 Supabase SQL Editor 實跑）：`pg_policies`
+  查出 `public` schema 底下**總共只有四條 policy**（foods／intake／weight／profile 各一條
+  `owner_all`），每條都是 `cmd = ALL`、`qual` 與 `with_check` 皆為 `auth.uid() = user_id`，
+  與 `schema.sql` 逐字一致；`pg_class.relrowsecurity` 四張表皆 `true`。
+  **`ALL` 涵蓋 DELETE，`qual` 就是 DELETE 走的判斷式**，而且沒有第二條 permissive policy
+  可以繞過去——設定面完整，原本記的「跨使用者 DELETE 未實測」不再是缺口。
+  **判準（可複用）**：要驗的東西如果是**資料庫自己的執行行為**而不是我們的程式碼，
+  把設定查完整（policy 全集 ＋ RLS 開關）就是充分證據；再跑一次 runtime DELETE 只是
+  重新確認 Postgres 是 Postgres。跨帳號 runtime 測試留給「policy 判斷式本身有條件分支」
+  那種情況——這裡沒有。
+- **選中態語意在本專案的統一裁決（v2.30）**：互斥選一組一律 `aria-pressed`，容器不掛
+  `role="tablist"`；`aria-current` 只留給底部分頁列（真的在換頁）。**沒有補成完整 tablist
+  是刻意的**——APG 契約要 roving tabindex ＋方向鍵 ＋ `aria-controls`，半套會讓讀屏期待
+  方向鍵可用卻沒有，比不做更糟（與 v2.24 拒絕升級 radiogroup 同一個判斷）。
+  **附帶發現**：筆記只記了 LogSheet 一處，實際上食品庫的使用中／已封存也是同樣的錯——
+  **待決清單記的位置往往是「當時看到的那一處」，不是全部，收的時候要重搜一次**。
+- **「select 保證合法值」只涵蓋一半的路徑**（v2.30）：v2.22 拿掉自訂輸入後移除範圍檢查，
+  理由是選單保證合法——但 `xTouchedRef` 沒被碰過時走的是 **DB 原值**那條分支，那個值
+  沒有人驗過。新增 `clampToPresetRange()` 補上。**通則：拿「輸入源受控」當理由移除驗證前，
+  先數清楚有幾條路徑通到那個變數**，受控的通常只有其中一條。
+
 ## 未解失敗
 
-- **app icon 已結案，移出未解失敗**（見上方「已驗證事實」）。
-- 其餘舊的未解失敗（vitest Git Bash 炸、scrim 分區變色、就地編輯區無 focus trap、
-  改份量無 debounce）維持原狀未動，細節見 git log 對應 commit 訊息。
+- 舊的未解失敗（vitest Git Bash 炸、scrim 分區變色、就地編輯區無 focus trap、改份量無
+  debounce）維持原狀未動，細節見 git log 對應 commit 訊息。（app icon 已結案，見上方。）
 
 ## 待決問題
 
-- **`activityFactor`／`proteinPerKg` 送出前的範圍檢查已移除**，只信任 select 選項合法值
-  （v2.22 起）。light review 標 minor/low，要補防禦深度就是一道輕量 clamp。
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` skill 定案才能做，樣張在
   `_design-sample/food-library.html` A3 frame。e2e 刻意只驗進出不鎖內容。
-- **PWA / service worker**：只有 manifest，沒有 SW。屬中型改動，開工先走 `dev-flow`。
-- **零碎（都不擋上線）**：RLS 跨使用者 DELETE 未實測；`LogSheet.tsx` 餐別 chip 誤用
-  `aria-current`（範圍外未動）；Notion 退場收尾未完成。
+- **零碎（都不擋上線）**：Notion 退場收尾未完成。（RLS 與 `aria-current` 兩項 2026-08-05
+  已結案，見「已驗證事實」。）
 
 ## 下次續點
 
-1. **push v2.28／v2.29**（v2.28 已本地 commit；v2.29 未提交）。push 前照全域
-   `rules/git-push.md` 走 review。
-2. 沒有進行中的任務。下一輪可以挑「待決問題」裡的任一項開工（體重趨勢圖表要先過
-   `dataviz`；PWA/SW 屬中型，先走 `dev-flow`）。
+1. **v2.30 已 commit、尚未 push**（aria-pressed 語意統一 ＋ `clampToPresetRange`；
+   vitest 64/64、e2e 59/59、build／lint 乾淨）。**開場第一件事＝照 `rules/git-push.md`
+   走完 review 再 push**——本輪是時間到了才停，不是有問題卡住。
+
+2. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05 收工於此）。
+   走完 dev-flow 前段，**規模判為「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。
+   **範圍（使用者裁決）**：離線可讀 ＋ 冷啟動加速；更新走「下次開啟自動換」。
+   **Musk 視角砍掉的兩件事，別在下一輪又長回來**：
+   ① 不承諾「變快」——assets 檔名帶 hash，HTTP cache 已經蓋住重複載入，SW 只多買到
+      `index.html` 那一跳，量不出來的東西不寫進 AC。
+   ② **SW 不快取 Supabase API 回應**——App.tsx 已有 `cacheRef` 日期快取，兩層快取壽命
+      不同必然對不上；且 SW 那層是透明的，App 拿到舊資料時不知道它舊，就無法誠實標示。
+      離線資料改由 `cacheRef` 持久化到 localStorage 供給，一層快取、App 自己知道新舊。
+   **AC 六條、plan 六步、補遺三條的全文在本次對話**，沒有落成檔案——下一輪要嘛從對話撈，
+   要嘛重跑一次 spec。**已定的三條補遺**：SW 放 `public/` 以 `./sw.js` 註冊（scope 跟著
+   `base: '/tally/'`）；登出時一併清掉快照（掛在 App.tsx:557 既有的 `cacheRef.clear()` 旁）；
+   **實作第一步必須先實測「離線時 supabase-js 會不會把 App 踢回登入頁」**——這是唯一可能
+   推翻整個設計的未知數，探針已寫好但**還沒跑**：
+   `<scratchpad>/probe-offline-auth.mjs`（跑兩種 session：未過期／已過期，因為分歧點在
+   supabase-js 要不要為了 refresh 打網路；需要 `npm run preview` 起在 5501）。
+   **這條有 UI**（離線指示條），實作階段照 dev-flow 鐵律 4 轉 `ui-design-flow`。
+
+3. 體重趨勢完整圖表尚未開工，要先過 `dataviz` 定案。
+
+**dev-flow 申報（PWA 這條，未完成）**：規模<大> 視角<兩者：Jobs 在釐清翻出「加 PWA」是技術
+描述不是使用者利益、逼出三選一的範圍題；Musk 在 spec 砍掉上述兩件事> 釐清<完成，AskUserQuestion
+兩題> spec<完成，AC 六條> plan<完成，六步> ★核可<通過> 實作<未開始> 收尾<未到> 蒸餾<見下>
+
+**本輪蒸餾**：待決清單記的位置往往只是「當時看到的那一處」——`aria-current` 筆記只記了
+LogSheet，實際上食品庫也有；**收零碎項時要重搜一次，不要照著筆記逐條修完就當收完**。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 

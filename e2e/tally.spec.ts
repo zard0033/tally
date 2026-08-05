@@ -130,9 +130,10 @@ test('Tally UI 回歸', async ({ page }) => {
       const label = (await chip.textContent()) ?? `#${i}`
       await chip.click()
       await page.waitForTimeout(120)
+      // v2.30 起選中態是 aria-pressed（原本誤用 aria-current，見 LogSheet.tsx 該處註解）
       check(
-        (await chip.getAttribute('aria-current')) === 'true',
-        `點了「${label}」後該 chip 沒有 aria-current="true"`,
+        (await chip.getAttribute('aria-pressed')) === 'true',
+        `點了「${label}」後該 chip 沒有 aria-pressed="true"`,
       )
       check((await page.locator('.food-scroll').count()) === 1, `點「${label}」後清單捲動區消失`)
     }
