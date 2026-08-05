@@ -195,6 +195,50 @@ test('封存：該列樂觀消失並浮出復原 pill，按復原就回到清單
   expect(writes.map((w) => w.method)).toEqual(['PATCH', 'PATCH'])
 })
 
+/* 迴歸鎖（2026-08-05 使用者回報「封存好像沒有提示」）。提示本來就在，是四件事疊起來
+   讓它實際上看不到／聽不到：① 貼底但沒補 `env(safe-area-inset-bottom)`，而這個畫面的
+   底部列是收起來的、沒有東西幫它擋 home indicator ② `left: 50%` 把絕對定位元素的收縮
+   寬度卡在半個螢幕（196.5px），真實品名「油雞腿飯」需要 226px，文字就在固定 44px 高的
+   膠囊裡換行溢出 ③ 沒有 role="status"／aria-live，螢幕閱讀器完全不會播報 ④ 沒有進場動畫。
+
+   **①的安全區在無頭瀏覽器下 env() 恆為 0，測不出來**——這裡誠實記帳：只鎖 ②③，
+   ①靠 CSS 註解與 DESIGN.md 守著。 */
+test('封存提示：長品名不會撐破膠囊，只截品名不截「復原」，且有無障礙播報', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="封存 ${name}"]`).click()
+
+  const pill = page.locator('.undo-pill')
+  await expect(pill).toBeVisible()
+  await expect(pill, '封存對螢幕閱讀器沒有任何回饋').toHaveAttribute('role', 'status')
+  await expect(pill).toHaveAttribute('aria-live', 'polite')
+
+  const geo = await page.evaluate(() => {
+    const p = document.querySelector('.undo-pill') as HTMLElement
+    const nm = p.querySelector('.nm') as HTMLElement
+    const measure = (chars: number) => {
+      nm.textContent = '雞'.repeat(chars)
+      const r = p.getBoundingClientRect()
+      return { h: +r.height.toFixed(1), w: +r.width.toFixed(1), nmClipped: nm.scrollWidth > nm.clientWidth + 1 }
+    }
+    const short = measure(4)
+    const long = measure(30)
+    return { short, long, viewportW: window.innerWidth, hasNmSpan: !!nm }
+  })
+
+  expect(geo.hasNmSpan, '品名沒有包在 .nm 裡，過長時會把「・復原」一起截掉').toBe(true)
+  // 換行的話高度會從 44 長高——這正是修之前真實品名會發生的事
+  expect(geo.short.h, '品名一長膠囊就換行了').toBe(44)
+  expect(geo.long.h, '極長品名把膠囊撐高了').toBe(44)
+  // 短品名時要能用超過半個螢幕的寬度（left: 50% 的寫法會把它卡在 196.5px）
+  expect(geo.short.w, '寬度又被卡在半個螢幕，文字會在膠囊裡換行').toBeGreaterThan(geo.viewportW / 2)
+  expect(geo.long.nmClipped, '極長品名沒有走 ellipsis').toBe(true)
+  expect(geo.long.w, '膠囊超出畫面寬度').toBeLessThanOrEqual(geo.viewportW)
+})
+
 test('以現有食物為範本新增：表單預填來源的值，送出是 POST 新增而不是改到原本那筆', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)

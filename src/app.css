@@ -624,13 +624,33 @@ body {
 
 /* 封存的樂觀＋5 秒復原提示——跟今日頁刪除品項同一套語言（undo-bar），差別只在
    這裡不用固定在底部列上方（食品庫管理頁沒有底部列），置中貼頁面底部即可。 */
-.undo-pill { position: absolute; left: 50%; bottom: var(--s-5); transform: translateX(-50%); z-index: 6;
+/* 三個座標都是修過的，別改回去（2026-08-05 使用者回報「封存好像沒有提示」，量測後
+   發現是四件事疊在一起讓這顆 pill 實際上看不到）：
+
+   ① `bottom` 要含 `env(safe-area-inset-bottom)`。**這個畫面的底部列是收起來的**（次級頁），
+      沒有東西幫它擋 home indicator——本檔其他 5 處貼底元素都補了安全區，只有它漏了。
+      量測：原本底緣距視窗底 20px，而安全區是 34px，等於有 14px 陷在裡面。
+   ② `left/right` 取代 `left: 50%`。絕對定位元素的收縮寬度會被「容器寬 − left」卡住，
+      `left: 50%` 等於最多只能用半個螢幕（實測封頂 196.5px）——而真實品名「油雞腿飯」
+      算出來需要 226px，文字就在固定 44px 高的膠囊裡換行溢出。改成左右都給邊界、
+      `width: fit-content` ＋ `margin: 0 auto` 置中，可用寬度變成整行。
+   ③ 品名過長時只截品名（`.nm` 的 ellipsis），不能讓「・復原」被切掉——那是唯一的動作。 */
+.undo-pill { position: absolute; left: var(--s-4); right: var(--s-4); margin: 0 auto;
+  width: fit-content; max-width: calc(100% - var(--s-4) * 2);
+  bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); z-index: 6;
   display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-4);
   border-radius: var(--r-pill); background: var(--ink); color: var(--paper); font-size: var(--t-sm);
-  font-weight: 600; border: none; cursor: pointer; font-family: inherit;
-  -webkit-appearance: none; appearance: none; }
-.undo-pill svg { width: 16px; height: 16px; }
+  font-weight: 600; border: none; cursor: pointer; font-family: inherit; white-space: nowrap;
+  -webkit-appearance: none; appearance: none;
+  animation: undo-pill-in var(--dur-mid) var(--ease) both; }
+.undo-pill .nm { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.undo-pill svg { width: 16px; height: 16px; flex-shrink: 0; }
 .undo-pill:active { opacity: .8; }
+.undo-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* ④ 進場動畫。今日頁的復原條一直有（motion 的 opacity/y），這顆沒有、是硬跳出來的——
+   一個只出現 5 秒的提示，沒有動作引導很容易整個被錯過。這裡用 CSS keyframes 而不是
+   引進 motion：只有進場需要，退場直接消失可以接受，不值得為它拉 AnimatePresence。 */
+@keyframes undo-pill-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* ═══════════ 日期切換（v2.4：`‹ 日期 › ` 三件包進一顆膠囊，日期本身是 h1） ═══════════ */
 /* 膠囊＝.datectl 本身：--card 底、1px --rule 邊框、--r-pill 圓角，寬度收成內容自身
@@ -1019,7 +1039,7 @@ body {
   .item-row.is-armed .item-delete::before { transition-duration: .01ms; }
   .cta:active, .action-btn:active, .pick-bar-btn:active { transform: none; }
   .item-content.just-added::before,
-  .sheet.opening, .pick-bar,
+  .sheet.opening, .pick-bar, .undo-pill,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
   #settings-sheet-root .scrim { animation-duration: .01ms; }
 }

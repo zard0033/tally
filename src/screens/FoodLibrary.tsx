@@ -346,10 +346,13 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         </button>
       )}
 
+      {/* `role="status"` ＋ `aria-live="polite"` 對齊今日頁的 .undo-bar——原本兩者都沒有，
+          等於封存這個動作對螢幕閱讀器**完全沒有回饋**（列消失了，但沒有任何播報）。
+          品名包一層 .nm：太長時只截品名，「・復原」不能被切掉，那是唯一的動作。 */}
       {undo && (
-        <button className="undo-pill" type="button" onClick={() => void undoArchive()}>
+        <button className="undo-pill" type="button" role="status" aria-live="polite" onClick={() => void undoArchive()}>
           {RESTORE_ICON}
-          已封存「{undo.food.name}」・復原
+          已封存「<span className="nm">{undo.food.name}</span>」・復原
         </button>
       )}
     </div>
