@@ -100,7 +100,11 @@ function FoodFormFields({ form, onChange, vendorAutoFocus }: { form: FoodForm; o
 }
 
 const EDIT_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-const TEMPLATE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="11" height="11" rx="2" /><path d="M9 4V3a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1" /></svg>
+/* 座標比原稿整體位移 (-0.5, +3.5)：原本的筆畫範圍是 x5–20 / y2–15，重心落在 (12.5, 8.5)，
+   而 viewBox 中心是 (12, 12)——等於整顆圖示在 44px 觸控盒裡往上偏了 3.5 個單位（17px 渲染
+   尺寸下約 2.5px），跟左右兩顆並排時看起來就是沒對齊（使用者真機回報，量 getBBox 確認）。
+   相對指令（a／h／v）不受位移影響，只有起點 M 與絕對的 V 要跟著改。 */
+const TEMPLATE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="7.5" width="11" height="11" rx="2" /><path d="M8.5 7.5V6.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1" /></svg>
 const ARCHIVE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1" /><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><path d="M10 12h4" /></svg>
 const RESTORE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>
 

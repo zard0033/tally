@@ -192,6 +192,66 @@ test('BMR 說明收在 popover 裡：預設不佔版面，點 ⓘ 才展開，Es
   await expect(popup, 'Esc 關不掉，鍵盤使用者會被困住').toHaveCount(0)
 })
 
+/* 全站的 select 都被 `-webkit-appearance: none` 拿掉原生下拉箭頭（為了跟輸入框共用同一套
+   外觀），結果選單跟純文字輸入框長得一模一樣，點下去才知道會展開（使用者 2026-08-05 回報）。
+   補了 `.field-float:has(select)::after` 的箭頭。這條鎖「select 有、input 沒有」兩邊——
+   只驗前者的話，哪天箭頭被誤套到所有欄位上也不會有人發現。 */
+test('選單看得出是選單：每個 select 都有下拉箭頭，文字輸入框都沒有', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+
+  const marks = await page.evaluate(() =>
+    [...document.querySelectorAll('.field-float')].map((f) => ({
+      id: (f.querySelector('input, select') as HTMLElement | null)?.id ?? '',
+      isSelect: !!f.querySelector('select'),
+      // ::after 沒被宣告時 content 是 'none'
+      hasArrow: getComputedStyle(f, '::after').content !== 'none',
+    })),
+  )
+  expect(marks.length, '前提不成立：畫面上找不到欄位').toBeGreaterThan(2)
+  for (const m of marks) {
+    expect(m.hasArrow, `${m.id}：${m.isSelect ? 'select 少了下拉箭頭' : '文字輸入框不該有下拉箭頭'}`).toBe(m.isSelect)
+  }
+})
+
+/* 迴歸鎖（2026-08-05 量測抓到）：活動量最長的選項「輕度活動（1.375）」需要 136px，
+   而它原本擠在半寬欄位裡只有 103.5px 可用——加箭頭之前就已經短 8.5px、只是看不太出來。
+   改成整行後有 269px。這條直接比對「文字要多寬」與「欄位給多寬」，不是看有沒有 ellipsis
+   （select 被截斷時不會有 ellipsis，只是安靜切掉）。 */
+test('每個選單的最長選項都放得下，不會被切掉', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+
+  const tight = await page.evaluate(() => {
+    const out: { id: string; longest: string; avail: number; needs: number }[] = []
+    for (const el of [...document.querySelectorAll('select')] as HTMLSelectElement[]) {
+      const cs = getComputedStyle(el)
+      // box-sizing 是 border-box，所以可用文字寬 = 外框寬 − 左右內距 − 左右框線
+      const avail = el.getBoundingClientRect().width
+        - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+        - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth)
+      const span = document.createElement('span')
+      span.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font}`
+      document.body.appendChild(span)
+      let needs = 0
+      let longest = ''
+      for (const o of [...el.options]) {
+        span.textContent = o.text
+        const w = span.getBoundingClientRect().width
+        if (w > needs) { needs = w; longest = o.text }
+      }
+      span.remove()
+      out.push({ id: el.id, longest, avail: +avail.toFixed(1), needs: +needs.toFixed(1) })
+    }
+    return out
+  })
+
+  expect(tight.length, '前提不成立：畫面上沒有 select').toBeGreaterThan(2)
+  for (const t of tight) {
+    expect(t.needs, `${t.id} 的「${t.longest}」需要 ${t.needs}px，欄位只有 ${t.avail}px`).toBeLessThanOrEqual(t.avail)
+  }
+})
+
 test('自訂目標分頁完全繞過公式：送出四個數字並帶上 use_custom_targets', async ({ page }) => {
   await openApp(page)
   await openGoal(page)

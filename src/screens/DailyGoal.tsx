@@ -400,35 +400,40 @@ export default function DailyGoal(props: DailyGoalProps) {
                     </label>
                   </div>
                 )}
-                <div className="field-row" style={{ marginTop: 'var(--s-3)' }}>
-                  <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
-                    <select
-                      id="g-activity"
-                      value={draft.activityChoice}
-                      onChange={(e) => patch('activityChoice', e.target.value)}
-                    >
-                      {ACTIVITY_PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                    <label htmlFor="g-activity">
-                      活動量<span className="req">*</span>
-                    </label>
-                  </div>
-                  <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
-                    <select
-                      id="g-protein"
-                      value={draft.proteinChoice}
-                      onChange={(e) => patch('proteinChoice', e.target.value)}
-                    >
-                      {PROTEIN_PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                    <label htmlFor="g-protein">
-                      攝取蛋白質<span className="req">*</span>
-                    </label>
-                  </div>
+                {/* 活動量與攝取蛋白質**各佔整行**，不併成兩欄（2026-08-05 改）。
+                    量過才改：半寬欄位的可用文字寬度是 103.5px，而最長的選項
+                    「輕度活動（1.375）」需要 136px——差 32.5px。這不是加了下拉箭頭才有的
+                    問題，箭頭之前就已經短 8.5px、只是勉強看不出來。縮箭頭補不回 32.5px；
+                    縮短選項文字也不行，DESIGN.md 明訂活動量要帶數字給看得懂公式的人核對，
+                    而「非常活躍（1.9）」就算砍成兩字仍然超出。整行是唯一不靠魔術數字的解，
+                    也跟上面的目標／變化速度一致。 */}
+                <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
+                  <select
+                    id="g-activity"
+                    value={draft.activityChoice}
+                    onChange={(e) => patch('activityChoice', e.target.value)}
+                  >
+                    {ACTIVITY_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                  <label htmlFor="g-activity">
+                    活動量<span className="req">*</span>
+                  </label>
+                </div>
+                <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
+                  <select
+                    id="g-protein"
+                    value={draft.proteinChoice}
+                    onChange={(e) => patch('proteinChoice', e.target.value)}
+                  >
+                    {PROTEIN_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                  <label htmlFor="g-protein">
+                    攝取蛋白質<span className="req">*</span>
+                  </label>
                 </div>
               </div>
             </div>
