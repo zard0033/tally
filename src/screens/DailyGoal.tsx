@@ -229,7 +229,8 @@ export default function DailyGoal(props: DailyGoalProps) {
       return
     }
 
-    // 活動量／蛋白質一律來自固定 preset（select 保證合法值），不必再驗證範圍。
+    // 活動量／蛋白質的範圍由 effective*() 內的 clampToPresetRange 把關（見上方註解）：
+    // select 只保證使用者動過選單那條路徑合法，沿用 DB 原值那條要另外夾。
     const patchBase: Partial<ProfileRow> = {
       goal,
       rate_kg_per_week: effectiveRateKgPerWeek(),
