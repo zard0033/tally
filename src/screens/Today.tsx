@@ -18,6 +18,8 @@ const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋�
 /* 就地編輯區的數字欄標籤。與新增食物表單同一組字（DESIGN.md「新增食物表單欄位」），
    單位帶在 label 上而不是欄位旁——欄位窄，額外的單位字會擠掉輸入空間。 */
 type DetailKey = 'kcal' | 'protein' | 'fat' | 'carb'
+/** 上界對齊 DB：那四欄最嚴的是 `numeric(6,2)`，能放到 9999.99 */
+const MACRO_MAX = 9999.99
 const DETAIL_LABEL: Record<DetailKey, string> = {
   kcal: '熱量（卡）',
   protein: '蛋白質 g',
@@ -606,12 +608,23 @@ function ItemEditor({
     carb: String(num(row.carb)),
   })
 
+  /* 播報與「還原」的參照點一律是 **foods 的品名**，不是 `name` prop：後者是有效品名
+     （`row.name ?? foods.name`），改名成功後父層會把它換成新快照，於是「改名 → 再清空」
+     這條路徑上唸出來的會是剛剛被清掉的那個名字（review 抓到）。 */
+  const foodsName = row.foods?.name ?? null
+
   async function commitName(raw: string) {
-    const next = raw.trim() || null
-    if (next === (row.name ?? name)) return
+    /* 打進來的字若正好等於 foods 的品名，語意就是「沿用食品庫」＝ null，與清空同一件事。
+       這一步把三條路徑（沒改、清空、打回原名）收斂成同一個值，下面才有辦法用一次相等
+       比對擋掉全部的 no-op：草稿預填的是有效品名，少了這層正規化，一筆從沒改過名的列
+       只要被清空就會送出一個 `{ name: null }` 的空包彈（review 抓到）。 */
+    const trimmed = raw.trim()
+    const next = !trimmed || trimmed === foodsName ? null : trimmed
+    if (next === row.name) return
     try {
       await onDetail({ name: next })
-      setSaid(next ? `品名已改為 ${next}` : `品名已還原成食品庫的 ${name}`)
+      setDetail((d) => ({ ...d, name: next ?? foodsName ?? '' }))
+      setSaid(next ? `品名已改為 ${next}` : `品名已還原成食品庫的 ${foodsName ?? '（食物已刪除）'}`)
     } catch {
       setDetail((d) => ({ ...d, name }))
     }
@@ -627,16 +640,24 @@ function ItemEditor({
     /* 空字串要自己擋：`Number('')` 是 0 而不是 NaN，少了這半清空欄位會被當成
        「我今天吃的這份脂肪是 0」靜靜存進去，而且畫面上那格還是留白的（e2e 抓到）。
        想歸零的人打得出 0，清空從來不是那個意思。 */
-    if (!trimmed || !Number.isFinite(n) || n < 0) {
+    /* 上界對齊 DB 的 numeric(6,2)（kcal 是 (7,2)，取嚴的那個當統一門檻）。少了它，手滑
+       多打一個 0 會讓 Postgres 回 numeric field overflow，使用者看到的是一句資料庫原文
+       ——同一種「你打錯了」，卻走了跟負數完全不同的呈現路徑（review 抓到）。 */
+    if (!trimmed || !Number.isFinite(n) || n < 0 || n > MACRO_MAX) {
       setDetail((d) => ({ ...d, [key]: String(prev) }))
-      setSaid(`${DETAIL_LABEL[key]} 要填 0 或正數，已還原`)
+      setSaid(`${DETAIL_LABEL[key]} 要填 0 到 ${MACRO_MAX} 之間的數字，已還原`)
       return
     }
     /* 先捨到兩位小數再送，因為 DB 那四欄都是 numeric(_,2)：直接送 123.456 的話 Postgres
        存成 123.46，而本地 rows 與 cacheRef 留著 123.456，兩邊要等下一次真的 fetch 才對齊。
        捨在這裡＝畫面、本地狀態、DB 三層看到的是同一個數字。 */
     const rounded = Math.round(n * 100) / 100
-    if (rounded === prev) return
+    /* 值沒變也要把草稿正規化：打 `420.00` 或 `420.` 與現值數學相等，早退的話那串
+       非正規化的字面會一直留在欄位上（review 抓到）。 */
+    if (rounded === prev) {
+      setDetail((d) => ({ ...d, [key]: String(prev) }))
+      return
+    }
     try {
       await onDetail({ [key]: rounded })
       setDetail((d) => ({ ...d, [key]: String(rounded) }))

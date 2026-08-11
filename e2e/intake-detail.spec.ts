@@ -102,6 +102,12 @@ test('品名清空＝清掉快照，顯示退回食品庫的品名', async ({ pa
   const sent = await writes(page, 'intake', 'PATCH')
   expect(sent[sent.length - 1].body, '清空要送 null，不是空字串').toEqual({ name: null })
   await expect(page.locator(`${ROW} .nm`)).toHaveText('雞胸餐盒')
+
+  /* 播報要唸「還原成食品庫的**雞胸餐盒**」，不是剛被清掉的那個改名。參照點是 foods 的
+     品名，不是有效品名——後者在上一次改名成功後就已經被換成新快照（review 抓到）。 */
+  await expect(page.locator(`${ROW} .item-editor [role="status"]`)).toHaveText('品名已還原成食品庫的 雞胸餐盒')
+  // 欄位本身也要同步回去，不能停在空字串
+  await expect(page.locator(`${ROW} input#${await editorId(page)}-name`)).toHaveValue('雞胸餐盒')
 })
 
 test('數字欄填負數或空白：不送請求，該欄當場還原成原值', async ({ page }) => {
@@ -137,6 +143,44 @@ test('展開編輯區但什麼都沒改就收合：零寫入（品名草稿是 f
 
   expect(await writes(page, 'intake', 'PATCH'), '沒改任何值卻送出了 PATCH').toHaveLength(0)
   await foodsUntouched(page)
+})
+
+/* 下面三條是 v2.31 push 前 review 抓到的 no-op 與殘值路徑。共同的病灶都是
+   「草稿預填的是有效品名／使用者打的原始字面」與「DB 實際存的值」不是同一個東西。 */
+test('從沒改過名的列直接清空品名：不送空包彈（DB 本來就是 null）', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+
+  await fill(page, 'name', '') // 欄位預填的是 foods 的品名，清掉它語意上沒有變化
+  expect(await writes(page, 'intake', 'PATCH'), 'name 本來就是 null，不該送 PATCH').toHaveLength(0)
+
+  // 把原本的品名一字不差打回去，同樣是 no-op
+  await fill(page, 'name', '雞胸餐盒')
+  expect(await writes(page, 'intake', 'PATCH'), '打回 foods 原名等於沿用，不該送').toHaveLength(0)
+})
+
+test('數字打成與現值等價的字面（420.00）：不送請求，但欄位正規化回 420', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+
+  const id = await editorId(page)
+  await fill(page, 'kcal', '420.00')
+  expect(await writes(page, 'intake', 'PATCH'), '值沒變不該送').toHaveLength(0)
+  await expect(page.locator(`${ROW} input#${id}-kcal`), '欄位該正規化，不留 420.00').toHaveValue('420')
+})
+
+test('數字超過 DB 上界（numeric 6,2）：本地擋下，不讓 Postgres 回原始錯誤訊息', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+
+  const id = await editorId(page)
+  const kcal = page.locator(`${ROW} input#${id}-kcal`)
+  await kcal.fill('99999')
+  await kcal.blur()
+
+  await expect(kcal, '超界該當場還原').toHaveValue('420')
+  expect(await writes(page, 'intake', 'PATCH'), '超界不該送出去讓 DB 拒絕').toHaveLength(0)
+  await expect(page.locator(`${ROW} .ed-error`), '走的是還原路徑，不該出現「存不進去」').toHaveCount(0)
 })
 
 test('改完切到別天再切回來（走快取）：新值還在，不會被舊快照蓋回去', async ({ page }) => {

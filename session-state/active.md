@@ -14,7 +14,7 @@
   **已上線＝v2.30**（`a7ddb26`）；**v2.31 待 push**＝今日頁就地編輯區加品名與四個營養數字
   （只動那一筆 intake，不動 foods），含 schema 變更 `intake.name`。
 - **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **65/65 全綠**（約 1.5 分，十個 spec 檔）。長年偶發的 `meal-exit-animation` flaky 在
+  **69/69 全綠**（約 1.5 分，十個 spec 檔；條數以實跑輸出為準，別用舊數字加本輪新增外推）。長年偶發的 `meal-exit-animation` flaky 在
   worker 壓到 2 之後穩定了——根因是並行壓力，不是動畫時序。各檔涵蓋範圍見 CLAUDE.md。
 - **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
   **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
