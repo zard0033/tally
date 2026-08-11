@@ -107,9 +107,9 @@
 
 ## 下次續點
 
-1. **v2.30 已 commit、尚未 push**（aria-pressed 語意統一 ＋ `clampToPresetRange`；
-   vitest 64/64、e2e 59/59、build／lint 乾淨）。**開場第一件事＝照 `rules/git-push.md`
-   走完 review 再 push**——本輪是時間到了才停，不是有問題卡住。
+1. **v2.30 已 push**（2026-08-11，`a7ddb26`）。light review 唯一 confirmed 是 submit()
+   裡留著 v2.22 的舊註解「不必再驗證範圍」與新 clamp 呼叫矛盾，已另開 commit 修掉；
+   另兩條（空陣列邊界、DB 無 CHECK）標不修，理由見 commit。
 
 2. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05 收工於此）。
    走完 dev-flow 前段，**規模判為「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。
