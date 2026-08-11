@@ -6,7 +6,7 @@
    本檔只定義「跨畫面共用」的形狀；畫面自己內部才需要的本地 UI state
    （例如 LogSheet 的搜尋字、已選清單、qty 輸入草稿）不在這裡，那是各 screen 自己的事。 */
 
-import type { Food, IntakeRow, NewFood, NewIntake, NewWeight, ProfileRow, Weight } from '@/lib/api'
+import type { Food, IntakeDetailPatch, IntakeRow, NewFood, NewIntake, NewWeight, ProfileRow, Weight } from '@/lib/api'
 import type { Targets } from '@/lib/formulas'
 import type { MealKey } from '@/lib/meals'
 
@@ -42,6 +42,9 @@ export interface TodayProps {
   onUpdateIntakeQty: (id: number, qty: number) => Promise<void>
   /** 改單筆餐別，同一個編輯區的第二排。失敗處理同 onUpdateIntakeQty。 */
   onUpdateIntakeMeal: (id: number, meal: MealKey) => Promise<void>
+  /** 改這一筆自己的品名／營養值（去皮、少醬那種當天調整），不動食品庫。
+   *  一次一欄，失敗處理同 onUpdateIntakeQty。 */
+  onUpdateIntakeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
 }
 
 export interface LogSheetProps {

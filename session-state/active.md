@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-05（v2.24–v2.29 全數已 push，main 與 origin 同步於 `e70dce2`）
+最後更新：2026-08-11（v2.30 已 push；v2.31 就地編輯品名／營養值待 push）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；2026-07-30 手術前的
 > 完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -11,23 +11,13 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎（v2.21→
   v2.23 三輪演進）＋食品庫管理與設定頁重構（v2.22）。細節見 DESIGN.md 版本紀錄。
-  **最新已上線＝v2.29**（`e70dce2`）＝封存提示的四個缺陷修復、食品庫新增改 sheet ＋
-  三處食物表單合併成 `src/components/FoodFormFields.tsx`。
-- **測試**：`npx vitest run` 60/60；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **58/58 全綠**（約 1.5 分；原 31 ＋ v2.24 新增 18 ＋ v2.27 新增 4 ＋ v2.28 新增 1 ＋ v2.29 新增 4）。長年偶發的
-  `meal-exit-animation` flaky 在 worker 壓到 2 之後也穩定了——根因是並行壓力，不是動畫時序。
+  **已上線＝v2.30**（`a7ddb26`）；**v2.31 待 push**＝今日頁就地編輯區加品名與四個營養數字
+  （只動那一筆 intake，不動 foods），含 schema 變更 `intake.name`。
+- **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+  **65/65 全綠**（約 1.5 分，十個 spec 檔）。長年偶發的 `meal-exit-animation` flaky 在
+  worker 壓到 2 之後穩定了——根因是並行壓力，不是動畫時序。各檔涵蓋範圍見 CLAUDE.md。
 - **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
   **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
-- **新增的 e2e**：
-  - `daily-goal.spec.ts` 10 條——目標/速度兩個獨立 select、脂肪固定 g/kg、touched-ref 不覆寫
-    DB 原值、動過選單就改用選單值、即時預覽顯示 — 不跳錯誤、計算依據常駐無 toggle 且有項目
-    符號、BMR 說明 popover、自訂目標繞過公式、**select 有箭頭而 input 沒有**、
-    **每個選單的最長選項都放得下**
-  - `food-library.spec.ts` 14 條——搜尋比對品名＋店家、空狀態、就地編輯、編輯中隱藏 FAB、
-    封存＋復原、範本新增、必填擋送出、儲存鈕不溢出卡片、三顆圖示筆畫重心置中、
-    **封存提示長品名不撐破膠囊＋無障礙播報**、**新增走 sheet 不換頁**、
-    **新增 sheet 的店家下拉點得到**、**就地編輯的店家也是 Autocomplete**
-  - `settings-nav.spec.ts` 3 條——三入口導覽往返、底部列收起與還原、入口熱量與目標頁一致
 
 ## 已驗證事實
 
@@ -102,14 +92,24 @@
 
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` skill 定案才能做，樣張在
   `_design-sample/food-library.html` A3 frame。e2e 刻意只驗進出不鎖內容。
-- **零碎（都不擋上線）**：Notion 退場收尾未完成。（RLS 與 `aria-current` 兩項 2026-08-05
-  已結案，見「已驗證事實」。）
+- **零碎（不擋上線）**：Notion 退場收尾未完成。
+- **食物表單在 iOS 被鍵盤蓋住（2026-08-11 真機回報）**：新增食物 sheet 鍵盤彈出後，
+  蛋白質／脂肪／碳水那排被「加入食品庫」按鈕壓掉——**sheet 高度沒吃 `visualViewport` 縮減**。
+  iOS 表單列上下箭頭「跳得不順」是同一病灶的表徵：DOM 順序已核對正確（品名→店家→熱量→蛋白
+  →脂肪→碳水），跳過去了但看不到；次要嫌疑是店家 Autocomplete `openOnInputClick`。
+  **桌面 WebKit 模擬不出 `visualViewport`，playwright 看到的是假的，只能真機驗**。影響共用
+  `FoodFormFields` 的三處。刻意與 intake 就地編輯拆開（位置不同、驗證節奏不同）。
 
 ## 下次續點
 
-1. **v2.30 已 push**（2026-08-11，`a7ddb26`）。light review 唯一 confirmed 是 submit()
-   裡留著 v2.22 的舊註解「不必再驗證範圍」與新 clamp 呼叫矛盾，已另開 commit 修掉；
-   另兩條（空陣列邊界、DB 無 CHECK）標不修，理由見 commit。
+1. **v2.31 實作與測試已完成，待走 push 流程**（review → push）。今日頁就地編輯區加
+   品名／熱量／蛋白質／脂肪／碳水，只 PATCH 那一筆 intake、foods 零寫入。
+   **schema 已由使用者實跑**：`alter table intake add column name text;`（`null` ＝沿用
+   `foods.name`，既有資料零回填）。vitest 64/64、e2e 65/65、build／lint 乾淨；新增的 6 條
+   e2e 做過兩輪 mutation 檢查。設計決策與撤銷的 v2.20 判例已寫進 DESIGN.md v2.31。
+   **實作偏離 AC 一處要申報**：AC 原寫「數字欄填錯顯示『存不進去』」，實作改成**當場還原
+   該欄＋sr-only 播報**——「存不進去」是 PATCH 失敗專用句，借來說「你打錯了」會讓兩種
+   完全不同的狀況長得一樣。
 
 2. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05 收工於此）。
    走完 dev-flow 前段，**規模判為「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。

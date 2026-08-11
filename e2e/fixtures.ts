@@ -68,6 +68,8 @@ export const FIX = {
       protein: 24,
       fat: 1.5,
       carb: 2,
+      // name＝這一筆自己的品名快照。null 是常態（沒為這筆改過名），顯示退回 foods.name
+      name: null,
       foods: { name: '乳清（1匙）', vendor: null },
     },
     {
@@ -78,6 +80,7 @@ export const FIX = {
       protein: 45,
       fat: 12,
       carb: 30,
+      name: null,
       foods: { name: '雞胸餐盒', vendor: '健康盒' },
     },
   ],

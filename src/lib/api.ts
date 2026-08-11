@@ -114,6 +114,10 @@ export interface IntakeRow {
   protein: number
   fat: number
   carb: number
+  /** 這一筆自己的品名快照。null＝沿用 foods 的品名（絕大多數紀錄都是 null，加這欄時
+   *  刻意不回填）。有值代表使用者為這一筆改過名（「雞排便當（去皮）」），
+   *  之後食品庫再改品名也不會回頭改寫它——與 kcal/protein/fat/carb 同一套快照語意。 */
+  name: string | null
   foods: { name: string; vendor: string | null } | null
 }
 
@@ -123,8 +127,8 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
      推不出關聯基數，型別預設當作陣列——實際回傳仍是單一物件，用明確泛型覆寫成真實形狀 */
   return unwrap(await supabase
     .from('intake')
-    .select<'id,meal,qty,kcal,protein,fat,carb,foods(name,vendor)', IntakeRow>(
-      'id,meal,qty,kcal,protein,fat,carb,foods(name,vendor)',
+    .select<'id,meal,qty,kcal,protein,fat,carb,name,foods(name,vendor)', IntakeRow>(
+      'id,meal,qty,kcal,protein,fat,carb,name,foods(name,vendor)',
     )
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
@@ -181,6 +185,17 @@ export async function updateIntakeQty(id: number, qty: number): Promise<void> {
  *  且改日期會讓那一筆離開當前畫面，需要另一套「已移到 8/2」的回饋設計）。 */
 export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void> {
   const { error } = await supabase.from('intake').update({ meal }).eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
+/** 這一筆自己的品名與營養值（「今天這份雞排便當去了皮」）。**只動 intake 這一列，
+ *  絕不碰 foods**——那正是這個功能存在的理由：調整當天實際吃的量，不污染食品庫的標準值。
+ *  呼叫端一次只送一欄（編輯區各欄 blur 時各自 commit），與 updateIntakeQty/Meal 同慣例。
+ *  name 送 null＝清掉快照、顯示退回 foods 的品名。 */
+export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb'>>
+
+export async function updateIntakeDetail(id: number, patch: IntakeDetailPatch): Promise<void> {
+  const { error } = await supabase.from('intake').update(patch).eq('id', id).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
 }
 

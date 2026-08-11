@@ -5,7 +5,7 @@
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
-import type { IntakeRow } from '@/lib/api'
+import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { DUR, sec } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
@@ -15,6 +15,15 @@ import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const MACRO_LABEL: Record<'protein' | 'fat' | 'carb', string> = { protein: '蛋白質', fat: '脂肪', carb: '碳水' }
+/* 就地編輯區的數字欄標籤。與新增食物表單同一組字（DESIGN.md「新增食物表單欄位」），
+   單位帶在 label 上而不是欄位旁——欄位窄，額外的單位字會擠掉輸入空間。 */
+type DetailKey = 'kcal' | 'protein' | 'fat' | 'carb'
+const DETAIL_LABEL: Record<DetailKey, string> = {
+  kcal: '熱量（卡）',
+  protein: '蛋白質 g',
+  fat: '脂肪 g',
+  carb: '碳水 g',
+}
 
 /* 左滑的三個距離。REVEAL＝44px 圓鈕＋兩側留白，就是「開啟」時停下來的位置；
    OPEN_AT＝放手時超過它就吸附開啟（拖不到一半視為反悔）；
@@ -50,6 +59,7 @@ export default function Today(props: TodayProps) {
     justAddedIds,
     onUpdateIntakeQty,
     onUpdateIntakeMeal,
+    onUpdateIntakeDetail,
   } = props
 
   const rows = dayData.rows
@@ -119,6 +129,11 @@ export default function Today(props: TodayProps) {
   const handleChangeQty = useCallback(
     (id: number, qty: number) => runEdit(id, () => onUpdateIntakeQty(id, qty)),
     [runEdit, onUpdateIntakeQty],
+  )
+
+  const handleChangeDetail = useCallback(
+    (id: number, patch: IntakeDetailPatch) => runEdit(id, () => onUpdateIntakeDetail(id, patch)),
+    [runEdit, onUpdateIntakeDetail],
   )
 
   /* 改餐別成功後收合編輯區。**原本寫「讓 FLIP layout 動畫帶著它移動、使用者看得到去向」
@@ -278,6 +293,7 @@ export default function Today(props: TodayProps) {
             handleDelete,
             handleChangeQty,
             handleChangeMeal,
+            handleChangeDetail,
             editErr,
           })
         )}
@@ -296,6 +312,7 @@ interface TimelineHelpers {
   handleDelete: (id: number) => void
   handleChangeQty: (id: number, qty: number) => Promise<void>
   handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
+  handleChangeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   editErr: { id: number; msg: string } | null
 }
 
@@ -322,6 +339,7 @@ function SwipeRow({
   onDelete,
   onQty,
   onMeal,
+  onDetail,
   err,
 }: {
   row: IntakeRow
@@ -337,6 +355,7 @@ function SwipeRow({
   onDelete: () => void
   onQty: (qty: number) => Promise<void>
   onMeal: (meal: MealKey) => Promise<void>
+  onDetail: (patch: IntakeDetailPatch) => Promise<void>
   err: string | null
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
@@ -482,6 +501,7 @@ function SwipeRow({
               openerRef={contentRef}
               onQty={onQty}
               onMeal={onMeal}
+              onDetail={onDetail}
               onDelete={onDelete}
               err={err}
             />
@@ -504,6 +524,7 @@ function ItemEditor({
   openerRef,
   onQty,
   onMeal,
+  onDetail,
   onDelete,
   err,
 }: {
@@ -514,6 +535,7 @@ function ItemEditor({
   openerRef: React.RefObject<HTMLButtonElement | null>
   onQty: (qty: number) => Promise<void>
   onMeal: (meal: MealKey) => Promise<void>
+  onDetail: (patch: IntakeDetailPatch) => Promise<void>
   onDelete: () => void
   err: string | null
 }) {
@@ -570,6 +592,69 @@ function ItemEditor({
     const n = Number(raw.trim())
     if (Number.isFinite(n) && n > 0) setLocalQty(n)
   }
+
+  /* 品名與四個營養數字：**改的是這一筆，不是食品庫**（去皮、少醬、店家給多了）。
+     每欄 blur 時各自 commit 一次、只送有變的那一欄，與 qty 的 onBlur 同一套慣例——
+     不做「儲存」按鈕，編輯區沒有送出的概念，每個動作都是即時的。
+     草稿初始值用**有效品名**（可能來自 foods），所以「打開沒改就關掉」要靠下面那個
+     相等比對擋掉，否則會把 foods 的品名白白複製進 name 快照欄、無謂地讓它脫鉤。 */
+  const [detail, setDetail] = useState({
+    name,
+    kcal: String(num(row.kcal)),
+    protein: String(num(row.protein)),
+    fat: String(num(row.fat)),
+    carb: String(num(row.carb)),
+  })
+
+  async function commitName(raw: string) {
+    const next = raw.trim() || null
+    if (next === (row.name ?? name)) return
+    try {
+      await onDetail({ name: next })
+      setSaid(next ? `品名已改為 ${next}` : `品名已還原成食品庫的 ${name}`)
+    } catch {
+      setDetail((d) => ({ ...d, name }))
+    }
+  }
+
+  /* 本地驗證失敗（空白、負數、打錯字）**不走「存不進去」那條錯誤訊息**——那句是 PATCH
+     失敗專用的，借來說「你打錯了」會讓兩種完全不同的狀況長得一樣。改成當場還原該欄並
+     用既有的 sr-only 播報說明，視覺上使用者也看得到值跳回去了。 */
+  async function commitMacro(key: DetailKey, raw: string) {
+    const prev = num(row[key])
+    const trimmed = raw.trim()
+    const n = Number(trimmed)
+    /* 空字串要自己擋：`Number('')` 是 0 而不是 NaN，少了這半清空欄位會被當成
+       「我今天吃的這份脂肪是 0」靜靜存進去，而且畫面上那格還是留白的（e2e 抓到）。
+       想歸零的人打得出 0，清空從來不是那個意思。 */
+    if (!trimmed || !Number.isFinite(n) || n < 0) {
+      setDetail((d) => ({ ...d, [key]: String(prev) }))
+      setSaid(`${DETAIL_LABEL[key]} 要填 0 或正數，已還原`)
+      return
+    }
+    if (n === prev) return
+    try {
+      await onDetail({ [key]: n })
+      setSaid(`${DETAIL_LABEL[key]} 已改為 ${n}`)
+    } catch {
+      setDetail((d) => ({ ...d, [key]: String(prev) }))
+    }
+  }
+
+  const macroField = (key: DetailKey) => (
+    <div className="field-float">
+      <input
+        id={`${id}-${key}`}
+        type="text"
+        inputMode="decimal"
+        placeholder=" "
+        value={detail[key]}
+        onChange={(e) => setDetail((d) => ({ ...d, [key]: e.target.value }))}
+        onBlur={(e) => void commitMacro(key, e.target.value)}
+      />
+      <label htmlFor={`${id}-${key}`}>{DETAIL_LABEL[key]}</label>
+    </div>
+  )
 
   async function pickMeal(key: MealKey) {
     if (key === localMeal || busy) return
@@ -647,6 +732,28 @@ function ItemEditor({
           ))}
         </div>
       </div>
+      {/* 品名與營養值。欄位版型照新增食物表單（DESIGN.md「新增食物表單欄位」）：品名整行、
+          熱量整行、三大營養素三欄並排——同一組數字在兩個地方長得一樣，使用者不必重學。
+          **這裡沒有店家欄**：店家是食品庫的屬性，「今天這份去了皮」不會換一家店。 */}
+      <div className="ed-line ed-detail">
+        <div className="field-float">
+          <input
+            id={`${id}-name`}
+            type="text"
+            placeholder=" "
+            value={detail.name}
+            onChange={(e) => setDetail((d) => ({ ...d, name: e.target.value }))}
+            onBlur={(e) => void commitName(e.target.value)}
+          />
+          <label htmlFor={`${id}-name`}>品名</label>
+        </div>
+        {macroField('kcal')}
+        <div className="field-row">
+          {macroField('protein')}
+          {macroField('fat')}
+          {macroField('carb')}
+        </div>
+      </div>
       {err && (
         <p className="sheet-error ed-error" role="alert">
           存不進去：{err}
@@ -667,10 +774,12 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
   for (const r of rows) byMeal.get(r.meal as MealKey)?.push(r)
 
   /* 三筆完全同名的「雞胸餐盒」只靠店家區分。今日頁常態不顯示店家，
-     同一天出現兩筆同名時才非顯示不可，否則回頭核對或刪除都是盲的 */
+     同一天出現兩筆同名時才非顯示不可，否則回頭核對或刪除都是盲的。
+     **數的是有效品名**（改過名的那筆算它自己的新名字）——不然「雞排便當」與
+     「雞排便當（去皮）」會被當成兩筆同名而雙雙掛上店家。 */
   const nameCount = new Map<string, number>()
   for (const r of rows) {
-    const n = r.foods?.name
+    const n = r.name ?? r.foods?.name
     if (n) nameCount.set(n, (nameCount.get(n) ?? 0) + 1)
   }
 
@@ -753,7 +862,9 @@ function MealNode({
                   opacity，沒有動 height（DESIGN.md「不動 layout 屬性」）。 */}
               <AnimatePresence initial={false} onExitComplete={() => setLingering(false)}>
                 {items.map((r) => {
-                  const name = r.foods?.name ?? '（食物已刪除）'
+                  /* intake 自己的品名快照優先於 foods 的：改過名的那筆從此與食品庫脫鉤，
+                     食品庫日後改品名不回頭改寫它（與 kcal/protein/fat/carb 同一套語意）。 */
+                  const name = r.name ?? r.foods?.name ?? '（食物已刪除）'
                   const dup = (nameCount.get(name) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
                   return (
                     <motion.li
@@ -779,6 +890,7 @@ function MealNode({
                         onDelete={() => h.handleDelete(r.id)}
                         onQty={(q) => h.handleChangeQty(r.id, q)}
                         onMeal={(m) => h.handleChangeMeal(r.id, m)}
+                        onDetail={(p) => h.handleChangeDetail(r.id, p)}
                         err={h.editErr?.id === r.id ? h.editErr.msg : null}
                       />
                     </motion.li>

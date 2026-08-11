@@ -287,6 +287,14 @@ body {
   display: flex; flex-direction: column; gap: var(--s-2); }
 .ed-line { display: flex; align-items: center; gap: var(--s-3); }
 
+/* 品名／熱量／三大營養素這三行沿用新增食物表單的 .field-float，欄位版型也照它
+   （DESIGN.md「新增食物表單欄位」）——同一組數字在兩個地方長得一樣，使用者不必重學。
+   兩處覆寫：**改成直向堆疊**（.ed-line 預設是橫排，那是給 stepper＋刪除鈕用的）、
+   **把 .field-float 的 margin-bottom 換成 gap**——這一塊的行距是 gap 宣告的（見上方
+   .item-editor 註解），混用兩套節奏會讓最後一欄底下多出一段對不上任何 token 的空白。 */
+.ed-detail { flex-direction: column; align-items: stretch; gap: var(--s-2); }
+.ed-detail .field-float { margin-bottom: 0; }
+
 /* 刪除：--over 是破表狀態的專用色，`.item-delete` 用實心紅圓沒問題是因為它只在左滑
    時短暫出現；這一顆是展開期間常駐的，填色會讓警告色變成常態元素、也會壓過真正的
    主角（改份量）。改成不填色的描邊圖示——對 --raised 實算 5.47:1（圖形需 3:1）。

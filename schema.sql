@@ -34,6 +34,12 @@ create table intake (
   protein    numeric(6,2) not null,
   fat        numeric(6,2) not null,
   carb       numeric(6,2) not null,
+  -- 這一筆自己的品名快照（2026-08-11）。null＝沿用 foods.name，是絕大多數紀錄的常態；
+  -- 有值代表使用者為這一筆改過名（「雞排便當（去皮）」），食品庫日後改品名不回頭改寫它。
+  -- 與上面四個營養快照同一套語意：紀錄的是「當天實際吃的那份」，不是食品庫的現況。
+  -- **刻意不回填**——null 的 fallback 就是正確行為，回填只會讓每一筆都無謂地脫鉤。
+  -- 既有資料庫補這欄：alter table intake add column name text;
+  name       text,
   created_at timestamptz not null default now()
 );
 create index intake_user_date_idx on intake (user_id, eaten_on);

@@ -19,11 +19,13 @@ import {
   onAuthStateChange,
   signOut as apiSignOut,
   updateFood as apiUpdateFood,
+  updateIntakeDetail as apiUpdateIntakeDetail,
   updateIntakeMeal as apiUpdateIntakeMeal,
   updateIntakeQty as apiUpdateIntakeQty,
   updateProfile as apiUpdateProfile,
   upsertWeight as apiUpsertWeight,
   type Food,
+  type IntakeDetailPatch,
   type IntakeRow,
   type NewFood,
   type NewIntake,
@@ -504,6 +506,12 @@ export default function App() {
     (id: number, meal: MealKey) => patchIntakeRow(id, { meal }, () => apiUpdateIntakeMeal(id, meal)),
     [patchIntakeRow],
   )
+  /* 品名／營養值的就地調整（去皮、少醬）。patch 直接就是要寫進那一列的形狀，
+   * 所以本地套用與送出用同一個物件——不像 qty/meal 需要各自組。 */
+  const handleUpdateIntakeDetail = useCallback(
+    (id: number, patch: IntakeDetailPatch) => patchIntakeRow(id, patch, () => apiUpdateIntakeDetail(id, patch)),
+    [patchIntakeRow],
+  )
 
   const handleSaveProfile = useCallback(
     async (patch: Partial<ProfileRow>) => {
@@ -620,6 +628,7 @@ export default function App() {
             justAddedIds={justAddedIds}
             onUpdateIntakeQty={handleUpdateIntakeQty}
             onUpdateIntakeMeal={handleUpdateIntakeMeal}
+            onUpdateIntakeDetail={handleUpdateIntakeDetail}
           />
         ) : (
           <Settings
