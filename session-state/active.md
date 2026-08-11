@@ -102,14 +102,12 @@
 
 ## 下次續點
 
-1. **v2.31 實作與測試已完成，待走 push 流程**（review → push）。今日頁就地編輯區加
-   品名／熱量／蛋白質／脂肪／碳水，只 PATCH 那一筆 intake、foods 零寫入。
-   **schema 已由使用者實跑**：`alter table intake add column name text;`（`null` ＝沿用
-   `foods.name`，既有資料零回填）。vitest 64/64、e2e 65/65、build／lint 乾淨；新增的 6 條
-   e2e 做過兩輪 mutation 檢查。設計決策與撤銷的 v2.20 判例已寫進 DESIGN.md v2.31。
-   **實作偏離 AC 一處要申報**：AC 原寫「數字欄填錯顯示『存不進去』」，實作改成**當場還原
-   該欄＋sr-only 播報**——「存不進去」是 PATCH 失敗專用句，借來說「你打錯了」會讓兩種
-   完全不同的狀況長得一樣。
+1. **v2.31 已 push**（2026-08-11，`73c9b14`）。今日頁就地編輯區加品名／熱量／蛋白質／
+   脂肪／碳水，只 PATCH 那一筆 intake、foods 零寫入。schema 由使用者實跑
+   `alter table intake add column name text;`。**唯一未驗的一項＝真 DB**：e2e 全打 stub，
+   `select` 字串現在含 `name`，那欄在線上存不存在只有部署後開今日頁才知道——**今日頁若
+   載不出來，第一個要查的就是它**。實作偏離 AC 一處已申報：數字填錯改成「當場還原＋
+   sr-only 播報」而不是顯示「存不進去」（後者是 PATCH 失敗專用句）。
 
 2. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05 收工於此）。
    走完 dev-flow 前段，**規模判為「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。
