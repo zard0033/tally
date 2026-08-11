@@ -59,6 +59,25 @@ test('改熱量只動這一筆的 kcal，食品庫不受影響，列上數字立
   await foodsUntouched(page)
 })
 
+test('編輯區改的是單份值，列上顯示的是 ×qty 總值；小數捨到 DB 的兩位', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+
+  await page.locator(`${ROW} .qty-btn`).last().click() // qty 1 → 2
+  await expect(page.locator(`${ROW} .kc`)).toHaveText('840')
+
+  // 編輯區填的是「一份」的熱量，列上要顯示 300×2
+  await fill(page, 'kcal', '300')
+  await expect(page.locator(`${ROW} .kc`)).toHaveText('600')
+
+  /* DB 那四欄是 numeric(_,2)，送出前就捨到兩位——否則本地留 12.345、DB 存 12.35，
+     兩邊要等下一次真的 fetch 才對齊。 */
+  await fill(page, 'fat', '12.345')
+  const sent = await writes(page, 'intake', 'PATCH')
+  expect(sent[sent.length - 1].body).toEqual({ fat: 12.35 })
+  await expect(page.locator(`${ROW} input#${await editorId(page)}-fat`)).toHaveValue('12.35')
+})
+
 test('改品名只動這一筆的 name 快照，時間軸換成新名字，食品庫仍是舊名', async ({ page }) => {
   await openApp(page)
   await expand(page)

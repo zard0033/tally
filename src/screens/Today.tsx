@@ -632,10 +632,15 @@ function ItemEditor({
       setSaid(`${DETAIL_LABEL[key]} 要填 0 或正數，已還原`)
       return
     }
-    if (n === prev) return
+    /* 先捨到兩位小數再送，因為 DB 那四欄都是 numeric(_,2)：直接送 123.456 的話 Postgres
+       存成 123.46，而本地 rows 與 cacheRef 留著 123.456，兩邊要等下一次真的 fetch 才對齊。
+       捨在這裡＝畫面、本地狀態、DB 三層看到的是同一個數字。 */
+    const rounded = Math.round(n * 100) / 100
+    if (rounded === prev) return
     try {
-      await onDetail({ [key]: n })
-      setSaid(`${DETAIL_LABEL[key]} 已改為 ${n}`)
+      await onDetail({ [key]: rounded })
+      setDetail((d) => ({ ...d, [key]: String(rounded) }))
+      setSaid(`${DETAIL_LABEL[key]} 已改為 ${rounded}`)
     } catch {
       setDetail((d) => ({ ...d, [key]: String(prev) }))
     }
