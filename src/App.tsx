@@ -431,9 +431,12 @@ export default function App() {
      ——焦點其實跳對了，只是跳到看不見的地方。
 
      `offsetTop` 要一起扣：iOS 會把 visual viewport 往上推，只看 height 會少算那一段。
-     沒有 `visualViewport` 的環境（桌面 Playwright、舊瀏覽器）整段跳過，
-     `--kb` 不存在，CSS 那邊的 `var(--kb, 0px)` 退回 0，行為與現在完全一樣。
-     **這條只能真機驗**——桌面 WebKit 不會產生鍵盤，模擬不出這個狀態。 */
+
+     **桌面不是靠 `if (!vv) return` 那道 guard 走掉的**（實測：桌面 WebKit 有
+     `visualViewport`，`height === innerHeight`、`offsetTop === 0`）——它照樣跑 `sync()`，
+     只是沒有鍵盤、算出來恆為 `0px`，結果等同於沒有這個變數。guard 只擋真的缺這支 API
+     的舊瀏覽器。這兩件事結果一樣但機制不同，別再寫成「桌面沒有這個 API」（review 抓到）。
+     **這條只能真機驗**——桌面產生不出鍵盤，`--kb` 永遠是 0，模擬不出那個狀態。 */
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return

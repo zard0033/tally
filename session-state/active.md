@@ -14,7 +14,8 @@
   **已上線＝v2.30**（`a7ddb26`）；**v2.31 待 push**＝今日頁就地編輯區加品名與四個營養數字
   （只動那一筆 intake，不動 foods），含 schema 變更 `intake.name`。
 - **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **70/70 全綠**（約 1.5 分，十個 spec 檔；條數以實跑輸出為準，別用舊數字加本輪新增外推）。長年偶發的 `meal-exit-animation` flaky 在
+  **71/71 全綠**（約 1.5 分，十個 spec 檔；條數以實跑輸出為準，別用舊數字加本輪新增外推
+  ——2026-08-12 這輪又漏算一條被 review 抓到，改文件前先跑一次比心算快）。長年偶發的 `meal-exit-animation` flaky 在
   worker 壓到 2 之後穩定了——根因是並行壓力，不是動畫時序。各檔涵蓋範圍見 CLAUDE.md。
 - **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
   **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
@@ -52,23 +53,17 @@
 - **e2e 的 fetch stub（`e2e/stub.ts`）完全不看 query 參數/filter**，只按 table+method 分流回同一份
   fixture——所以 `food-library.spec.ts` 的資料斷言只用「使用中」分頁，兩個分頁的資料差異在
   stub 升級前測不了（測了只會鎖住 stub 的行為）。
-- **screens 目錄下新增子頁不必上 router 套件**：Settings.tsx 自己管一個 `view` state，跟 App.tsx
-  的 `tab` 同一種「沒有 URL 的路由」。代價是那行 unmount cleanup（`onSubViewChange(false)`）
-  目前 **UI 走不到**（底部列已收起、也沒有 URL 可繞），所以刻意沒為它寫測試。
-- **把 DB 上分開的兩個欄位在 UI 層合併成模板字面量聯集型別（v2.22 的 `GoalMode`）**短期型別
-  安全漂亮，但使用者實際用起來覺得「一個選單塞兩件事」不好用；拆回兩欄位要跨 formulas.ts
-  ／DailyGoal.tsx／test 三處，事後拆比想像中貴。設計合併型 UI 前先想清楚。
+- **screens 目錄下新增子頁不必上 router 套件**：Settings.tsx 自己管 `view` state，跟 App.tsx
+  的 `tab` 同一種「沒有 URL 的路由」。那行 unmount cleanup 目前 UI 走不到，刻意沒寫測試。
+- **把 DB 上分開的兩欄在 UI 層合併成模板字面量聯集型別（v2.22 的 `GoalMode`）**型別漂亮，
+  但使用者覺得「一個選單塞兩件事」難用；拆回去要跨三處，事後拆比想像中貴。先想清楚再合併。
 
-- **RLS 已驗，此題結案**（2026-08-05，使用者在 Supabase SQL Editor 實跑）：`pg_policies`
-  查出 `public` schema 底下**總共只有四條 policy**（foods／intake／weight／profile 各一條
-  `owner_all`），每條都是 `cmd = ALL`、`qual` 與 `with_check` 皆為 `auth.uid() = user_id`，
-  與 `schema.sql` 逐字一致；`pg_class.relrowsecurity` 四張表皆 `true`。
-  **`ALL` 涵蓋 DELETE，`qual` 就是 DELETE 走的判斷式**，而且沒有第二條 permissive policy
-  可以繞過去——設定面完整，原本記的「跨使用者 DELETE 未實測」不再是缺口。
-  **判準（可複用）**：要驗的東西如果是**資料庫自己的執行行為**而不是我們的程式碼，
-  把設定查完整（policy 全集 ＋ RLS 開關）就是充分證據；再跑一次 runtime DELETE 只是
-  重新確認 Postgres 是 Postgres。跨帳號 runtime 測試留給「policy 判斷式本身有條件分支」
-  那種情況——這裡沒有。
+- **RLS 已驗，此題結案**（2026-08-05，使用者在 SQL Editor 實跑 `pg_policies` 與 `pg_class`）：
+  四張表各一條 `owner_all`（`cmd = ALL`、`qual`／`with_check` 皆 `auth.uid() = user_id`），
+  無第二條 permissive policy，RLS 全開。**判準（可複用）**：要驗的若是**資料庫自己的執行
+  行為**而非我們的程式碼，把設定查完整（policy 全集 ＋ RLS 開關）就是充分證據；再跑一次
+  runtime DELETE 只是重新確認 Postgres 是 Postgres。跨帳號 runtime 測試留給「policy
+  判斷式本身有條件分支」那種情況——這裡沒有。
 - **選中態語意在本專案的統一裁決（v2.30）**：互斥選一組一律 `aria-pressed`，容器不掛
   `role="tablist"`；`aria-current` 只留給底部分頁列（真的在換頁）。**沒有補成完整 tablist
   是刻意的**——APG 契約要 roving tabindex ＋方向鍵 ＋ `aria-controls`，半套會讓讀屏期待
@@ -96,6 +91,11 @@
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` skill 定案才能做，樣張在
   `_design-sample/food-library.html` A3 frame。e2e 刻意只驗進出不鎖內容。
 - **零碎（不擋上線）**：Notion 退場收尾未完成。
+- **`.tabbar` 與 `.datectl` 的邊框要不要比照 v2.32 加深？**（2026-08-12 review 提出）兩者
+  仍是 `--rule`，對 `--paper` 只有 1.37:1。但它們是**導覽類容器**不是資料輸入控件，而且
+  v2.4 明訂日期膠囊「是安靜的，不與 44px 主數字搶重量」——加深會直接撞掉那個決策。
+  **這是取捨題不是 bug**，要你裁決：維持安靜、或讓它過 3:1 但變顯眼。在裁決之前
+  DESIGN.md 那條規則已刻意限縮成「資料輸入控件」，不寫「一律」。
 - **食物表單在 iOS 被鍵盤蓋住 → 修法已寫、待真機驗（v2.32）**：`.sheet` 的 `bottom` 改吃
   `--kb`（App.tsx 用 `visualViewport` 算鍵盤高度）。**桌面 WebKit 產生不出鍵盤，e2e 只守得住
   「CSS 接線沒斷」那半，讀數要你在手機上看**。驗的時候：開新增食物 → 點熱量欄 → 蛋白質／

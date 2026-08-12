@@ -322,7 +322,12 @@ test('新增走 sheet 不是換頁：底下清單還在，關閉鈕／Esc 都能
    **桌面 WebKit 產生不出鍵盤，這條驗不到 `visualViewport` 的讀數**——它守的是另一半：
    接線。CSS 變數名打錯、選擇器沒命中、被更晚的規則蓋掉，任何一種都會讓整個修法靜默
    失效而畫面看起來一切正常。所以這裡直接餵一個 `--kb` 進去，量 sheet 有沒有真的縮上來，
-   順帶確認可捲區跟著變矮、確認鈕還在 sheet 裡面。讀數那半只能真機驗。 */
+   順帶確認可捲區跟著變矮、確認鈕還在 sheet 裡面。讀數那半只能真機驗。
+
+   **`--kb` 設在 sheet 元素身上，不是 `documentElement`**：App.tsx 那支 `sync()` 寫的正是
+   root 的 inline style，桌面上任何一次 `visualViewport` 的 resize／scroll 都會把它蓋回
+   `0px`——設在 root 上等於跟 effect 搶同一格，是個等著發作的 flaky 源（review 抓到）。
+   設在元素自己身上則永遠贏過繼承來的值，與 effect 井水不犯河水。 */
 test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮、確認鈕仍在框內', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)
@@ -336,7 +341,7 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   const formBefore = await box(sheet.locator('.form-wrap'))
 
   const KB = 300
-  await page.evaluate((kb) => document.documentElement.style.setProperty('--kb', `${kb}px`), KB)
+  await sheet.evaluate((el, kb) => el.style.setProperty('--kb', `${kb}px`), KB)
 
   const after = await box(sheet)
   expect(Math.round(before.height - after.height), 'sheet 沒有吃到 --kb，接線斷了').toBe(KB)
