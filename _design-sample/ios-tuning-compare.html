@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tally — iOS 微調對照</title>
+<!--
+  拋棄式對照 demo（2026-08-12）。不是產品程式碼，挑完就刪。
+  左邊一律「現在的樣子」，右邊是「改後」。四項各自獨立，可以只挑其中幾項。
+  這頁不載 Archivo 數字字體（獨立 HTML 載不到），所以數字寬度跟實機不同——不是這次要比的東西。
+-->
+<style>
+:root {
+  --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
+  --rule: #E0D3BD; --rule-subtle: #ECE1CD; --rule-field: #9A8069;
+  --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
+  --accent: #1C7059; --accent-soft: #CFE9E0; --on-accent: #FFFFFF;
+  --over: #9A4330; --over-fill: #B8533A;
+  --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-lg: 1.25rem; --t-hero: 2.75rem;
+  --track-hero: -.022em; --track-md: -.008em; --track-xs: .015em;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+  --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
+  --dur-fast: 100ms; --dur-base: 160ms; --dur-mid: 220ms; --dur-sheet: 280ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  margin: 0; padding: var(--s-5) var(--s-4) 64px; background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--t-base); line-height: 1.55;
+  touch-action: manipulation;
+}
+h1 { font-size: var(--t-lg); font-weight: 600; letter-spacing: var(--track-md); margin: 0 0 var(--s-2); }
+.lede { color: var(--ink-muted); margin: 0 0 var(--s-6); max-width: 46ch; }
+
+section { margin: 0 0 48px; }
+h2 { font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md);
+  margin: 0 0 var(--s-1); padding-top: var(--s-4); border-top: 1px solid var(--rule); }
+.why { color: var(--ink-muted); margin: 0 0 var(--s-4); max-width: 46ch; }
+.how { color: var(--ink-muted); font-size: var(--t-sm); margin: var(--s-3) 0 0; max-width: 46ch; }
+.how b { color: var(--ink); font-weight: 600; }
+
+/* 並排：寬螢幕左右，窄螢幕上下相鄰 */
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); align-items: start; }
+@media (max-width: 620px) { .pair { grid-template-columns: 1fr; gap: var(--s-5); } }
+.side { min-width: 0; }
+.tag { font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted);
+  margin: 0 0 var(--s-2); display: flex; align-items: center; gap: var(--s-2); }
+.tag::before { content: ''; width: 8px; height: 8px; border-radius: var(--r-pill);
+  background: var(--ink-faint); flex-shrink: 0; }
+.side.new .tag::before { background: var(--accent); }
+.side.new .tag { color: var(--accent); font-weight: 600; }
+
+/* ── 品項列：從 app.css 抄過來，尺寸與色票一致 ── */
+.stage { background: var(--paper); border-radius: var(--r-tab); }
+.item-row { border-radius: var(--r-tab); overflow: clip; position: relative; }
+.item-main { position: relative; }
+.item-delete-slot { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: flex-end; padding-right: var(--s-2); }
+.del { width: 44px; height: 44px; border-radius: var(--r-pill); border: none; background: none;
+  color: var(--on-accent); display: flex; align-items: center; justify-content: center;
+  position: relative; flex-shrink: 0; }
+.del::before { content: ''; position: absolute; inset: 2px; border-radius: var(--r-pill);
+  background: var(--over-fill); transition: transform var(--dur-base) var(--ease); }
+.del svg { position: relative; }
+.item-slide { position: relative; z-index: 1; touch-action: pan-y; cursor: grab; }
+.item-slide:active { cursor: grabbing; }
+.item-content { width: 100%; border-radius: var(--r-tab); display: flex;
+  justify-content: space-between; align-items: center; gap: var(--s-3); min-height: 44px;
+  padding: var(--s-1) var(--s-3); border: none; background: var(--card); text-align: left;
+  font-size: var(--t-base); line-height: 1.45; }
+.nm-wrap { display: flex; align-items: baseline; gap: var(--s-1); min-width: 0; }
+.nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qty { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.kc { font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; }
+.vendor { color: var(--ink-muted); font-size: var(--t-xs); }
+svg { stroke: currentColor; fill: none; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── ② scrim：縮小的今日頁 + 蓋上來的 sheet ── */
+.phone { position: relative; height: 300px; border-radius: var(--r-tab); overflow: clip;
+  background: var(--paper); border: 1px solid var(--rule); }
+.phone-body { padding: var(--s-4) var(--s-3); }
+.hero { font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero);
+  line-height: .95; font-variant-numeric: tabular-nums; }
+.hero-lbl { font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.gauge { height: 8px; border-radius: 4px; background: var(--rule); margin: var(--s-3) 0 var(--s-4);
+  overflow: clip; }
+.gauge > i { display: block; height: 100%; width: 48%; background: var(--accent); }
+.phone .items { display: grid; gap: var(--s-1); }
+.scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 55%, transparent); }
+.scrim.blur { backdrop-filter: blur(var(--b, 16px)); -webkit-backdrop-filter: blur(var(--b, 16px)); }
+.knob { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-3) 0 0;
+  font-size: var(--t-sm); color: var(--ink-muted); }
+.knob input { flex: 1; accent-color: var(--accent); }
+.knob output { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600;
+  min-width: 4ch; text-align: right; }
+.mini-sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 38%;
+  background: var(--card); border-radius: var(--r-btn) var(--r-btn) 0 0; padding: var(--s-2) var(--s-3); }
+.handle { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--rule);
+  margin: 0 auto var(--s-3); }
+.sheet-title { font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md);
+  margin: 0 0 var(--s-2); }
+
+/* ── ③ 字重 ── */
+.node-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-2);
+  min-height: 44px; padding: 0 0 var(--s-2); border-bottom: 1px solid var(--rule); }
+.node-name { font-size: var(--t-md); line-height: 1.2; letter-spacing: var(--track-md); }
+.node-kcal { font-size: var(--t-base); font-weight: 600; line-height: 1.2;
+  font-variant-numeric: tabular-nums; }
+.w700 .node-name { font-weight: 700; }
+.w600 .node-name { font-weight: 600; }
+.node-body { margin-top: var(--s-2); display: grid; gap: var(--s-1); }
+
+/* ── ④ 長按選字 ── */
+.card { background: var(--card); border-radius: var(--r-tab); padding: var(--s-3); }
+.card .row { display: flex; justify-content: space-between; align-items: center;
+  min-height: 44px; gap: var(--s-3); }
+.chip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--s-3);
+  border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent);
+  font-size: var(--t-sm); font-weight: 600; border: 1px solid var(--accent); }
+.card-lbl { font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted);
+  margin: 0 0 var(--s-2); }
+.noselect .chip, .noselect .card-lbl, .noselect .kc, .noselect .qty {
+  user-select: none; -webkit-user-select: none; }
+
+.note { background: var(--card); border-left: 3px solid var(--accent); border-radius: 0 var(--r-tab) var(--r-tab) 0;
+  padding: var(--s-3) var(--s-4); margin: 0 0 var(--s-6); color: var(--ink-muted); max-width: 52ch; }
+.note b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>四項微調，左右對照</h1>
+<p class="lede">左邊是<b>現在的樣子</b>，右邊是<b>改後</b>。四項各自獨立，你可以只挑其中幾項。</p>
+
+<p class="note"><b>第一項最重要，而且一定要動手拖才感覺得到。</b>其餘三項用看的就行。
+這頁沒載 Archivo 數字字體，所以數字寬度跟你手機上不一樣——那不是這次要比的東西。</p>
+
+<!-- ① 左滑放手 -->
+<section>
+  <h2>① 左滑刪除，放手之後</h2>
+  <p class="why">兩邊都往左拖看看，尤其<b>快速甩一下再放手</b>。左邊不管你甩多快，都用同一段時間、同一條路線滑回去。右邊會接著你手指離開時的速度繼續跑，甩得快就衝得遠一點再穩下來。</p>
+  <div class="pair">
+    <div class="side">
+      <p class="tag">現在：固定時間滑回去</p>
+      <div class="stage" id="rowA"></div>
+    </div>
+    <div class="side new">
+      <p class="tag">改後：接著你的手勁</p>
+      <div class="stage" id="rowB"></div>
+    </div>
+  </div>
+  <p class="how"><b>怎麼看：</b>慢慢拖放手，兩邊幾乎一樣。<b>快速甩一下</b>，差別才出來——這就是「像 app」跟「像網頁」的那一下。</p>
+</section>
+
+<!-- ② scrim -->
+<section>
+  <h2>② 記一筆拉起來的時候，背後那層</h2>
+  <p class="why">面板拉起來時，後面的今日頁現在只是被壓暗。右邊多一層模糊，跟 iOS 拉起面板時一樣。</p>
+  <div class="pair">
+    <div class="side">
+      <p class="tag">現在：只壓暗</p>
+      <div class="phone" id="phoneA"></div>
+    </div>
+    <div class="side new">
+      <p class="tag">改後：壓暗 ＋ 模糊</p>
+      <div class="phone" id="phoneB"></div>
+      <label class="knob">模糊<input type="range" id="blur" min="0" max="30" step="2" value="16">
+        <output id="blurOut">16px</output></label>
+    </div>
+  </div>
+  <p class="how"><b>怎麼看：</b>盯著上面那顆大數字跟綠色的量尺。<b>拖滑桿看要多模糊才有感</b>——
+    背景本來就壓暗了 55%，細節已經吃掉大半，模糊能加的東西可能比想像中少。
+    <b>如果怎麼調都覺得差不多，那這項的答案就是「不用做」。</b></p>
+</section>
+
+<!-- ③ 字重 -->
+<section>
+  <h2>③ 餐別標題的粗細</h2>
+  <p class="why">「早餐」「午餐」這種標題，現在是最粗的那一級。iPhone 內建的 app 在這個層級多半停在次粗一級。</p>
+  <div class="pair">
+    <div class="side">
+      <p class="tag">現在：最粗</p>
+      <div class="stage w700" id="mealA"></div>
+    </div>
+    <div class="side new">
+      <p class="tag">改後：次粗一級</p>
+      <div class="stage w600" id="mealB"></div>
+    </div>
+  </div>
+  <p class="how"><b>怎麼看：</b>只看「午餐」那兩個字。問題是——變細之後，它跟底下的食物名還分得夠開嗎？分不開就別改。</p>
+</section>
+
+<!-- ④ 長按 -->
+<section>
+  <h2>④ 長按會不會選到字</h2>
+  <p class="why">手機上長按畫面（電腦上用滑鼠拖過去），現在什麼都會被選成藍色一片，那是網頁才有的行為。右邊把按鈕跟標籤鎖起來，<b>但食物名跟數字仍然選得到</b>——那些你可能會想複製。</p>
+  <div class="pair">
+    <div class="side">
+      <p class="tag">現在：全部都選得到</p>
+      <div class="card" id="selA"></div>
+    </div>
+    <div class="side new">
+      <p class="tag">改後：只鎖介面，不鎖內容</p>
+      <div class="card noselect" id="selB"></div>
+    </div>
+  </div>
+  <p class="how"><b>怎麼看：</b>兩邊都長按「午餐」跟那顆綠色標籤——左邊選得起來，右邊選不動。再長按「雞胸肉便當」，<b>兩邊都選得到</b>，那是刻意留的。</p>
+</section>
+
+<script>
+/* ══ 極簡 spring 積分器 ══
+   參數語意跟 motion 的 spring 一樣（stiffness / damping / mass），實作時把同一組數字
+   餵給 motion 的 transition 即可。semi-implicit Euler，跟 motion 的物理模型同一套。 */
+function springTo(from, to, velocity, onUpdate, opts) {
+  const { stiffness = 500, damping = 42, mass = 1 } = opts || {}
+  /* 承接的速度要夾上限：不夾的話用力一甩會衝出去兩三百 px 再彈回來，那不是 iOS 手感是失控。
+     實測（playwright 的三步瞬移）不夾會衝到 -352px。1500 px/s 已經比真人甩得動的還快。 */
+  let x = from, v = Math.max(-1500, Math.min(1500, velocity)), last = performance.now(), raf
+  const step = (now) => {
+    const dt = Math.min((now - last) / 1000, 1 / 30); last = now
+    v += ((-stiffness * (x - to) - damping * v) / mass) * dt
+    x += v * dt
+    if (Math.abs(x - to) < 0.3 && Math.abs(v) < 3) { onUpdate(to); return }
+    onUpdate(x); raf = requestAnimationFrame(step)
+  }
+  raf = requestAnimationFrame(step)
+  return () => cancelAnimationFrame(raf)
+}
+
+const REVEAL = 56, OPEN_AT = 24            /* 跟 Today.tsx 同一組常數 */
+const TRASH = '<svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>'
+
+function buildRow(host, mode) {
+  host.innerHTML =
+    '<div class="item-row"><div class="item-main">' +
+      '<div class="item-delete-slot"><span class="del">' + TRASH + '</span></div>' +
+      '<div class="item-slide"><div class="item-content">' +
+        '<span class="nm-wrap"><span class="nm">雞胸肉便當</span><span class="qty">×2</span></span>' +
+        '<span class="kc">420 卡</span>' +
+      '</div></div>' +
+    '</div></div>'
+
+  const slide = host.querySelector('.item-slide')
+  let x = 0, open = false, dragging = false, startX = 0, startOffset = 0
+  let lastX = 0, lastT = 0, velocity = 0, cancelSpring = null
+
+  const paint = (v) => { x = v; slide.style.transform = 'translateX(' + v + 'px)' }
+
+  /* 放手後的吸附——兩邊唯一的差別就在這個函式 */
+  const settle = (target) => {
+    if (cancelSpring) cancelSpring()
+    if (mode === 'now') {
+      /* 現況：固定時長 + 固定曲線，跟手指多快完全無關 */
+      const dur = target === 0 ? 220 : 160
+      slide.style.transition = 'transform ' + dur + 'ms cubic-bezier(.4, 0, .2, 1)'
+      paint(target)
+      setTimeout(() => { slide.style.transition = '' }, dur)
+    } else {
+      /* 改後：承接手指離開時的速度 */
+      slide.style.transition = ''
+      cancelSpring = springTo(x, target, velocity, paint)
+    }
+  }
+
+  slide.addEventListener('pointerdown', (e) => {
+    if (cancelSpring) cancelSpring()
+    dragging = true; startX = e.clientX; startOffset = x
+    lastX = e.clientX; lastT = performance.now(); velocity = 0
+    slide.style.transition = ''
+    slide.setPointerCapture(e.pointerId)
+  })
+
+  slide.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    const next = Math.max(-140, Math.min(0, startOffset + (e.clientX - startX)))
+    const now = performance.now(), dt = now - lastT
+    if (dt > 0) { velocity = ((e.clientX - lastX) / dt) * 1000; lastX = e.clientX; lastT = now }
+    paint(next)
+  })
+
+  const end = () => {
+    if (!dragging) return
+    dragging = false
+    /* 甩得夠快就算開啟意圖，不然看拖了多遠——同 Today.tsx 的 flung 判斷 */
+    const flung = velocity < -400
+    open = flung || x < -OPEN_AT
+    if (velocity > 400) open = false
+    settle(open ? -REVEAL : 0)
+  }
+  slide.addEventListener('pointerup', end)
+  slide.addEventListener('pointercancel', end)
+}
+
+buildRow(document.getElementById('rowA'), 'now')
+buildRow(document.getElementById('rowB'), 'spring')
+
+/* ② 兩支手機畫面內容一模一樣，只有 scrim 那層不同 */
+function buildPhone(host, blur) {
+  host.innerHTML =
+    '<div class="phone-body">' +
+      '<p class="hero-lbl">還能吃</p>' +
+      '<div class="hero">957</div>' +
+      '<div class="gauge"><i></i></div>' +
+      '<div class="items">' +
+        '<div class="item-content"><span class="nm-wrap"><span class="nm">雞胸肉便當</span>' +
+          '<span class="qty">×2</span></span><span class="kc">420 卡</span></div>' +
+        '<div class="item-content"><span class="nm-wrap"><span class="nm">無糖豆漿</span></span>' +
+          '<span class="kc">130 卡</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="scrim' + (blur ? ' blur' : '') + '"></div>' +
+    '<div class="mini-sheet"><div class="handle"></div>' +
+      '<p class="sheet-title">午餐</p>' +
+      '<div class="item-content"><span class="nm-wrap"><span class="nm">滷雞腿飯</span></span>' +
+        '<span class="kc">680 卡</span></div>' +
+    '</div>'
+}
+buildPhone(document.getElementById('phoneA'), false)
+buildPhone(document.getElementById('phoneB'), true)
+
+/* ③ 兩邊同樣的內容，只有 .w700 / .w600 決定標題字重 */
+const mealHTML =
+  '<div class="node-head"><span class="node-name">午餐</span><span class="node-kcal">550 卡</span></div>' +
+  '<div class="node-body">' +
+    '<div class="item-content"><span class="nm-wrap"><span class="nm">雞胸肉便當</span>' +
+      '<span class="qty">×2</span></span><span class="kc">420 卡</span></div>' +
+    '<div class="item-content"><span class="nm-wrap"><span class="nm">無糖豆漿</span></span>' +
+      '<span class="kc">130 卡</span></div>' +
+  '</div>'
+document.getElementById('mealA').innerHTML = mealHTML
+document.getElementById('mealB').innerHTML = mealHTML
+
+/* ② 模糊強度滑桿——右邊那支手機專用 */
+const blurInput = document.getElementById('blur'), blurOut = document.getElementById('blurOut')
+blurInput.addEventListener('input', () => {
+  document.querySelector('#phoneB .scrim').style.setProperty('--b', blurInput.value + 'px')
+  blurOut.textContent = blurInput.value + 'px'
+})
+
+/* ④ 兩張卡內容一樣，差別只在右邊那張多一個 .noselect */
+const selHTML =
+  '<p class="card-lbl">午餐</p>' +
+  '<div class="row"><span class="nm-wrap"><span class="nm">雞胸肉便當</span>' +
+    '<span class="qty">×2</span></span><span class="kc">420 卡</span></div>' +
+  '<div class="row"><span class="chip">已記錄</span><span class="kc">共 550 卡</span></div>'
+document.getElementById('selA').innerHTML = selHTML
+document.getElementById('selB').innerHTML = selHTML
+</script>
+</body>
+</html>

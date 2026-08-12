@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
-import { DUR, sec } from '@/lib/durations'
+import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import { normalizeQty } from '@/lib/quantity'
@@ -385,9 +385,18 @@ function SwipeRow({
      彈性區搆得到，同一個手勢在手機與桌機的手感會不一樣 */
   const fullSwipeAt = () => Math.min((rowRef.current?.offsetWidth ?? 320) * FULL_AT, 200)
 
+  /* 放手瞬間的橫向速度，交棒給吸附用的 spring（v2.38）。**motion 不會自己交棒**——
+     實測（e2e 探針，慢拖 vs 快甩同樣放手在 -90）兩者過衝都是 0，spring 一律從靜止起跑。
+     `dragMomentum={false}` 關掉的是 motion 自己那套慣性滑行，連帶也沒有把速度傳下去，
+     所以要自己記一份餵給 transition 的 `velocity`。
+     **夾上限**：對照 demo 實測不夾的話用力一甩會衝出去兩三百 px 再彈回來，那不是 iOS
+     手感是失控；1500 px/s 已經比真人甩得動的還快。 */
+  const releaseVel = useRef(0)
+
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
     blockClickUntil.current = Date.now() + CLICK_GRACE_MS
+    releaseVel.current = Math.max(-1500, Math.min(1500, info.velocity.x))
     const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
     if (moved < -fullSwipeAt()) {
@@ -435,7 +444,18 @@ function SwipeRow({
           dragConstraints={{ left: -280, right: 0 }}
           dragElastic={{ left: 0.4, right: 0 }}
           animate={{ x: open ? -REVEAL : 0 }}
-          transition={quick ? { duration: 0 } : { duration: sec(open ? DUR.base : DUR.mid), ease: EASE }}
+          /* v2.38：吸附改 spring 並手動交棒放手速度（見上方 releaseVel 與 durations.ts）。
+             **速度只在「往左開啟」那個方向交棒，收合一律從靜止起跑**（`open ? ... : 0`）。
+             收合那半刻意不吃 velocity，是因為 `onAnimationComplete` 靠不住：**動畫被打斷時
+             motion 不會呼叫它**（`JSAnimation.stop()` 只發 onStop），而 transition 物件是
+             render 當下就把 ref 的值烘進去的。於是「用力甩開 A 列 → 開啟動畫還沒跑完就去點
+             B 列」會讓 A 的**被動收合**帶著 A 剛才那一甩的殘留速度，往開的方向先衝約 16px
+             再關回去——方向與動作相反（precommit review 抓到，已對 motion 原始碼證實）。
+             歸零仍留著當第二道保險，但正確性不靠它。
+             代價：手勢往右甩關閉不再承接速度。可接受——`dragConstraints.right` 與
+             `dragElastic.right` 都是 0，那個方向本來就沒有多少動態可承接。 */
+          transition={quick ? { duration: 0 } : { ...SETTLE_SPRING, velocity: open ? releaseVel.current : 0 }}
+          onAnimationComplete={() => { releaseVel.current = 0 }}
           onDragStart={() => {
             blockClickUntil.current = Infinity
             // 編輯區不在 .item-slide 裡（它不跟著位移），拖曳中留著會變成「上半條在動、

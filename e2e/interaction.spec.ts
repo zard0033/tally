@@ -283,3 +283,45 @@ test('日期快取 5 — 慢請求在使用者已經切回今天之後才落地�
     `今天的畫面被較早發出的慢請求蓋掉了：頁首「${title}」但品項剩 ${after} 筆（應為 ${todayItems}）`,
   )
 })
+
+/* v2.38 四項 iOS 微調的 CSS 面迴歸鎖。手感（spring 過衝）鎖不了——桌面模擬不出真人甩動的
+   速度量級，而過衝只有幾 px；但四項裡真正靜默壞掉的方式全是「值被改回去／漏改一半」，
+   那些比對 computed style 就擋得住。**這條的存在理由是它抓過真的東西**：v2.38 把
+   `.node-name` 改 600 卻漏了 `.todo-row .lb`，兩種餐別標題並排在同一條時間軸上字重不一致，
+   截圖看過也沒看出來，是 precommit review 抓到的。 */
+test('v2.38 四項微調的 CSS 沒有被改回去', async ({ page }) => {
+  await openApp(page)
+  const s = await page.evaluate(() => {
+    const g = (sel: string, prop: string) => {
+      const el = document.querySelector(sel)
+      if (!el) return `NO-EL(${sel})`
+      return (getComputedStyle(el) as unknown as Record<string, string>)[prop] ?? 'undef'
+    }
+    return {
+      mealDone: g('.node-name', 'fontWeight'),
+      mealTodo: g('.todo-row .lb', 'fontWeight'),
+      itemName: g('.item .nm', 'fontWeight'),
+      tabSelect: g('.tabbar .tab', 'webkitUserSelect'),
+      nameSelect: g('.item-content .nm', 'webkitUserSelect'),
+    }
+  })
+  // 兩種餐別標題必須同重——漏改一邊正是這條要擋的
+  check(s.mealDone === s.mealTodo, `已記錄與待記錄的餐別標題字重不一致：${s.mealDone} vs ${s.mealTodo}`)
+  check(s.mealDone === '600', `餐別標題字重應為 600（v2.38），實際 ${s.mealDone}`)
+  // 與品項名仍要差開，否則層級塌掉
+  check(s.itemName === '400', `品項名字重應維持 400，實際 ${s.itemName}`)
+  // 長按只鎖控件、不鎖內容
+  check(s.tabSelect === 'none', `分頁應鎖住不可選取，實際 ${s.tabSelect}`)
+  check(s.nameSelect === 'text', `品名應保持可選取（使用者自己輸入的資料），實際 ${s.nameSelect}`)
+
+  // scrim 的模糊：值可以再調，但屬性不能不見（真機確認前它是唯一的看門狗）
+  await page.locator('button[aria-label="記一筆"]').click()
+  await page.waitForTimeout(500)
+  const bf = await page.evaluate(() => {
+    const el = document.querySelector('.scrim')
+    if (!el) return 'NO-SCRIM'
+    const st = getComputedStyle(el)
+    return st.backdropFilter || (st as unknown as Record<string, string>).webkitBackdropFilter
+  })
+  check(/blur\(/.test(bf), `scrim 的 backdrop-filter 不見了：${bf}`)
+})

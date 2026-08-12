@@ -101,6 +101,16 @@ body {
 .screen svg { stroke: currentColor; fill: none; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 
+/* v2.38：長按控件不要跳出選字（原生 app 不會這樣）。**只鎖控件，不鎖內容** ——
+   全域一刀切會連品名與營養數字都選不起來，那是無障礙的常見抱怨，而且這裡的資料是
+   使用者自己輸入的。全站可點的東西一律是原生 button（見「語意與鍵盤」），所以鎖
+   button 就等於鎖住所有控件；唯一要解回來的是**被包在 button 裡的內容**——品項列
+   `.item-content` 本身是 button（點了展開編輯），但它裡面的品名與熱量是資料不是標籤。
+   餐別小計 `.node-kcal` 不解鎖：那是算出來的數字，不是誰輸入的。 */
+button { -webkit-user-select: none; user-select: none; }
+.item-content .nm, .item-content .qty, .item-content .kc, .item-content .vendor {
+  -webkit-user-select: text; user-select: text; }
+
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 [hidden] { display: none !important; }
@@ -193,7 +203,9 @@ body {
 .node-head:active { opacity: .5; }
 .node-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
   border-radius: var(--s-1); }
-.node-name { font-weight: 700; font-size: var(--t-md); line-height: 1.2;
+/* v2.38：700 → 600。SF 的 UI 字重階梯在這個層級多半停在 semibold，700 偏重。
+   與品項名（400）仍差兩級，層級沒有塌掉。 */
+.node-name { font-weight: 600; font-size: var(--t-md); line-height: 1.2;
   letter-spacing: var(--track-md); }
 .node-kcal { font-family: var(--font-num); font-size: var(--t-base); font-weight: 600;
   line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -355,7 +367,11 @@ body {
 .todo-row:active { opacity: .5; }   /* 手機沒有 hover，按下必須立刻有回饋 */
 .todo-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--s-2); }
 .todo-row:disabled { cursor: default; }   /* 不淡化——這一行同時是「這餐還沒記」的資訊 */
-.todo-row .lb { font-weight: 700; font-size: var(--t-md); line-height: 1.2;
+/* v2.38：跟著 .node-name 一起 700→600。**這兩條是一組的**——同一條時間軸上「午餐（已記錄）」
+   與「晚餐（待記錄）」是同一個 `meal.label`，只改一邊會讓相鄰兩列字重不一致（precommit
+   review 抓到，我改的時候漏了，而且截圖看過也沒看出來）。改任一邊要同時改另一邊，
+   `e2e/interaction.spec.ts` 有一條鎖住兩者相等。 */
+.todo-row .lb { font-weight: 600; font-size: var(--t-md); line-height: 1.2;
   letter-spacing: var(--track-md); }
 .todo-row .chev { width: 14px; height: 14px; color: var(--ink-muted); }
 
@@ -728,8 +744,24 @@ body {
 .date-today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ═══════════ 記一筆 sheet ═══════════ */
+/* v2.38：壓暗之外再加一層模糊。前綴不可省（同「區塊分隔」的 mask-image，舊 iOS Safari
+   只認 -webkit-）。16px 這個值的來源要講清楚：是**在 headless WebKit 上截對照 demo
+   （`_design-sample/ios-tuning-compare.html`）的畫面比出來的**——那頁的模糊在同一支引擎上
+   render 得出來，10px 以下在 55% 壓暗底下跟沒加幾乎分不出來（壓暗已經先吃掉大半細節）。
+   **不是真機比的、也沒有使用者拉滑桿的讀數**，真機看過之後可能要重調。
+
+   **⚠ 這條在 e2e 的 headless WebKit 裡看不出效果，尚未真機確認（v2.38 留下的未解）**：
+   computed style 完全正確（`pos=fixed bf=blur(16px)`，值拉到 40px 也照樣回報），截圖卻
+   一點都沒糊——日期膠囊那條 1px 邊框仍然銳利。診斷六輪未定案，而且**對照實驗本身自相
+   矛盾**：同樣 absolute 的測試層，帶 background 的糊得起來、不帶的糊不起來，所以「fixed
+   vs absolute」那個結論不成立，position 因此**維持原本的 fixed 不動**（它跟 v2.35 的
+   `--vvtop` 判準綁在一起，不拿一個沒控好變因的實驗去動它）。
+   高度懷疑是 headless WebKit 的合成行為與真機不同——同一支引擎跑對照 demo 時模糊是
+   **有效的**，差別只在那頁的模糊層有個 `overflow: clip` 的祖先。真機若也沒效果，下一步
+   從「給模糊層一個 overflow:clip／contain 的祖先」試起，別再重跑 position 那條路。 */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   -webkit-appearance: none; appearance: none; }
 /* 進場動畫只給 Settings 的手刻 sheet——LogSheet 的 scrim 是 vaul Overlay，動畫由
    vaul 的 [data-state] 單軌驅動（LogSheet.tsx 的覆寫塊）。base class 掛動畫會跟

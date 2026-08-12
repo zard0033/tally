@@ -17,3 +17,13 @@ export const DUR = {
 
 /** motion 吃的是秒 */
 export const sec = (ms: number) => ms / 1000
+
+/* 手勢放手後的吸附——四級階梯的**唯一例外**（v2.38）。固定時長不管手指離開時多快，
+   都跑同一條曲線同一段時間；spring 會承接那個速度，甩得快就多衝一點再穩下來。
+   階梯管的是「畫面自己要花多久」，這裡管的是「接住使用者的手」，兩件事。
+
+   參數與 `_design-sample/ios-tuning-compare.html` 的對照 demo 同一組（那邊是手寫積分器，
+   stiffness／damping／mass 的語意跟 motion 的 spring 相同）。stiffness 500 ／ damping 42
+   落在臨界阻尼（2√500 ≈ 44.7）之下一點，所以會有小幅過衝——demo 實測過衝約 6px，
+   看得出來但不誇張；damping 調到 45 以上就完全不過衝，也就失去「接住手勁」的訊號。 */
+export const SETTLE_SPRING = { type: 'spring', stiffness: 500, damping: 42 } as const
