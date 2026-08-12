@@ -87,22 +87,34 @@ function filterPendingRow(
 
 /* `?debug` 才掛載的鍵盤讀數列。[追加] spec 外，理由：iOS 鍵盤這題已經三輪沒收掉，
    每一輪都只帶回「還是怪怪的」而沒有量測值。有這條之後，真機不管過不過都會回來一組
-   數字——尤其是 `sheet inline`，它就是「vaul 還在不在寫 inline style」的直接證據。
+   數字——尤其是 `sheetInline`，它就是「vaul 還在不在寫 inline style」的直接證據。
    輪詢而不是掛 resize：vaul 改 inline style 不發事件，非得自己回頭看不可。
-   `?debug` 沒帶就整個不渲染，也不起計時器；e2e 不帶這個參數。 */
+
+   **標籤刻意寫長**（`vvH` / `winH` / `sheetRect h`）：這東西唯一的用途是判讀真機截圖，
+   而畫面上同時有三個「高度」，縮寫成 h 讀截圖時分不出誰是誰（review 抓到）。
+
+   **為什麼不鎖 `import.meta.env.DEV`**（review 提的，這裡是刻意選擇）：要驗的正是
+   GitHub Pages 上那份 production build——鎖了 DEV 就等於這個工具在唯一需要它的場合
+   不存在。**代價是它隨正式版出貨、任何人加 `?debug` 都能開**：目前印的四個值全是版面
+   幾何（CSS 變數、viewport 尺寸、元素 rect），不含任何帳號或 session 資料，**往這顆
+   面板加東西前先確認這句話還成立**；哪天要印的東西沾到使用者資料，就該連同這個決定
+   一起重來。鍵盤三題收掉之後這整段可以直接刪。
+   旗標只在整頁載入時讀一次——不支援 app 內改 query string 即時開關，也不需要。 */
 function KbDebug() {
   const [txt, setTxt] = useState('')
   useEffect(() => {
     const read = () => {
       const vv = window.visualViewport
+      /* 只抓第一個 `.sheet`：目前不會有兩個 sheet 同時掛載（LogSheet 在今日頁、
+         食品庫新增在設定分頁下，互斥）。真的同時開了，這裡讀到的就不一定是手上那個。 */
       const sheet = document.querySelector<HTMLElement>('.sheet')
       const r = sheet?.getBoundingClientRect()
       setTxt(
         [
-          `--kb=${document.documentElement.style.getPropertyValue('--kb') || '(unset)'}`,
-          `vv=${vv ? Math.round(vv.height) : '?'}/${window.innerHeight} top=${vv ? Math.round(vv.offsetTop) : '?'}`,
-          `sheet inline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'}`,
-          r ? `rect t=${Math.round(r.top)} h=${Math.round(r.height)}` : 'no sheet',
+          `kbVar=${document.documentElement.style.getPropertyValue('--kb') || '(unset)'}`,
+          `vvH=${vv ? Math.round(vv.height) : '?'} winH=${window.innerHeight} vvTop=${vv ? Math.round(vv.offsetTop) : '?'}`,
+          `sheetInline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'}`,
+          r ? `sheetRect top=${Math.round(r.top)} h=${Math.round(r.height)}` : 'sheetRect=(none)',
         ].join('  '),
       )
     }
@@ -113,7 +125,7 @@ function KbDebug() {
   return <div className="kb-debug">{txt}</div>
 }
 
-const DEBUG_KB = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')
+const DEBUG_KB = new URLSearchParams(window.location.search).has('debug')
 
 export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入
