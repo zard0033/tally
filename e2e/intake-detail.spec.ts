@@ -196,3 +196,27 @@ test('改完切到別天再切回來（走快取）：新值還在，不會被�
   await expect(page.locator(`${ROW} .nm`)).toContainText('（去皮）')
   await expect(page.locator(`${ROW} .kc`)).toHaveText('500')
 })
+
+/* 使用者真機回報「新加的營養素欄框線顏色跟份量／餐別不一樣」。量下來不只是不搭：
+   --rule 對編輯區底色 --raised 只有 1.24:1、舊的 --rule-field 也只有 2.90:1，兩邊
+   都沒過 WCAG 1.4.11 的 3:1。統一成調深後的 --rule-field（raised 3.11:1）。
+   顏色回歸肉眼難察，用 getComputedStyle 釘住——斷言「看得到框線」在顏色跑掉時照樣綠。 */
+test('編輯區四排控件的框線同色，且不是舊的淺色 --rule', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+
+  const borderOf = (sel: string) =>
+    page.locator(`${ROW} ${sel}`).first().evaluate((el) => getComputedStyle(el).borderTopColor)
+
+  const [stepper, seg, nameField, macroField] = await Promise.all([
+    borderOf('.qty-value'),
+    borderOf('.seg'),
+    borderOf('.ed-detail .field-float input'),
+    borderOf('.ed-detail .field-row input'),
+  ])
+
+  expect(new Set([stepper, seg, nameField, macroField]).size, `四排框線不同色：${[stepper, seg, nameField, macroField].join(' / ')}`).toBe(1)
+  expect(stepper, '不該退回 --rule #E0D3BD').not.toBe('rgb(224, 211, 189)')
+  expect(stepper, '該是調深後的 --rule-field #9A8069').toBe('rgb(154, 128, 105)')
+})
+

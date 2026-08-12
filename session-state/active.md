@@ -14,7 +14,7 @@
   **已上線＝v2.30**（`a7ddb26`）；**v2.31 待 push**＝今日頁就地編輯區加品名與四個營養數字
   （只動那一筆 intake，不動 foods），含 schema 變更 `intake.name`。
 - **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **69/69 全綠**（約 1.5 分，十個 spec 檔；條數以實跑輸出為準，別用舊數字加本輪新增外推）。長年偶發的 `meal-exit-animation` flaky 在
+  **70/70 全綠**（約 1.5 分，十個 spec 檔；條數以實跑輸出為準，別用舊數字加本輪新增外推）。長年偶發的 `meal-exit-animation` flaky 在
   worker 壓到 2 之後穩定了——根因是並行壓力，不是動畫時序。各檔涵蓋範圍見 CLAUDE.md。
 - **e2e 的跑法（v2.25 改）**：webServer 跑 `npm run build && npm run preview`，站在
   **port 5501**，跟開發用的 5500 分開——所以 `npm run dev` 可以一直開著不必為了跑測試關掉。
@@ -105,9 +105,11 @@
 1. **v2.31 已 push**（2026-08-11，`73c9b14`）。今日頁就地編輯區加品名／熱量／蛋白質／
    脂肪／碳水，只 PATCH 那一筆 intake、foods 零寫入。schema 由使用者實跑
    `alter table intake add column name text;`。**唯一未驗的一項＝真 DB**：e2e 全打 stub，
-   `select` 字串現在含 `name`，那欄在線上存不存在只有部署後開今日頁才知道——**今日頁若
-   載不出來，第一個要查的就是它**。實作偏離 AC 一處已申報：數字填錯改成「當場還原＋
-   sr-only 播報」而不是顯示「存不進去」（後者是 PATCH 失敗專用句）。
+   `select` 現在含 `name`，那欄在線上存不存在只有部署後開今日頁才知道——**今日頁若載不
+   出來，第一個查它**。
+   **v2.32 待 push**：控件邊界統一 `--rule-field` 並把它調深到 `#9A8069`——真機回報
+   「框線顏色不一致」，量下來新舊兩色對 `--raised` 都沒過 WCAG 的 3:1。通則見
+   DESIGN.md v2.32：**一個對比度 token 只在它被校準的那個底色上有效，換 surface 要重算**。
 
 2. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05 收工於此）。
    走完 dev-flow 前段，**規模判為「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。

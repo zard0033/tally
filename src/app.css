@@ -51,10 +51,13 @@
   /* 表面 */
   --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
   --rule: #E0D3BD; --rule-subtle: #ECE1CD;
-  /* 輸入框邊界專用：--rule 對 paper 只有 1.37:1，而輸入框的底色 --paper 對
+  /* 控件邊界專用：--rule 對 paper 只有 1.37:1，而輸入框的底色 --paper 對
      sheet 底 --card 幾乎沒有色差，邊框是唯一的邊界線索，WCAG 1.4.11 要 3:1。
-     此色對 paper 實算 3.22:1（不是目測）。只用於輸入框，分隔線仍用 --rule */
-  --rule-field:   #9F8570;
+     **v2.32 從 #9F8570 調深到 #9A8069**：舊值只照 --paper 校準（3.22:1），搬到
+     今日頁編輯區那塊更深的 --raised 上就掉到 2.90:1、悄悄不合格了。新值對三種
+     表面全部實算過關——raised 3.11、card 3.53、paper 3.44——一個 token 走遍全站，
+     不必為每種底色各養一個。只用於控件邊界，**內容分隔線仍用 --rule**。 */
+  --rule-field:   #9A8069;
   /* 文字 */
   --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
   /* 主色 jade */
@@ -317,14 +320,19 @@ body {
 /* 餐別分段控制器：互斥四選一，與 stepper 同一個形狀家族（--r-tab、格與格緊貼、
    接縫收直角）。記一筆 sheet 那排可捲動的 pill chip 不動——那裡是「切換瀏覽哪一餐」，
    語意與這裡的「把這一筆改成哪一餐」不同。 */
+/* 外框用 --rule-field 而不是 --rule：這是控件邊界（WCAG 1.4.11 要 3:1），而 --rule
+   對編輯區底色 --raised 只有 1.24:1。v2.31 在同一塊卡片裡加了一組 --rule-field 的
+   輸入框之後，深淺兩種框線並排的差異才變得明顯——但真正的問題不是不一致，是這條
+   本來就不合格（使用者回報「顏色不符」時量出來的）。內部分隔線同步，否則外框深、
+   內線淺會讀成兩個元件疊在一起。 */
 .seg { display: flex; flex: 1; min-width: 0; background: var(--card);
-  border: 1px solid var(--rule); border-radius: var(--r-tab); overflow: hidden; }
+  border: 1px solid var(--rule-field); border-radius: var(--r-tab); overflow: hidden; }
 .seg button { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s-1);
   border: none; background: none; font-family: inherit; font-size: var(--t-sm);
   color: var(--ink-muted); white-space: nowrap; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
-.seg button + button { border-left: 1px solid var(--rule); }
+.seg button + button { border-left: 1px solid var(--rule-field); }
 /* 選中態：--accent-soft 對 --card 只有 1.22:1，跟分頁列同一筆帳——顏色只買到色相差，
    所以另配字重 600 當非顏色訊號（分頁列用的是描邊加粗，同一個原則的不同手段）。 */
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
@@ -846,7 +854,10 @@ body {
   padding: var(--s-1) 0; }
 .food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
 .qty-stepper { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
-.qty-btn { width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: var(--r-tab);
+/* 邊框用 --rule-field（控件邊界，WCAG 1.4.11 要 3:1）——理由與 .seg 那條同一筆帳。
+   stepper 兩處都在用（記一筆的食物列在 --card 上、今日頁編輯區在 --raised 上），
+   換成同一個 token 之後兩種底色都過門檻，不必分別開色。 */
+.qty-btn { width: 44px; height: 44px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
   background: var(--card); color: var(--ink); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
@@ -870,7 +881,7 @@ body {
 /* 42px：把加減鈕之間的間距收成 0，44＋42＋44 剛好 130px 上限，數字框從 34 長到 42。
    「觸控區 ≥44」與「整組上限 130px」兩條規則原本互不相容，程式默默選了後者；
    拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
-.qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule);
+.qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule-field);
   border-radius: var(--r-tab); background: var(--paper); font-family: var(--font-num);
   font-size: var(--t-md); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
