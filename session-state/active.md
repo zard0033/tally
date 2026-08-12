@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-12（v2.34 已 push、真機驗出剩一半；v2.35 補 `--vvtop` 本地待 push，見續點 1）
+最後更新：2026-08-12（v2.36 已上線；**iOS 鍵盤三題全數真機驗過、結案**。續點 1 是移除 debug 面板）
 
 > 這是**覆寫式快照**，不是流水帳。已完成輪次的施工細節看 `git log`；2026-07-30 手術前的
 > 完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
@@ -11,10 +11,10 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎（v2.21→
   v2.23 三輪演進）＋食品庫管理與設定頁重構（v2.22）。細節見 DESIGN.md 版本紀錄。
-  **已上線＝v2.34**（`8c98bc9`）：v2.31 就地編輯區加品名與營養值（schema 加 `intake.name`）、
+  **已上線＝v2.36**（`7f6cb4d`）：v2.31 就地編輯區加品名與營養值（schema 加 `intake.name`）、
   v2.32 控件邊界統一 `--rule-field` ＋ sheet 吃 `--kb`、v2.33 多欄輸入包 `<form>`、
-  v2.34 走 vaul 的 sheet 一律 `repositionInputs={false}` ＋ `?debug` 讀數列。
-  **本地 commit 未 push＝v2.35**＝補 `--vvtop`（見續點 1）。
+  **v2.34–v2.36 iOS 鍵盤三題**（走 vaul 的 sheet 一律 `repositionInputs={false}`
+  ＋ sheet 的 top 吃 `--vvtop` ＋ `?debug` 讀數列）——**三題已全數真機驗過、結案**。
 - **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **73/73 全綠**（約 1.5 分，十個 spec 檔；**條數以實跑輸出為準**——2026-08-12 又漏算一條
   被 review 抓到，改文件前先跑一次比心算快）。各檔涵蓋範圍見 CLAUDE.md。
@@ -41,6 +41,11 @@
   在 viewBox 裡的位置，量元素框查不出來（用 `getBBox()`）② `select` 文字放不下不會有
   ellipsis，只是安靜切掉 ③ 全域元件搬進新容器要重驗（`.pick-bar-btn` 進 flex row 溢出
   96px）。**照肉眼改，①會改錯地方、③會整條漏掉。**
+- **真機讀數的兩個判讀陷阱（v2.36 各踩一次，全文在 DESIGN.md v2.36）**：① iOS Safari 的
+  `getBoundingClientRect()` 相對 **visual viewport**，不是 layout viewport——`--vvtop` 修好
+  之後 `sheetRect top` 讀起來跟「完全沒生效」一模一樣，差點往回改。判別靠**同吃一個變數的
+  另一個元素**有沒有跟著動，不是盯著單一數字猜。② **指紋要先於一切數字被檢查**：讀數與本機
+  對不上時，第一個該懷疑的是手機拿到快取的舊 `index.html`，不是修法。
 - **e2e stub（`e2e/stub.ts`）不看 query 參數／filter**，只按 table+method 回同一份 fixture。
   兩個後果：食品庫的分頁資料差異測不了；`intake` 的 PATCH 不反映在後續 GET，所以**任何
   「重整後還在」的斷言都驗不到真持久化**，只驗得到 App 本地 state 與 `cacheRef`。
@@ -82,21 +87,11 @@
 
 ## 下次續點
 
-1. **iOS 鍵盤三題**（v2.31–v2.33 的 `intake.name` 與框線同色已真機驗過 OK，不必再驗）。
-   三個症狀：① 鍵盤彈出時底部欄位被切掉；② 鍵盤收起後確認鈕停在畫面中間不回位；
-   ③ sheet 裡上下箭頭切到一半斷（**兩處就地編輯都正常**）。
-   **v2.34 真機結果（讀數截圖）**：品名欄 `vvTop=0`、`sheetInline h=- b=-`、
-   `sheetRect top=96 h=337` 貼齊 `vvH=433`——**①② 在 `vvTop=0` 的欄位上已修好**，
-   vaul 不再寫 inline style。碳水欄則整個畫面上移、連讀數列自己都被推不見
-   → **v2.35 補 `--vvtop` 修這半，待驗**。
-   **③ 已修好，此題結案**（2026-08-12 真機「不會斷掉」）：元凶是 vaul `onFocus` 裡那段
-   `translateY(-2000px)` ＋ 手動 `scrollIntoView`，關 `repositionInputs` 時順手帶走的。
-   從 v2.32 追到這裡換過三個嫌疑（焦點順序、可視性、Autocomplete），沒有一個是。
-   **①② 仍待驗，而且上一份讀數不算數**：那張截圖的特徵（讀數列貼在 safe-area、
-   `sheetRect top=96`）都符合 **v2.34**，不是 v2.35——本機已證明 CSS 端正常（設 root 的
-   `--vvtop` 後 `computedTop` 96px→227px），所以最可能是 Safari 拿到快取的舊 `index.html`。
-   **讀數列因此加了 `build=<bundle hash>` 指紋**，下次先對它：跟
-   `curl -s <站台>/ | grep index-` 抓到的檔名一致才往下看。
+1. **移除 `?debug` 讀數列（`KbDebug` ＋ `.kb-debug` ＋ `BUNDLE_ID`）**——iOS 鍵盤三題
+   2026-08-12 已全數真機驗證通過、結案（全文見 DESIGN.md v2.34–v2.36），它的存在理由
+   到此結束。**留著就是一個隨正式版出貨、任何人加 `?debug` 就能開的面板**（security
+   review 提過兩次，當時的答覆是「要驗的正是 production build」——現在不成立了）。
+   `ponytail:` 已標在 App.tsx 那段註解裡。**動 UI 前若又需要它，從 git 撿回來比留著便宜。**
 
 2. **「做起來更有 iOS app 質感」——已談定範圍，尚未開工**（2026-08-12 使用者提出）。
    範圍是**五個面向全部**：彈簧物理的滑動手感、半透明材質與模糊、大標題摺疊、觸覺回饋
@@ -132,12 +127,15 @@
 描述不是使用者利益、逼出三選一的範圍題；Musk 在 spec 砍掉上述兩件事> 釐清<完成，AskUserQuestion
 兩題> spec<完成，AC 六條> plan<完成，六步> ★核可<通過> 實作<未開始> 收尾<未到> 蒸餾<見下>
 
-**蒸餾（四條，都關於「停在第一個看起來對的答案」；②③ 全文已升格 DESIGN.md v2.33／v2.34）**：
+**蒸餾（五條，都關於「停在第一個看起來對的答案」；②③ 全文已升格 DESIGN.md v2.33／v2.34）**：
 ① 待決清單記的位置往往只是「當時看到的那一處」，**收零碎項時要重搜一次**（`aria-current`）。
 ② 症狀有兩個面向時，一個原因解釋得通不代表另一個面向也被它解釋了（v2.32→v2.33）。
 ③ **懷疑「我寫的 CSS 沒生效」時，先查有沒有第三方在寫 inline style**（v2.34 讀 vaul 原始碼）。
 ④ **真機回報的因果先擱著，直接問「還有哪裡不一樣」**（v2.35）：「注音會推、數字不會」聽起來
 是鍵盤類型，實際是欄位位置。這題四輪、四次被症狀的自然描述帶向錯的變因，四次都靠對照組轉向。
+⑤ **iOS 鍵盤三題最後是同一個開關**（vaul `repositionInputs`）。五輪裡我一直在問「這個症狀
+為什麼會發生」，沒問過「這三個症狀有沒有可能是同一個東西」——**症狀清單本身就是線索，
+在追第一條之前先看它們有沒有共同的上游。**
 
 ## 教訓指標（本體已升格，這裡只留指標）
 

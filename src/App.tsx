@@ -98,7 +98,10 @@ function filterPendingRow(
    不存在。**代價是它隨正式版出貨、任何人加 `?debug` 都能開**：目前印的四個值全是版面
    幾何（CSS 變數、viewport 尺寸、元素 rect），不含任何帳號或 session 資料，**往這顆
    面板加東西前先確認這句話還成立**；哪天要印的東西沾到使用者資料，就該連同這個決定
-   一起重來。鍵盤三題收掉之後這整段可以直接刪。
+   一起重來。
+   ponytail: 三題已於 2026-08-12 全數結案（DESIGN.md v2.36），**這整段現在就該刪**
+   ——`KbDebug` ＋ `BUNDLE_ID` ＋ `DEBUG_KB` ＋ app.css 的 `.kb-debug`，四處一起。
+   已排進 session-state 續點 1。之後若又需要，從 git 撿回來比留著便宜。
    旗標只在整頁載入時讀一次——不支援 app 內改 query string 即時開關，也不需要。 */
 function KbDebug() {
   const [txt, setTxt] = useState('')
