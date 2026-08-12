@@ -355,6 +355,36 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   expect(btn.y + btn.height, '「加入食品庫」被擠出 sheet 了').toBeLessThanOrEqual(after.y + after.height + 1)
 })
 
+/* v2.35：`--vvtop` 補的是**位移**，跟上面那條 `--kb` 補的**高度**是兩件事。
+   欄位落在表單下半部時，iOS 會把整個 layout viewport 往上捲去讓它露出來，而
+   `position: fixed` 是釘在 layout viewport 上的，於是 sheet 整個被推出可見區——真機
+   截圖：點碳水欄，「新增食物」標題貼到螢幕最頂、確認鈕掉到鍵盤底下，連 `?debug` 讀數列
+   自己都被推不見了。點品名欄則 `vvTop=0`、一切正常，兩者的差別只有欄位位置。
+
+   **兩條接線鎖都要留**：`--kb` 斷了 sheet 不會縮、`--vvtop` 斷了 sheet 不會下移，
+   兩種靜默失效在桌面看起來都一模一樣（`visualViewport` 讀數恆為 0，畫面完全正常）。
+   同樣把變數設在 sheet 元素身上而不是 `documentElement`，理由見上一條。 */
+test('sheet 的 top 吃 --vvtop（visual viewport 位移）：整條跟著往下移', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+
+  /* 要等 vaul 的進場動畫跑完再量——它是 translateY(100%)→0，量在途中的話基準線是浮動的
+     （第一次寫這條就撞到：位移 +120 量出來是 -154）。上面那條 `--kb` 測試不受影響，因為
+     它比的是 height，而 translateY 不改變 height。 */
+  await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)).then(() => undefined))
+  const before = (await sheet.boundingBox())!
+
+  const OFFSET = 120
+  await sheet.evaluate((el, v) => el.style.setProperty('--vvtop', `${v}px`), OFFSET)
+
+  const after = (await sheet.boundingBox())!
+  expect(Math.round(after.y - before.y), 'sheet 的 top 沒有吃到 --vvtop，接線斷了').toBe(OFFSET)
+})
+
 /* v2.29：食品庫的店家欄位補上 Autocomplete。在這之前它是純 text input——同一件事從
    「記一筆」進去能搜既有店家、從食品庫進去不能，是能力差異不是風格差異。
 

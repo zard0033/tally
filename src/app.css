@@ -762,7 +762,12 @@ body {
       它的原註解寫明是為了鍵盤上下鍵（next/previous）而做——**這正是「箭頭切到一半斷掉」
       在 sheet 裡修不掉、在無 vaul 的就地編輯卻正常的頭號嫌疑**，關掉是預期中的處置，
       不是附帶損害。若真機驗完箭頭反而變順，那條 hack 就是三輪都沒抓到的元凶。 */
-.sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); top: 96px; z-index: 11;
+/* top 要加 `--vvtop`（v2.35）：欄位在表單下半部時，iOS 會把整個 layout viewport 往上捲
+   去讓它露出來，而 `position: fixed` 釘在 layout viewport 上，sheet 就整個被推出可見區
+   （真機：點碳水欄，「新增食物」標題貼到螢幕最頂、確認鈕掉到鍵盤底下）。`--kb` 補的是
+   高度、`--vvtop` 補的是位移，**兩個都要**——只補 --kb 的話，欄位一旦在下半部就失效。 */
+.sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px);
+  top: calc(96px + var(--vvtop, 0px)); z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
   display: flex; flex-direction: column; min-height: 0; }
@@ -1137,7 +1142,10 @@ body {
    pointer-events:none 免得它擋住底下真正要點的東西。 */
 /* top 要吃 safe-area：index.html 的 viewport 是 `viewport-fit=cover`，內容會延伸到
    狀態列底下，`top: 0` 的東西整條藏在時間與訊號格後面（2026-08-12 真機：使用者說
-   「我沒看到黑底綠字」，就是這個）。 */
-.kb-debug { position: fixed; left: 0; right: 0; top: env(safe-area-inset-top, 0px); z-index: 99;
+   「我沒看到黑底綠字」，就是這個）。**再加 `--vvtop`**：不然 layout viewport 一被捲，
+   這條讀數列自己就先跑出畫面——正好是最需要看它的那一刻（真機截圖裡它就這樣消失了，
+   那次的消失本身反而成了「fixed 釘在 layout viewport」的證據）。 */
+.kb-debug { position: fixed; left: 0; right: 0; z-index: 99;
+  top: calc(env(safe-area-inset-top, 0px) + var(--vvtop, 0px));
   padding: 2px 4px; background: #000; color: #0f0; pointer-events: none;
   font: 500 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
