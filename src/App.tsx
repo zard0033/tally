@@ -109,11 +109,13 @@ function KbDebug() {
          食品庫新增在設定分頁下，互斥）。真的同時開了，這裡讀到的就不一定是手上那個。 */
       const sheet = document.querySelector<HTMLElement>('.sheet')
       const r = sheet?.getBoundingClientRect()
+      const rootStyle = document.documentElement.style
       setTxt(
         [
-          `kbVar=${document.documentElement.style.getPropertyValue('--kb') || '(unset)'}`,
+          `build=${BUNDLE_ID}`,
+          `kbVar=${rootStyle.getPropertyValue('--kb') || '(unset)'} vvtopVar=${rootStyle.getPropertyValue('--vvtop') || '(unset)'}`,
           `vvH=${vv ? Math.round(vv.height) : '?'} winH=${window.innerHeight} vvTop=${vv ? Math.round(vv.offsetTop) : '?'}`,
-          `sheetInline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'}`,
+          `sheetInline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'} t=${sheet?.style.top || '-'}`,
           r ? `sheetRect top=${Math.round(r.top)} h=${Math.round(r.height)}` : 'sheetRect=(none)',
         ].join('  '),
       )
@@ -126,6 +128,21 @@ function KbDebug() {
 }
 
 const DEBUG_KB = new URLSearchParams(window.location.search).has('debug')
+
+/* 載入中的 JS bundle 檔名 hash，給讀數列當版本指紋。**加它的理由是踩過**：v2.35 的真機
+   讀數怎麼看都像修法沒生效，本機卻證明 CSS 沒問題——兩邊對不起來，是因為當時無從判斷
+   手機上跑的到底是哪一版（Safari 可能還握著舊的 index.html）。讀數列印的每個數字都
+   建立在「你看的是最新版」這個沒人驗過的前提上。
+   直接讀 `<script>` 的 src 而不是另外注入 build 時間：Vite 的 hash 本來就跟著內容變，
+   拿它跟 `curl` 線上 index.html 抓到的檔名一比就知道對不對得上，零設定。
+   **兩個前提，破了就安靜印 `?`（不報錯，因為這是 debug 用途、不值得擋住頁面）**：
+   ① index.html 只有一個帶 src 的 module script（現況成立；dev 模式下 Vite 注入的
+   client 是內聯的）② 產物命名是 Vite 預設的 `index-<hash>.js`。改 `entryFileNames`
+   或換 bundler 的人請回來看這裡。
+   `DEBUG_KB &&` 短路：沒帶 `?debug` 就連這次 querySelector 都不做（review 提的）。 */
+const BUNDLE_ID = DEBUG_KB
+  ? (document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src.match(/index-([^.]+)\./)?.[1] ?? '?')
+  : ''
 
 export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入

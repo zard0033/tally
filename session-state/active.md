@@ -89,10 +89,14 @@
    `sheetRect top=96 h=337` 貼齊 `vvH=433`——**①② 在 `vvTop=0` 的欄位上已修好**，
    vaul 不再寫 inline style。碳水欄則整個畫面上移、連讀數列自己都被推不見
    → **v2.35 補 `--vvtop` 修這半，待驗**。
-   **③ 的兇手已由對照組指認**：兩處就地編輯（其一有 Autocomplete）都順，只有走 vaul 的
-   sheet 斷 → **Autocomplete 洗清**。③ 在 v2.34／v2.35 之後還沒回報過，**下次專驗它**：
-   開 `?debug` → 新增食物 → 從品名一路按「下一個」到碳水，中途不能斷；
-   讀數列的 `sheetInline` 要全程是 `-`（有值＝ vaul 又在寫 inline style）。
+   **③ 已修好，此題結案**（2026-08-12 真機「不會斷掉」）：元凶是 vaul `onFocus` 裡那段
+   `translateY(-2000px)` ＋ 手動 `scrollIntoView`，關 `repositionInputs` 時順手帶走的。
+   從 v2.32 追到這裡換過三個嫌疑（焦點順序、可視性、Autocomplete），沒有一個是。
+   **①② 仍待驗，而且上一份讀數不算數**：那張截圖的特徵（讀數列貼在 safe-area、
+   `sheetRect top=96`）都符合 **v2.34**，不是 v2.35——本機已證明 CSS 端正常（設 root 的
+   `--vvtop` 後 `computedTop` 96px→227px），所以最可能是 Safari 拿到快取的舊 `index.html`。
+   **讀數列因此加了 `build=<bundle hash>` 指紋**，下次先對它：跟
+   `curl -s <站台>/ | grep index-` 抓到的檔名一致才往下看。
 
 2. **「做起來更有 iOS app 質感」——已談定範圍，尚未開工**（2026-08-12 使用者提出）。
    範圍是**五個面向全部**：彈簧物理的滑動手感、半透明材質與模糊、大標題摺疊、觸覺回饋
