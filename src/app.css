@@ -1134,18 +1134,3 @@ body {
 /* 2026-08-05 從 LogSheet 的內嵌 <style> 搬來這裡：選擇器本來就是全域的，而食品庫的
    新增 sheet（同樣走 vaul）在設定分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
    會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
-
-
-/* ═══════════ ?debug 讀數列（不進設計系統） ═══════════ */
-/* 只有 `?debug` 時才有對應的 DOM（App.tsx 的 KbDebug）。刻意用原始的黑底綠字、
-   不吃任何 token——它不是產品的一部分，長得像 debug 面板才不會被誤認為 UI。
-   pointer-events:none 免得它擋住底下真正要點的東西。 */
-/* top 要吃 safe-area：index.html 的 viewport 是 `viewport-fit=cover`，內容會延伸到
-   狀態列底下，`top: 0` 的東西整條藏在時間與訊號格後面（2026-08-12 真機：使用者說
-   「我沒看到黑底綠字」，就是這個）。**再加 `--vvtop`**：不然 layout viewport 一被捲，
-   這條讀數列自己就先跑出畫面——正好是最需要看它的那一刻（真機截圖裡它就這樣消失了，
-   那次的消失本身反而成了「fixed 釘在 layout viewport」的證據）。 */
-.kb-debug { position: fixed; left: 0; right: 0; z-index: 99;
-  top: calc(env(safe-area-inset-top, 0px) + var(--vvtop, 0px));
-  padding: 2px 4px; background: #000; color: #0f0; pointer-events: none;
-  font: 500 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }

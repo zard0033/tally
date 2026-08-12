@@ -85,68 +85,6 @@ function filterPendingRow(
   return pending && pending.date === date ? rows.filter((row) => row.id !== pending.row.id) : rows
 }
 
-/* `?debug` 才掛載的鍵盤讀數列。[追加] spec 外，理由：iOS 鍵盤這題已經三輪沒收掉，
-   每一輪都只帶回「還是怪怪的」而沒有量測值。有這條之後，真機不管過不過都會回來一組
-   數字——尤其是 `sheetInline`，它就是「vaul 還在不在寫 inline style」的直接證據。
-   輪詢而不是掛 resize：vaul 改 inline style 不發事件，非得自己回頭看不可。
-
-   **標籤刻意寫長**（`vvH` / `winH` / `sheetRect h`）：這東西唯一的用途是判讀真機截圖，
-   而畫面上同時有三個「高度」，縮寫成 h 讀截圖時分不出誰是誰（review 抓到）。
-
-   **為什麼不鎖 `import.meta.env.DEV`**（review 提的，這裡是刻意選擇）：要驗的正是
-   GitHub Pages 上那份 production build——鎖了 DEV 就等於這個工具在唯一需要它的場合
-   不存在。**代價是它隨正式版出貨、任何人加 `?debug` 都能開**：目前印的四個值全是版面
-   幾何（CSS 變數、viewport 尺寸、元素 rect），不含任何帳號或 session 資料，**往這顆
-   面板加東西前先確認這句話還成立**；哪天要印的東西沾到使用者資料，就該連同這個決定
-   一起重來。
-   ponytail: 三題已於 2026-08-12 全數結案（DESIGN.md v2.36），**這整段現在就該刪**
-   ——`KbDebug` ＋ `BUNDLE_ID` ＋ `DEBUG_KB` ＋ app.css 的 `.kb-debug`，四處一起。
-   已排進 session-state 續點 1。之後若又需要，從 git 撿回來比留著便宜。
-   旗標只在整頁載入時讀一次——不支援 app 內改 query string 即時開關，也不需要。 */
-function KbDebug() {
-  const [txt, setTxt] = useState('')
-  useEffect(() => {
-    const read = () => {
-      const vv = window.visualViewport
-      /* 只抓第一個 `.sheet`：目前不會有兩個 sheet 同時掛載（LogSheet 在今日頁、
-         食品庫新增在設定分頁下，互斥）。真的同時開了，這裡讀到的就不一定是手上那個。 */
-      const sheet = document.querySelector<HTMLElement>('.sheet')
-      const r = sheet?.getBoundingClientRect()
-      const rootStyle = document.documentElement.style
-      setTxt(
-        [
-          `build=${BUNDLE_ID}`,
-          `kbVar=${rootStyle.getPropertyValue('--kb') || '(unset)'} vvtopVar=${rootStyle.getPropertyValue('--vvtop') || '(unset)'}`,
-          `vvH=${vv ? Math.round(vv.height) : '?'} winH=${window.innerHeight} vvTop=${vv ? Math.round(vv.offsetTop) : '?'}`,
-          `sheetInline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'} t=${sheet?.style.top || '-'}`,
-          r ? `sheetRect top=${Math.round(r.top)} h=${Math.round(r.height)}` : 'sheetRect=(none)',
-        ].join('  '),
-      )
-    }
-    read()
-    const t = setInterval(read, 300)
-    return () => clearInterval(t)
-  }, [])
-  return <div className="kb-debug">{txt}</div>
-}
-
-const DEBUG_KB = new URLSearchParams(window.location.search).has('debug')
-
-/* 載入中的 JS bundle 檔名 hash，給讀數列當版本指紋。**加它的理由是踩過**：v2.35 的真機
-   讀數怎麼看都像修法沒生效，本機卻證明 CSS 沒問題——兩邊對不起來，是因為當時無從判斷
-   手機上跑的到底是哪一版（Safari 可能還握著舊的 index.html）。讀數列印的每個數字都
-   建立在「你看的是最新版」這個沒人驗過的前提上。
-   直接讀 `<script>` 的 src 而不是另外注入 build 時間：Vite 的 hash 本來就跟著內容變，
-   拿它跟 `curl` 線上 index.html 抓到的檔名一比就知道對不對得上，零設定。
-   **兩個前提，破了就安靜印 `?`（不報錯，因為這是 debug 用途、不值得擋住頁面）**：
-   ① index.html 只有一個帶 src 的 module script（現況成立；dev 模式下 Vite 注入的
-   client 是內聯的）② 產物命名是 Vite 預設的 `index-<hash>.js`。改 `entryFileNames`
-   或換 bundler 的人請回來看這裡。
-   `DEBUG_KB &&` 短路：沒帶 `?debug` 就連這次 querySelector 都不做（review 提的）。 */
-const BUNDLE_ID = DEBUG_KB
-  ? (document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src.match(/index-([^.]+)\./)?.[1] ?? '?')
-  : ''
-
 export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -507,12 +445,13 @@ export default function App() {
 
      **第二個變數 `--vvtop`（v2.35）＝ `vv.offsetTop`，補的是完全不同的一件事**：欄位在
      表單下半部時，iOS 為了讓它露出來會**把整個 layout viewport 往上捲**，而
-     `position: fixed` 是釘在 layout viewport 上的，於是 sheet 與這條讀數列一起被推出
-     可見區。**`--kb` 管高度、`--vvtop` 管位移，兩者互不取代**——真機實測：品名欄
-     `vvTop=0` 一切正常，碳水欄整個畫面上移。
-     **只有貼著可見區邊緣的 fixed 元素要補 `--vvtop`**（sheet 貼底、讀數列貼頂）；
+     `position: fixed` 是釘在 layout viewport 上的，sheet 因此整個被推出可見區。
+     **`--kb` 管高度、`--vvtop` 管位移，兩者互不取代**——真機實測：品名欄 `vvTop=0`
+     一切正常，碳水欄整個畫面上移。
+     **只有貼著可見區邊緣的 fixed 元素要補 `--vvtop`**（`.sheet` 貼底是目前唯一一個）；
      `.scrim` 那種 `inset: 0` 撐滿全屏的不必——可見區永遠是 layout viewport 的子集，
-     它照樣蓋得住（review 抓到我一開始把 scrim 也算進受害者）。 */
+     它照樣蓋得住（review 抓到我一開始把 scrim 也算進受害者）。
+     **新增貼邊的 fixed 元素時記得比照辦理**，這條在 iOS 上只有真機看得出來。 */
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
@@ -712,7 +651,6 @@ export default function App() {
 
   return (
     <div className="screen" id="view-app">
-      {DEBUG_KB && <KbDebug />}
       <main className="main">
         {failed && notice ? (
           <div className="notice">
