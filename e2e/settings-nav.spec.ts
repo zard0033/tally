@@ -108,4 +108,21 @@ test('多欄輸入群組一律包在 form 裡（iOS 鍵盤上下箭頭靠它分�
   for (const f of ['name', 'vendor', 'kcal', 'protein', 'fat', 'carb']) {
     expect(await inForm(`#lf-${f}`), `新增食物的「${f}」欄不在 form 裡`).toBe(true)
   }
+
+  /* 包 form 的代價：欄位裡按 Enter 可能觸發 submit，整頁重整、填到一半的東西全沒。
+     **這條守的是 `onSubmit={preventDefault}`，不是 `type="button"`**——實測過了：
+     在 form 裡塞一顆漏標 type 的按鈕、但 preventDefault 還在，測試照樣綠；要把
+     preventDefault 也拿掉才轉紅。所以那句 preventDefault 才是保險絲，`type="button"`
+     是語意上的第二層。**誠實記帳：目前的 FoodFormFields 裡一顆按鈕都沒有**，而 HTML 的
+     implicit submission 規則在「多個 text input ＋ 無 submit button」時本來就不送出，
+     所以這條在現況下是恆綠的。留著的理由是它會在**日後往這個 form 加按鈕的那一刻**
+     開始生效——那正是最容易忘記 preventDefault 還在不在的時機。 */
+  await page.evaluate(() => ((window as unknown as { __alive: number }).__alive = 1))
+  await page.locator('#lf-kcal').fill('123')
+  await page.locator('#lf-kcal').press('Enter')
+  expect(
+    await page.evaluate(() => (window as unknown as { __alive?: number }).__alive),
+    '在欄位按 Enter 讓表單送出並重整了頁面——onSubmit 的 preventDefault 不見了',
+  ).toBe(1)
+  await expect(page.locator('#lf-kcal'), 'Enter 之後表單狀態不見了').toHaveValue('123')
 })

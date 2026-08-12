@@ -699,7 +699,11 @@ function ItemEditor({
   return (
     /* `<form>` 而不是 `<div>`：給 iOS 的鍵盤上下箭頭一個明確的欄位分組（理由與
        FoodFormFields 那份相同）。`onSubmit` preventDefault——這個編輯區沒有送出的概念，
-       每一欄 blur 時各自 commit。裡面所有 button 都已經標了 `type="button"`，不會誤觸 submit。 */
+       每一欄 blur 時各自 commit。裡面所有 button 都已經標了 `type="button"`，不會誤觸 submit。
+       **`role="group"` 是刻意留著的**：有 accessible name 的 `<form>` 會成為 form landmark，
+       而這裡的 `<form>` 純粹是給 iOS 用的技術手段，不是一份要填要送的表單——讓它進 landmark
+       列表只會在導覽時多一個沒有意義的入口。另外兩處（FoodFormFields、體重 sheet）的 form
+       都沒有 `aria-label`，本來就不會變 landmark，三處語意一致（review 提出）。 */
     <form
       className="item-editor"
       id={id}
