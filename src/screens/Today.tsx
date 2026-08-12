@@ -558,7 +558,7 @@ function ItemEditor({
      → 捲動跳回第 1 列 → 第 5 列的 onAnimationComplete 再捲一次，一次點擊兩段互打的捲動
      （impeccable 抓到）。改餐別那條路徑由 handleChangeMeal 自己把焦點送到新位置，
      這裡不插手。 */
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLFormElement>(null)
   useEffect(
     () => () => {
       if (rootRef.current?.contains(document.activeElement)) {
@@ -697,7 +697,17 @@ function ItemEditor({
   }
 
   return (
-    <div className="item-editor" id={id} ref={rootRef} role="group" aria-label={`編輯 ${name}`}>
+    /* `<form>` 而不是 `<div>`：給 iOS 的鍵盤上下箭頭一個明確的欄位分組（理由與
+       FoodFormFields 那份相同）。`onSubmit` preventDefault——這個編輯區沒有送出的概念，
+       每一欄 blur 時各自 commit。裡面所有 button 都已經標了 `type="button"`，不會誤觸 submit。 */
+    <form
+      className="item-editor"
+      id={id}
+      ref={rootRef}
+      role="group"
+      aria-label={`編輯 ${name}`}
+      onSubmit={(e) => e.preventDefault()}
+    >
       <div className="ed-line">
         <div className="qty-stepper">
           <button
@@ -791,7 +801,7 @@ function ItemEditor({
       <span className="sr-only" role="status" aria-live="polite">
         {said}
       </span>
-    </div>
+    </form>
   )
 }
 

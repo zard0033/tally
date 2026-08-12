@@ -69,3 +69,43 @@ test('設定頁入口列出目前的每日目標數字，跟每日目標頁算�
      規則在某一側失效了（precommit-review 抓到過的正是這個症狀）。 */
   expect(goalKcal, '設定頁入口與每日目標頁顯示的熱量對不上').toBe(entryKcal)
 })
+
+/* 全站契約（v2.33）：**每一組多欄輸入都必須包在 `<form>` 裡**。
+
+   這條守的不是送出——所有畫面的送出都走自己的按鈕，`onSubmit` 一律 preventDefault。
+   它守的是 **iOS 鍵盤上下箭頭（form accessory bar）**：沒有 `<form>` 時 Safari 只能靠
+   DOM 相鄰性猜「哪些欄位算同一組」，猜歪了就會出現真機回報的那個症狀——從品名往下切，
+   切到熱量就下不去，但直接從熱量起跳上下都順。桌面 Tab 順序在兩條路徑上都正常，
+   所以這個 bug 在桌面**重現不了**，只能靠結構契約防它復發。
+
+   之所以寫成「走訪三個畫面」而不是各自一條：真正的風險是**新增第四處時漏掉**，
+   而那種漏掉只有一條會掃全站的測試抓得到。 */
+test('多欄輸入群組一律包在 form 裡（iOS 鍵盤上下箭頭靠它分組）', async ({ page }) => {
+  await openApp(page)
+
+  const inForm = (sel: string) =>
+    page.locator(sel).first().evaluate((el) => !!el.closest('form'))
+
+  // ① 今日頁的就地編輯區
+  await page.locator('.timeline .item-content').first().click()
+  await expect(page.locator('.item-editor')).toBeVisible()
+  expect(await inForm('.item-editor .ed-detail input'), '就地編輯區的欄位不在 form 裡').toBe(true)
+  expect(await inForm('.item-editor .qty-value'), '就地編輯區的份量欄不在 form 裡').toBe(true)
+  await page.locator('.timeline .item-content').first().click()
+
+  await openSettings(page)
+
+  // ② 更新身體數據 sheet（量測日／體重／體脂）
+  await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+  await expect(page.locator('#w-kg')).toBeVisible()
+  expect(await inForm('#w-kg'), '體重 sheet 的欄位不在 form 裡').toBe(true)
+  await page.locator('#settings-sheet-root .icon-btn[aria-label="關閉"]').click()
+
+  // ③ 食品庫的新增食物 sheet（FoodFormFields，三處共用同一份）
+  await page.locator('.entry-row', { hasText: '食品庫管理' }).click()
+  await page.locator('.lib-fab').click()
+  await expect(page.locator('#lf-name')).toBeVisible()
+  for (const f of ['name', 'vendor', 'kcal', 'protein', 'fat', 'carb']) {
+    expect(await inForm(`#lf-${f}`), `新增食物的「${f}」欄不在 form 裡`).toBe(true)
+  }
+})

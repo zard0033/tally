@@ -153,7 +153,9 @@ export default function Settings(props: SettingsProps) {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
-        <div className="form-wrap">
+        {/* form 而不是 div：三個連續輸入欄要給 iOS 的鍵盤上下箭頭一個明確的分組
+            （理由與 FoodFormFields 那份相同）。onSubmit preventDefault，送出仍走下方按鈕。 */}
+        <form className="form-wrap" onSubmit={(e) => e.preventDefault()}>
           <div className="field-float">
             <input ref={wDate} id="w-date" type="date" defaultValue={localDate()} />
             <label htmlFor="w-date">量測日</label>
@@ -168,7 +170,7 @@ export default function Settings(props: SettingsProps) {
           </div>
           <p className="note">同一天再記一次會覆蓋當天那筆。</p>
           <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
-        </div>
+        </form>
         <div className="confirm-wrap">
           {err && <p className="sheet-error" role="alert">{err}</p>}
           <button type="button" className="pick-bar-btn" disabled={busy} onClick={() => void submitWeight()}>

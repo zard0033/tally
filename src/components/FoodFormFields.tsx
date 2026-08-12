@@ -73,8 +73,15 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   const id = (k: string) => `${idPrefix}${k}`
   const set = (patch: Partial<FoodForm>) => onChange({ ...form, ...patch })
 
+  /* 包在 `<form>` 裡是為了 **iOS 的鍵盤上下箭頭**（form accessory bar），不是為了送出——
+     `onSubmit` 一律 preventDefault，送出仍然走各畫面自己的按鈕。真機回報：從品名往下切，
+     切到熱量就下不去了，但直接從熱量起跳上下都順。桌面 Tab 順序兩條路徑都正常（實測過），
+     所以不是 DOM 順序的問題——**accessory bar 走的不是 Tab 順序**，沒有 `<form>` 時 Safari
+     只能靠 DOM 相鄰性猜「同一組欄位」，而店家欄的 Autocomplete 會動態掛載／卸載 Portal 裡的
+     listbox，那個猜測就從那裡開始歪掉。`<form>` 是把分組明講出來，不讓它猜。
+     **這條只能真機驗**：桌面沒有 accessory bar。 */
   return (
-    <>
+    <form onSubmit={(e) => e.preventDefault()}>
       <div className="field-row">
         {renderField({ id: id('name'), label: '品名', required: true, value: form.name, onChange: (v) => set({ name: v }) })}
         <div className="field-float">
@@ -114,6 +121,6 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         {renderField({ id: id('fat'), label: '脂肪 g', numeric: true, value: form.fat, onChange: (v) => set({ fat: v }) })}
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}
       </div>
-    </>
+    </form>
   )
 }

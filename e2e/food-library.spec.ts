@@ -431,3 +431,4 @@ test('新增必填擋在送出前：品名留空時顯示錯誤且不送出', as
   await expect(sheet, '驗證沒過卻把 sheet 關掉了，使用者要重打一遍').toBeVisible()
   expect(await foodWrites(page), '驗證沒過卻送出了新增').toHaveLength(0)
 })
+
