@@ -737,7 +737,12 @@ body {
 #settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 96px; z-index: 11;
+/* bottom 吃 --kb（App.tsx 從 visualViewport 算出的鍵盤高度）：iOS 鍵盤彈出時
+   layout viewport 不變，貼死 bottom:0 的話 sheet 底緣會落在鍵盤底下，可捲區
+   `.form-wrap` 算的是沒縮水的高度、內容不溢出所以也捲不動——底部欄位就這樣被
+   `.confirm-wrap` 壓掉（真機回報）。縮上來之後 `.form-wrap` 自己變矮並可捲、
+   確認鈕浮在鍵盤上方。沒有 visualViewport 的環境退回 0px，行為不變。 */
+.sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); top: 96px; z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
   display: flex; flex-direction: column; min-height: 0; }

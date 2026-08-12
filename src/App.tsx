@@ -422,6 +422,35 @@ export default function App() {
     }
   }, [commitDelete])
 
+  /* iOS 鍵盤佔掉的高度 → CSS 變數 `--kb`，給貼底的 `.sheet` 當 `bottom` 用。
+     鍵盤彈出時 **layout viewport 不變**，只有 visual viewport 縮小，所以
+     `position: fixed; bottom: 0` 的 sheet 底緣仍然落在鍵盤底下——真機回報的
+     「新增食物表單的蛋白質／脂肪／碳水那排被『加入食品庫』按鈕壓掉、只露一條邊」
+     就是這麼來的：可捲區 `.form-wrap` 明明是 `flex:1`，但它算的是那個沒縮水的高度，
+     內容沒溢出、於是也捲不動。iOS 表單列上下箭頭「跳得不順」是同一個病灶的表徵
+     ——焦點其實跳對了，只是跳到看不見的地方。
+
+     `offsetTop` 要一起扣：iOS 會把 visual viewport 往上推，只看 height 會少算那一段。
+     沒有 `visualViewport` 的環境（桌面 Playwright、舊瀏覽器）整段跳過，
+     `--kb` 不存在，CSS 那邊的 `var(--kb, 0px)` 退回 0，行為與現在完全一樣。
+     **這條只能真機驗**——桌面 WebKit 不會產生鍵盤，模擬不出這個狀態。 */
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const sync = () => {
+      const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      document.documentElement.style.setProperty('--kb', `${Math.round(hidden)}px`)
+    }
+    sync()
+    vv.addEventListener('resize', sync)
+    vv.addEventListener('scroll', sync)
+    return () => {
+      vv.removeEventListener('resize', sync)
+      vv.removeEventListener('scroll', sync)
+      document.documentElement.style.removeProperty('--kb')
+    }
+  }, [])
+
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
    * 按鈕變重試，跟 legacy 的 withBusy 行為一致（跟上面 deleteIntake 的全域 Notice 不同）。 */

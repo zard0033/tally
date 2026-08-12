@@ -315,6 +315,41 @@ test('新增走 sheet 不是換頁：底下清單還在，關閉鈕／Esc 都能
   await expect(sheet, 'Esc 關不掉，鍵盤使用者會被困在 sheet 裡').toHaveCount(0)
 })
 
+/* v2.32：iOS 鍵盤彈出時 layout viewport 不變，貼死 `bottom: 0` 的 sheet 底緣會落在
+   鍵盤底下，底部欄位被確認鈕壓掉（真機回報，附截圖）。修法是 App.tsx 從
+   `visualViewport` 算出鍵盤高度寫進 `--kb`，sheet 的 `bottom` 吃它。
+
+   **桌面 WebKit 產生不出鍵盤，這條驗不到 `visualViewport` 的讀數**——它守的是另一半：
+   接線。CSS 變數名打錯、選擇器沒命中、被更晚的規則蓋掉，任何一種都會讓整個修法靜默
+   失效而畫面看起來一切正常。所以這裡直接餵一個 `--kb` 進去，量 sheet 有沒有真的縮上來，
+   順帶確認可捲區跟著變矮、確認鈕還在 sheet 裡面。讀數那半只能真機驗。 */
+test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮、確認鈕仍在框內', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+
+  const box = async (l: ReturnType<Page['locator']>) => (await l.boundingBox())!
+  const before = await box(sheet)
+  const formBefore = await box(sheet.locator('.form-wrap'))
+
+  const KB = 300
+  await page.evaluate((kb) => document.documentElement.style.setProperty('--kb', `${kb}px`), KB)
+
+  const after = await box(sheet)
+  expect(Math.round(before.height - after.height), 'sheet 沒有吃到 --kb，接線斷了').toBe(KB)
+
+  // 可捲區吸收整段縮減（確認列是 flex-shrink:0，不該被壓）
+  const formAfter = await box(sheet.locator('.form-wrap'))
+  expect(Math.round(formBefore.height - formAfter.height), '縮減沒有落在可捲區身上').toBe(KB)
+
+  // 確認鈕仍在 sheet 的可視範圍內，不是被推到框外
+  const btn = await box(sheet.locator('.pick-bar-btn'))
+  expect(btn.y + btn.height, '「加入食品庫」被擠出 sheet 了').toBeLessThanOrEqual(after.y + after.height + 1)
+})
+
 /* v2.29：食品庫的店家欄位補上 Autocomplete。在這之前它是純 text input——同一件事從
    「記一筆」進去能搜既有店家、從食品庫進去不能，是能力差異不是風格差異。
 
