@@ -741,7 +741,27 @@ body {
    layout viewport 不變，貼死 bottom:0 的話 sheet 底緣會落在鍵盤底下，可捲區
    `.form-wrap` 算的是沒縮水的高度、內容不溢出所以也捲不動——底部欄位就這樣被
    `.confirm-wrap` 壓掉（真機回報）。縮上來之後 `.form-wrap` 自己變矮並可捲、
-   確認鈕浮在鍵盤上方。桌面沒有鍵盤，算出來恆為 0px，行為不變。 */
+   確認鈕浮在鍵盤上方。桌面沒有鍵盤，算出來恆為 0px，行為不變。
+
+   **這條規則在 vaul 的兩個 sheet 上，v2.32～v2.33 期間從來沒有生效過**（v2.34 才修）：
+   vaul 的 `repositionInputs`（預設 true）自己也在補償鍵盤，而且是直接往 Drawer.Content
+   寫 **inline** `style.height` 與 `style.bottom`（node_modules/vaul/dist/index.mjs 的
+   `onVisualViewportChange`），inline 永遠贏過這裡的 class 規則。兩套補償還都掛在同一個
+   `visualViewport.resize` 上：App.tsx 的 listener 先註冊先跑、先把 sheet 用 --kb 縮短，
+   vaul 隨後 `getBoundingClientRect()` 量到的就是**已經縮過的**高度，並把它記成
+   `initialDrawerHeight`——鍵盤收起後 vaul 用這個記歪的值還原 `style.height`，
+   sheet 就停在半空、確認鈕卡在畫面中間（2026-08-12 真機截圖）。
+   所以 v2.34 關掉 `repositionInputs`，讓這裡的 --kb 單獨執政。
+
+   **關掉的代價**（vaul index.mjs:940 的 `isDisabled` 條件把兩件事綁在同一個 flag）：
+   ① vaul 的 `usePreventScroll` 一併停用。iOS 不受影響——`usePositionFixed` 是另一條路徑，
+      Safari 上仍會把 body 設 position:fixed 擋住背景捲動；受影響的只有非 Safari 平台
+      （桌面／Android）開 sheet 時背景滾得動。手機為主的專案，scrim 也還蓋著，**刻意不補**。
+      真的礙眼再加 `html:has(.sheet) { overflow: hidden }` 一行，不要為此改回 flag。
+   ② vaul 那段 `onFocus` 裡的 `translateY(-2000px)` ＋ 手動 scrollIntoView 也跟著關掉。
+      它的原註解寫明是為了鍵盤上下鍵（next/previous）而做——**這正是「箭頭切到一半斷掉」
+      在 sheet 裡修不掉、在無 vaul 的就地編輯卻正常的頭號嫌疑**，關掉是預期中的處置，
+      不是附帶損害。若真機驗完箭頭反而變順，那條 hack 就是三輪都沒抓到的元凶。 */
 .sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px); top: 96px; z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
@@ -1110,3 +1130,11 @@ body {
    新增 sheet（同樣走 vaul）在設定分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
    會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
 
+
+/* ═══════════ ?debug 讀數列（不進設計系統） ═══════════ */
+/* 只有 `?debug` 時才有對應的 DOM（App.tsx 的 KbDebug）。刻意用原始的黑底綠字、
+   不吃任何 token——它不是產品的一部分，長得像 debug 面板才不會被誤認為 UI。
+   pointer-events:none 免得它擋住底下真正要點的東西。 */
+.kb-debug { position: fixed; left: 0; right: 0; top: 0; z-index: 99;
+  padding: 2px 4px; background: #000; color: #0f0; pointer-events: none;
+  font: 500 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }

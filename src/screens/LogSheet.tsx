@@ -480,7 +480,10 @@ export default function LogSheet(props: LogSheetProps) {
 
   return (
     <>
-      <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false}>
+      {/* repositionInputs={false}：vaul 自己那套鍵盤補償會直接往 Drawer.Content 寫 inline
+          `height`／`bottom`，把 app.css 的 `--kb` 蓋掉（inline 永遠贏）。原委與取捨寫在
+          app.css `.sheet` 那段，改這裡之前先讀那段。 */}
+      <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false} repositionInputs={false}>
         <Drawer.Portal>
           <Drawer.Overlay className="scrim" />
           <Drawer.Content ref={sheetRef} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">

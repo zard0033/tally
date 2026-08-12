@@ -192,9 +192,11 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
   /* 新增／範本新增的 sheet。走 vaul 跟 LogSheet 同一套，不複製 Settings 那份手刻的
      scrim/animation 樣板——手刻那份的存在理由是 legacy 的 `#sheet-root` id 衝突，
-     在 vaul 下不成立，而 vaul 順帶給了拖曳關閉與 Drawer.Content 這個 portal 容器。 */
+     在 vaul 下不成立，而 vaul 順帶給了拖曳關閉與 Drawer.Content 這個 portal 容器。
+
+     `repositionInputs={false}`：理由同 LogSheet，全文在 app.css `.sheet` 那段。 */
   const addSheet = (
-    <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false}>
+    <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false} repositionInputs={false}>
       <Drawer.Portal>
         <Drawer.Overlay className="scrim" />
         <Drawer.Content ref={addSheetRef} className="sheet" aria-label={addTitle} data-screen="food-add-sheet">

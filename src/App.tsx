@@ -85,6 +85,36 @@ function filterPendingRow(
   return pending && pending.date === date ? rows.filter((row) => row.id !== pending.row.id) : rows
 }
 
+/* `?debug` 才掛載的鍵盤讀數列。[追加] spec 外，理由：iOS 鍵盤這題已經三輪沒收掉，
+   每一輪都只帶回「還是怪怪的」而沒有量測值。有這條之後，真機不管過不過都會回來一組
+   數字——尤其是 `sheet inline`，它就是「vaul 還在不在寫 inline style」的直接證據。
+   輪詢而不是掛 resize：vaul 改 inline style 不發事件，非得自己回頭看不可。
+   `?debug` 沒帶就整個不渲染，也不起計時器；e2e 不帶這個參數。 */
+function KbDebug() {
+  const [txt, setTxt] = useState('')
+  useEffect(() => {
+    const read = () => {
+      const vv = window.visualViewport
+      const sheet = document.querySelector<HTMLElement>('.sheet')
+      const r = sheet?.getBoundingClientRect()
+      setTxt(
+        [
+          `--kb=${document.documentElement.style.getPropertyValue('--kb') || '(unset)'}`,
+          `vv=${vv ? Math.round(vv.height) : '?'}/${window.innerHeight} top=${vv ? Math.round(vv.offsetTop) : '?'}`,
+          `sheet inline h=${sheet?.style.height || '-'} b=${sheet?.style.bottom || '-'}`,
+          r ? `rect t=${Math.round(r.top)} h=${Math.round(r.height)}` : 'no sheet',
+        ].join('  '),
+      )
+    }
+    read()
+    const t = setInterval(read, 300)
+    return () => clearInterval(t)
+  }, [])
+  return <div className="kb-debug">{txt}</div>
+}
+
+const DEBUG_KB = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')
+
 export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -436,7 +466,12 @@ export default function App() {
      `visualViewport`，`height === innerHeight`、`offsetTop === 0`）——它照樣跑 `sync()`，
      只是沒有鍵盤、算出來恆為 `0px`，結果等同於沒有這個變數。guard 只擋真的缺這支 API
      的舊瀏覽器。這兩件事結果一樣但機制不同，別再寫成「桌面沒有這個 API」（review 抓到）。
-     **這條只能真機驗**——桌面產生不出鍵盤，`--kb` 永遠是 0，模擬不出那個狀態。 */
+     **這條只能真機驗**——桌面產生不出鍵盤，`--kb` 永遠是 0，模擬不出那個狀態。
+
+     **上面那段描述的效果，在 vaul 的兩個 sheet 上要到 v2.34 才第一次真的發生**：v2.32～v2.33
+     期間 vaul 的 `repositionInputs` 用 inline style 蓋著它，這裡算得再對也寫不進版面。
+     全文（含關掉 flag 的兩個代價）在 app.css `.sheet` 那段。這個 effect 本身沒有改動——
+     它一直是對的，只是沒被套用。 */
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
@@ -634,6 +669,7 @@ export default function App() {
 
   return (
     <div className="screen" id="view-app">
+      {DEBUG_KB && <KbDebug />}
       <main className="main">
         {failed && notice ? (
           <div className="notice">
