@@ -355,6 +355,39 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   expect(btn.y + btn.height, '「加入食品庫」被擠出 sheet 了').toBeLessThanOrEqual(after.y + after.height + 1)
 })
 
+/* v2.45：鍵盤佔掉空間之後，焦點切到底部欄位要自動捲進可視區。守的是 v2.34 關掉
+   `repositionInputs` 時一併關掉、當時沒補回來的那段 `scrollIntoView`（真機回報：從熱量往下切，
+   蛋白質那排被鍵盤蓋住；表單捲得動，只是不會自己捲）。
+   **前提斷言不可省**——沒有它的話，哪天版面變短、碳水欄本來就在框內，這條會永遠是綠的
+   而什麼都沒驗到。 */
+test('鍵盤佔掉空間時，焦點切到底部欄位會自動捲進可視區', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+
+  /* **先等抽屜的開啟動畫停**，不然量到的是半路上的位置（實測 kb 每加 20 框底掉 120，
+     那不是版面在動是動畫還沒停）。380 是量出來的：門檻在 355 附近（框底 385／碳水頂 390），
+     取再高一階留餘裕；可捲餘裕 181px，捲得回來。 */
+  await page.waitForTimeout(500)
+  await sheet.evaluate((el) => el.style.setProperty('--kb', '380px'))
+  const sheetBox = (await sheet.boundingBox())!
+  const bottom = sheetBox.y + sheetBox.height
+
+  const carb = page.locator('#lf-carb')
+  const before = (await carb.boundingBox())!
+  expect(before.y, '前提不成立：碳水欄本來就在框內，這條測不到東西').toBeGreaterThan(bottom)
+
+  /* **`preventScroll: true` 不可省**：桌面 WebKit 的 `focus()` 自己就會把元素捲進可視區，
+     不關掉這半的話，這條測試量到的是瀏覽器內建行為、跟我們補的那段無關——**第一版就是這樣，
+     mutation 檢查照樣是綠的才抓到**。而真機的症狀正是「iOS 用表單上下箭頭切換時不做這件事」，
+     所以關掉它才是在模擬真實條件。 */
+  await carb.evaluate((el: HTMLElement) => el.focus({ preventScroll: true }))
+  const after = (await carb.boundingBox())!
+  expect(after.y + after.height, '焦點切過去了，但欄位沒被捲進可視區').toBeLessThanOrEqual(bottom + 1)
+})
+
 /* v2.35：`--vvtop` 補的是**位移**，跟上面那條 `--kb` 補的**高度**是兩件事。
    欄位落在表單下半部時，iOS 會把整個 layout viewport 往上捲去讓它露出來，而
    `position: fixed` 是釘在 layout viewport 上的，於是 sheet 整個被推出可見區——真機
@@ -434,6 +467,16 @@ test('以現有食物為範本新增：表單預填來源的值，送出是 POST
   await expect(sheet).toBeVisible()
   await expect(sheet.locator('.sheet-title')).toContainText(`以「${name}」為範本新增`)
   await expect(page.locator('#lf-name'), '範本沒有預填來源的品名').toHaveValue(name)
+
+  /* 這條路徑會在掛載當下把焦點送到店家欄（`vendorAutoFocus`），而 v2.45 之後那個焦點事件
+     也會觸發一次 `scrollIntoView`——**發生在抽屜還在開啟動畫的時候**（precommit review 提的）。
+     驗的是「沒有捲到任何不該捲的地方」：兩個捲軸都該還在原點。 */
+  await page.waitForTimeout(500)
+  const scrolled = await page.evaluate(() => ({
+    win: Math.round(window.scrollY),
+    form: document.querySelector('[data-screen="food-add-sheet"] .form-wrap')?.scrollTop ?? -1,
+  }))
+  expect(scrolled, '掛載時的自動聚焦把畫面捲跑了').toEqual({ win: 0, form: 0 })
 
   await page.locator('#lf-name').fill(`${name}（大份）`)
   await sheet.locator('.confirm-wrap .pick-bar-btn').click()

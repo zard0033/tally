@@ -172,8 +172,27 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      只能靠 DOM 相鄰性猜「同一組欄位」，而店家欄的 Autocomplete 會動態掛載／卸載 Portal 裡的
      listbox，那個猜測就從那裡開始歪掉。`<form>` 是把分組明講出來，不讓它猜。
      **這條只能真機驗**：桌面沒有 accessory bar。 */
+  /* iOS 的表單上下箭頭把焦點切走時**不會自己把目標捲進可視區**——vaul 那段 `scrollIntoView`
+     在 v2.34 關掉 `repositionInputs` 時一起關掉了（那輪的主旨是讓 `--kb` 單獨執政）。當時表單短、
+     底部欄位還在框內所以看不出來；v2.40 把「AI 辨識輸入」加在欄位上方、整份表單長高之後才現形
+     ——真機回報：從熱量往下切，蛋白質那排被鍵盤蓋住。**按鈕是誘因不是兇手**，捲得動就證明
+     `--kb`／`--vvtop` 那套仍然有效，缺的只是自動捲過去這一步。
+
+     `block: 'nearest'` 對已經在可視區內的欄位是 no-op，所以桌面（沒有鍵盤、不需要捲）完全無感。
+     **已知未涵蓋**：第一次點欄位叫出鍵盤那一下，`--kb` 是在 `visualViewport` 事件之後才更新的，
+     這裡算的可能是縮之前的版面。真機回報的是「切換時」，先修這條，那條等有回報再說。 */
+  const scrollFocusedIntoView = (e: React.FocusEvent) => {
+    /* **只認 `<input>`**。掛在 `<form>` 上等於接住底下每一個可聚焦的東西——辨識鈕（它也在
+       form 裡）、以及店家 Autocomplete 那份 Portal 出去的清單（React 的合成事件走元件樹不走
+       DOM 樹，Portal 的內容照樣冒泡到這裡，而它在 DOM 上不在 `.form-wrap` 內，捲起來會動到
+       別的容器）。這兩個都不是這條修法要服務的對象。 */
+    const el = e.target as HTMLElement
+    if (el.tagName !== 'INPUT') return
+    el.scrollIntoView({ block: 'nearest' })
+  }
+
   return (
-    <form onSubmit={(e) => e.preventDefault()}>
+    <form onSubmit={(e) => e.preventDefault()} onFocus={scrollFocusedIntoView}>
       {/* 辨識中整組鎖住。用原生 `<fieldset disabled>` 而不是逐個欄位傳 disabled——一個屬性
           就關掉底下所有表單控件（含店家的 Autocomplete，它底下是真的 <input>），
           少寫六處、也不會有漏掉一處的可能。`.form-lock` 只做樣式重置：fieldset 預設帶邊框、
