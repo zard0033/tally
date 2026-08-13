@@ -104,9 +104,9 @@
    OpenRouter ＋CORS allowlist ＋POST-only ＋SSRF 閘），19 條測試、**兩輪獨立 verifier 皆 PASS**。
    前端：相機鈕「AI 辨識輸入」已接進兩個新增入口（就地編輯刻意不給），辨識中用 `<fieldset disabled>`
    整組鎖住、關閉鈕與 vaul 下滑一起鎖，e2e ＋2 條。
-   **剩三件**：① 等待動效落地——使用者選「B 骨架呼吸＋A 掃描線」的融合版，對照 demo 在
-   `_design-sample/scan-motion-compare.html`（**一次性產物，落地後即可刪**）② DESIGN.md 回寫
-   ③ 部署。
+   等待動效已落地：四版對照 demo 讓使用者挑，選「骨架呼吸」（空欄位變灰條輕微呼吸、標籤同時
+   浮起，已打字的欄位不長骨架）＋填入時數值由上而下依序浮現。demo 是一次性產物、已刪。
+   **剩兩件**：① DESIGN.md 回寫 ② 部署。
    **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
    `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
    **部署後第一件事：curl 驗 OPTIONS preflight**。Supabase gateway 的 `verify_jwt` 可能在函式之前

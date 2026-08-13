@@ -80,6 +80,8 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
+  /** 填入瞬間的一次性動效開關（數值由上而下依序浮現），~0.7 秒後自己關掉。 */
+  const [justFilled, setJustFilled] = useState(false)
 
   useEffect(() => {
     if (vendorAutoFocus) vendorInputRef.current?.focus()
@@ -114,6 +116,9 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
       // formRef 不是 form：等待期間打的字要留著（見上方註解）。辨識讀到的欄位仍以辨識為準
       // ——使用者按的就是「AI 辨識輸入」，那是他要的；而且結果是草稿，不滿意可以再改。
       onChange({ ...formRef.current, ...patch })
+      setJustFilled(true)
+      // 只是把 CSS 動畫的開關關掉，晚一點關沒有副作用，所以不為它做 unmount 清理。
+      setTimeout(() => setJustFilled(false), 700)
     } catch {
       /* 所有失敗同一句：登入真的過期時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回
          登入頁並顯示「登入已過期，請重新登入」（App.tsx onAuthStateChange），比在這裡多印
@@ -140,7 +145,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
           就關掉底下所有表單控件（含店家的 Autocomplete，它底下是真的 <input>），
           少寫六處、也不會有漏掉一處的可能。`.form-lock` 只做樣式重置：fieldset 預設帶邊框、
           內距與一個會撐破 flex 版面的 min-width。 */}
-      <fieldset className="form-lock" disabled={scanning}>
+      <fieldset className={`form-lock${justFilled ? ' scan-filled' : ''}`} disabled={scanning}>
       {onScan && (
         <>
           {/* capture="environment" 在 iOS Safari 直接開後鏡頭；桌面沒有相機就退成檔案選擇器。
