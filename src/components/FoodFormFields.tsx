@@ -86,6 +86,12 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /* 辨識是非同步的，而 `form` 這個 prop 會被閉包凍在「按下按鈕那一刻」。直接用它去組
+     `{...form, ...patch}`，使用者在等待期間打的字會整組被還原——**包含辨識根本沒讀的店家欄**，
+     而那正是我們刻意留給他邊等邊填的地方。所以合併時一律讀 ref 的最新值，不讀閉包裡那份。 */
+  const formRef = useRef(form)
+  formRef.current = form
+
   const id = (k: string) => `${idPrefix}${k}`
   /* 使用者一動手打字就把辨識失敗那行清掉——他已經在走手打這條路了，那行紅字再留著只是噪音。
      （原本它會一直掛到關閉 sheet 為止。） */
@@ -105,7 +111,9 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
     try {
       const patch = readingToForm(await onScan!(await compressToDataUri(file)))
       setScanError('')
-      onChange({ ...form, ...patch })
+      // formRef 不是 form：等待期間打的字要留著（見上方註解）。辨識讀到的欄位仍以辨識為準
+      // ——使用者按的就是「AI 辨識輸入」，那是他要的；而且結果是草稿，不滿意可以再改。
+      onChange({ ...formRef.current, ...patch })
     } catch {
       /* 所有失敗同一句：登入真的過期時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回
          登入頁並顯示「登入已過期，請重新登入」（App.tsx onAuthStateChange），比在這裡多印
@@ -128,6 +136,11 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      **這條只能真機驗**：桌面沒有 accessory bar。 */
   return (
     <form onSubmit={(e) => e.preventDefault()}>
+      {/* 辨識中整組鎖住。用原生 `<fieldset disabled>` 而不是逐個欄位傳 disabled——一個屬性
+          就關掉底下所有表單控件（含店家的 Autocomplete，它底下是真的 <input>），
+          少寫六處、也不會有漏掉一處的可能。`.form-lock` 只做樣式重置：fieldset 預設帶邊框、
+          內距與一個會撐破 flex 版面的 min-width。 */}
+      <fieldset className="form-lock" disabled={scanning}>
       {onScan && (
         <>
           {/* capture="environment" 在 iOS Safari 直接開後鏡頭；桌面沒有相機就退成檔案選擇器。
@@ -200,6 +213,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         {renderField({ id: id('fat'), label: '脂肪 g', numeric: true, value: form.fat, onChange: (v) => set({ fat: v }) })}
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}
       </div>
+      </fieldset>
     </form>
   )
 }

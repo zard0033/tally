@@ -461,3 +461,71 @@ test('新增必填擋在送出前：品名留空時顯示錯誤且不送出', as
   await expect(sheet, '驗證沒過卻把 sheet 關掉了，使用者要重打一遍').toBeVisible()
   expect(await foodWrites(page), '驗證沒過卻送出了新增').toHaveLength(0)
 })
+
+/* AI 辨識輸入。辨識中**整組欄位鎖住**（使用者裁決：等辨識完再讓人操作），所以下面驗的是
+   「真的鎖住了」而不是「打的字有沒有被保留」。
+   元件裡合併結果時仍然讀 formRef 的最新值而不是閉包裡的 `form`——那修的是一個真的發生過的
+   bug（stale closure 會把等待期間打的字整組還原，含辨識根本沒讀的店家欄）。欄位鎖住之後那條
+   路走不到了，留著是保險：哪天有人放寬某個欄位，不會連帶把這個 bug 放回來。 */
+const SCAN_READING = {
+  name: '伯朗奶茶-減糖香濃原味(三合一)',
+  basis: 'per_serving', serving_g: 17,
+  kcal: 82, protein_g: 0.4, fat_g: 3.6, carb_g: 12.1,
+}
+const TINY_PNG = {
+  name: 'label.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  ),
+}
+
+test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+
+  // delayMs 給我們一段「辨識中」的時間可以操作畫面——bug 只在那個窗口現形
+  await page.evaluate((body) => {
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 600 }
+  }, SCAN_READING)
+
+  await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
+
+  // 辨識中：按鈕與關閉鈕都該停用（誤關的代價是那張照片白拍）
+  await expect(sheet.locator('.scan-btn')).toBeDisabled()
+  await expect(sheet.locator('.sheet-head .icon-btn'), '辨識中關閉鈕沒鎖，誤按就得重拍').toBeDisabled()
+
+  // 辨識中整組欄位鎖住（使用者裁決：等辨識完再讓人操作）
+  await expect(page.locator('#lf-vendor'), '辨識中欄位沒鎖住').toBeDisabled()
+  await expect(page.locator('#lf-name')).toBeDisabled()
+
+  await expect(page.locator('#lf-kcal')).toHaveValue('82')
+  await expect(page.locator('#lf-vendor'), '辨識結束後欄位該解鎖').toBeEnabled()
+  await expect(page.locator('#lf-name')).toHaveValue('伯朗奶茶-減糖香濃原味(三合一)（每份 17g）')
+  await expect(sheet.locator('.sheet-head .icon-btn'), '辨識結束後關閉鈕該解鎖').toBeEnabled()
+})
+
+test('辨識失敗只留一行字，欄位不動、仍可手動完成新增', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+
+  await page.locator('#lf-name').fill('自己打的名字')
+  await page.evaluate(() => {
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'fail' }
+  })
+  await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
+
+  await expect(sheet.locator('.scan-error')).toHaveText('辨識失敗，請手動填寫')
+  await expect(page.locator('#lf-name'), '失敗不該動到已經打好的欄位').toHaveValue('自己打的名字')
+  await expect(sheet, '失敗不該把 sheet 關掉').toBeVisible()
+
+  // 一開始打字就把錯誤訊息清掉——他已經在走手打這條路了
+  await page.locator('#lf-kcal').fill('100')
+  await expect(sheet.locator('.scan-error')).toHaveCount(0)
+})

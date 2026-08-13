@@ -58,12 +58,18 @@ export async function seedFetchStub(
          * 並自動清空——用來驗「失敗訊息怎麼呈現／有沒有殘留」這類只有失敗路徑才走得到的
          * 分支。page.route() 在這個環境完全不攔截（見檔頭），所以只能從 stub 內部注入。 */
         __failNext: { table: string; method: string } | null
+        /* 拍照辨識（read-label Edge Function）的回應控制。**預設 null＝比照其他非 rest/v1 的
+         * 請求擋下來並記進 __blocked**，測試要用才明確打開——不讓「忘了設」變成靜默放行。
+         * delayMs 是讓測試有時間在辨識途中操作畫面（例如打字），那正是 stale closure 那類
+         * bug 唯一現形的時機。 */
+        __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
       }
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
       w.__intakeCalls = []
       w.__failNext = null
+      w.__scan = null
 
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -81,6 +87,14 @@ export async function seedFetchStub(
       window.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
         const u = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
         w.__allFetches.push(u)
+
+        /* 拍照辨識：排在下面那道總擋之前，但**沒設 __scan 就一樣落回去被擋**，
+           所以「測試忘了打開」不會靜默變成放行。 */
+        if (u.includes('/functions/v1/read-label') && w.__scan) {
+          const s = w.__scan
+          if (s.delayMs) await new Promise((r) => setTimeout(r, s.delayMs))
+          return s.mode === 'fail' ? json({ error: '辨識失敗' }, 502) : json(s.body)
+        }
 
         if (u.includes('supabase.co') && !u.includes('/rest/v1/')) {
           w.__blocked.push(u)

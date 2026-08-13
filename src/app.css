@@ -1037,6 +1037,9 @@ button { -webkit-user-select: none; user-select: none; }
 .scan-btn:disabled { opacity: .6; cursor: default; }
 /* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
 .scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); color: var(--over); font-size: var(--t-sm); }
+/* 辨識中把整組欄位鎖住。fieldset 純粹當開關用，樣式全部重置——
+   `min-width: 0` 不可省：fieldset 的預設 min-content 寬度會把裡面的 flex 版面撐破。 */
+.form-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
 .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
   scrollbar-width: none; }
 .form-wrap::-webkit-scrollbar { display: none; }
