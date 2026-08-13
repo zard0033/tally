@@ -236,7 +236,11 @@ describe('read-label 辨識', () => {
       { image: 'data:text/html;base64,PHNjcmlwdD4=' }, // 不是影像
       { image: 'data:image/svg+xml;base64,PHN2Zz4=' }, // SVG 不收
       { image: 123 },
-      { image: `data:image/jpeg;base64,${'A'.repeat(700_001)}` }, // 超過上限
+      /* 超過上限。**跟著 handler 的 MAX_IMAGE_CHARS 走**——上線第一天就是因為那個常數
+         拿本機 Pillow 的量測去設、而真機 canvas 吐出三倍大而撞牆（見 handler 該常數的註解）。
+         這裡刻意寫死一個「明顯超過」的量而不是 import 常數：測試要驗的是「有界」這個行為，
+         不是「界在哪個數字」——import 進來的話常數改了測試永遠跟著綠，就驗不到東西了。 */
+      { image: `data:image/jpeg;base64,${'A'.repeat(2_500_000)}` },
     ]
     for (const body of bad) {
       const res = await handleRequest(post(token, body, SITE), JWKS, OR_KEY)

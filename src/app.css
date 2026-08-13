@@ -1066,17 +1066,20 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* 填入瞬間：數值由上而下依序浮現。**動的是文字顏色不是整個盒子**——動 opacity 會連邊框
    一起淡，看起來像欄位在閃而不是數字在填。順序照版面由上到下：品名／店家 → 熱量 → 三大。 */
-/* **掛勾用 `.macros` 這個明確的 class，不用 `:nth-of-type`**：後者照的是**標籤名**，
+/* **掛勾用 `.form-macros` 這個明確的 class，不用 `:nth-of-type`**：後者照的是**標籤名**，
    fieldset 底下第 2 個 div 是熱量那顆 `.field-float`（renderField 直接回傳、沒外包 field-row），
    所以原本寫的 `.field-row:nth-of-type(2)` 一個元素都選不到，三大營養素退回 delay 0、
    順序反而比熱量還早——宣稱「由上而下」實際上下顛倒（precommit review 抓到，無測試會抓）。
    **店家排除在外**：辨識不讀店家，而使用者可能在按鈕前就打好了，讓它跟著閃一次透明
-   等於拿別人的內容做我們的動畫。 */
+   等於拿別人的內容做我們的動畫。
+   **名字帶 `form-` 前綴不是潔癖**：第一版就叫 `.macros`，跟首頁那排營養素撞名，
+   把人家的 `padding: 0 var(--s-5) var(--s-4)` 一起吃進來，表單這排左右內縮了一版才被看出來。
+   純掛勾的 class 也是 class，全域 CSS 底下一樣會被別人的樣式打到。 */
 .form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: value-in 340ms var(--ease) both; }
 .form-lock.scan-filled > .field-float input { animation-delay: 90ms; }
-.form-lock.scan-filled .macros .field-float:nth-child(1) input { animation-delay: 180ms; }
-.form-lock.scan-filled .macros .field-float:nth-child(2) input { animation-delay: 240ms; }
-.form-lock.scan-filled .macros .field-float:nth-child(3) input { animation-delay: 300ms; }
+.form-lock.scan-filled .form-macros .field-float:nth-child(1) input { animation-delay: 180ms; }
+.form-lock.scan-filled .form-macros .field-float:nth-child(2) input { animation-delay: 240ms; }
+.form-lock.scan-filled .form-macros .field-float:nth-child(3) input { animation-delay: 300ms; }
 @keyframes value-in { from { color: transparent } to { color: var(--ink) } }
 .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
   scrollbar-width: none; }

@@ -225,11 +225,14 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         </div>
       </div>
       {renderField({ id: id('kcal'), label: '熱量（卡）', required: true, numeric: true, value: form.kcal, onChange: (v) => set({ kcal: v }) })}
-      {/* `macros` 是給填入動效的 stagger 用的穩定掛勾。原本寫 `.field-row:nth-of-type(2)`
+      {/* `form-macros` 是給填入動效的 stagger 用的穩定掛勾。原本寫 `.field-row:nth-of-type(2)`
           ——`:nth-of-type` 是照**標籤名**數的，而 fieldset 底下第 2 個 div 是熱量那個
           `.field-float`（renderField 直接回傳、沒外包 field-row），所以那條規則一個元素都選不到
-          （precommit review 抓到）。換成靠位置的另一種寫法只是換一個會再壞的。 */}
-      <div className="field-row macros">
+          （precommit review 抓到）。換成靠位置的另一種寫法只是換一個會再壞的。
+          **前綴不可省**：第一版就叫 `macros`，撞上 Today 首頁那排營養素的同名 class，
+          白吃了它的 `padding: 0 var(--s-5)`，表單這排左右憑空內縮（使用者實機看出來的）。
+          全域 CSS 沒有命名空間，掛勾類一律加自己的前綴。 */}
+      <div className="field-row form-macros">
         {renderField({ id: id('protein'), label: '蛋白質 g', numeric: true, value: form.protein, onChange: (v) => set({ protein: v }) })}
         {renderField({ id: id('fat'), label: '脂肪 g', numeric: true, value: form.fat, onChange: (v) => set({ fat: v }) })}
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}

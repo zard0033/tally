@@ -37,9 +37,9 @@ That boundary buys nothing today. The app runs in exactly one place, a browser, 
 
 The bar for lifting UI into `src/components` is that the same set of fields appears on two or more screens and the two should never disagree. There is exactly one shared component so far, and it came out only after the two copies had already drifted apart twice. Extracting on resemblance makes a promise you didn't mean to make: that these two things will always change together.
 
-### 76 end-to-end tests, and a UI change runs all of them
+### 77 end-to-end tests, and a UI change runs all of them
 
-76 browser tests across 10 files, plus 97 unit tests covering the formulas, dates, rounding, image sizing, and the label-reading Edge Function. Any UI change runs the entire browser suite, not the file that looks related. The whole thing finishes in under two minutes, and "the relevant tests passed" is the most common way a regression gets shipped.
+77 browser tests across 11 files, plus 97 unit tests covering the formulas, dates, rounding, image sizing, and the label-reading Edge Function. Any UI change runs the entire browser suite, not the file that looks related. The whole thing finishes in under two minutes, and "the relevant tests passed" is the most common way a regression gets shipped.
 
 Every new test also gets checked by breaking the thing it covers on purpose and confirming it goes red. A test that has never failed hasn't been shown to test anything.
 
@@ -78,7 +78,7 @@ npm run dev        # http://localhost:5500
 
 ```bash
 npx vitest run     # 97 unit tests: formulas, dates, rounding, image sizing, edge function
-npm run e2e        # 76 browser tests, 10 files (WebKit, 393x745)
+npm run e2e        # 77 browser tests, 11 files (WebKit, 393x745)
 npm run build      # tsc -b + vite build
 npm run lint
 ```

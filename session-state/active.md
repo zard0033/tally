@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-13（v2.38 已上線；**拍照辨識功能實作中，dev-flow 步驟 0–3 完成、4–5 進行中——見續點 2**）
+最後更新：2026-08-13（**拍照辨識已上線並修完兩個真機缺陷；等使用者實機再拍一次確認辨識成功——見續點 2**）
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -10,12 +10,14 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎＋食品庫管理
   與設定頁重構。逐版細節一律看 DESIGN.md 版本紀錄，這裡不再複述。
-  **已上線＝v2.38**（`73b923f`，含雙語 README）；本機 v2.39 是純文件結案、無程式改動。
+  **已上線＝v2.41**（拍照讀營養標示；v2.39 是純文件結案、v2.40 是功能本體、v2.41 是上線第一天的兩個真機修正）。
+  Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
+  理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`
   （iOS 鍵盤三題已真機驗過結案）；診斷用的 `?debug` 讀數列已整組移除，要用從 git 撿。
 - **測試**：`npx vitest run` 97/97；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **76/76 全綠**（約 1.4 分，十個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（76／10／97）有三份文件在寫（CLAUDE.md、本檔、
+  **77/77 全綠**（約 1.4 分，十一個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
+  2026-08-12 又漏算一條被 review 抓到；且條數（77／11／97）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
@@ -99,26 +101,14 @@
    已過期，分歧點在 supabase-js 要不要為了 refresh 打網路；需 `npm run preview` 起在 5501）。
    **這條有 UI**（離線指示條），實作階段照 dev-flow 鐵律 4 轉 `ui-design-flow`。
 
-2. **拍照辨識：dev-flow 走到實作階段，步驟 0–3 完成、4–5 進行中**（規格全文見 spec.md）。
-   完成：key 上限已設／壓縮參數 1200px q0.85 實測定案／Edge Function `read-label`（驗 JWT ＋
-   OpenRouter ＋CORS allowlist ＋POST-only ＋SSRF 閘），21 條測試、**兩輪獨立 verifier 皆 PASS**。
-   前端：相機鈕「AI 辨識輸入」已接進兩個新增入口（就地編輯刻意不給），辨識中用 `<fieldset disabled>`
-   整組鎖住、關閉鈕與 vaul 下滑一起鎖，e2e ＋2 條。
-   等待動效已落地：四版對照 demo 讓使用者挑，選「骨架呼吸」（空欄位變灰條輕微呼吸、標籤同時
-   浮起，已打字的欄位不長骨架）＋填入時數值由上而下依序浮現。demo 是一次性產物、已刪。
-   **剩一件：push 前端**（後端已上線，push 前 app 上還沒有那顆鈕）。
-   註冊已關閉（單人 app 的成本防線，理由在 spec.md「安全」節，不複製第二份）；金鑰已進 Supabase secrets。
-   **Edge Function 已部署並從外部驗過（2026-08-13）**：preflight 不帶 Authorization → 204 且
-   `Allow-Origin` 回的是白名單常數；無 token／亂寫 token → 401、GET → 405，訊息都是函式自己寫的
-   中文（代表請求真的進到程式碼）；未授權 origin 拿不到 `Allow-Origin`。**部署指令要兩個旗標**：
-   `--use-api`（預設的打包路徑要 Docker，這台沒有——第一次部署就是靜默失敗成 404）＋
-   `--no-verify-jwt`（**閘道那層的驗證連公開的 anon key 都收，擋不住人，卻會擋掉依規範不帶
-   Authorization 的 preflight**；真正的防線是函式內那道，21 條測試＋兩輪 verifier＋mutation 檢查）。
-   **仍未驗（要真機）**：iOS 鍵盤的上下箭頭——這輪在 `<form>` 與欄位之間插了一層 `<fieldset>`，
-   而 v2.33 的教訓正是「沒有 form 時 Safari 靠 DOM 相鄰性猜欄位分組」，多一層會不會擾動那個猜測
-   **桌面重現不了**（precommit review 指出，confidence low 但這專案為同一件事踩過三輪）。
-   另一個已知缺口：`supabase/functions/**` 不在 `tsconfig.app.json` 的 include 內，**型別錯誤 CI
-   攔不到**（vitest 只做 esbuild transform 不查型別），收尾時補。
+2. **拍照辨識：已上線**（規格見 spec.md，設計取捨與兩個真機修正見 DESIGN.md v2.40／v2.41）。
+   後端 21 條測試＋兩輪獨立 verifier 皆 PASS＋mutation 檢查；註冊已關閉（單人 app 的成本防線，
+   理由在 spec.md「安全」節）。**剩三件**：
+   ① **等使用者實機再拍一次**——上線第一天兩次都撞圖片上限，已修並重新部署，但修正本身還沒被真機證實。
+   ② **iOS 鍵盤上下箭頭未驗（只能真機）**：這輪在 `<form>` 與欄位之間插了一層 `<fieldset>`，而 v2.33
+   的教訓正是「沒有 form 時 Safari 靠 DOM 相鄰性猜欄位分組」，多一層會不會擾動那個猜測桌面重現不了。
+   ③ `supabase/functions/**` 不在 `tsconfig.app.json` 的 include 內，**型別錯誤 CI 攔不到**
+   （vitest 只做 esbuild transform 不查型別）。
 
 3. **預先記錄明天的飲食**：範圍已定（見待決問題），尚未開工。
 
@@ -140,6 +130,11 @@
 （v2.38：微調類的選項給文字清單，使用者的回應是「講太多我都聽不懂的東西」——**可摸的對照
 demo 才是這類決策的正確載體**，而且要我先做、不是等他要求）。⑥ **宣告「某條路否決」前先數清楚
 候選裡真的測過幾個**——2026-08-13 四個免費模型只實測過一個就下結論，使用者連問兩次才補測，翻盤。
+⑦ **拿 A 工具的量測去設 B 工具的門檻**（上線第一天全數 400：上限是用本機 Pillow 推的，
+真機 canvas 大三倍）。修法不是換個數字，是**改量「那個格式的上界」而且用同一家的引擎**
+（WebKit 跑 1200×1200 純亂數＝JPEG 的理論最壞）。⑧ **純掛勾用的 class 也要加前綴**——
+`macros` 撞上首頁同名 class，白吃了它的內距；全域 CSS 沒有命名空間。⑨ **「不記 log」要分清楚
+對外與對內**：對前端收斂成一句是對的，伺服器也什麼都不留，第一次上線出問題時兩邊都是瞎的。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 
