@@ -71,8 +71,8 @@
 1. 新增食物 sheet 上有一顆相機鈕，`accept="image/*" capture="environment"`；它在 `<form>` 內必須標 `type="button"`（沒標的 button 預設是 submit，見 DESIGN.md「多欄輸入一律包 `<form>`」）。
 2. 選圖後前端壓縮：**長邊 ≤1200px、JPEG q0.85**，送出 payload <400KB。單元測試餵一張 4000px 的圖，斷言輸出長邊與位元組數。（**兩個旋鈕的成本不對稱**：token 由像素數決定 ── Qwen3.7 每 32×32 px 一個 token，1200px≈780 tokens／2048px≈2300 ──，而 **JPEG quality 完全不進 token 公式，只影響上傳位元組**。所以尺寸要省、品質不必省；原訂 q0.75 是把「省」用錯地方，q0.85 對小字多留一點餘裕而 token 成本不變。）
 3. Edge Function **無有效 JWT 一律回 401 且不呼叫 OpenRouter**（用 `SUPABASE_JWKS` 驗，該環境變數 Edge Function 預設就有）。亂寫 token 與過期 token 各一條測試。
-4. 函式成功回 `{basis, serving_g, kcal, protein_g, fat_g, carb_g}` 固定形狀；失敗回 `{error}`，**不洩漏 OpenRouter 的錯誤原文或 key**。
-5. 結果填進表單欄位，**品名附加括號標籤**：`per_serving` 無公克數→`（每份）`／有公克數→`（每份 123g）`／`per_100g`→`（每100克）`。
+4. 函式成功回 `{name, basis, serving_g, kcal, protein_g, fat_g, carb_g}` 固定形狀；失敗回 `{error}`，**不洩漏 OpenRouter 的錯誤原文或 key**。`name` 是包裝上的**正式完整品名**（如「伯朗奶茶-減糖香濃原味(三合一)」），不是商標大字——同品牌常有多種口味，只取品牌名會讓不同營養的品項在食品庫裡同名。**`name` 是唯一讀不到也不算失敗的欄位**（讀不到回 `null`）：數字才是難的部分，品名使用者自己打很快，為了它丟掉六個正確的數字是本末倒置。
+5. 結果填進表單欄位，**品名欄＝讀到的品名＋括號標籤**：`per_serving` 無公克數→`（每份）`／有公克數→`（每份 17g）`／`per_100g`→`（每100克）`。**`name` 為 null 時品名欄只填括號**（例如 `（每份 17g）`），使用者在前面補打名字即可——括號已經在那裡，比整欄留白好用。品名偏長是刻意的：結果一律是草稿，**刪短比從頭打字容易**，所以寧可給多不給少。
 6. **結果一律是草稿，表單不自動送出**；辨識失敗時表單維持可手打，不出現阻斷式提示。斷言辨識後 `foods` 無新列、且 stub 回 500 時仍能手動完成新增。
 7. 既有 e2e／vitest 全綠、`npm run lint` 0 error。
 

@@ -15,6 +15,8 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose'
 
 /** 成功回傳的固定形狀（spec.md AC4）。值由模型輸出填，逐欄驗過才組出來。 */
 export interface LabelReading {
+  /** 包裝上的正式完整品名。**讀不到是 null，不是失敗**——理由見 parseReading。 */
+  name: string | null
   basis: 'per_serving' | 'per_100g'
   serving_g: number | null
   kcal: number
@@ -33,7 +35,9 @@ const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'qwen/qwen3.7-flash'
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
-{"basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
+{"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
+name 填包裝上的**正式完整品名**（通常標在成分欄前面的「品名:」後面，例如「伯朗奶茶-減糖香濃原味(三合一)」），
+不要只填商標大字。同一品牌常有多種口味，只填品牌名會讓不同營養的品項變成同名。找不到就填 null。
 標示同時有「每份」與「每100公克」兩欄時，一律讀「每份」那欄，basis 填 per_serving。
 serving_g 只填標示上明寫的每份公克數，沒印就填 null，不要用兩欄比值回推。
 看不清楚的欄位填 null，不要猜。`
@@ -89,12 +93,16 @@ function parseReading(content: string): LabelReading | null {
     return null
   }
 
-  const { basis, serving_g, kcal, protein_g, fat_g, carb_g } = got
+  const { name, basis, serving_g, kcal, protein_g, fat_g, carb_g } = got
   if (basis !== 'per_serving' && basis !== 'per_100g') return null
   if (!(serving_g === null || isNum(serving_g))) return null
   if (!isNum(kcal) || !isNum(protein_g) || !isNum(fat_g) || !isNum(carb_g)) return null
+  /* name 讀不到只是留白，**不讓整次辨識失敗**：數字才是難的部分（小字、反光、兩欄並列），
+     品名使用者自己打很快。為了一個空欄位丟掉六個正確的數字是本末倒置。
+     型別不對（模型回了數字或物件）也一律當沒讀到，而不是 return null 整組作廢。 */
+  const trimmed = typeof name === 'string' ? name.trim() : ''
   // 逐欄重建，不把模型回的物件原樣往前端送——多出來的欄位沒有理由跟著出去。
-  return { basis, serving_g, kcal, protein_g, fat_g, carb_g }
+  return { name: trimmed || null, basis, serving_g, kcal, protein_g, fat_g, carb_g }
 }
 
 /**

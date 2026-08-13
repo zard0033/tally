@@ -82,7 +82,7 @@ function stubUpstream(body: string, status = 200) {
 /** OpenRouter 成功回應的形狀：模型的字串塞在 choices[0].message.content。 */
 const upstreamReply = (content: string) => JSON.stringify({ choices: [{ message: { content } }] })
 
-const GOOD_READING = '{"basis":"per_serving","serving_g":17,"kcal":82,"protein_g":0.4,"fat_g":3.6,"carb_g":12.1}'
+const GOOD_READING = '{"name":"伯朗奶茶-減糖香濃原味(三合一)","basis":"per_serving","serving_g":17,"kcal":82,"protein_g":0.4,"fat_g":3.6,"carb_g":12.1}'
 
 /* 「不呼叫外部服務」用機器證明，不靠讀 code 宣稱：任何路徑只要碰 fetch 就炸。
    要驗成功路徑的測試自己用 stubUpstream 換掉它——換不掉就代表那條路真的不該外呼。 */
@@ -140,10 +140,11 @@ describe('read-label 安全外殼', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(Object.keys(body).sort()).toEqual(
-      ['basis', 'carb_g', 'fat_g', 'kcal', 'protein_g', 'serving_g'],
+      ['basis', 'carb_g', 'fat_g', 'kcal', 'name', 'protein_g', 'serving_g'],
     )
     expect(body.basis).toBe('per_serving')
     expect(typeof body.kcal).toBe('number')
+    expect(body.name).toBe('伯朗奶茶-減糖香濃原味(三合一)')
   })
 
   it('⑦ SUPABASE_JWKS 缺／壞 → 500 而不是 401（讓 401 只剩驗證失敗一個成因）', async () => {
@@ -261,17 +262,48 @@ describe('read-label 辨識', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SITE)
     expect(await res.json()).toEqual({
+      name: '伯朗奶茶-減糖香濃原味(三合一)',
       basis: 'per_serving', serving_g: 17, kcal: 82, protein_g: 0.4, fat_g: 3.6, carb_g: 12.1,
     })
   })
 
   it('⑰ 模型把 JSON 包在 ``` 裡也解得開；多出來的欄位不會跟著送給前端', async () => {
-    stubUpstream(upstreamReply('```json\n{"basis":"per_100g","serving_g":null,"kcal":250,"protein_g":8,"fat_g":12,"carb_g":28,"note":"多的"}\n```'))
+    stubUpstream(upstreamReply('```json\n{"name":"某某餅乾","basis":"per_100g","serving_g":null,"kcal":250,"protein_g":8,"fat_g":12,"carb_g":28,"note":"多的"}\n```'))
     const res = await handleRequest(post(await validToken(), { image: IMAGE }), JWKS, OR_KEY)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
+      name: '某某餅乾',
       basis: 'per_100g', serving_g: null, kcal: 250, protein_g: 8, fat_g: 12, carb_g: 28,
     })
+  })
+
+  /* 品名是**唯一一個讀不到也不算失敗**的欄位：數字才是難的部分（小字、反光、兩欄並列），
+     品名使用者自己打很快，為了它丟掉六個正確的數字是本末倒置。這條鎖住那個取捨。 */
+  it('⑳ 品名讀不到／型別不對只留白，不讓整次辨識失敗', async () => {
+    const token = await validToken()
+    const nums = '"basis":"per_serving","serving_g":17,"kcal":82,"protein_g":0.4,"fat_g":3.6,"carb_g":12.1'
+    const cases = [
+      `{${nums}}`,                    // 整個欄位沒回
+      `{"name":null,${nums}}`,        // 明確填 null
+      `{"name":"",${nums}}`,          // 空字串
+      `{"name":"   ",${nums}}`,       // 只有空白
+      `{"name":123,${nums}}`,         // 型別不對
+      `{"name":{"a":1},${nums}}`,     // 型別不對
+    ]
+    for (const content of cases) {
+      stubUpstream(upstreamReply(content))
+      const res = await handleRequest(post(token, { image: IMAGE }, SITE), JWKS, OR_KEY)
+      expect(res.status, content).toBe(200)
+      const body = await res.json()
+      expect(body.name, content).toBeNull()
+      expect(body.kcal, content).toBe(82)
+    }
+  })
+
+  it('㉑ 品名前後的空白會被去掉（模型常多回幾個空格）', async () => {
+    stubUpstream(upstreamReply('{"name":"  伯朗奶茶  ","basis":"per_serving","serving_g":17,"kcal":82,"protein_g":0.4,"fat_g":3.6,"carb_g":12.1}'))
+    const res = await handleRequest(post(await validToken(), { image: IMAGE }), JWKS, OR_KEY)
+    expect((await res.json()).name).toBe('伯朗奶茶')
   })
 
   it('⑱ 模型回的讀數半殘或不是 JSON → 502 {error}，不把半組數字交給前端', async () => {
