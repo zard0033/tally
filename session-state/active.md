@@ -106,12 +106,8 @@
    整組鎖住、關閉鈕與 vaul 下滑一起鎖，e2e ＋2 條。
    等待動效已落地：四版對照 demo 讓使用者挑，選「骨架呼吸」（空欄位變灰條輕微呼吸、標籤同時
    浮起，已打字的欄位不長骨架）＋填入時數值由上而下依序浮現。demo 是一次性產物、已刪。
-   **剩兩件**：① DESIGN.md 回寫 ② 部署。
-   **使用者要做的另一件（在部署之前）：Supabase 關掉「Allow new users to sign up」**——
-   `read-label` 沒有 per-user 配額，「只有一個帳號拿得到 token」就是它唯一的速率限制。
-   理由與重開的後果已寫進 spec.md「安全（不可妥協）」節，不在這裡複製第二份。
-   **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
-   `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
+   **剩一件：push 前端**（後端已上線，push 前 app 上還沒有那顆鈕）。
+   註冊已關閉（單人 app 的成本防線，理由在 spec.md「安全」節，不複製第二份）；金鑰已進 Supabase secrets。
    **Edge Function 已部署並從外部驗過（2026-08-13）**：preflight 不帶 Authorization → 204 且
    `Allow-Origin` 回的是白名單常數；無 token／亂寫 token → 401、GET → 405，訊息都是函式自己寫的
    中文（代表請求真的進到程式碼）；未授權 origin 拿不到 `Allow-Origin`。**部署指令要兩個旗標**：
