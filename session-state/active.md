@@ -118,7 +118,9 @@
 
 4. **待刪（v2.38 的一次性產物，結案條件已滿足，等使用者點頭）**：
    [ios-gap-analysis.md](ios-gap-analysis.md)、`_design-sample/ios-tuning-compare.html`。
-   刪掉後記得改 DESIGN.md 版本紀錄最後那條「對照 demo 現況」。
+   **刪之前先 grep 這兩個檔名**——已知引用點至少三處：DESIGN.md 版本紀錄最後那條
+   「對照 demo 現況」（要改）、v2.38 那條（歷史紀錄，留著）、`app.css` scrim 註解裡
+   「16px 這個值的來源」那句（自行判斷要不要拿掉路徑）。
 
 **dev-flow 申報（PWA 這條，未完成）**：規模<大> 視角<兩者：Jobs 在釐清翻出「加 PWA」是技術
 描述不是使用者利益、逼出三選一的範圍題；Musk 在 spec 砍掉上述兩件事> 釐清<完成，AskUserQuestion
