@@ -17,6 +17,9 @@
 - **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **74/74 全綠**（約 1.3 分，十個 spec 檔；**條數以實跑輸出為準**——2026-08-12 又漏算一條
   被 review 抓到，改文件前先跑一次比心算快）。各檔涵蓋範圍見 CLAUDE.md。
+- **[追加] 雙語 README（2026-08-13，spec 外）**：讀者是獵頭不是開發者；verifier 七項 AC 全 PASS。
+  **測試條數（74／10 檔／64）現在有三份文件在寫**（CLAUDE.md、本檔、兩份 README），改條數要一次改到底；
+  DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
 
