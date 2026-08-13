@@ -109,8 +109,11 @@
    **剩兩件**：① DESIGN.md 回寫 ② 部署。
    **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
    `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
-   **部署後第一件事：curl 驗 OPTIONS preflight**。Supabase gateway 的 `verify_jwt` 可能在函式之前
-   就擋掉不帶 Authorization 的 preflight，**這是本機唯一驗不到的假設**（無 Deno／Docker）。
+   **部署後要驗的兩件（本機都驗不到）**：① **curl 驗 OPTIONS preflight**——Supabase gateway 的
+   `verify_jwt` 可能在函式之前就擋掉不帶 Authorization 的 preflight（無 Deno／Docker，本機起不了）。
+   ② **真機驗 iOS 鍵盤的上下箭頭**——這輪在 `<form>` 與欄位之間插了一層 `<fieldset>`，而 v2.33
+   的教訓正是「沒有 form 時 Safari 靠 DOM 相鄰性猜欄位分組」；多一層會不會影響那個猜測**桌面
+   重現不了**（precommit review 指出，confidence low 但這個專案為同一件事踩過三輪）。
    另一個已知缺口：`supabase/functions/**` 不在 `tsconfig.app.json` 的 include 內，**型別錯誤 CI
    攔不到**（vitest 只做 esbuild transform 不查型別），收尾時補。
 
