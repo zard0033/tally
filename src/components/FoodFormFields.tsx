@@ -12,9 +12,10 @@
    在 vaul Drawer 裡會被 Radix Dialog 的 `pointer-events: none` 擋掉——選單看得到、點不到
    （真機與 e2e 都撞過，見 DESIGN.md「店家欄位」條）。**放在 sheet 裡用就一定要傳**；
    不在 sheet 裡（食品庫的就地編輯）留空走預設即可。 */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Autocomplete } from '@base-ui/react/autocomplete'
-import type { FoodForm } from '@/lib/foodForm'
+import { readingToForm, type FoodForm, type LabelReading } from '@/lib/foodForm'
+import { compressToDataUri } from './compressImage'
 
 interface FieldOpts {
   id: string
@@ -59,11 +60,26 @@ export interface FoodFormFieldsProps {
   portalContainer?: React.RefObject<HTMLElement | null>
   /** 品名已經有值（搜尋字串帶入／以範本新增）時，焦點直接落在店家。 */
   vendorAutoFocus?: boolean
+  /**
+   * 傳了才出現「拍標示自動填」那顆鈕。**只有兩個「新增」入口該傳**——就地編輯是在改一筆
+   * 既有食物，重拍一張標示把欄位整組蓋掉不是那個情境要的事。
+   * 只負責送出去辨識；拍照、壓縮、載入與錯誤狀態都在本元件內，呼叫端不必各做一份。
+   */
+  onScan?: (imageDataUri: string) => Promise<LabelReading>
+  /**
+   * 辨識期間的忙碌狀態。外層拿它**鎖住關閉**（關閉鈕停用 ＋ sheet 的下滑關閉停用）——
+   * 只擋關閉鈕沒用，vaul 的抽屜手指往下一滑就關了。
+   * 代價是辨識卡住時會被關在畫面裡，所以 `scanLabel` 的逾時壓到 15 秒（實測只要 2–5 秒）。
+   */
+  onBusyChange?: (busy: boolean) => void
 }
 
 export default function FoodFormFields(props: FoodFormFieldsProps) {
-  const { form, onChange, idPrefix, vendorOptions, portalContainer, vendorAutoFocus } = props
+  const { form, onChange, idPrefix, vendorOptions, portalContainer, vendorAutoFocus, onScan } = props
   const vendorInputRef = useRef<HTMLInputElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState('')
 
   useEffect(() => {
     if (vendorAutoFocus) vendorInputRef.current?.focus()
@@ -71,7 +87,37 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   }, [])
 
   const id = (k: string) => `${idPrefix}${k}`
-  const set = (patch: Partial<FoodForm>) => onChange({ ...form, ...patch })
+  /* 使用者一動手打字就把辨識失敗那行清掉——他已經在走手打這條路了，那行紅字再留著只是噪音。
+     （原本它會一直掛到關閉 sheet 為止。） */
+  const set = (patch: Partial<FoodForm>) => {
+    if (scanError) setScanError('')
+    onChange({ ...form, ...patch })
+  }
+
+  /* 辨識結果**一律是草稿**（spec.md AC6）：只填欄位，不送出、不擋畫面。失敗也只是留一行字，
+     使用者照樣手打——那條路本來就存在且免費，不需要為它蓋復原流程。
+     店家刻意不動：標示上沒有店家，那欄是使用者自己的分類。
+     `onBusyChange` 讓外層在辨識期間鎖住關閉：**誤按關閉的代價是要重拍一張照片**，值得擋。 */
+  async function handleFile(file: File) {
+    setScanError('')
+    setScanning(true)
+    props.onBusyChange?.(true)
+    try {
+      const patch = readingToForm(await onScan!(await compressToDataUri(file)))
+      setScanError('')
+      onChange({ ...form, ...patch })
+    } catch {
+      /* 所有失敗同一句：登入真的過期時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回
+         登入頁並顯示「登入已過期，請重新登入」（App.tsx onAuthStateChange），比在這裡多印
+         一句話有用得多——所以這裡不為 401 另開分支。 */
+      setScanError('辨識失敗，請手動填寫')
+    } finally {
+      setScanning(false)
+      props.onBusyChange?.(false)
+      // 清掉 value，否則再選同一個檔不會觸發 change（重拍同一張是合理操作）
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   /* 包在 `<form>` 裡是為了 **iOS 的鍵盤上下箭頭**（form accessory bar），不是為了送出——
      `onSubmit` 一律 preventDefault，送出仍然走各畫面自己的按鈕。真機回報：從品名往下切，
@@ -82,6 +128,39 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      **這條只能真機驗**：桌面沒有 accessory bar。 */
   return (
     <form onSubmit={(e) => e.preventDefault()}>
+      {onScan && (
+        <>
+          {/* capture="environment" 在 iOS Safari 直接開後鏡頭；桌面沒有相機就退成檔案選擇器。
+              `type="button"` 不可省——`<form>` 裡沒標 type 的 button 預設是 submit
+              （DESIGN.md「多欄輸入一律包 `<form>`」條末尾那句）。 */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            data-testid={`${idPrefix}scan-input`}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void handleFile(f)
+            }}
+          />
+          <button
+            type="button"
+            className="scan-btn"
+            disabled={scanning}
+            onClick={() => fileRef.current?.click()}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+              <circle cx="12" cy="12.5" r="3.2" />
+            </svg>
+            {scanning ? '辨識中…' : 'AI 辨識輸入'}
+          </button>
+          {/* role=status：辨識是非同步的，讀屏使用者不會自己回頭看這一行 */}
+          {scanError && <p className="scan-error" role="status">{scanError}</p>}
+        </>
+      )}
       <div className="field-row">
         {renderField({ id: id('name'), label: '品名', required: true, value: form.name, onChange: (v) => set({ name: v }) })}
         <div className="field-float">

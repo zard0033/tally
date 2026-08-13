@@ -11,6 +11,7 @@ import type { Profile } from './formulas'
    收斂成 MealKey 而不是裸 string，讓非法餐別在 TS 邊界就擋掉，不必等 DB 約束
    （precommit review 的 code 與 security 兩個維度各提了一次）。 */
 import type { MealKey } from './meals'
+import type { LabelReading } from './foodForm'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -265,4 +266,33 @@ export async function getProfile(): Promise<ProfileRow | null> {
 export async function updateProfile(userId: string, patch: Partial<ProfileRow>): Promise<void> {
   const { error } = await supabase.from('profile').update(patch).eq('user_id', userId).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
+}
+
+/* ═══════════ 拍照讀營養標示 ═══════════ */
+
+/* 比 DB_TIMEOUT 寬、但刻意不寬太多。一方面「連上了但不回」這種失敗 fetch 永遠不會 reject
+   （檔頭那句），沒有上界畫面就一直轉；另一方面**辨識期間 UI 會鎖住 sheet 的關閉**（避免誤按
+   讓那張照片白拍），所以這個數字同時是「最壞情況使用者被關住多久」。實測 2–5 秒，15 秒已很寬鬆。
+   Edge Function 自己對上游另有 60 秒的界，兩層互不取代。 */
+const SCAN_TIMEOUT = 15_000
+
+/**
+ * 把壓好的照片送給 `read-label` Edge Function 讀營養標示。
+ *
+ * 走 `functions.invoke` 而不是自己 fetch：它會自動帶上目前 session 的 access token，
+ * 而那正是函式那端唯一認的東西（金鑰在函式裡，前端從頭到尾碰不到）。
+ *
+ * **失敗一律收斂成同一句。** 注意理由不是「分不出來」——函式那端雖然不說原因，HTTP 狀態碼
+ * 仍然拿得到，401 與 502 是分得出來的。真正的理由是**分出來也沒有第二種該做的事**：
+ * session 真的失效時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回登入頁並顯示
+ * 「登入已過期，請重新登入」（比在表單裡多印一行有用得多）；其餘情況 spec.md AC6 要的行為
+ * 只有一種——讓使用者改手打。為此再分一套錯誤類型是替不存在的分支蓋房子。
+ */
+export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
+  const { data, error } = await supabase.functions.invoke<LabelReading>('read-label', {
+    body: { image: imageDataUri },
+    signal: AbortSignal.timeout(SCAN_TIMEOUT),
+  })
+  if (error || !data) throw new Error('辨識失敗')
+  return data
 }

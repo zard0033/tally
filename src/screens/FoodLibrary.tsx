@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Drawer } from 'vaul'
 import FoodFormFields from '@/components/FoodFormFields'
-import { listArchivedFoods, type Food, type NewFood } from '@/lib/api'
+import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
 import { BLANK_FOOD_FORM, foodToForm, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
 export interface FoodLibraryProps {
@@ -76,6 +76,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   /* 新增／範本新增走 sheet（v2.29），不再是整頁 view——同 LogSheet 的「新增食物」，
      底下的清單留在原地，關掉就回到剛才捲到的位置。 */
   const [addOpen, setAddOpen] = useState(false)
+  /** 辨識中鎖住關閉（關閉鈕 ＋ 下滑）——誤關的代價是那張照片白拍。 */
+  const [scanBusy, setScanBusy] = useState(false)
   const addSheetRef = useRef<HTMLDivElement | null>(null)
   const [addForm, setAddForm] = useState<FoodForm>(BLANK_FOOD_FORM)
   const [addSourceName, setAddSourceName] = useState<string | null>(null)
@@ -194,16 +196,19 @@ export default function FoodLibrary(props: FoodLibraryProps) {
      scrim/animation 樣板——手刻那份的存在理由是 legacy 的 `#sheet-root` id 衝突，
      在 vaul 下不成立，而 vaul 順帶給了拖曳關閉與 Drawer.Content 這個 portal 容器。
 
-     `repositionInputs={false}`：理由同 LogSheet，全文在 app.css `.sheet` 那段。 */
+     `repositionInputs={false}`：理由同 LogSheet，全文在 app.css `.sheet` 那段。
+
+     `dismissible={!scanBusy}`：辨識中鎖住下滑關閉。只擋關閉鈕沒用——vaul 的抽屜手指往下
+     一滑就關了，而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */
   const addSheet = (
-    <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false} repositionInputs={false}>
+    <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
       <Drawer.Portal>
         <Drawer.Overlay className="scrim" />
         <Drawer.Content ref={addSheetRef} className="sheet" aria-label={addTitle} data-screen="food-add-sheet">
           <Drawer.Handle className="handle" />
           <div className="sheet-head">
             <span className="sheet-title">{addTitle}</span>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setAddOpen(false)}>
+            <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={() => setAddOpen(false)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
@@ -218,6 +223,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
               vendorOptions={vendorOptions}
               portalContainer={addSheetRef}
               vendorAutoFocus={!!addSourceName}
+              onScan={scanLabel}
+              onBusyChange={setScanBusy}
             />
           </div>
           <div className="confirm-wrap">

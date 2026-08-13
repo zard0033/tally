@@ -13,6 +13,7 @@ import { Drawer } from 'vaul'
 import FoodFormFields from '@/components/FoodFormFields'
 import {
   listRecentIntake,
+  scanLabel,
   type Food,
   type NewIntake,
 } from '@/lib/api'
@@ -173,6 +174,8 @@ export default function LogSheet(props: LogSheetProps) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FOOD_FORM)
+  /** 辨識中鎖住關閉（關閉鈕 ＋ 下滑）——誤關的代價是那張照片白拍。 */
+  const [scanBusy, setScanBusy] = useState(false)
   /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
      Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
      Dialog Content 自己的子樹。預設 Portal 掛在 body 下等於掛在被擋的那層，選單看得到
@@ -483,7 +486,9 @@ export default function LogSheet(props: LogSheetProps) {
       {/* repositionInputs={false}：vaul 自己那套鍵盤補償會直接往 Drawer.Content 寫 inline
           `height`／`bottom`，把 app.css 的 `--kb` 蓋掉（inline 永遠贏）。原委與取捨寫在
           app.css `.sheet` 那段，改這裡之前先讀那段。 */}
-      <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false} repositionInputs={false}>
+      {/* dismissible={!scanBusy}：辨識中鎖住下滑關閉。只擋關閉鈕沒用——vaul 的抽屜手指往下
+          一滑就關了，而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */}
+      <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
         <Drawer.Portal>
           <Drawer.Overlay className="scrim" />
           <Drawer.Content ref={sheetRef} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
@@ -599,7 +604,7 @@ export default function LogSheet(props: LogSheetProps) {
               <>
                 <div className="sheet-head">
                   <span className="sheet-title">新增食物</span>
-                  <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
+                  <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={onClose}>
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
@@ -626,6 +631,8 @@ export default function LogSheet(props: LogSheetProps) {
                     vendorOptions={vendorOptions}
                     portalContainer={sheetRef}
                     vendorAutoFocus
+                    onScan={scanLabel}
+                    onBusyChange={setScanBusy}
                   />
                 </div>
 

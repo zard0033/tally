@@ -1014,6 +1014,29 @@ button { -webkit-user-select: none; user-select: none; }
 .sheet-error { margin: 0; }
 
 /* ═══════════ 表單（新增食物／設定編輯／記體重） ═══════════ */
+
+/* 拍標示自動填：**表單層級的捷徑，不是主要動作**——所以描邊不填色，與底部那顆填色的
+   確認鈕分層（同一張表單上兩顆填色鈕會分不出誰是主角）。放在欄位上方而不是黏在品名旁，
+   因為它一次填滿整張表單（品名＋熱量＋三大營養素），不屬於任何單一欄位。
+   帶文字不只圖示：光一顆相機在表單上方有歧義——拍的是食物本身還是標示？
+   邊框用 `--rule-field` 而不是 `--rule`：它是使用者拿來操作的控件，受 WCAG 1.4.11 的 3:1 管
+   （見「資料輸入控件的邊界」條）。字距用 `--track-xs`，小字要放鬆——**沒有 `--track-sm` 這個
+   token**，寫了會靜默 fallback 成 normal。 */
+.scan-btn { width: 100%; min-height: 44px; margin-bottom: var(--s-4);
+  display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  border: 1px solid var(--rule-field); border-radius: var(--r-tab);
+  background: transparent; color: var(--accent);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  letter-spacing: var(--track-xs); cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.scan-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.scan-btn:active { opacity: .7; }
+.scan-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 辨識中：不換文案位置只換字，避免按鈕寬高跳動；其餘欄位仍可編輯（見元件註解）。 */
+.scan-btn:disabled { opacity: .6; cursor: default; }
+/* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
+.scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); color: var(--over); font-size: var(--t-sm); }
 .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
   scrollbar-width: none; }
 .form-wrap::-webkit-scrollbar { display: none; }
