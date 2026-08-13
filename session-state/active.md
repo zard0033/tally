@@ -107,6 +107,9 @@
    等待動效已落地：四版對照 demo 讓使用者挑，選「骨架呼吸」（空欄位變灰條輕微呼吸、標籤同時
    浮起，已打字的欄位不長骨架）＋填入時數值由上而下依序浮現。demo 是一次性產物、已刪。
    **剩兩件**：① DESIGN.md 回寫 ② 部署。
+   **使用者要做的另一件（在部署之前）：Supabase 關掉「Allow new users to sign up」**——
+   `read-label` 沒有 per-user 配額，「只有一個帳號拿得到 token」就是它唯一的速率限制。
+   理由與重開的後果已寫進 spec.md「安全（不可妥協）」節，不在這裡複製第二份。
    **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
    `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
    **部署後要驗的兩件（本機都驗不到）**：① **curl 驗 OPTIONS preflight**——Supabase gateway 的

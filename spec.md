@@ -28,6 +28,7 @@
 - 前端只用 `anon` key ＋ RLS（Row Level Security）。
 - Neve 分析：平常用**唯讀 key**；**key 絕不進 repo**（放本機 env 或需要時臨時提供）。
 - **repo 為 public**（2026-07-27 轉），GitHub Pages 網站當然也公開。隱私全靠 Auth ＋ RLS：前端只有 publishable key，未登入讀任何一張表都回 `[]`（已實測）。
+- **這是單人 app：Supabase 的「Allow new users to sign up」必須維持關閉**（2026-08-13 立，precommit review 指出）。**這條不只保護資料，還是 `read-label` Edge Function 唯一的成本防線**——那支函式驗完 JWT 就代打付費的 OpenRouter，沒有 per-user 配額，所以「只有一個帳號拿得到 token」就是它的速率限制。官方文件原話：`If this config is disabled, only existing users can sign in`（通用設定，Google OAuth 同樣受管）。**把註冊打開會無聲地重開這個洞**：不會有測試變紅、不會有任何提示，站點 URL 與 anon key 都在 public bundle 裡，任何人登入一次就能把額度打光（花費上限已設，所以最壞是功能停擺不是帳單）。真的需要開放註冊時，**必須同時**在函式內加 per-user 配額或把呼叫者限縮到特定 `sub`。
 
 ## 資料模型（Supabase，初版四表；細節開發時定）
 
