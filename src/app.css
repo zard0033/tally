@@ -748,17 +748,15 @@ button { -webkit-user-select: none; user-select: none; }
    只認 -webkit-）。16px 這個值的來源要講清楚：是**在 headless WebKit 上截對照 demo
    （`_design-sample/ios-tuning-compare.html`）的畫面比出來的**——那頁的模糊在同一支引擎上
    render 得出來，10px 以下在 55% 壓暗底下跟沒加幾乎分不出來（壓暗已經先吃掉大半細節）。
-   **不是真機比的、也沒有使用者拉滑桿的讀數**，真機看過之後可能要重調。
+   **不是真機比的**，但 2026-08-13 使用者真機看過並回報 ok，16px 就地定案。
 
-   **⚠ 這條在 e2e 的 headless WebKit 裡看不出效果，尚未真機確認（v2.38 留下的未解）**：
-   computed style 完全正確（`pos=fixed bf=blur(16px)`，值拉到 40px 也照樣回報），截圖卻
-   一點都沒糊——日期膠囊那條 1px 邊框仍然銳利。診斷六輪未定案，而且**對照實驗本身自相
-   矛盾**：同樣 absolute 的測試層，帶 background 的糊得起來、不帶的糊不起來，所以「fixed
-   vs absolute」那個結論不成立，position 因此**維持原本的 fixed 不動**（它跟 v2.35 的
-   `--vvtop` 判準綁在一起，不拿一個沒控好變因的實驗去動它）。
-   高度懷疑是 headless WebKit 的合成行為與真機不同——同一支引擎跑對照 demo 時模糊是
-   **有效的**，差別只在那頁的模糊層有個 `overflow: clip` 的祖先。真機若也沒效果，下一步
-   從「給模糊層一個 overflow:clip／contain 的祖先」試起，別再重跑 position 那條路。 */
+   **這裡留下一個環境陷阱（v2.38 的六輪診斷，v2.39 結案）**：`backdrop-filter` 在 e2e 的
+   headless WebKit 裡**完全看不出效果，而 computed style 一切正常**（`pos=fixed
+   bf=blur(16px)`，值拉到 40px 也照樣回報），真機卻是好的。所以**這條規則在 e2e 裡驗不到，
+   別為它寫視覺斷言**，也別因為截圖沒糊就判它壞掉。當時的對照實驗自相矛盾（同樣 absolute
+   的測試層，帶 background 的糊得起來、不帶的糊不起來），「fixed vs absolute」那個結論
+   從頭到尾不成立，position 維持 fixed——**幸好沒照那個沒控好變因的實驗去動它**，
+   它跟 v2.35 的 `--vvtop` 判準綁在一起。 */
 .scrim { position: fixed; inset: 0; z-index: 10; border: none; padding: 0;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
