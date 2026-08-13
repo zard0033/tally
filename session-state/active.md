@@ -13,9 +13,9 @@
   **已上線＝v2.38**（`73b923f`，含雙語 README）；本機 v2.39 是純文件結案、無程式改動。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`
   （iOS 鍵盤三題已真機驗過結案）；診斷用的 `?debug` 讀數列已整組移除，要用從 git 撿。
-- **測試**：`npx vitest run` 64/64；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **74/74 全綠**（約 1.3 分，十個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（74／10／64）有三份文件在寫（CLAUDE.md、本檔、
+- **測試**：`npx vitest run` 97/97；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+  **76/76 全綠**（約 1.4 分，十個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
+  2026-08-12 又漏算一條被 review 抓到；且條數（76／10／97）有三份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
