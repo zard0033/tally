@@ -3,7 +3,12 @@
 
    SUPABASE_JWKS 是 Edge Function 執行環境預設就帶的變數，內容等同
    `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`——公鑰集，不是祕密，
-   用它在本機驗即可，不必打那個 URL，更不必動用 service_role。 */
+   用它在本機驗即可，不必打那個 URL，更不必動用 service_role。
+
+   OPENROUTER_API_KEY 相反，是祕密，用 `supabase secrets set` 設在函式環境裡；
+   它只從這裡讀一次、傳進 handler，handler 只把它放進對 OpenRouter 的 Authorization header。 */
 import { handleRequest } from './handler.ts'
 
-Deno.serve((req) => handleRequest(req, Deno.env.get('SUPABASE_JWKS')))
+Deno.serve((req) =>
+  handleRequest(req, Deno.env.get('SUPABASE_JWKS'), Deno.env.get('OPENROUTER_API_KEY')),
+)
