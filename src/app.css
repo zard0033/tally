@@ -1036,6 +1036,10 @@ button { -webkit-user-select: none; user-select: none; }
 /* 辨識中：不換文案位置只換字，避免按鈕寬高跳動。**整組欄位一併鎖住**（見 .form-lock）——
    原設計是「其餘欄位維持可編輯」，使用者裁決後改成全鎖，這句註解一度沒跟著改。 */
 .scan-btn:disabled { opacity: .6; cursor: default; }
+/* 秒數。等寬數字＋固定最小寬度：不設的話 1→2 位數會把整串文字往旁邊推，每秒抖一下。
+   `1.6ch` 容得下兩位數（界是 55 秒，到不了三位）。 */
+.scan-sec { font-variant-numeric: tabular-nums; min-width: 1.6ch; display: inline-block;
+  text-align: right; margin: 0 .15em 0 .4em; }
 /* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
 .scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); color: var(--over); font-size: var(--t-sm); }
 /* 辨識中把整組欄位鎖住。fieldset 純粹當開關用，樣式全部重置——

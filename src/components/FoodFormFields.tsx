@@ -69,7 +69,8 @@ export interface FoodFormFieldsProps {
   /**
    * 辨識期間的忙碌狀態。外層拿它**鎖住關閉**（關閉鈕停用 ＋ sheet 的下滑關閉停用）——
    * 只擋關閉鈕沒用，vaul 的抽屜手指往下一滑就關了。
-   * 代價是辨識卡住時會被關在畫面裡，所以 `scanLabel` 的逾時壓到 15 秒（實測只要 2–5 秒）。
+   * 代價是辨識卡住時會被關在畫面裡，最壞約 50 秒（函式那端 45 秒先放棄，再加上傳）——所以按鈕上要有
+   * 秒數，讓被關住的那段時間看得出它還活著。
    */
   onBusyChange?: (busy: boolean) => void
 }
@@ -82,6 +83,16 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   const [scanError, setScanError] = useState('')
   /** 填入瞬間的一次性動效開關（數值由上而下依序浮現），~0.7 秒後自己關掉。 */
   const [justFilled, setJustFilled] = useState(false)
+  /* 辨識已經等了幾秒。**刻意不做百分比或進度條**：真實進度拿不到（上傳只佔一小段、模型在吐出
+     結果前不回報任何東西），而實測同一張圖 12.9／22.4 秒差 1.7 倍，任何百分比都只能用猜的，
+     結果就是卡在 90% 或衝到 99% 乾等——比沒有更煩。秒數不假裝知道還要多久，
+     但回答了使用者真正在問的問題：**它還活著嗎**（辨識期間表單是鎖住的，這點更重要）。 */
+  const [scanSec, setScanSec] = useState(0)
+  useEffect(() => {
+    if (!scanning) return
+    const id = setInterval(() => setScanSec((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [scanning])
 
   useEffect(() => {
     if (vendorAutoFocus) vendorInputRef.current?.focus()
@@ -98,9 +109,17 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      仍會呼叫父層還活著的 setState——而 `formRef.current` 停在卸載那一刻的舊值。使用者若在
      這段期間點了別的食物（`setFoodForm({...BLANK, name: prefillName})`），晚到的那次寫入會把
      他剛帶入的品名整組蓋回舊值。**這正是本輪修掉的 stale closure，換一扇門走回來**，
-     所以除了鎖住出口（外層按鈕），這裡也要真的把結果丟掉。 */
+     所以除了鎖住出口（外層按鈕），這裡也要真的把結果丟掉。
+
+     **setup 那半不可省**：StrictMode（dev）會 mount → cleanup → mount，只寫 cleanup 的話
+     第一次 cleanup 就把旗標永久壓成 false，之後每次辨識的結果都被丟掉、`setScanning(false)`
+     也跳過（畫面永遠停在「辨識中…」）。production 不做 double-invoke，所以這隻只在 dev 發作，
+     而 e2e 跑的是 preview（production build）——整套測試都照不到，只有真的手動開 dev 才會遇到。 */
   const aliveRef = useRef(true)
-  useEffect(() => () => { aliveRef.current = false }, [])
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
 
   const id = (k: string) => `${idPrefix}${k}`
   /* 使用者一動手打字就把辨識失敗那行清掉——他已經在走手打這條路了，那行紅字再留著只是噪音。
@@ -116,6 +135,8 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      `onBusyChange` 讓外層在辨識期間鎖住關閉：**誤按關閉的代價是要重拍一張照片**，值得擋。 */
   async function handleFile(file: File) {
     setScanError('')
+    // 歸零跟開始鎖在同一批 state 更新裡：放進 effect 的話，上一次的秒數會在畫面上閃一格才被重設
+    setScanSec(0)
     setScanning(true)
     props.onBusyChange?.(true)
     try {
@@ -185,7 +206,8 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
               <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
               <circle cx="12" cy="12.5" r="3.2" />
             </svg>
-            {scanning ? '辨識中…' : 'AI 辨識輸入'}
+            {/* 秒數用 tabular-nums 等寬字，否則每跳一秒整串字會左右抖（數字寬度不一） */}
+            {scanning ? <>辨識中…<span className="scan-sec">{scanSec}</span>秒</> : 'AI 辨識輸入'}
           </button>
           {/* role=status：辨識是非同步的，讀屏使用者不會自己回頭看這一行 */}
           {scanError && <p className="scan-error" role="status">{scanError}</p>}

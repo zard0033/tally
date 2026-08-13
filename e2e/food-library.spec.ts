@@ -509,6 +509,25 @@ test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({
   await expect(sheet.locator('.sheet-head .icon-btn'), '辨識結束後關閉鈕該解鎖').toBeEnabled()
 })
 
+/* 秒數只回答「它還活著嗎」，不是進度（真實進度拿不到，理由在元件註解）。這裡驗它**真的在走**
+   ——只驗「有出現數字」的話，把 setInterval 拿掉照樣是綠的。 */
+test('辨識中的秒數會往上跳，結束後消失', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+
+  await page.evaluate((body) => {
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 2400 }
+  }, SCAN_READING)
+  await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
+
+  // 跳到 1 就夠證明計時器在走（停在 0 = 只印了初始值）；不驗更大的數字免得跟 delayMs 賽跑
+  await expect(sheet.locator('.scan-sec'), '秒數沒有往上跳').toHaveText('1')
+  await expect(sheet.locator('.scan-btn'), '辨識結束後該回到原文案、不留秒數').toHaveText('AI 辨識輸入')
+})
+
 test('辨識失敗只留一行字，欄位不動、仍可手動完成新增', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)

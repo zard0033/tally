@@ -231,6 +231,8 @@ export async function handleRequest(
   /* 7. 辨識。不重試、不換模型、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：
         前端讓使用者手打。上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
   let content: string
+  let usage: string | undefined
+  const t0 = Date.now()
   try {
     const upstream = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -240,6 +242,14 @@ export async function handleRequest(
       },
       body: JSON.stringify({
         model: MODEL,
+        /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：這個模型在 OpenRouter 上
+           只有阿里巴巴一家在供（`/api/v1/models/qwen/qwen3.7-flash/endpoints` 回 1 筆），
+           `sort: 'throughput'` 沒有第二家可選、是空話；而 `data_collection: 'deny'` 更危險
+           ——唯一那家若不符合就沒有 provider 可用，等於把功能關掉。
+           **「照片不被拿去訓練」這個保證在哪裡**：OpenRouter 帳號的 Privacy 設定（付費／免費各一個
+           開關），關掉之後它本來就不會把請求路由給會訓練的 provider，不必在每個請求裡再講一次。
+           **動那個設定要立刻測一張**——只有一家 provider，被那個設定擋掉就是全滅、沒有備援。
+           推論：耗時的波動（同圖 12.9／22.4 秒）是那一家自己的排隊，這邊沒有旋鈕可轉。 */
         messages: [
           {
             role: 'user',
@@ -250,14 +260,27 @@ export async function handleRequest(
           },
         ],
       }),
-      // 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
-      signal: AbortSignal.timeout(60_000),
+      /* 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
+         **這個數字必須比前端的 `SCAN_TIMEOUT`（55 秒）小，而且要小得夠多**（前端的計時含上傳，
+         這裡的不含）——誰先放棄，誰就決定失敗留不留得下
+         紀錄：函式先放棄會走下面的 catch 寫一行 diag，前端先放棄則連 `edge_logs` 都不會有那一列
+         （那列是回應送出時才寫的）。2026-08-13 追一次真機「辨識失敗」追了大半天，就是因為前端
+         15 秒先切，函式這邊從頭到尾安靜。45 秒對實測 13–22 秒是兩倍餘裕。 */
+      signal: AbortSignal.timeout(45_000),
     })
     if (!upstream.ok) {
       diag('502 upstream-not-ok', { status: upstream.status, body: (await upstream.text()).slice(0, 300) })
       return json({ error: READ_FAILED }, 502, cors)
     }
-    const data = (await upstream.json()) as { choices?: { message?: { content?: unknown } }[] }
+    const data = (await upstream.json()) as {
+      choices?: { message?: { content?: unknown } }[]
+      /** OpenRouter 的用量回報。只進 log，不進回應——用途見下方 `200 ok` 那行的註解。 */
+      usage?: unknown
+    }
+    /* 先字串化再截斷，**不整包透傳**：這個物件的形狀由上游決定（型別是 `unknown` 不是我們定的），
+       今天只有 token 計數，哪天上游在裡面多塞了請求回顯，就會不聲不響地多留一份在 log 裡。
+       截斷保住診斷價值（要看的數字都在前面），同時把「形狀漂移」的爆炸半徑封在 200 字內。 */
+    usage = JSON.stringify(data.usage ?? null).slice(0, 200)
     const raw = data.choices?.[0]?.message?.content
     if (typeof raw !== 'string') {
       diag('502 no-content', { shape: Object.keys(data) })
@@ -275,5 +298,13 @@ export async function handleRequest(
     diag('502 unparseable', { content: content.slice(0, 300) })
     return json({ error: READ_FAILED }, 502, cors)
   }
+  /* **成功路徑也要留一行**。原本只有失敗分支寫 log，於是「函式好好跑完、前端已經放棄」
+     這種情況長得跟「什麼都沒發生」一模一樣——2026-08-13 那次就是這樣查了大半天。
+     記兩件事：**耗時**是訂前後端逾時的唯一依據（要照最壞情況訂，所以需要一段時間的分布）；
+     **用量**是為了回答「那十幾秒花在哪」——這是個 reasoning 模型，預設會思考，
+     `usage.completion_tokens_details.reasoning_tokens` 直接顯示思考佔了多少，
+     決定要不要送 `reasoning: { enabled: false }`（會影響準確度，要有數字才動）。
+     **不記讀數內容**，那是使用者的資料，診斷用不到。 */
+  diag('200 ok', { ms: Date.now() - t0, usage })
   return json(reading, 200, cors)
 }
