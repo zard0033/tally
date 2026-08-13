@@ -48,9 +48,9 @@
   `owner_all`、無第二條 permissive policy、RLS 全開）。**判準（可複用）**：要驗的若是資料庫
   自己的執行行為而非我們的程式碼，把設定查完整就是充分證據；跨帳號 runtime 測試留給
   「policy 判斷式本身有條件分支」那種情況。
-- **選中態語意的統一裁決（v2.30）**：互斥選一組一律 `aria-pressed`、容器不掛 `role="tablist"`；
-  `aria-current` 只留給底部分頁列。**不補成完整 tablist 是刻意的**——半套 APG 契約會讓讀屏
-  期待方向鍵可用卻沒有，比不做更糟（同 v2.24 拒絕升級 radiogroup）。
+- **選中態語意的統一裁決（v2.30）**：互斥選一組一律 `aria-pressed`、容器不掛 `role="tablist"`，
+  `aria-current` 只留給底部分頁列。**不補成完整 tablist 是刻意的**——半套 APG 契約會讓讀屏期待
+  方向鍵可用卻沒有，比不做更糟（同 v2.24 拒絕升級 radiogroup）。
 - **「select 保證合法值」只涵蓋一半的路徑**（v2.30）：v2.22 拿掉自訂輸入後移除範圍檢查，
   理由是選單保證合法——但 `xTouchedRef` 沒被碰過時走的是 **DB 原值**那條分支，那個值
   沒有人驗過。新增 `clampToPresetRange()` 補上。**通則：拿「輸入源受控」當理由移除驗證前，
@@ -147,5 +147,4 @@ demo 才是這類決策的正確載體**，而且要我先做、不是等他要�
   已入 CLAUDE.md Pre-Push Checklist。
 - **三本全域 ledger memory**：`windows-shell-ledger`、`verification-ledger`（＋`ui-verify` skill）、
   `delegation-ledger`。
-- **真機／真實資料試用是設計核可之外的必要一關**：三層（樣張核可／真機試用／deep review）各自
-  抓到不同類的問題，樣張資料太乾淨。
+- **真機／真實資料試用是設計核可之外的必要一關**：三層（樣張核可／真機試用／deep review）各抓到不同類的問題。
