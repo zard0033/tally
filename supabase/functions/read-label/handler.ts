@@ -231,7 +231,7 @@ export async function handleRequest(
   /* 7. 辨識。不重試、不換模型、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：
         前端讓使用者手打。上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
   let content: string
-  let usage: string | undefined
+  let usage: { prompt?: number; completion?: number; think?: number; cost?: number } | undefined
   const t0 = Date.now()
   try {
     const upstream = await fetch(OPENROUTER_URL, {
@@ -277,10 +277,20 @@ export async function handleRequest(
       /** OpenRouter 的用量回報。只進 log，不進回應——用途見下方 `200 ok` 那行的註解。 */
       usage?: unknown
     }
-    /* 先字串化再截斷，**不整包透傳**：這個物件的形狀由上游決定（型別是 `unknown` 不是我們定的），
-       今天只有 token 計數，哪天上游在裡面多塞了請求回顯，就會不聲不響地多留一份在 log 裡。
-       截斷保住診斷價值（要看的數字都在前面），同時把「形狀漂移」的爆炸半徑封在 200 字內。 */
-    usage = JSON.stringify(data.usage ?? null).slice(0, 200)
+    /* **挑欄位，不整包透傳**：這個物件的形狀由上游決定（型別是 `unknown` 不是我們定的），
+       哪天多塞了請求回顯就會不聲不響地多留一份在 log 裡。
+       第一版是「字串化後截斷 200 字」，**那個界正好砍掉 `completion_tokens_details`**——
+       要看的 `reasoning_tokens` 就住在裡面，第一筆真實 log 因此白拿。**截斷保不住你要的欄位，
+       除非你確定它排在前面；挑欄位才會。** */
+    const u = data.usage as
+      | { prompt_tokens?: number; completion_tokens?: number; cost?: number;
+          completion_tokens_details?: { reasoning_tokens?: number } }
+      | undefined
+    /* `u` 整個缺（上游沒回 usage）時**不要組一個空物件**——`JSON.stringify` 會把值是 undefined
+       的 key 全部省略，印出來的 `"usage":{}` 跟「有回 usage 但欄位都空」一模一樣。留 undefined，
+       那個 key 會整個不出現，兩種情況才分得開。 */
+    usage = u && { prompt: u.prompt_tokens, completion: u.completion_tokens,
+      think: u.completion_tokens_details?.reasoning_tokens, cost: u.cost }
     const raw = data.choices?.[0]?.message?.content
     if (typeof raw !== 'string') {
       diag('502 no-content', { shape: Object.keys(data) })

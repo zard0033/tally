@@ -1,6 +1,8 @@
 .env
 .env.*
 *.local
+# 拋棄式探針（`*.local` 只匹配結尾是 .local 的檔名，蓋不到 foo.local.mjs）
+*.local.mjs
 client_secret*.json
 *_pw.txt
 *.pem
