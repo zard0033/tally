@@ -112,11 +112,15 @@
    理由與重開的後果已寫進 spec.md「安全（不可妥協）」節，不在這裡複製第二份。
    **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
    `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
-   **部署後要驗的兩件（本機都驗不到）**：① **curl 驗 OPTIONS preflight**——Supabase gateway 的
-   `verify_jwt` 可能在函式之前就擋掉不帶 Authorization 的 preflight（無 Deno／Docker，本機起不了）。
-   ② **真機驗 iOS 鍵盤的上下箭頭**——這輪在 `<form>` 與欄位之間插了一層 `<fieldset>`，而 v2.33
-   的教訓正是「沒有 form 時 Safari 靠 DOM 相鄰性猜欄位分組」；多一層會不會影響那個猜測**桌面
-   重現不了**（precommit review 指出，confidence low 但這個專案為同一件事踩過三輪）。
+   **Edge Function 已部署並從外部驗過（2026-08-13）**：preflight 不帶 Authorization → 204 且
+   `Allow-Origin` 回的是白名單常數；無 token／亂寫 token → 401、GET → 405，訊息都是函式自己寫的
+   中文（代表請求真的進到程式碼）；未授權 origin 拿不到 `Allow-Origin`。**部署指令要兩個旗標**：
+   `--use-api`（預設的打包路徑要 Docker，這台沒有——第一次部署就是靜默失敗成 404）＋
+   `--no-verify-jwt`（**閘道那層的驗證連公開的 anon key 都收，擋不住人，卻會擋掉依規範不帶
+   Authorization 的 preflight**；真正的防線是函式內那道，21 條測試＋兩輪 verifier＋mutation 檢查）。
+   **仍未驗（要真機）**：iOS 鍵盤的上下箭頭——這輪在 `<form>` 與欄位之間插了一層 `<fieldset>`，
+   而 v2.33 的教訓正是「沒有 form 時 Safari 靠 DOM 相鄰性猜欄位分組」，多一層會不會擾動那個猜測
+   **桌面重現不了**（precommit review 指出，confidence low 但這專案為同一件事踩過三輪）。
    另一個已知缺口：`supabase/functions/**` 不在 `tsconfig.app.json` 的 include 內，**型別錯誤 CI
    攔不到**（vitest 只做 esbuild transform 不查型別），收尾時補。
 
