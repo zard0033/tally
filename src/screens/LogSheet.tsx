@@ -8,7 +8,7 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要 legacy 那套
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import { Drawer } from 'vaul'
 import FoodFormFields from '@/components/FoodFormFields'
 import {
@@ -182,6 +182,18 @@ export default function LogSheet(props: LogSheetProps) {
      但點不到（真機／e2e 都撞到這個，見 DESIGN.md「店家欄位」條）。指到 Drawer.Content
      這個 ref 之後，選單變成 Dialog Content 的子孫，繼承同一份 pointer-events 豁免。 */
   const sheetRef = useRef<HTMLDivElement | null>(null)
+
+  /* sheet 掛上時把焦點移進來——理由與做法同 `FoodLibrary.tsx` 的 `attachAddSheet`（vaul 不自己
+     做，焦點會留在觸發的那顆鈕上，而 `#root` 已被標成 `aria-hidden`）。**兩處要一起改**：
+     兩個都是 vaul 的 Drawer，缺一個就有一條路徑仍然把焦點丟在被隱藏的區域裡。
+     **必須是 callback ref**：掛在 `[open]` 的 effect 上不會生效，那時 Portal 還沒掛好節點。
+     與 `FoodLibrary` 那份逐字相同是**刻意的**，不抽共用 hook 的理由寫在那一份的註解裡。 */
+  const attachSheet = useCallback((node: HTMLDivElement | null) => {
+    sheetRef.current = node
+    if (node) requestAnimationFrame(() => {
+      if (node.isConnected && !node.contains(document.activeElement)) node.focus()
+    })
+  }, [])
 
   /* 「常吃」＝該餐別歷史出現次數，順便記住每樣最近一次的份量——LogSheetProps 只給當天
      dayData，這份跨日期的歷史不在 props 契約裡（見回報「共用檔缺口清單」），這裡直接讀
@@ -491,7 +503,7 @@ export default function LogSheet(props: LogSheetProps) {
       <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
         <Drawer.Portal>
           <Drawer.Overlay className="scrim" />
-          <Drawer.Content ref={sheetRef} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
+          <Drawer.Content ref={attachSheet} tabIndex={-1} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
             <Drawer.Handle className="handle" />
 
             {view === 'list' ? (

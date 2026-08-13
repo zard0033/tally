@@ -528,6 +528,21 @@ test('辨識中的秒數會往上跳，結束後消失', async ({ page }) => {
   await expect(sheet.locator('.scan-btn'), '辨識結束後該回到原文案、不留秒數').toHaveText('AI 辨識輸入')
 })
 
+/* sheet 開啟時焦點必須進到 sheet 裡。**這條擋的是一個真的發生過的缺陷**：vaul 不會自己搬焦點，
+   焦點留在觸發的那顆 FAB 上，而 `#root` 此時已被標成 `aria-hidden`——瀏覽器會直接在 console
+   警告，而且 `aria-hidden` 擋不住聚焦，鍵盤 Tab 會走進一個對讀屏不存在的區域。
+   驗的是「焦點在 sheet 裡」而不是「焦點在某個特定元素上」：容器或第一個輸入框都算通過，
+   鎖太細會讓 `vendorAutoFocus` 那條刻意的行為變成假紅。 */
+test('開啟 sheet 後焦點進到 sheet 裡（aria-hidden 蓋不到的地方）', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  await expect(page.locator('[data-screen="food-add-sheet"]')).toBeVisible()
+  const inSheet = await page.evaluate(() =>
+    !!document.activeElement?.closest('[data-screen="food-add-sheet"]'))
+  expect(inSheet, '焦點沒進 sheet——會留在 aria-hidden 底下的觸發鈕上').toBe(true)
+})
+
 test('辨識失敗只留一行字，欄位不動、仍可手動完成新增', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)

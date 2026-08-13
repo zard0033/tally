@@ -8,7 +8,7 @@
    但不必重建 pendingDelete／計時器／pagehide flush 那整套只有「不可逆」才需要的機制。
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Drawer } from 'vaul'
 import FoodFormFields from '@/components/FoodFormFields'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
@@ -83,6 +83,31 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const [addSourceName, setAddSourceName] = useState<string | null>(null)
   const [addBusy, setAddBusy] = useState(false)
   const [addErr, setAddErr] = useState<string | null>(null)
+
+  /* sheet 掛上時把焦點移進來。**vaul 不會自己做**（實測：開啟後 600ms 焦點仍停在 `<body>`／
+     真人點擊時停在觸發的那顆鈕上，Chrome 會直接警告「aria-hidden 蓋住了持有焦點的元素」）。
+     後果不只是警告：`#root` 被標成 `aria-hidden` 之後裡面仍然可以聚焦，鍵盤 Tab 會走進一個
+     對讀屏不存在的區域。**聚焦容器（`tabIndex={-1}`）而不是聚焦第一個輸入框**——後者在 iOS
+     會直接叫出鍵盤，那是本專案打過三輪的仗（DESIGN v2.33／v2.35）。
+
+     **掛在 callback ref 上，不掛在 `[addOpen]` 的 effect 上**：第一版那樣寫沒有生效，因為
+     effect 跑的時候 vaul 的 Portal 還沒把節點掛上、`ref.current` 是 null，而 deps 不變就
+     再也不會重試。callback ref 由節點自己觸發，不必猜時序。
+     `contains` 那個判斷不可省：`FoodFormFields` 的 `vendorAutoFocus` 可能已經接手了，
+     那是刻意的行為，容器只在沒人接手時墊底。**兩者的先後不受規格保證**（callback ref 在
+     commit 階段、rAF 在下次繪製前、passive effect 的排程時機各家不同），目前兩種順序都收斂到
+     同一個終態——因為 `vendorAutoFocus` 那邊是無條件 `focus()`。**哪天它也加上條件，這個
+     收斂性就要重新檢查。**
+
+     **`LogSheet.tsx` 有一份逐字相同的**（precommit review 兩位 reviewer 都提議抽成共用 hook）。
+     **刻意不抽**：本專案的判準是「兩份長得像不構成理由，本來就該一致且已經開始不一致才是」
+     （CLAUDE.md／DESIGN v2.29）。這兩份同一輪寫成、還沒分岔過，第三次重複再談。 */
+  const attachAddSheet = useCallback((node: HTMLDivElement | null) => {
+    addSheetRef.current = node
+    if (node) requestAnimationFrame(() => {
+      if (node.isConnected && !node.contains(document.activeElement)) node.focus()
+    })
+  }, [])
 
   const [undo, setUndo] = useState<{ food: Food } | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
@@ -204,7 +229,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
       <Drawer.Portal>
         <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={addSheetRef} className="sheet" aria-label={addTitle} data-screen="food-add-sheet">
+        <Drawer.Content ref={attachAddSheet} tabIndex={-1} className="sheet" aria-label={addTitle} data-screen="food-add-sheet">
           <Drawer.Handle className="handle" />
           <div className="sheet-head">
             <span className="sheet-title">{addTitle}</span>
