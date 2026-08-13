@@ -94,6 +94,14 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   const formRef = useRef(form)
   formRef.current = form
 
+  /* 卸載守衛。辨識中若元件被卸載（LogSheet 的「返回搜尋」會直接把這層拆掉），晚到的結果
+     仍會呼叫父層還活著的 setState——而 `formRef.current` 停在卸載那一刻的舊值。使用者若在
+     這段期間點了別的食物（`setFoodForm({...BLANK, name: prefillName})`），晚到的那次寫入會把
+     他剛帶入的品名整組蓋回舊值。**這正是本輪修掉的 stale closure，換一扇門走回來**，
+     所以除了鎖住出口（外層按鈕），這裡也要真的把結果丟掉。 */
+  const aliveRef = useRef(true)
+  useEffect(() => () => { aliveRef.current = false }, [])
+
   const id = (k: string) => `${idPrefix}${k}`
   /* 使用者一動手打字就把辨識失敗那行清掉——他已經在走手打這條路了，那行紅字再留著只是噪音。
      （原本它會一直掛到關閉 sheet 為止。） */
@@ -112,6 +120,8 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
     props.onBusyChange?.(true)
     try {
       const patch = readingToForm(await onScan!(await compressToDataUri(file)))
+      // 已經卸載就整包丟掉：寫進去會蓋掉使用者這期間換到的另一筆食物（見 aliveRef 註解）。
+      if (!aliveRef.current) return
       setScanError('')
       // formRef 不是 form：等待期間打的字要留著（見上方註解）。辨識讀到的欄位仍以辨識為準
       // ——使用者按的就是「AI 辨識輸入」，那是他要的；而且結果是草稿，不滿意可以再改。
@@ -125,7 +135,9 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
          一句話有用得多——所以這裡不為 401 另開分支。 */
       setScanError('辨識失敗，請手動填寫')
     } finally {
-      setScanning(false)
+      // 卸載後就沒有 state 可設，但 onBusyChange 仍要放行——否則外層的 scanBusy 會永遠卡住，
+      // 抽屜的下滑關閉就再也回不來（那個 state 活在父層，不隨本元件卸載）。
+      if (aliveRef.current) setScanning(false)
       props.onBusyChange?.(false)
       // 清掉 value，否則再選同一個檔不會觸發 change（重拍同一張是合理操作）
       if (fileRef.current) fileRef.current.value = ''
@@ -213,7 +225,11 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         </div>
       </div>
       {renderField({ id: id('kcal'), label: '熱量（卡）', required: true, numeric: true, value: form.kcal, onChange: (v) => set({ kcal: v }) })}
-      <div className="field-row">
+      {/* `macros` 是給填入動效的 stagger 用的穩定掛勾。原本寫 `.field-row:nth-of-type(2)`
+          ——`:nth-of-type` 是照**標籤名**數的，而 fieldset 底下第 2 個 div 是熱量那個
+          `.field-float`（renderField 直接回傳、沒外包 field-row），所以那條規則一個元素都選不到
+          （precommit review 抓到）。換成靠位置的另一種寫法只是換一個會再壞的。 */}
+      <div className="field-row macros">
         {renderField({ id: id('protein'), label: '蛋白質 g', numeric: true, value: form.protein, onChange: (v) => set({ protein: v }) })}
         {renderField({ id: id('fat'), label: '脂肪 g', numeric: true, value: form.fat, onChange: (v) => set({ fat: v }) })}
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}

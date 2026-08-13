@@ -284,9 +284,13 @@ const SCAN_TIMEOUT = 15_000
  *
  * **失敗一律收斂成同一句。** 注意理由不是「分不出來」——函式那端雖然不說原因，HTTP 狀態碼
  * 仍然拿得到，401 與 502 是分得出來的。真正的理由是**分出來也沒有第二種該做的事**：
- * session 真的失效時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回登入頁並顯示
- * 「登入已過期，請重新登入」（比在表單裡多印一行有用得多）；其餘情況 spec.md AC6 要的行為
- * 只有一種——讓使用者改手打。為此再分一套錯誤類型是替不存在的分支蓋房子。
+ * **本地** session 失效時 supabase-js 會發 SIGNED_OUT，App.tsx 直接把人踢回登入頁並顯示
+ * 「登入已過期，請重新登入」（比在表單裡多印一行有用得多）。**但那條路只涵蓋本地判定得出來的
+ * 失效**：token 在本地看起來有效、函式那端卻回 401（金鑰輪換、aud/sub 不符）時不會發
+ * SIGNED_OUT，使用者會一直看到「辨識失敗」而找不到出路。**接受這個缺口**：Supabase 的
+ * refresh 會在下一輪換到新金鑰簽的 token，自己會好；為一個會自癒的罕見情況多養一條錯誤分支
+ * 不划算。真的頻繁發生再回來補（precommit review 指出這裡原本的理由「前端分不出來」是錯的
+ * ——HTTP 狀態碼拿得到，真正的理由是分出來也沒有第二種該做的事）。
  */
 export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
   const { data, error } = await supabase.functions.invoke<LabelReading>('read-label', {

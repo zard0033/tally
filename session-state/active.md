@@ -101,7 +101,7 @@
 
 2. **拍照辨識：dev-flow 走到實作階段，步驟 0–3 完成、4–5 進行中**（規格全文見 spec.md）。
    完成：key 上限已設／壓縮參數 1200px q0.85 實測定案／Edge Function `read-label`（驗 JWT ＋
-   OpenRouter ＋CORS allowlist ＋POST-only ＋SSRF 閘），19 條測試、**兩輪獨立 verifier 皆 PASS**。
+   OpenRouter ＋CORS allowlist ＋POST-only ＋SSRF 閘），21 條測試、**兩輪獨立 verifier 皆 PASS**。
    前端：相機鈕「AI 辨識輸入」已接進兩個新增入口（就地編輯刻意不給），辨識中用 `<fieldset disabled>`
    整組鎖住、關閉鈕與 vaul 下滑一起鎖，e2e ＋2 條。
    等待動效已落地：四版對照 demo 讓使用者挑，選「骨架呼吸」（空欄位變灰條輕微呼吸、標籤同時

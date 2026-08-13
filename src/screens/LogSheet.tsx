@@ -611,7 +611,9 @@ export default function LogSheet(props: LogSheetProps) {
                   </button>
                 </div>
                 <div className="back-row">
-                  <button className="back-btn" type="button" onClick={backToList}>
+                  {/* scanBusy 也要吃：按下去會把 FoodFormFields 整層卸載，而辨識還在跑（元件內另有卸載守衛把
+                      晚到的結果丟掉，但讓使用者按得到一顆「按了等於白拍」的鈕本身就是壞體驗）。 */}
+                  <button className="back-btn" type="button" disabled={scanBusy} onClick={backToList}>
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M15 6l-6 6 6 6" />
                     </svg>
@@ -642,7 +644,7 @@ export default function LogSheet(props: LogSheetProps) {
                       {err}
                     </p>
                   )}
-                  <button className="pick-bar-btn" type="button" disabled={busy} onClick={() => void submitFoodForm()}>
+                  <button className="pick-bar-btn" type="button" disabled={busy || scanBusy} onClick={() => void submitFoodForm()}>
                     {busy ? '加入中…' : '加入食品庫'}
                   </button>
                 </div>

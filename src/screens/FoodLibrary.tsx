@@ -229,7 +229,9 @@ export default function FoodLibrary(props: FoodLibraryProps) {
           </div>
           <div className="confirm-wrap">
             {addErr && <p className="sheet-error" role="alert">{addErr}</p>}
-            <button className="pick-bar-btn" type="button" disabled={addBusy} onClick={() => void submitAdd()}>
+            {/* scanBusy：確認鈕在 fieldset 之外（confirm-wrap 是 form-wrap 的兄弟節點），鎖不到。
+                辨識中送出會建立一筆用舊值組出來的食物。 */}
+            <button className="pick-bar-btn" type="button" disabled={addBusy || scanBusy} onClick={() => void submitAdd()}>
               {addBusy ? '加入中…' : '加入食品庫'}
             </button>
           </div>

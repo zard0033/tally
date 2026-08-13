@@ -1033,7 +1033,8 @@ button { -webkit-user-select: none; user-select: none; }
 .scan-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .scan-btn:active { opacity: .7; }
 .scan-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 辨識中：不換文案位置只換字，避免按鈕寬高跳動；其餘欄位仍可編輯（見元件註解）。 */
+/* 辨識中：不換文案位置只換字，避免按鈕寬高跳動。**整組欄位一併鎖住**（見 .form-lock）——
+   原設計是「其餘欄位維持可編輯」，使用者裁決後改成全鎖，這句註解一度沒跟著改。 */
 .scan-btn:disabled { opacity: .6; cursor: default; }
 /* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
 .scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); color: var(--over); font-size: var(--t-sm); }
@@ -1065,11 +1066,17 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* 填入瞬間：數值由上而下依序浮現。**動的是文字顏色不是整個盒子**——動 opacity 會連邊框
    一起淡，看起來像欄位在閃而不是數字在填。順序照版面由上到下：品名／店家 → 熱量 → 三大。 */
-.form-lock.scan-filled .field-float input { animation: value-in 340ms var(--ease) both; }
+/* **掛勾用 `.macros` 這個明確的 class，不用 `:nth-of-type`**：後者照的是**標籤名**，
+   fieldset 底下第 2 個 div 是熱量那顆 `.field-float`（renderField 直接回傳、沒外包 field-row），
+   所以原本寫的 `.field-row:nth-of-type(2)` 一個元素都選不到，三大營養素退回 delay 0、
+   順序反而比熱量還早——宣稱「由上而下」實際上下顛倒（precommit review 抓到，無測試會抓）。
+   **店家排除在外**：辨識不讀店家，而使用者可能在按鈕前就打好了，讓它跟著閃一次透明
+   等於拿別人的內容做我們的動畫。 */
+.form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: value-in 340ms var(--ease) both; }
 .form-lock.scan-filled > .field-float input { animation-delay: 90ms; }
-.form-lock.scan-filled .field-row:nth-of-type(2) .field-float:nth-child(1) input { animation-delay: 180ms; }
-.form-lock.scan-filled .field-row:nth-of-type(2) .field-float:nth-child(2) input { animation-delay: 240ms; }
-.form-lock.scan-filled .field-row:nth-of-type(2) .field-float:nth-child(3) input { animation-delay: 300ms; }
+.form-lock.scan-filled .macros .field-float:nth-child(1) input { animation-delay: 180ms; }
+.form-lock.scan-filled .macros .field-float:nth-child(2) input { animation-delay: 240ms; }
+.form-lock.scan-filled .macros .field-float:nth-child(3) input { animation-delay: 300ms; }
 @keyframes value-in { from { color: transparent } to { color: var(--ink) } }
 .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5);
   scrollbar-width: none; }
@@ -1182,8 +1189,14 @@ button { -webkit-user-select: none; user-select: none; }
   .cta:active, .action-btn:active, .pick-bar-btn:active { transform: none; }
   .item-content.just-added::before,
   .sheet.opening, .pick-bar, .undo-pill,
+  /* 填入動效：一次性、影響小，但這份清單連 label 的 transition 都收了，漏它不一致 */
+  .form-lock.scan-filled .field-float input,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
   #settings-sheet-root .scrim { animation-duration: .01ms; }
+  /* 骨架呼吸是**無限循環的脈動**，正是這條 media query 最該關掉的一類（WCAG 2.2.2），
+     而辨識期間整張表單的空欄位都在呼吸。**關成 none 而不是 .01ms**——灰條要留著（它是
+     「這裡還沒有值」的資訊），只是不要動。 */
+  .form-lock[disabled] .field-float:has(input:placeholder-shown)::after { animation: none; opacity: .8; }
 }
 
 /* ── vaul sheet 的動效覆寫 ──
