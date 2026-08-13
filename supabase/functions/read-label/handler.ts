@@ -42,9 +42,16 @@ name 填包裝上的**正式完整品名**（通常標在成分欄前面的「�
 serving_g 只填標示上明寫的每份公克數，沒印就填 null，不要用兩欄比值回推。
 看不清楚的欄位填 null，不要猜。`
 
-/* 圖片上限：spec.md AC2 要求前端壓到 payload <400KB（base64 後約 55 萬字元以內），
-   這裡留一點餘裕但**必須有界**——理由不是省流量，是不替人把任意大的東西轉發給上游。 */
-const MAX_IMAGE_CHARS = 700_000
+/* 圖片上限。**必須有界**——理由不是省流量，是不替人把任意大的東西轉發給上游。
+
+   數字的由來要講清楚，因為第一版錯得很典型：原本設 700_000，是拿**本機 Pillow 壓同一張照片**
+   得到的 244,667 字元推的。上線第一天就撞牆——真機的 **iOS Safari canvas 吐出 752,775 字元**
+   （同樣 1200px、同樣 q0.85、同樣是合法 JPEG），瀏覽器的編碼器沒有 Pillow 的 optimize，
+   同樣的像素大三倍。**教訓是方法不是數字：拿 A 工具的量測去設 B 工具的門檻。**
+
+   改成 2_000_000（約 1.5MB）——是實測值的 2.6 倍餘裕，仍然是個真的界。
+   **加大不影響辨識成本**：token 由像素數決定，位元組數完全不進 token 公式（spec AC2 那段）。 */
+const MAX_IMAGE_CHARS = 2_000_000
 /** 只收 data: 開頭的 base64 影像——**絕不接受 http(s) URL**，否則這支函式就成了替人打任意網址的代理。 */
 const IMAGE_DATA_URI = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/
 
@@ -66,6 +73,14 @@ function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin')
   const allowed = ALLOWED_ORIGINS.find((o) => o === origin)
   return allowed ? { Vary: 'Origin', 'Access-Control-Allow-Origin': allowed } : { Vary: 'Origin' }
+}
+
+/* 診斷 log。**只寫進 Supabase 的函式 log（後台才看得到），永遠不進回應**——當初 spec
+   砍掉的是「回傳給呼叫端的錯誤細節」，不是「伺服器自己留線索」。第一次上線除錯時發現
+   沒有這個等於把眼睛蒙起來：前端把所有失敗收斂成同一句，而 Supabase 預設的 log 只有
+   boot/shutdown，看不出函式回了什麼。**永遠不要把 openrouterKey 或完整 token 放進來。** */
+function diag(tag: string, extra?: Record<string, unknown>): void {
+  console.error(`[read-label] ${tag}`, extra ? JSON.stringify(extra) : '')
 }
 
 function json(body: unknown, status: number, extra: Record<string, string>): Response {
@@ -153,7 +168,10 @@ export async function handleRequest(
 
   // 3. 取 Bearer token。scheme 名稱依 RFC 7235 大小寫不敏感，token 本身當然敏感。
   const match = /^Bearer\s+(\S+)$/i.exec(req.headers.get('Authorization') ?? '')
-  if (!match) return json({ error: UNAUTHORIZED }, 401, cors)
+  if (!match) {
+    diag('401 no-bearer', { hasAuthHeader: req.headers.has('Authorization') })
+    return json({ error: UNAUTHORIZED }, 401, cors)
+  }
   const token = match[1]
 
   // 4. 驗簽章與 claim。這一步之前、以及失敗的所有路徑，都沒有任何對外呼叫。
@@ -167,9 +185,11 @@ export async function handleRequest(
     })
     // sub＝使用者 id。沒有 sub 的 token 不是「某個使用者」，一律不放行。
     if (typeof payload.sub !== 'string' || payload.sub === '') {
+      diag('401 no-sub')
       return json({ error: UNAUTHORIZED }, 401, cors)
     }
-  } catch {
+  } catch (e) {
+    diag('401 verify-failed', { reason: e instanceof Error ? e.message : String(e) })
     // 簽章錯、kid 找不到、過期、aud 不符，全部收斂成同一個 401，不往外洩漏是哪一種。
     return json({ error: UNAUTHORIZED }, 401, cors)
   }
@@ -182,10 +202,20 @@ export async function handleRequest(
   let image: unknown
   try {
     image = ((await req.json()) as { image?: unknown }).image
-  } catch {
+  } catch (e) {
+    // 這條原本沒加診斷，害得第一次上線除錯時「log 是空的」也是一種可能，等於白跑一趟
+    diag('400 body-not-json', {
+      reason: e instanceof Error ? e.message : String(e),
+      contentType: req.headers.get('Content-Type'),
+    })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   if (typeof image !== 'string' || image.length > MAX_IMAGE_CHARS || !IMAGE_DATA_URI.test(image)) {
+    diag('400 bad-image', {
+      type: typeof image,
+      len: typeof image === 'string' ? image.length : null,
+      head: typeof image === 'string' ? image.slice(0, 40) : null,
+    })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
 
@@ -214,17 +244,27 @@ export async function handleRequest(
       // 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
       signal: AbortSignal.timeout(60_000),
     })
-    if (!upstream.ok) return json({ error: READ_FAILED }, 502, cors)
+    if (!upstream.ok) {
+      diag('502 upstream-not-ok', { status: upstream.status, body: (await upstream.text()).slice(0, 300) })
+      return json({ error: READ_FAILED }, 502, cors)
+    }
     const data = (await upstream.json()) as { choices?: { message?: { content?: unknown } }[] }
     const raw = data.choices?.[0]?.message?.content
-    if (typeof raw !== 'string') return json({ error: READ_FAILED }, 502, cors)
+    if (typeof raw !== 'string') {
+      diag('502 no-content', { shape: Object.keys(data) })
+      return json({ error: READ_FAILED }, 502, cors)
+    }
     content = raw
-  } catch {
+  } catch (e) {
     // 連不上、逾時、回的不是 JSON。catch 到的 error 可能夾帶請求內容甚至 header，絕不進回應。
+    diag('502 fetch-threw', { reason: e instanceof Error ? e.message : String(e) })
     return json({ error: READ_FAILED }, 502, cors)
   }
 
   const reading = parseReading(content)
-  if (!reading) return json({ error: READ_FAILED }, 502, cors)
+  if (!reading) {
+    diag('502 unparseable', { content: content.slice(0, 300) })
+    return json({ error: READ_FAILED }, 502, cors)
+  }
   return json(reading, 200, cors)
 }
