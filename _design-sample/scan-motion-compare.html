@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 辨識輸入・動效對照</title>
+<!-- 一次性對照 demo（同 v2.38 的 ios-tuning-compare）：讓使用者按得到、比得出來，
+     不要用文字描述動畫。決定之後把選中的那版落地進 app.css，本檔即可刪。
+     色票與圓角逐字抄自 src/app.css，不然比出來的東西跟正式畫面長得不一樣。 -->
+<style>
+  :root{
+    --paper:#FAF6F0; --card:#FCF9F3; --raised:#F4EAD8;
+    --rule:#E0D3BD; --rule-field:#9A8069;
+    --ink:#3D2210; --ink-muted:#7A5C44; --ink-faint:#A88C76;
+    --accent:#1C7059; --over:#9A4330;
+    --r-tab:12px; --r-btn:16px;
+    --dur-base:160ms; --ease:cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 16px 64px;background:var(--paper);color:var(--ink);
+       font-family:-apple-system,"Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
+  h1{font-size:1.05rem;margin:0 0 4px}
+  .hint{font-size:.78rem;color:var(--ink-muted);margin:0 0 24px;line-height:1.7}
+  .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));max-width:1400px;margin:0 auto}
+  .col{background:var(--card);border:1px solid var(--rule);border-radius:var(--r-btn);padding:16px}
+  .col h2{font-size:.9rem;margin:0 0 2px}
+  .col p{font-size:.74rem;color:var(--ink-muted);margin:0 0 14px;line-height:1.6;min-height:2.6em}
+  .play{width:100%;min-height:40px;border:none;border-radius:var(--r-tab);background:var(--accent);
+        color:#fff;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;margin-bottom:16px}
+  .play:active{transform:translateY(1px)}
+
+  /* ── 真實表單的縮影（版式照 FoodFormFields：品名+店家並排／熱量整行／三大營養素三欄） ── */
+  .scan-btn{width:100%;min-height:40px;display:flex;align-items:center;justify-content:center;gap:8px;
+    border:1px solid var(--rule-field);border-radius:var(--r-tab);background:transparent;
+    color:var(--accent);font-size:.8rem;font-weight:600;margin-bottom:14px;letter-spacing:.015em}
+  .scan-btn svg{width:17px;height:17px}
+  .row{display:flex;gap:10px;margin-bottom:12px}
+  .row>*{flex:1;min-width:0}
+  .fld{position:relative;min-height:52px;border:1px solid var(--rule-field);border-radius:var(--r-tab);
+       padding:8px 12px;background:transparent;overflow:hidden}
+  .fld .lb{font-size:.7rem;color:var(--ink-faint);display:block}
+  .fld .vv{font-size:.95rem;margin-top:2px;min-height:1.2em;opacity:0}
+  .zone{position:relative;overflow:hidden;border-radius:var(--r-tab)}
+
+  /* ══ A：掃描線 ══ */
+  .a .zone::after{content:'';position:absolute;left:0;right:0;height:64px;pointer-events:none;
+    background:linear-gradient(180deg,transparent,rgba(28,112,89,.14),transparent);
+    transform:translateY(-70px);opacity:0}
+  .a.run .zone::after{animation:sweep 1.15s var(--ease) infinite;opacity:1}
+  @keyframes sweep{from{transform:translateY(-70px)}to{transform:translateY(340px)}}
+
+  /* ══ B：骨架呼吸 ══ */
+  .b.run .fld{border-color:var(--rule)}
+  .b.run .fld .lb{opacity:.35}
+  .b.run .fld::after{content:'';position:absolute;left:12px;right:12px;bottom:12px;height:11px;
+    border-radius:6px;background:var(--raised);animation:breathe 1.1s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* ══ C：邊框依序點亮（訊號在跑） ══ */
+  .c.run .fld{animation:edge 1.4s var(--ease) infinite}
+  .c.run .fld:nth-of-type(1){animation-delay:0ms}
+  .c .row:nth-of-type(2) .fld{animation-delay:120ms}
+  .c .row:nth-of-type(3) .fld{animation-delay:240ms}
+  .c .row:nth-of-type(4) .fld:nth-child(1){animation-delay:360ms}
+  .c .row:nth-of-type(4) .fld:nth-child(2){animation-delay:440ms}
+  .c .row:nth-of-type(4) .fld:nth-child(3){animation-delay:520ms}
+  @keyframes edge{0%,100%{border-color:var(--rule-field);box-shadow:none}
+                  45%{border-color:var(--accent);box-shadow:0 0 0 2px rgba(28,112,89,.13)}}
+
+  /* ══ D：B 的骨架呼吸 ＋ 每個欄位各自一條由左至右的掃描 ══
+     掃描不是整區一條垂直的（那是 A），是**每根骨架條自己的**橫向光帶——也就是骨架
+     shimmer 的經典做法。兩個動畫疊在同一個 ::after 上：呼吸走 opacity、掃描走
+     background-position，互不打架。呼吸幅度比純 B 淡（.7→1 而非 .55→1），讓它當底噪。
+     六個欄位的掃描**依序錯開**，讀起來像逐欄在讀，而不是六條一起閃。 */
+  .d.run .fld{border-color:var(--rule)}
+  .d.run .fld .lb{opacity:.35}
+  .d.run .fld::after{content:'';position:absolute;left:12px;right:12px;bottom:12px;height:11px;
+    border-radius:6px;
+    background-color:var(--raised);
+    background-image:linear-gradient(90deg,transparent 15%,rgba(28,112,89,.30) 50%,transparent 85%);
+    background-repeat:no-repeat;background-size:55% 100%;
+    animation:breathe-soft 1.4s ease-in-out infinite, shimmer 1.25s var(--ease) infinite}
+  @keyframes breathe-soft{0%,100%{opacity:.7}50%{opacity:1}}
+  @keyframes shimmer{from{background-position:-70% 0}to{background-position:170% 0}}
+  .d .row:nth-of-type(2) .fld::after{animation-delay:0s,.1s}
+  .d .row:nth-of-type(3) .fld::after{animation-delay:0s,.2s}
+  .d .row:nth-of-type(4) .fld:nth-child(1)::after{animation-delay:0s,.3s}
+  .d .row:nth-of-type(4) .fld:nth-child(2)::after{animation-delay:0s,.38s}
+  .d .row:nth-of-type(4) .fld:nth-child(3)::after{animation-delay:0s,.46s}
+
+  /* ══ 共用：填入瞬間 stagger（各欄都用同一套，比的是等待那段） ══ */
+  .filled .vv{opacity:1;animation:drop 380ms var(--ease) both}
+  .filled .row:nth-of-type(2) .vv{animation-delay:60ms}
+  .filled .row:nth-of-type(3) .vv{animation-delay:140ms}
+  .filled .row:nth-of-type(4) .vv:nth-child(1){animation-delay:220ms}
+  @keyframes drop{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+
+  .btn-busy{opacity:.55}
+  .spin{width:15px;height:15px;border:2px solid rgba(28,112,89,.28);border-top-color:var(--accent);
+        border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<h1>AI 辨識輸入・等待動效三選一</h1>
+<p class="hint">
+  三欄的<strong>填入瞬間都一樣</strong>（數值由上而下依序落下），差別只在<strong>等待那 2–5 秒</strong>。<br>
+  按「播放」看完整流程：按下 → 等待 1.6 秒 → 填入。可以連按比較。
+</p>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const FORM = `
+  <button class="scan-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>
+      <circle cx="12" cy="12.5" r="3.2"/></svg>
+    <span class="lbl">AI 辨識輸入</span>
+  </button>
+  <div class="zone">
+    <div class="row"><div class="fld"><span class="lb">品名 *</span><div class="vv">伯朗奶茶（每份 17g）</div></div>
+                     <div class="fld"><span class="lb">店家</span><div class="vv"></div></div></div>
+    <div class="row"><div class="fld"><span class="lb">熱量（卡）*</span><div class="vv">82</div></div></div>
+    <div class="row"><div class="fld"><span class="lb">蛋白質 g</span><div class="vv">0.4</div></div>
+                     <div class="fld"><span class="lb">脂肪 g</span><div class="vv">3.6</div></div>
+                     <div class="fld"><span class="lb">碳水 g</span><div class="vv">12.1</div></div></div>
+  </div>`
+
+const VARIANTS = [
+  { k:'a', t:'A・掃描線', d:'一道淡綠光帶由上往下反覆掃過欄位區。語意最貼「正在讀這張標示」，也最像掃描器。' },
+  { k:'b', t:'B・骨架呼吸', d:'欄位變成灰色骨架條輕微呼吸。最含蓄、最不吵，但比較像「在載入」而不是「在辨識」。' },
+  { k:'c', t:'C・邊框依序點亮', d:'欄位邊框一格一格亮起來，像訊號跑過去。最有「正在逐欄填」的暗示，也最搶眼。' },
+  { k:'d', t:'D・骨架呼吸 ＋ 逐欄橫向掃描', d:'B 的骨架呼吸打底，<strong>每根骨架條自己有一條由左至右的光帶</strong>（不是整區一條垂直的）。六欄的掃描依序錯開，讀起來像逐欄在讀。' },
+]
+
+document.getElementById('grid').innerHTML = VARIANTS.map(v => `
+  <div class="col">
+    <h2>${v.t}</h2>
+    <p>${v.d}</p>
+    <button class="play" data-k="${v.k}">▶ 播放</button>
+    <div class="demo ${v.k}" id="d-${v.k}">${FORM}</div>
+  </div>`).join('')
+
+document.querySelectorAll('.play').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const el = document.getElementById('d-' + btn.dataset.k)
+    const label = el.querySelector('.lbl')
+    const svg = el.querySelector('svg')
+    el.classList.remove('run', 'filled')
+    void el.offsetWidth                     // 強制重排，讓連按可以重播
+    el.classList.add('run')
+    el.querySelector('.scan-btn').classList.add('btn-busy')
+    svg.outerHTML = '<div class="spin"></div>'
+    label.textContent = '辨識中…'
+    setTimeout(() => {
+      el.classList.remove('run')
+      el.classList.add('filled')
+      el.querySelector('.scan-btn').classList.remove('btn-busy')
+      el.querySelector('.spin').outerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.2"/></svg>'
+      label.textContent = 'AI 辨識輸入'
+    }, 1600)
+  })
+})
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-08-13（v2.38 已上線；scrim 與邊框兩題結案回寫 DESIGN.md v2.39；兩個新需求未開工——見待決）
+最後更新：2026-08-13（v2.38 已上線；**拍照辨識功能實作中，dev-flow 步驟 0–3 完成、4–5 進行中——見續點 2**）
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -72,29 +72,10 @@
   決策**：`App.tsx:258`「看不了未來」＋DESIGN.md「日期切換」右箭頭在今天停用、e2e 有鎖，翻案
   理由要回寫 DESIGN.md。spec 先解三題：明天那頁主數字「還能吃多少」的語意、時間軸「待記錄」
   節點顯示什麼、「回今天」鈕目前只在歷史日出現。**跨四檔、走 dev-flow。**
-- **[新需求 2026-08-13 · 未開工] 拍照讀營養標示自動填表**（研究＋真實照片實測各一輪）：
-  **走使用者既有的 OpenRouter 帳號**（原本供 Hermes 用；已另開獨立 key，**但花費上限還沒設**——
-  正式接後端前必補，否則迴圈或被打會吃掉整個帳號餘額、Hermes 一起遭殃）。OpenRouter **per-token
-  不加價**（官方 FAQ；只在買 credit 時收手續費），且換模型只改一個字串——不要為省手續費改去
-  直連單一供應商。**模型選定 `qwen/qwen3.7-flash`**（$0.030/$0.130 per MTok ＝約 NT$0.07／月）：
-  單一樣本（維力炸醬麵，雙欄標示）四項全中。同樣全中的還有 `openai/gpt-5-nano`、
-  `google/gemini-2.5-flash`（三輪一致，可當基準）。**免費路實質已死**：`gemma-4-26b-a4b:free`
-  讀得準但連兩輪 429，付費層便宜到沒有實質差別且不必開「允許訓練」的路由。**DeepSeek 全系列
-  不吃圖**（14 個型號 `input_modalities` 皆無 image）。**出局**：`nova-lite-v1` 整表打散重排、
-  `nemotron-nano-12b-vl:free` 同圖兩次錯法不同＝非確定性。
-  **錯法有兩種，只有一種驗得到**：① 打散重排 → 4/9/4 反算抓得到（nova 實測偏 15%，±10% 容差可攔）
-  ② **憑空生出數字 → 抓不到**（`gemma-3-12b` 四個營養數字全對卻生出 `serving_g:55.9`，標示上沒有，
-  疑似 559.1 挪小數點）。**設計含意：`serving_g`／`servings_per_pack` 無任何數學約束可驗，模型會
-  違反「沒印就填 null」——最懶解是根本不問模型，份量本來就由使用者自己填。** 另一道檢查：兩欄
-  並列時各列「每份÷每100g」比值須一致（這張收斂 1.229＝每份約 123g）。**兩道都只能當寬容差警示、
-  不能當硬閘門**（DESIGN.md 已記「標示熱量與 4/9/4 本來就對不上」）。**仍未測：真實手機拍攝**
-  （反光／彎曲／傾斜／陰影）——至今所有樣本都是乾淨裁切圖。
-  **架構不變**：key 不能進 public bundle → 必須一層 Supabase Edge Function ＋**驗 Supabase JWT**；
-  拍照零成本（`<input type="file" accept="image/*" capture="environment">`），與 PWA 無相依。
-  **已否決**：Tesseract.js 純前端（讀密集表格不可靠）、掃條碼查 OFF（iOS Safari 無 `BarcodeDetector`、
-  全文搜尋無 CORS、台灣覆蓋率兩次撞 502 沒驗成，真要重驗是條碼精確查詢端點）、台灣無官方資料
-  （data.gov.tw 8543 是食材成分庫非標示庫）。**先決問題仍未問**：食品庫已能存常吃品項，拍照只值在
-  「第一次吃的新品項」——頻率不高就不做。探針 `<scratchpad>/ocr-probe.py`。
+- **[進行中 2026-08-13] 拍照讀營養標示自動填表**——**需求、AC、模型選型、已否決的路徑全文都在
+  [spec.md](../spec.md) 的「拍照讀營養標示」節**，本檔只記進度與還沒落檔的東西，不複製第二份。
+  模型 `qwen/qwen3.7-flash`，走使用者既有的 OpenRouter 帳號（另開的獨立 key，**花費上限已設**）。
+  探針 `<scratchpad>/ocr-probe.py`（多模型並排）與 `calib-probe.py`（壓縮校準，會自動對答案）。
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` 定案才能做，樣張在
   `_design-sample/food-library.html` A3 frame；e2e 刻意只驗進出不鎖內容。
   **零碎（不擋上線）**：Notion 退場收尾未完成。
@@ -118,11 +99,26 @@
    已過期，分歧點在 supabase-js 要不要為了 refresh 打網路；需 `npm run preview` 起在 5501）。
    **這條有 UI**（離線指示條），實作階段照 dev-flow 鐵律 4 轉 `ui-design-flow`。
 
-2. 上面兩個新需求要不要開工、先做哪個，等使用者定。
+2. **拍照辨識：dev-flow 走到實作階段，步驟 0–3 完成、4–5 進行中**（規格全文見 spec.md）。
+   完成：key 上限已設／壓縮參數 1200px q0.85 實測定案／Edge Function `read-label`（驗 JWT ＋
+   OpenRouter ＋CORS allowlist ＋POST-only ＋SSRF 閘），19 條測試、**兩輪獨立 verifier 皆 PASS**。
+   前端：相機鈕「AI 辨識輸入」已接進兩個新增入口（就地編輯刻意不給），辨識中用 `<fieldset disabled>`
+   整組鎖住、關閉鈕與 vaul 下滑一起鎖，e2e ＋2 條。
+   **剩三件**：① 等待動效落地——使用者選「B 骨架呼吸＋A 掃描線」的融合版，對照 demo 在
+   `_design-sample/scan-motion-compare.html`（**一次性產物，落地後即可刪**）② DESIGN.md 回寫
+   ③ 部署。
+   **只有使用者能做的一步是部署**：`supabase login／link／functions deploy` ＋
+   `supabase secrets set OPENROUTER_API_KEY`——我沒有也不該有他的登入權限。
+   **部署後第一件事：curl 驗 OPTIONS preflight**。Supabase gateway 的 `verify_jwt` 可能在函式之前
+   就擋掉不帶 Authorization 的 preflight，**這是本機唯一驗不到的假設**（無 Deno／Docker）。
+   另一個已知缺口：`supabase/functions/**` 不在 `tsconfig.app.json` 的 include 內，**型別錯誤 CI
+   攔不到**（vitest 只做 esbuild transform 不查型別），收尾時補。
 
-3. 體重趨勢完整圖表尚未開工，要先過 `dataviz` 定案。
+3. **預先記錄明天的飲食**：範圍已定（見待決問題），尚未開工。
 
-4. **待刪（v2.38 一次性產物，結案條件已滿足，等使用者點頭）**：[ios-gap-analysis.md](ios-gap-analysis.md)、
+4. 體重趨勢完整圖表尚未開工，要先過 `dataviz` 定案。
+
+5. **待刪（v2.38 一次性產物，結案條件已滿足，等使用者點頭）**：[ios-gap-analysis.md](ios-gap-analysis.md)、
    `_design-sample/ios-tuning-compare.html`。**刪前先 grep 這兩個檔名**——已知三處引用：DESIGN.md
    「對照 demo 現況」（要改）、v2.38 那條（歷史，留著）、`app.css` scrim 註解的出處句（自行判斷）。
 
