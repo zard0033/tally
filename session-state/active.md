@@ -42,8 +42,8 @@
   兩個後果：食品庫的分頁資料差異測不了；`intake` 的 PATCH 不反映在後續 GET，所以**任何
   「重整後還在」的斷言都驗不到真持久化**，只驗得到 App 本地 state 與 `cacheRef`。
 - **screens 新增子頁不必上 router**：Settings.tsx 自己管 `view` state，同 App.tsx 的 `tab`。
-- **把 DB 上分開的兩欄在 UI 層合併成聯集型別（v2.22 `GoalMode`）**型別漂亮，但使用者覺得
-  難用；事後拆要跨三處，比想像中貴。
+- **把 DB 上分開的兩欄在 UI 層合併成聯集型別（v2.22 `GoalMode`）**型別漂亮但使用者覺得難用；
+  事後拆要跨三處，比想像中貴。
 - **RLS 已驗，此題結案**（2026-08-05 使用者實跑 `pg_policies`／`pg_class`：四張表各一條
   `owner_all`、無第二條 permissive policy、RLS 全開）。**判準（可複用）**：要驗的若是資料庫
   自己的執行行為而非我們的程式碼，把設定查完整就是充分證據；跨帳號 runtime 測試留給
@@ -73,25 +73,28 @@
   理由要回寫 DESIGN.md。spec 先解三題：明天那頁主數字「還能吃多少」的語意、時間軸「待記錄」
   節點顯示什麼、「回今天」鈕目前只在歷史日出現。**跨四檔、走 dev-flow。**
 - **[新需求 2026-08-13 · 未開工] 拍照讀營養標示自動填表**（研究＋真實照片實測各一輪）：
-  **走使用者既有的 OpenRouter 帳號**（原本供 Hermes 用；已另開一把獨立 key，**但花費上限還沒設**
-  ——正式接後端前必補，否則迴圈或被打會吃掉整個帳號餘額、Hermes 一起遭殃）。**模型待裁決：
-  `google/gemini-2.5-flash`（推薦，約台幣 1 元/月）或 `google/gemma-4-26b-a4b-it:free`（真的能用）**
-  ——單一樣本（維力炸醬麵，雙欄標示）兩者四項全中、輸出一字不差。**免費的代價不在準確度而在
-  ①429（`gemma-4-31b:free` 兩輪全掛、26b 重試才過，放進 app 就是間歇性失敗）②資料會被拿去訓練**
-  （免費模型走的正是「允許訓練的 provider」那條路由）。**已出局**：`nemotron-nano-12b-vl:free`
-  同一張圖兩次錯法不同（跳列／幾乎全空）＝非確定性；`nemotron-omni-30b:free` 回 400；
-  `openrouter/free` 路由到分類器回 `User Safety: safe`（這輪的流程教訓見下方蒸餾 ⑥）。
-  **兩道免費的自我檢查（實測有效）**：4/9/4 反算熱量；兩欄並列時各列的「每份÷每100g」比值必須
-  一致（這張全部收斂在 1.229＝每份約 123g）。**但只能當寬容差警示不能當硬閘門**——DESIGN.md
-  已記「標示熱量與 4/9/4 本來就對不上」。**仍未測**：真實手機拍攝（反光／彎曲／傾斜／陰影），
-  這張是乾淨裁切圖，對兩個候選都還是未知。
-  **架構（不因換 provider 而改變）**：key 不能進 public bundle → 必須一層 Supabase Edge Function
-  ＋**驗 Supabase JWT**；拍照零成本（`<input type="file" accept="image/*" capture="environment">`
-  iOS Safari 直接開相機），與 PWA 無相依。**已否決**：Tesseract.js 純前端（讀密集表格不可靠）、
-  掃條碼查 Open Food Facts（iOS Safari 無 `BarcodeDetector`；全文搜尋無 CORS；台灣覆蓋率兩次都撞
-  主 API 502 沒驗成，真要重驗是「條碼精確查詢」端點不是全文搜尋）；台灣無官方路（data.gov.tw
-  8543 是食材成分庫非標示庫）。**還沒問過的先決問題**：食品庫已能存常吃品項，拍照的價值只在
-  「第一次吃的新品項」——頻率不高的話最懶的答案是不做。探針 `<scratchpad>/ocr-probe.py`。
+  **走使用者既有的 OpenRouter 帳號**（原本供 Hermes 用；已另開獨立 key，**但花費上限還沒設**——
+  正式接後端前必補，否則迴圈或被打會吃掉整個帳號餘額、Hermes 一起遭殃）。OpenRouter **per-token
+  不加價**（官方 FAQ；只在買 credit 時收手續費），且換模型只改一個字串——不要為省手續費改去
+  直連單一供應商。**模型選定 `qwen/qwen3.7-flash`**（$0.030/$0.130 per MTok ＝約 NT$0.07／月）：
+  單一樣本（維力炸醬麵，雙欄標示）四項全中。同樣全中的還有 `openai/gpt-5-nano`、
+  `google/gemini-2.5-flash`（三輪一致，可當基準）。**免費路實質已死**：`gemma-4-26b-a4b:free`
+  讀得準但連兩輪 429，付費層便宜到沒有實質差別且不必開「允許訓練」的路由。**DeepSeek 全系列
+  不吃圖**（14 個型號 `input_modalities` 皆無 image）。**出局**：`nova-lite-v1` 整表打散重排、
+  `nemotron-nano-12b-vl:free` 同圖兩次錯法不同＝非確定性。
+  **錯法有兩種，只有一種驗得到**：① 打散重排 → 4/9/4 反算抓得到（nova 實測偏 15%，±10% 容差可攔）
+  ② **憑空生出數字 → 抓不到**（`gemma-3-12b` 四個營養數字全對卻生出 `serving_g:55.9`，標示上沒有，
+  疑似 559.1 挪小數點）。**設計含意：`serving_g`／`servings_per_pack` 無任何數學約束可驗，模型會
+  違反「沒印就填 null」——最懶解是根本不問模型，份量本來就由使用者自己填。** 另一道檢查：兩欄
+  並列時各列「每份÷每100g」比值須一致（這張收斂 1.229＝每份約 123g）。**兩道都只能當寬容差警示、
+  不能當硬閘門**（DESIGN.md 已記「標示熱量與 4/9/4 本來就對不上」）。**仍未測：真實手機拍攝**
+  （反光／彎曲／傾斜／陰影）——至今所有樣本都是乾淨裁切圖。
+  **架構不變**：key 不能進 public bundle → 必須一層 Supabase Edge Function ＋**驗 Supabase JWT**；
+  拍照零成本（`<input type="file" accept="image/*" capture="environment">`），與 PWA 無相依。
+  **已否決**：Tesseract.js 純前端（讀密集表格不可靠）、掃條碼查 OFF（iOS Safari 無 `BarcodeDetector`、
+  全文搜尋無 CORS、台灣覆蓋率兩次撞 502 沒驗成，真要重驗是條碼精確查詢端點）、台灣無官方資料
+  （data.gov.tw 8543 是食材成分庫非標示庫）。**先決問題仍未問**：食品庫已能存常吃品項，拍照只值在
+  「第一次吃的新品項」——頻率不高就不做。探針 `<scratchpad>/ocr-probe.py`。
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` 定案才能做，樣張在
   `_design-sample/food-library.html` A3 frame；e2e 刻意只驗進出不鎖內容。
   **零碎（不擋上線）**：Notion 退場收尾未完成。
@@ -107,25 +110,21 @@
    ② **SW 不快取 Supabase API 回應**——App.tsx 已有 `cacheRef` 日期快取，兩層快取壽命
       不同必然對不上；且 SW 那層是透明的，App 拿到舊資料時不知道它舊，就無法誠實標示。
       離線資料改由 `cacheRef` 持久化到 localStorage 供給，一層快取、App 自己知道新舊。
-   **AC 六條、plan 六步的全文只存在於 2026-08-05 那次對話，已經撈不回來——下一輪直接
-   重跑一次 spec**（範圍與上面兩條砍除決策仍有效，不必重談）。**已定的補遺**：SW 放
-   `public/` 以 `./sw.js` 註冊（scope 跟著 `base: '/tally/'`）；登出時一併清掉快照
-   （掛在 App.tsx 既有的 `cacheRef.clear()` 旁）；
-   **實作第一步必須先實測「離線時 supabase-js 會不會把 App 踢回登入頁」**——這是唯一可能
-   推翻整個設計的未知數，探針已寫好但**還沒跑**：
-   `<scratchpad>/probe-offline-auth.mjs`（跑兩種 session：未過期／已過期，因為分歧點在
-   supabase-js 要不要為了 refresh 打網路；需要 `npm run preview` 起在 5501）。
+   **AC 六條、plan 六步的全文只存在於 2026-08-05 那次對話、已撈不回來——下一輪直接重跑 spec**
+   （範圍與上面兩條砍除決策仍有效，不必重談）。**已定的補遺**：SW 放 `public/` 以 `./sw.js` 註冊
+   （scope 跟著 `base: '/tally/'`）；登出時一併清掉快照（掛在既有的 `cacheRef.clear()` 旁）。
+   **實作第一步必須先實測「離線時 supabase-js 會不會把 App 踢回登入頁」**——唯一可能推翻整個設計
+   的未知數，探針已寫好但**還沒跑**：`<scratchpad>/probe-offline-auth.mjs`（兩種 session：未過期／
+   已過期，分歧點在 supabase-js 要不要為了 refresh 打網路；需 `npm run preview` 起在 5501）。
    **這條有 UI**（離線指示條），實作階段照 dev-flow 鐵律 4 轉 `ui-design-flow`。
 
 2. 上面兩個新需求要不要開工、先做哪個，等使用者定。
 
 3. 體重趨勢完整圖表尚未開工，要先過 `dataviz` 定案。
 
-4. **待刪（v2.38 的一次性產物，結案條件已滿足，等使用者點頭）**：
-   [ios-gap-analysis.md](ios-gap-analysis.md)、`_design-sample/ios-tuning-compare.html`。
-   **刪之前先 grep 這兩個檔名**——已知引用點至少三處：DESIGN.md 版本紀錄最後那條
-   「對照 demo 現況」（要改）、v2.38 那條（歷史紀錄，留著）、`app.css` scrim 註解裡
-   「16px 這個值的來源」那句（自行判斷要不要拿掉路徑）。
+4. **待刪（v2.38 一次性產物，結案條件已滿足，等使用者點頭）**：[ios-gap-analysis.md](ios-gap-analysis.md)、
+   `_design-sample/ios-tuning-compare.html`。**刪前先 grep 這兩個檔名**——已知三處引用：DESIGN.md
+   「對照 demo 現況」（要改）、v2.38 那條（歷史，留著）、`app.css` scrim 註解的出處句（自行判斷）。
 
 **dev-flow 申報（PWA 這條）**：規模<大> 釐清／spec／plan／★核可<全部完成> 實作<未開始>——
 但 AC 與 plan 全文已遺失（見續點 1），實質上要從 spec 重跑。
