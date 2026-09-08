@@ -355,6 +355,28 @@ test('v2.47 ① 往未來只開一天：今天可以往前走，明天就是上�
   await must(page, 'button.date-today-btn', '「回今天」鈕（明天頁也要有，否則走得出去回不來）')
 })
 
+/* deep review 補：**鈕在持有焦點的當下翻成 disabled，焦點會被瀏覽器甩回 body。**
+   v2.47 之前停用邊界是今天，接焦點的判斷寫成「會不會落在今天」剛好等價；邊界移到明天之後
+   兩者分家，而且**剛好錯開最常走的那條路**（今天→明天）。所以這條走鍵盤路徑：
+   用 focus() ＋ Enter，不是 click——`page.click` 在 WebKit 上不見得會讓 button 拿到焦點，
+   那樣測到的是「焦點本來就不在鈕上」，什麼都證明不了。 */
+test('v2.47 ①b 鍵盤按「後一天」到上界，焦點要被容器接住而不是掉回 body', async ({ page }) => {
+  await openApp(page)
+  const next = page.locator('button[aria-label="後一天"]')
+  await next.focus()
+  check(
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '後一天'),
+    '前提不成立：focus() 之後焦點不在「後一天」鈕上，這條測不到東西',
+  )
+  await next.press('Enter')
+  await page.waitForTimeout(500)
+  check(await next.isDisabled(), '前提不成立：按完之後「後一天」沒有變成停用')
+  check(
+    await page.evaluate(() => document.activeElement?.closest('.datectl') !== null),
+    '按到上界後焦點掉出 .datectl（鍵盤使用者失去位置）',
+  )
+})
+
 test('v2.47 ② 明天問「還能吃」不是「攝取」——那正是這頁存在的理由', async ({ page }) => {
   await openApp(page)
   await page.click('button[aria-label="後一天"]')
@@ -388,6 +410,14 @@ test('v2.47 ③ 在明天記一筆會記到明天，今天的數字不受影響'
   await page.waitForSelector('.food-row', { timeout: 3000 })
   await page.locator('.food-row').first().click()
   await page.waitForSelector('.pick-bar', { timeout: 2000 })
+  /* deep review 抓到的真缺陷：`pickBarRight` 的分支原本問「是不是今天」，明天會走進
+     「歷史日」那條回傳「共 N」——而**「看會不會超過」正是這個功能存在的全部理由**，
+     等於在最該用的畫面上失效。第一版四條 e2e 沒有一條讀過確認列的文字，所以全綠。 */
+  const remain = ((await page.locator('.pick-bar .remain').textContent()) ?? '').trim()
+  check(
+    remain.startsWith('剩'),
+    `明天的確認列應該回答「還剩多少」（「剩 N」或超標時的 (+N)），實際是「${remain}」`,
+  )
   await page.click('.pick-bar-btn')
   await page.waitForTimeout(700)
 

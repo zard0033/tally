@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
-import { localDate, maxPlanDate, shiftDate, weekdayDate } from '@/lib/dates'
+import { isPlannable, localDate, maxPlanDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
@@ -68,14 +68,22 @@ export default function Today(props: TodayProps) {
   const isToday = currentDate === localDate()
   /* v2.47：主數字的語意分岔點從「是不是今天」改成**「是不是過去」**。
      回頭看過去問的是「那天吃了多少」（顯示攝取量）；今天與明天問的都是「還剩多少／超了多少」
-     ——明天那頁存在的理由就是這個數字，它跟今天是同一個問題，只是還沒發生。 */
-  const isPast = currentDate < localDate()
+     ——明天那頁存在的理由就是這個數字，它跟今天是同一個問題，只是還沒發生。
+     **判斷用 dates.ts 的共用函式**：記一筆 sheet 的確認列問的是同一件事，第一版兩處各算
+     一份、只改了這裡，結果明天的確認列退化成「共 N」（deep review 抓到）。 */
+  const isPast = !isPlannable(currentDate)
 
   /* 「回今天」按下後原本的鈕會被靜態 span 取代（unmount），焦點跟著掉回 body；
-     「後一天」按到今天當下也會翻 disabled，同樣把焦點甩掉——兩條路徑都用這個容器
-     接住焦點（tabIndex=-1：只接受程式化 focus，不進 Tab 順序，不干擾原本的鍵盤走位）。 */
+     「後一天」按到**上界**當下也會翻 disabled，同樣把焦點甩掉——兩條路徑都用這個容器
+     接住焦點（tabIndex=-1：只接受程式化 focus，不進 Tab 順序，不干擾原本的鍵盤走位）。
+
+     **v2.47 修**：這裡原本問的是「會不會落在今天」（`=== localDate()`），因為 v2.47 之前
+     停用邊界就是今天，兩者等價。邊界移到明天之後兩者分家，而且**剛好錯開最常走的那條路**：
+     今天→明天會讓鈕翻 disabled 卻不接焦點，昨天→今天不會 disabled 卻硬把焦點搶走。
+     所以判斷要直接照「這一按會不會落在停用邊界」寫，不要照某個剛好等價的日期寫
+     （deep review 抓到；跟 disabled 的條件同一個 `>=`，兩邊才不會再分家）。 */
   const dateRegionRef = useRef<HTMLDivElement>(null)
-  const willLandOnToday = (days: number) => shiftDate(currentDate, days) === localDate()
+  const willLandOnMax = (days: number) => shiftDate(currentDate, days) >= maxPlanDate()
 
   /* 品項列同時只有一列是「活躍」的，而活躍有兩種樣子：左滑露出刪除鈕（swipe）、
      點按展開就地編輯（edit）。v2.0 曾拆成 raisedId／openingId／manualOpenId 三個並行
@@ -211,9 +219,9 @@ export default function Today(props: TodayProps) {
                「不得超過上界」這個規則本身寫進條件，而不是只擋住剛好那一天。 */
             disabled={currentDate >= maxPlanDate()}
             onClick={() => {
-              const landOnToday = willLandOnToday(1)
+              const landOnMax = willLandOnMax(1)
               onShiftDate(1)
-              if (landOnToday) dateRegionRef.current?.focus()
+              if (landOnMax) dateRegionRef.current?.focus()
             }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">

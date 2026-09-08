@@ -17,7 +17,7 @@ import {
   type Food,
   type NewIntake,
 } from '@/lib/api'
-import { localDate } from '@/lib/dates'
+import { isPlannable } from '@/lib/dates'
 import { BLANK_FOOD_FORM, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
@@ -366,10 +366,13 @@ export default function LogSheet(props: LogSheetProps) {
     }
   }
 
-  const isToday = dayData.date === localDate()
+  /* v2.47：**不是 `=== localDate()`**。這裡問的是「這天還能不能改變結果」，明天也算——
+     確認列要顯示「剩 N／(+N)」而不是「共 N」，那正是「先排明天、看會不會超過」的落點。
+     判斷收在 dates.ts 共用，不在這裡再維護一份（第一版就是各維護一份才漏改）。 */
+  const plannable = isPlannable(dayData.date)
   const eaten = sumIntake(dayData.rows ?? [])
   const totals = pickTotals(picks, foodById)
-  const right = pickBarRight(isToday, eaten.kcal, targets.kcal, totals.kcal)
+  const right = pickBarRight(plannable, eaten.kcal, targets.kcal, totals.kcal)
   const combined: IntakeTotals = {
     kcal: eaten.kcal + totals.kcal,
     protein: eaten.protein + totals.protein,

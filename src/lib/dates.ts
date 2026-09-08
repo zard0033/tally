@@ -33,6 +33,21 @@ export function maxPlanDate(today: string = localDate()): string {
   return shiftDate(today, 1)
 }
 
+/**
+ * 這一天**還能改變結果嗎**——今天與明天為真，過去為假（v2.47，precommit deep review 補）。
+ *
+ * 存在的理由是它被**兩個畫面**問到：今日頁的主數字（要顯示「還能吃」還是「攝取」）、
+ * 記一筆 sheet 的確認列（要顯示「剩 N／(+N)」還是「共 N」）。第一版只改了今日頁，
+ * sheet 那份仍自己算 `dayData.date === localDate()`，於是**在明天記一筆時確認列退化成
+ * 「共 N」——而「看會不會超過」正是這個功能存在的全部理由**，等於在最該用的畫面上失效。
+ *
+ * **同一條規則被兩處各維護一份，就是這種漏改的來源**；跟 `maxPlanDate()` 同一個道理：
+ * 界只有一處定義，才不會有人只改到其中一處。
+ */
+export function isPlannable(iso: string, today: string = localDate()): boolean {
+  return iso >= today
+}
+
 /** 出生年在 today 那年的年齡（今年－出生年）。只問年份，不問月日——
  *  換掉 date picker 要滾幾十年份的操作成本，換來的是 ±1 歲的誤差，對 BMR 影響是個位數卡路里等級。 */
 export function ageFromYear(birthYear: number, today: Date = new Date()): number {

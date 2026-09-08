@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageFromYear, localDate, maxPlanDate, shiftDate, weekdayDate } from './dates'
+import { ageFromYear, isPlannable, localDate, maxPlanDate, shiftDate, weekdayDate } from './dates'
 
 describe('localDate', () => {
   it('本地時區 yyyy-mm-dd，不受 UTC 偏移影響', () => {
@@ -37,6 +37,24 @@ describe('maxPlanDate', () => {
   })
   it('不帶參數時以今天為基準（界會跟著午夜自己移動）', () => {
     expect(maxPlanDate()).toBe(shiftDate(localDate(), 1))
+  })
+})
+
+/* v2.47（deep review 補）：「這天還能不能改變結果」。**兩個畫面問同一件事**——今日頁的
+   主數字、記一筆 sheet 的確認列，所以它必須只有一份定義。同樣顯式傳 today，不吃系統時鐘。 */
+describe('isPlannable', () => {
+  it('今天為真', () => {
+    expect(isPlannable('2026-07-28', '2026-07-28')).toBe(true)
+  })
+  it('明天為真——這正是 v2.47 開放的那一天', () => {
+    expect(isPlannable('2026-07-29', '2026-07-28')).toBe(true)
+  })
+  it('昨天為假', () => {
+    expect(isPlannable('2026-07-27', '2026-07-28')).toBe(false)
+  })
+  it('純字串比較，跨月不會出錯', () => {
+    expect(isPlannable('2026-03-01', '2026-02-28')).toBe(true)
+    expect(isPlannable('2026-02-28', '2026-03-01')).toBe(false)
   })
 })
 

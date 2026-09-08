@@ -199,8 +199,11 @@ export function macroExceeds(cur: number, target: number): boolean {
    歷史日看的是加進去之後那天總共吃了多少。剩餘／超出不用正負號，避免「+594」
    被讀成「多攝取 594」。v2.10：熱量超標時「剩」讓位，超出量改掛在小計數字右邊
    （`(+40)`），deltaText 與 remainText 因此互斥，同時只有一個非空。 */
-export function pickBarRight(isToday: boolean, eatenKcal: number, targetKcal: number, picksKcal: number) {
-  if (!isToday) {
+/* v2.47：參數從 `isToday` 更名為 `plannable`——**舊名字在明天這條路上是錯的**。
+   分支要問的從來不是「是不是今天」而是「這天還能不能改變結果」，只是在只看得到今天以前，
+   兩者剛好等價。明天開放之後名字就開始說謊，而說謊的名字正是漏改的溫床。 */
+export function pickBarRight(plannable: boolean, eatenKcal: number, targetKcal: number, picksKcal: number) {
+  if (!plannable) {
     const total = Math.round(eatenKcal + picksKcal)
     return { remainText: `共 ${total}`, deltaText: '', ariaLabel: `共 ${total} 大卡`, over: false }
   }
