@@ -746,7 +746,7 @@ button { -webkit-user-select: none; user-select: none; }
 /* ═══════════ 記一筆 sheet ═══════════ */
 /* v2.38：壓暗之外再加一層模糊。前綴不可省（同「區塊分隔」的 mask-image，舊 iOS Safari
    只認 -webkit-）。16px 這個值的來源要講清楚：是**在 headless WebKit 上截對照 demo
-   （`_design-sample/ios-tuning-compare.html`）的畫面比出來的**——那頁的模糊在同一支引擎上
+   （`_design-sample/ios-tuning-compare.html`，**2026-09-08 已刪**，要看從 git 撿）的畫面比出來的**——那頁的模糊在同一支引擎上
    render 得出來，10px 以下在 55% 壓暗底下跟沒加幾乎分不出來（壓暗已經先吃掉大半細節）。
    **不是真機比的**，但 2026-08-13 使用者真機看過並回報 ok，16px 就地定案。
 

@@ -1,0 +1,19 @@
+{
+  /* Supabase Edge Function 的型別檢查。**存在的理由是 CI 攔不到這裡的型別錯誤**——
+     `npm run build` 跑的是 `tsc -b`，只會建 tsconfig.json 裡 references 到的專案，
+     而 `supabase/functions/**` 兩邊都不在（app 只 include `src`）；vitest 那半只做
+     esbuild transform、完全不查型別。結果是這幾支檔案改壞了要等真的部署上去才知道。
+
+     **index.ts 刻意排除**：它碰 `Deno.serve`／`Deno.env`，要查它得裝一份 Deno 的型別，
+     而那是為了三行膠水碼多養一個相依。邏輯全部在 handler.ts（300+ 行，21 條測試守著），
+     那才是這條規則要保護的東西。index.ts 的正確性由部署後的實際呼叫證明。 */
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.functions.tsbuildinfo",
+    /* 不吃 `vite/client`（那是前端的），改吃 vitest 的全域型別——handler.test.ts 用 describe/it。
+       lib 要留 DOM：handler.ts 用的是 Request／Response／fetch 這組標準 Web API。 */
+    "types": ["vitest/globals"]
+  },
+  "include": ["supabase/functions"],
+  "exclude": ["supabase/functions/**/index.ts"]
+}
