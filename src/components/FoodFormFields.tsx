@@ -181,6 +181,42 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      `block: 'nearest'` 對已經在可視區內的欄位是 no-op，所以桌面（沒有鍵盤、不需要捲）完全無感。
      **已知未涵蓋**：第一次點欄位叫出鍵盤那一下，`--kb` 是在 `visualViewport` 事件之後才更新的，
      這裡算的可能是縮之前的版面。真機回報的是「切換時」，先修這條，那條等有回報再說。 */
+  /* v2.45 只修了一半，真機仍被蓋住。**原因是 iOS 根本沒發我們在等的那個事件**：
+     用箭頭切欄位時鍵盤已經在、高度沒變 ⇒ `visualViewport` 只發 `scroll` 不發 `resize`
+     （iOS 是靠**捲 layout viewport** 去露出目標欄位的）。而那個捲動正是 `--vvtop`（v2.35）
+     在補償的東西——**iOS 自己想幫你露出來，被我們依設計抵銷掉了**，這就是上一輪
+     「捲了但量不夠」的真正機制。
+
+     下面 `onFocus` 那條**留著、不是重複**：它是同步的，跑在 iOS 調整版面之前，所以量到的是
+     舊版面——對「版面不會再變」的情況（桌面、鍵盤已就位）剛好對，對 iOS 切欄位的情況剛好錯。
+     這裡補的是「版面安定之後再捲一次」，兩者管的是不同時機（e2e 各有一條，互為 mutation 對照）。
+
+     **掛在本元件而不是 App.tsx 那支 listener 裡**：那支是全 repo 最敏感的一段
+     （v2.32→v2.35 打了三輪），而且「表單該捲到哪」不是它該知道的事。同一個事件目標上
+     listener 依註冊順序執行，本元件必定晚於 App.tsx 掛載 ⇒ 輪到這裡時 `--kb`／`--vvtop`
+     保證已經更新完，不必自己再算一次版面。
+
+     不怕跟使用者手動捲打架：捲 `.form-wrap` 這種內層容器**不會**觸發 visualViewport 事件
+     （它量的是可見區相對 layout viewport 的位移），而 `block: 'nearest'` 對已經在可視區內的
+     元素是 no-op。 */
+  const formElRef = useRef<HTMLFormElement | null>(null)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const settle = () => {
+      const el = document.activeElement
+      if (el instanceof HTMLInputElement && formElRef.current?.contains(el)) {
+        el.scrollIntoView({ block: 'nearest' })
+      }
+    }
+    vv.addEventListener('resize', settle)
+    vv.addEventListener('scroll', settle)
+    return () => {
+      vv.removeEventListener('resize', settle)
+      vv.removeEventListener('scroll', settle)
+    }
+  }, [])
+
   const scrollFocusedIntoView = (e: React.FocusEvent) => {
     /* **只認 `<input>`**。掛在 `<form>` 上等於接住底下每一個可聚焦的東西——辨識鈕（它也在
        form 裡）、以及店家 Autocomplete 那份 Portal 出去的清單（React 的合成事件走元件樹不走
@@ -192,7 +228,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   }
 
   return (
-    <form onSubmit={(e) => e.preventDefault()} onFocus={scrollFocusedIntoView}>
+    <form ref={formElRef} onSubmit={(e) => e.preventDefault()} onFocus={scrollFocusedIntoView}>
       {/* 辨識中整組鎖住。用原生 `<fieldset disabled>` 而不是逐個欄位傳 disabled——一個屬性
           就關掉底下所有表單控件（含店家的 Autocomplete，它底下是真的 <input>），
           少寫六處、也不會有漏掉一處的可能。`.form-lock` 只做樣式重置：fieldset 預設帶邊框、

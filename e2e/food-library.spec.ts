@@ -337,6 +337,10 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   await expect(sheet).toBeVisible()
 
   const box = async (l: ReturnType<Page['locator']>) => (await l.boundingBox())!
+  /* 等 vaul 的進場動畫（translateY(100%)→0）跑完再量。原本沒有這行也對，因為當時只比
+     **高度**——translateY 不改變高度。改成比**位置**之後基準線就浮動了，動畫途中量到的
+     y 是半路值（同檔的 --vvtop 那條早註記過這件事，我還是重踩了一次）。 */
+  await page.waitForTimeout(500)
   const before = await box(sheet)
   const formBefore = await box(sheet.locator('.form-wrap'))
 
@@ -344,11 +348,23 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   await sheet.evaluate((el, kb) => el.style.setProperty('--kb', `${kb}px`), KB)
 
   const after = await box(sheet)
-  expect(Math.round(before.height - after.height), 'sheet 沒有吃到 --kb，接線斷了').toBe(KB)
+  /* v2.46 起 `--kb` 同時牽動兩端：底緣照舊上移 KB，**頂緣也把原本的 96px 空隙收回來**
+     （鍵盤升起時那個空隙的用途已經消失，見 app.css `.sheet`）。所以「高度剛好縮 KB」
+     不再成立——但那從來不是這條要守的東西，它要守的是「`--kb` 這條線有接上」。
+     改成分開驗兩端，反而把兩條獨立的線各自鎖住：一條斷了另一條不會替它遮掩。 */
+  expect(
+    Math.round(before.y + before.height - (after.y + after.height)),
+    'sheet 底緣沒有吃到 --kb，接線斷了',
+  ).toBe(KB)
+  // 桌面 env(safe-area-inset-top) 回 0，KB > 96 ⇒ 頂緣應該一路收到 0
+  expect(Math.round(after.y), '鍵盤升起時頂部空隙沒有收回（v2.46）').toBe(0)
 
-  // 可捲區吸收整段縮減（確認列是 flex-shrink:0，不該被壓）
+  /* 可捲區吸收**整段**淨變化（確認列是 flex-shrink:0，不該被壓）。寫成「等於 sheet 的
+     淨高度變化」而不是寫死 KB：這樣頂緣那條規則以後再調，這個不變量仍然成立。 */
   const formAfter = await box(sheet.locator('.form-wrap'))
-  expect(Math.round(formBefore.height - formAfter.height), '縮減沒有落在可捲區身上').toBe(KB)
+  expect(Math.round(formBefore.height - formAfter.height), '縮減沒有落在可捲區身上').toBe(
+    Math.round(before.height - after.height),
+  )
 
   // 確認鈕仍在 sheet 的可視範圍內，不是被推到框外
   const btn = await box(sheet.locator('.pick-bar-btn'))
@@ -371,7 +387,10 @@ test('鍵盤佔掉空間時，焦點切到底部欄位會自動捲進可視區',
      那不是版面在動是動畫還沒停）。380 是量出來的：門檻在 355 附近（框底 385／碳水頂 390），
      取再高一階留餘裕；可捲餘裕 181px，捲得回來。 */
   await page.waitForTimeout(500)
-  await sheet.evaluate((el) => el.style.setProperty('--kb', '380px'))
+  /* 380 是 v2.45 量的（當時門檻約 355）。v2.46 把頂部空隙收回來之後 sheet 高了 96px，
+     同樣重量一次門檻：碳水欄在 kb=455 附近才離開框內，取 480 留一樣的餘裕。
+     **不是把數字調大到綠為止**——門檻是量出來的，餘裕是照上一輪的取法。 */
+  await sheet.evaluate((el) => el.style.setProperty('--kb', '480px'))
   const sheetBox = (await sheet.boundingBox())!
   const bottom = sheetBox.y + sheetBox.height
 
@@ -386,6 +405,39 @@ test('鍵盤佔掉空間時，焦點切到底部欄位會自動捲進可視區',
   await carb.evaluate((el: HTMLElement) => el.focus({ preventScroll: true }))
   const after = (await carb.boundingBox())!
   expect(after.y + after.height, '焦點切過去了，但欄位沒被捲進可視區').toBeLessThanOrEqual(bottom + 1)
+})
+
+/* v2.46：**版面安定之後**再捲一次。上一條守的是 `onFocus`——它是同步的，跑在 iOS 調整
+   版面之前。真機用鍵盤上下箭頭切欄位時鍵盤高度沒變，`visualViewport` 只發 `scroll` 不發
+   `resize`（iOS 是靠捲 layout viewport 去露出目標欄位，而那正是 `--vvtop` 在補償的東西），
+   於是 `onFocus` 那條算的是舊版面——這就是 v2.45「捲了但量不夠」的真正機制。
+
+   **這條刻意不碰焦點**：焦點已經在碳水欄上，先手動把可捲區捲回頂端讓它離開視野，再單獨
+   發一次 visualViewport 事件。全程沒有任何 focus 事件，所以上一條的 `onFocus` 幫不上忙，
+   紅綠只反映新加的那支 listener（mutation：拿掉它這條就轉紅，上一條仍綠）。 */
+test('版面在焦點移動之後才改變時，焦點欄位仍會被捲回可視區', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await page.waitForTimeout(500)
+  await sheet.evaluate((el) => el.style.setProperty('--kb', '480px'))
+
+  const carb = page.locator('#lf-carb')
+  await carb.evaluate((el: HTMLElement) => el.focus({ preventScroll: true }))
+
+  // 把可捲區捲回頂端：焦點不動，但碳水欄離開可視區——模擬「焦點還在，版面卻變了」
+  await sheet.locator('.form-wrap').evaluate((el) => { el.scrollTop = 0 })
+  const bottom = (await sheet.boundingBox())!.y + (await sheet.boundingBox())!.height
+  const before = (await carb.boundingBox())!
+  expect(before.y, '前提不成立：碳水欄還在框內，這條測不到東西').toBeGreaterThan(bottom)
+
+  await page.evaluate(() => window.visualViewport?.dispatchEvent(new Event('scroll')))
+
+  const after = (await carb.boundingBox())!
+  expect(after.y + after.height, '版面安定後沒有把焦點欄位捲回可視區').toBeLessThanOrEqual(bottom + 1)
 })
 
 /* v2.35：`--vvtop` 補的是**位移**，跟上面那條 `--kb` 補的**高度**是兩件事。

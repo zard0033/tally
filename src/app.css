@@ -796,8 +796,21 @@ button { -webkit-user-select: none; user-select: none; }
    去讓它露出來，而 `position: fixed` 釘在 layout viewport 上，sheet 就整個被推出可見區
    （真機：點碳水欄，「新增食物」標題貼到螢幕最頂、確認鈕掉到鍵盤底下）。`--kb` 補的是
    高度、`--vvtop` 補的是位移，**兩個都要**——只補 --kb 的話，欄位一旦在下半部就失效。 */
+/* 頂部空隙在鍵盤升起時收回（v2.46）。96px 的用途是「記錄時還看得到今日的主數字」——
+   **鍵盤一升起那個用途就不存在了**：人正在打字，而且主數字早被鍵盤與 sheet 夾掉。
+   下限用 `env(safe-area-inset-top)` 而不是寫死的數字：`viewport-fit=cover` 讓頁面鑽到瀏海
+   底下，收到 0 會把標題塞進狀態列。**用裝置自己報的值，不要用我在某台機器上量到的 59。**
+   桌面與沒有瀏海的裝置 env() 回 0，而它們也沒有鍵盤（--kb 恆為 0）⇒ `max()` 取 96px，行為不變。
+
+   實測收回多少有用（440×956、WebKit，量 `.form-wrap` 的 scrollHeight − clientHeight）：
+     鍵盤 380（英數）  現行溢出 0   → 提案 0
+     鍵盤 420（中文帶候選列）現行溢出 30 → 提案 0
+     鍵盤 460          現行溢出 70  → 提案 33
+   **原本的餘裕只有約 10px**——380 那格「溢出 0」是剛好塞下、根本捲不動，中文鍵盤多一條
+   候選列就破。收回這 37px 把門檻推到 420，但 460 仍會溢出，**所以自動捲進可視區那條
+   （FoodFormFields 的 visualViewport listener）不能省，兩條各管一半。** */
 .sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px);
-  top: calc(96px + var(--vvtop, 0px)); z-index: 11;
+  top: calc(max(env(safe-area-inset-top, 0px), 96px - var(--kb, 0px)) + var(--vvtop, 0px)); z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
   display: flex; flex-direction: column; min-height: 0; }
