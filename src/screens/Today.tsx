@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
-import { localDate, shiftDate, weekdayDate } from '@/lib/dates'
+import { localDate, maxPlanDate, shiftDate, weekdayDate } from '@/lib/dates'
 import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
@@ -66,6 +66,10 @@ export default function Today(props: TodayProps) {
 
   const rows = dayData.rows
   const isToday = currentDate === localDate()
+  /* v2.47：主數字的語意分岔點從「是不是今天」改成**「是不是過去」**。
+     回頭看過去問的是「那天吃了多少」（顯示攝取量）；今天與明天問的都是「還剩多少／超了多少」
+     ——明天那頁存在的理由就是這個數字，它跟今天是同一個問題，只是還沒發生。 */
+  const isPast = currentDate < localDate()
 
   /* 「回今天」按下後原本的鈕會被靜態 span 取代（unmount），焦點跟著掉回 body；
      「後一天」按到今天當下也會翻 disabled，同樣把焦點甩掉——兩條路徑都用這個容器
@@ -202,7 +206,10 @@ export default function Today(props: TodayProps) {
             type="button"
             className="date-arrow"
             aria-label="後一天"
-            disabled={isToday}
+            /* v2.47：停用條件從 isToday 改成「已經在上界」。**不要寫成 `currentDate === maxPlanDate()`**
+               ——那樣萬一有別的路徑把日期帶到更遠，這顆鈕反而會變成可按的。用 `>=` 是把
+               「不得超過上界」這個規則本身寫進條件，而不是只擋住剛好那一天。 */
+            disabled={currentDate >= maxPlanDate()}
             onClick={() => {
               const landOnToday = willLandOnToday(1)
               onShiftDate(1)
@@ -216,13 +223,15 @@ export default function Today(props: TodayProps) {
         </div>
       </header>
 
-      <section className="gauge" aria-label="今日熱量">
+      {/* 補遺①：這個 aria-label 原本寫死「今日熱量」，**在歷史日就已經是錯的**（不是這輪引入，
+          但這輪明知就不能照抄）。改成跟著檢視日走，讀屏使用者才知道自己在看哪一天。 */}
+      <section className="gauge" aria-label={`${weekdayDate(currentDate)} 熱量`}>
         <div className="gauge-top">
           <div>
-            <div className="gauge-lead">{eatenKcal === null ? '還能吃' : !isToday ? '攝取' : over ? '超出' : '還能吃'}</div>
+            <div className="gauge-lead">{eatenKcal === null ? '還能吃' : isPast ? '攝取' : over ? '超出' : '還能吃'}</div>
             <div aria-live="polite">
               <span className="gauge-num">
-                {eatenKcal === null ? '—' : isToday ? Math.abs(targetKcal - eatenKcal) : eatenKcal}
+                {eatenKcal === null ? '—' : isPast ? eatenKcal : Math.abs(targetKcal - eatenKcal)}
               </span>
               <span className="gauge-unit">卡</span>
             </div>

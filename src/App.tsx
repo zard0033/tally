@@ -35,7 +35,7 @@ import {
 } from '@/lib/api'
 import { DUR, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
-import { localDate, shiftDate } from '@/lib/dates'
+import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import Login from '@/screens/Login'
 import Today from '@/screens/Today'
@@ -171,10 +171,12 @@ export default function App() {
   const prefetchAdjacent = useCallback(
     (date: string) => {
       prefetchDate(shiftDate(date, -1))
-      if (date !== localDate()) {
-        const next = shiftDate(date, 1)
-        if (next <= localDate()) prefetchDate(next)
-      }
+      /* v2.47：上界跟著 `maxPlanDate()`（＝明天）。原本這裡還有一層 `date !== localDate()`
+         的守衛，是為了「今天不必預取後一天，因為看不了未來」——那個前提本身就是這輪翻掉的
+         東西，留著它會讓**最常走的那條路（從今天按 →）**變成唯一沒有預取的一條，
+         正好是 DESIGN v2.5「按下箭頭時資料要已經在手上」要避免的情況。 */
+      const next = shiftDate(date, 1)
+      if (next <= maxPlanDate()) prefetchDate(next)
     },
     [prefetchDate],
   )
@@ -255,7 +257,8 @@ export default function App() {
     (iso: string) => {
       if (iso === currentDate) return
       if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return
-      if (iso > localDate()) return // 看不了未來
+      // v2.47：界從「今天」放寬到「明天」。定義只有 maxPlanDate() 一處，理由寫在那支函式。
+      if (iso > maxPlanDate()) return
       setCurrentDate(iso)
       const cached = cacheRef.current.get(iso)
       if (cached) {

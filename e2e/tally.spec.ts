@@ -342,7 +342,13 @@ test('Tally UI 回歸', async ({ page }) => {
     )
     await must(page, 'button[aria-label="前一天"]', '前一天')
     await must(page, 'button[aria-label="後一天"]', '後一天')
-    check(await page.locator('button[aria-label="後一天"]').isDisabled(), '今天時「後一天」應停用（看不了未來）')
+    /* v2.47 翻案：這裡原本斷言「今天時後一天停用（看不了未來）」——**那條斷言鎖的是已經作廢的
+       決策**，所以它必須反過來，不是放寬。往未來只開一天（＝明天）的完整路徑在
+       interaction.spec.ts；這裡只鎖「今天可以往前走」這件事，避免累積回歸再長出第二份。 */
+    check(
+      !(await page.locator('button[aria-label="後一天"]').isDisabled()),
+      '今天時「後一天」應可按（v2.47 起可以排明天）',
+    )
     check((await page.locator('button.date-today-btn').count()) === 0, '今天時不應出現「回今天」鈕')
     await page.click('button[aria-label="前一天"]')
     await page.waitForTimeout(500)

@@ -14,6 +14,25 @@ export function shiftDate(iso: string, days: number): string {
   return localDate(new Date(y, m - 1, d + days))
 }
 
+/**
+ * 使用者能檢視／記錄到的**最後一天＝明天**（v2.47）。
+ *
+ * 這條界原本是「今天」（`goToDate` 的 `iso > localDate()` 與右箭頭的 `disabled={isToday}`），
+ * **翻案理由**：那條界擋掉的不是錯誤操作，是整個「先排明天、看會不會超過」的用途——
+ * 記帳 app 都只能回顧，這一天的餘裕讓數字出現在**還能改變結果的時候**。
+ *
+ * **為什麼只開一天而不是任意未來**（使用者裁決）：再遠就變成餐點計畫工具，
+ * 那是另一個產品；而且每多開一天，「這筆到底吃了沒」的不確定就多一天。
+ * 一天剛好是「今晚決定明天」這個真實的使用時機。
+ *
+ * **刻意做成函式而不是常數**：`localDate()` 每次呼叫都重算，所以跨午夜之後這條界
+ * 自己會跟著移動，不必有人記得去刷新。三個呼叫點（goToDate 的上界、預取的上界、
+ * 右箭頭的停用條件）共用這一份定義——**界只有一處，才不會有人只改到其中兩處**。
+ */
+export function maxPlanDate(today: string = localDate()): string {
+  return shiftDate(today, 1)
+}
+
 /** 出生年在 today 那年的年齡（今年－出生年）。只問年份，不問月日——
  *  換掉 date picker 要滾幾十年份的操作成本，換來的是 ±1 歲的誤差，對 BMR 影響是個位數卡路里等級。 */
 export function ageFromYear(birthYear: number, today: Date = new Date()): number {

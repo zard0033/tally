@@ -10,6 +10,15 @@ export const TODAY = (() => {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`
 })()
 
+/** 明天（v2.47 起可檢視／可記錄的上界）。stub 對這個日期回空清單——**那正是要驗的**：
+ *  明天預設是一張白紙，記上去的東西不會混進今天。 */
+export const TOMORROW = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+})()
+
 /** 昨天，供跨日期 undo 測試用（e2e/interaction.spec.ts 的四條「undo 跨日期」斷言）。 */
 export const YDAY = (() => {
   const d = new Date()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageFromYear, localDate, shiftDate, weekdayDate } from './dates'
+import { ageFromYear, localDate, maxPlanDate, shiftDate, weekdayDate } from './dates'
 
 describe('localDate', () => {
   it('本地時區 yyyy-mm-dd，不受 UTC 偏移影響', () => {
@@ -16,6 +16,27 @@ describe('shiftDate', () => {
   })
   it('閏日', () => {
     expect(shiftDate('2024-02-28', 1)).toBe('2024-02-29')
+  })
+})
+
+/* v2.47：可檢視範圍的上界。**測的是「界在明天」這個規則本身**，不是 shiftDate
+   （那個上面已經測過了）——所以每條都顯式傳入 today，不依賴系統時鐘，
+   否則測試會在跨月／跨年那幾天自己變成另一個案例。 */
+describe('maxPlanDate', () => {
+  it('就是明天', () => {
+    expect(maxPlanDate('2026-07-28')).toBe('2026-07-29')
+  })
+  it('跨月', () => {
+    expect(maxPlanDate('2026-02-28')).toBe('2026-03-01')
+  })
+  it('跨年', () => {
+    expect(maxPlanDate('2025-12-31')).toBe('2026-01-01')
+  })
+  it('閏年的 2/28 往前是 2/29，不是 3/1', () => {
+    expect(maxPlanDate('2024-02-28')).toBe('2024-02-29')
+  })
+  it('不帶參數時以今天為基準（界會跟著午夜自己移動）', () => {
+    expect(maxPlanDate()).toBe(shiftDate(localDate(), 1))
   })
 })
 

@@ -4,8 +4,8 @@
    這整個檔案的存在理由：拖曳／動畫這種要反覆試的東西，在 tally.spec.ts 那串累積狀態的
    15 條路徑裡除錯，一輪 20 秒起跳，而且斷言會建在上一條留下的狀態上。 */
 import { test } from '@playwright/test'
-import { FIX, YDAY } from './fixtures'
-import { check, deleteViaTap, grabPoint, leg, openApp, rowState, slowDrag, waitCount } from './harness'
+import { FIX, TOMORROW, YDAY } from './fixtures'
+import { check, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, rowState, slowDrag, waitCount } from './harness'
 
 /** window.__intakeCalls 的型別斷言（stub.ts 掛在 window 上，e2e 這邊只讀）。 */
 const intakeCalls = (page: import('@playwright/test').Page) =>
@@ -324,4 +324,103 @@ test('v2.38 四項微調的 CSS 沒有被改回去', async ({ page }) => {
     return st.backdropFilter || (st as unknown as Record<string, string>).webkitBackdropFilter
   })
   check(/blur\(/.test(bf), `scrim 的 backdrop-filter 不見了：${bf}`)
+})
+
+/* ── v2.47：預先記錄明天的飲食 ────────────────────────────────────────────
+   這組**翻掉了一條既有決策**：`goToDate` 的「看不了未來」與右箭頭 `disabled={isToday}`。
+   tally.spec.ts 那條「今天時後一天應停用」的斷言已經改成相反方向——**鎖著舊決策的測試
+   必須跟著翻，不是放寬**，否則它會以「回歸失敗」的外表擋住一個刻意的改變。
+
+   四條各鎖一件不同的事，不是同一件驗四遍：**界在哪／數字問什麼／記到哪一天／要不要等載入**。
+   日期比對只取 `M/D`（h1 是「週X M/D」），不從 src 匯入 weekdayDate——e2e 跑的是 build 後的
+   preview，測試檔不該跟 `@/` 別名綁在一起。 */
+const monthDay = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${m}/${d}`
+}
+
+test('v2.47 ① 往未來只開一天：今天可以往前走，明天就是上界', async ({ page }) => {
+  await openApp(page)
+  const next = page.locator('button[aria-label="後一天"]')
+  check(!(await next.isDisabled()), '今天時「後一天」應可按（v2.47 起可以排明天）')
+
+  await next.click()
+  await page.waitForTimeout(500)
+  const title = ((await page.locator('h1.date-title').textContent()) ?? '').trim()
+  check(
+    title.endsWith(monthDay(TOMORROW)),
+    `按「後一天」應該落在明天（${monthDay(TOMORROW)}），實際 h1 是「${title}」`,
+  )
+  check(await next.isDisabled(), '到了明天，「後一天」必須停用——只開一天，不是開放任意未來')
+  await must(page, 'button.date-today-btn', '「回今天」鈕（明天頁也要有，否則走得出去回不來）')
+})
+
+test('v2.47 ② 明天問「還能吃」不是「攝取」——那正是這頁存在的理由', async ({ page }) => {
+  await openApp(page)
+  await page.click('button[aria-label="後一天"]')
+  await page.waitForTimeout(500)
+  /* 明天在 stub 裡是空的一天 ⇒ 還沒吃任何東西 ⇒ 「還能吃」＝整份目標。
+     這一條同時證明**每日目標引擎在明天照常運作**（AC6）：數字不是 0、也不是「—」，
+     而是今天那份目標本人。 */
+  await mustText(page, '.gauge-lead', '還能吃', '明天的主數字標籤應為「還能吃」（跟今天同一個問題，只是還沒發生）')
+  const remainTomorrow = await numFrom(page, '.gauge-num')
+  const target = await numFrom(page, '.gauge-side .tgt')
+  check(
+    remainTomorrow === target,
+    `明天什麼都沒記，「還能吃」應該等於整份目標 ${target}，實際 ${remainTomorrow}`,
+  )
+
+  // 對照組：過去仍然是「攝取」。**沒有這一半，把標籤全站改成「還能吃」也會是綠的。**
+  await page.click('button.date-today-btn')
+  await page.waitForTimeout(400)
+  await page.click('button[aria-label="前一天"]')
+  await page.waitForTimeout(500)
+  await mustText(page, '.gauge-lead', '攝取', '歷史日仍應顯示「攝取」——回頭看問的是那天吃了多少')
+})
+
+test('v2.47 ③ 在明天記一筆會記到明天，今天的數字不受影響', async ({ page }) => {
+  await openApp(page)
+  const todayNum = await numFrom(page, '.gauge-num')
+
+  await page.click('button[aria-label="後一天"]')
+  await page.waitForTimeout(500)
+  await page.click('button.cta')
+  await page.waitForSelector('.food-row', { timeout: 3000 })
+  await page.locator('.food-row').first().click()
+  await page.waitForSelector('.pick-bar', { timeout: 2000 })
+  await page.click('.pick-bar-btn')
+  await page.waitForTimeout(700)
+
+  const writes = await page.evaluate(
+    () => (window as unknown as { __writes: { path: string; method: string; body: unknown }[] }).__writes,
+  )
+  const posted = writes.filter((w) => w.path.startsWith('intake') && w.method === 'POST')
+  check(posted.length === 1, `明天按「加入」應送出一筆 intake，實際 ${posted.length} 筆`)
+  const rows = posted[0].body as { eaten_on?: string }[]
+  check(
+    Array.isArray(rows) && rows.every((r) => r.eaten_on === TOMORROW),
+    `送出的 eaten_on 應該是明天（${TOMORROW}），實際 ${JSON.stringify(rows)}`,
+  )
+
+  /* AC7：回到今天，主數字必須跟記錄之前一模一樣。**這條才是「不污染」的證據**——
+     光看 POST 的日期只證明送對了，不證明畫面上今天那份沒被算進去。 */
+  await page.click('button.date-today-btn')
+  await page.waitForTimeout(600)
+  check(
+    (await numFrom(page, '.gauge-num')) === todayNum,
+    `在明天記一筆之後，今天的主數字不該變（原 ${todayNum}，現 ${await numFrom(page, '.gauge-num')}）`,
+  )
+})
+
+test('v2.47 ④ 一開機就預取明天：按下箭頭時資料已經在手上', async ({ page }) => {
+  await openApp(page)
+  await page.waitForTimeout(600)
+  const calls = await intakeCalls(page)
+  /* DESIGN v2.5 那條「按下箭頭時資料要已經在手上」原本對今天是**失效的**——舊的預取守衛
+     寫著「今天不必預取後一天，因為看不了未來」，而那個前提正是這輪翻掉的。
+     不補這條的話，最常走的一條路（從今天按 →）會變成唯一沒有預取的。 */
+  check(
+    calls.includes(TOMORROW),
+    `開機後應已預取明天（${TOMORROW}），實際打過的日期：${JSON.stringify(calls)}`,
+  )
 })
