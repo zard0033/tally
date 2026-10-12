@@ -42,8 +42,9 @@ export interface Targets {
  *  剩餘熱量，所以目標熱量的增減全部反映在碳水，不是脂肪。 */
 const FAT_G_PER_KG = 0.85
 
-/** 1 公斤體脂肪 ≈ 7700 大卡的常見估算值，用來把「每週想變化幾公斤」換算成每天的熱量差額。 */
-const KCAL_PER_KG = 7700
+/** 1 公斤體脂肪 ≈ 7700 大卡的常見估算值，用來把「每週想變化幾公斤」換算成每天的熱量差額。
+ *  baseline.ts 反方向用同一個數（體重斜率換成每日熱量差），所以匯出——界只有一處定義。 */
+export const KCAL_PER_KG = 7700
 
 export interface IntakeTotals {
   kcal: number

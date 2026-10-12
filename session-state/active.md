@@ -16,9 +16,9 @@
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`（iOS 鍵盤三題已真機驗過結案；`?debug` 讀數列已移除，要用從 git 撿）。
-- **測試**：`npx vitest run` 174/174（含 `ingest-weight` 54、`baseline` 14；README 兩份仍寫 160，隨實測維持熱量那次 commit 一起改）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+- **測試**：`npx vitest run` 174/174（含 `ingest-weight` 54、`baseline` 14）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **90/90 全綠**（約 1.8 分，十一個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（90／11／160，baseline 那次 commit 後單元測試改 174）有四份文件在寫（CLAUDE.md、本檔、
+  2026-08-12 又漏算一條被 review 抓到；且條數（90／11／174）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
@@ -119,16 +119,16 @@
 
 3. 體重趨勢完整圖表——尚未開工，要先過 `dataviz`，範圍見待決問題。
 
-4. **訓練紀錄（對標 Gymwork）**：診斷中，product-lens 七題已填 5 題，缺「目標與每週頻率」「Tally 版要得到 Gymwork 給不了的什麼」。
-   先用 Gymwork 勘查 2–4 週（也是出席率測試）再談 spec；線下運動紀錄使用者裁決當作沒有；會新增資料表＝先 spec 再動碼。
-   **2026-10-12 使用者提議**自建並寫進 Apple 健康，或 Gymwork 寫健康、Tally 再取。已查：網頁 app 沒有 HealthKit 寫入 API（只能走捷徑
-   Log Workout）；Gymwork **會寫入** Apple 健康（使用者實測：傳統肌力訓練、只有類型與時長，無組數／重量；時長準不準待真練一次對照）；
-   捷徑讀健康鎖屏時會失敗（與續點 0 ③ 同限制）。**建議不自建**；運動熱量估算不準、不餵進目標，見續點 5。
+4. **訓練紀錄**：診斷中；先用 Gymwork 勘查 2–4 週（也是出席率測試）再談 spec，線下運動當作沒有，會新增資料表＝先 spec 再動碼。
+   2026-10-12 查證：網頁 app 無 HealthKit 寫入 API；Gymwork **會寫入** Apple 健康（只有類型與時長，無組數／重量，時長準不準待真練對照）；
+   捷徑鎖屏讀健康會失敗（同續點 0 ③）。**建議不自建**；運動熱量估算不準、不餵進目標，見續點 5。
 
-5. **實測維持熱量（spec.md 同名節已寫；流程走 A＝專案流程，2026-10-12；`baseline.ts`＋14 條測試已完成、5 個 mutation 驗過、未 commit；
-   剩 api 區間查詢／DailyGoal 卡片／e2e stub／DESIGN.md）**：每日目標頁加唯讀卡片對帳公式上限（2026-10-12：公式 TDEE 1956、實測約
-   1760–1800，目標 1637 只有 ≈0.13 kg/週赤字）。**不改目標、公式、資料表。**前置：使用者先接回飲食記錄（9/7 起 5 週只記 1 天）。
-   **運動加成另案**，等 Gymwork 累積 3–4 週再議。
+5. **實測維持熱量（spec.md 同名節；流程 A；`baseline.ts`＋14 條測試完成、mutation 驗過、已 commit；剩 api 區間查詢／DailyGoal 卡片／e2e stub／DESIGN）**：
+   唯讀卡片對帳公式上限（2026-10-12：TDEE 1956、實測約 1760–1800，目標 1637 只有 ≈0.13 kg/週赤字），**不改目標、公式、資料表**；
+   前置＝使用者接回飲食記錄（9/7 起 5 週只記 1 天）。**運動加成另案**，等 Gymwork 累積 3–4 週。
+
+6. **估算一個品項＋複製前一餐（spec.md 同名節已寫、★等點頭才動碼）**：痛點＝沒標示的餐要離開 App 問 AI、於是整餐不記。A 估算（描述或拍照，
+   擴充 `read-label` 雙模式，結果必落一列 foods 並立即封存）先、B 複製後；**第 0 步先用 5–10 餐實際吃過的餐量準確度**，再決定值不值得做。
 
 **蒸餾（前四條關於「停在第一個看起來對的答案」，②③ 全文已升格 DESIGN.md v2.33／v2.34）**：
 ① 待決清單記的位置往往只是「當時看到的那一處」，**收零碎項時要重搜一次**（`aria-current`；
