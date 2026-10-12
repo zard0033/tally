@@ -3,9 +3,10 @@
    要探路（量而不是猜）時，在這裡寫一個暫時的 test 印 rowState() 就好，跑一條約 3 秒。
    這整個檔案的存在理由：拖曳／動畫這種要反覆試的東西，在 tally.spec.ts 那串累積狀態的
    15 條路徑裡除錯，一輪 20 秒起跳，而且斷言會建在上一條留下的狀態上。 */
-import { test } from '@playwright/test'
-import { FIX, TOMORROW, YDAY } from './fixtures'
+import { expect, test, type Page } from '@playwright/test'
+import { FIX, TODAY, TOMORROW, USER_ID, YDAY } from './fixtures'
 import { check, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, rowState, slowDrag, waitCount } from './harness'
+import { seedFetchStub, type AuthMode } from './stub'
 
 /** window.__intakeCalls 的型別斷言（stub.ts 掛在 window 上，e2e 這邊只讀）。 */
 const intakeCalls = (page: import('@playwright/test').Page) =>
@@ -453,4 +454,92 @@ test('v2.47 ④ 一開機就預取明天：按下箭頭時資料已經在手上'
     calls.includes(TOMORROW),
     `開機後應已預取明天（${TOMORROW}），實際打過的日期：${JSON.stringify(calls)}`,
   )
+})
+
+/* 後端連不上（2026-10-12 Supabase 被閒置暫停那次，v2.48）。token 過期時 supabase-js 對 refresh
+   做指數退避，約 25 秒（睡眠合計 25.4 秒加上每次 fetch 的時間）才放棄；那段時間畫面只有一句
+   不動的「載入中…」，放棄後還把人丟到登入頁、秀 Safari 的原文 'Load failed'。
+   用 page.clock 快轉那段時間，不真的等。四條測試各守一個形態：連不上／永不回應／恢復／撤銷。 */
+
+const authKeyPresent = (page: Page) =>
+  page.evaluate(() => Object.keys(localStorage).some((k) => k.endsWith('-auth-token')))
+const setAuthMode = (page: Page, mode: AuthMode) =>
+  page.evaluate((m) => { (window as unknown as { __authMode: string }).__authMode = m }, mode)
+
+/** 開機並快轉到 supabase-js 放棄、畫面停在「連不上後端」。 */
+async function bootUnreachable(page: Page) {
+  await page.clock.install()
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…') // 等掛載，理由見永不回應那條
+  await page.clock.runFor(30_000)
+  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
+}
+
+test('後端連不上：先換掉「載入中…」，放棄後停在可重載的提示，不落到登入頁', async ({ page }) => {
+  await page.clock.install()
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.notice .muted'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
+
+  // 看門狗的下界：門檻若被改成 0.5 秒，只驗「5.5 秒後有換字」是抓不到的，所以先量 4 秒時還沒換
+  await page.clock.runFor(4000)
+  await expect(page.locator('.notice .muted'), '不到 5 秒就換字了').toHaveText('載入中…')
+  await page.clock.runFor(1500)
+  await expect(page.locator('.notice .muted'), '等過 5 秒畫面仍是「載入中…」').toContainText('比平常慢')
+  await must(page, '.notice .action-btn', '慢態的重新載入鈕')
+
+  await page.clock.runFor(30_000)
+  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
+  check((await page.locator('#view-login').count()) === 0, '連不上後端被當成沒登入，落到了登入頁')
+  // 重新載入有用的前提：retryable 錯誤不清 session，reload 之後還能拿同一顆 refresh token 再試
+  check(await authKeyPresent(page), '連不上後端時 session 被清掉了，重新載入也救不回來')
+
+  const blocked = await page.evaluate(() => (window as unknown as { __blocked: string[] }).__blocked)
+  check(
+    blocked.some((u) => u.includes('/auth/v1/token')),
+    `前置條件不成立：根本沒打過 refresh（${JSON.stringify(blocked)}），測試沒走到要驗的路徑`,
+  )
+
+  // 鈕真的會重載：點了之後回到開機第一眼
+  await page.click('.notice .action-btn')
+  await expect(page.locator('.notice .muted'), '按「重新載入」後沒有回到開機畫面').toHaveText('載入中…')
+})
+
+test('後端連上了卻永不回應：慢態也要有出口（fetch 不會 reject，不能只等 unreachable）', async ({ page }) => {
+  await page.clock.install()
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'hang' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  // 先等 App 掛載：看門狗的計時器在掛載後才註冊，時鐘若先跳走它就從跳完的那刻才開始算
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  await page.clock.runFor(120_000)
+
+  // 這個形態下 getSession 永遠不 settle，bootStatus 到不了 unreachable——畫面停在慢態
+  await expect(page.locator('.notice .muted')).toContainText('比平常慢')
+  check((await page.locator('.notice .headline').count()) === 0, '永不回應的情境不該出現「連不上後端」headline')
+  await must(page, '.notice .action-btn', '慢態的重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
+
+  await page.click('.notice .action-btn')
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+})
+
+test('後端恢復：停在「連不上後端」的畫面自己接手，不必重新載入', async ({ page }) => {
+  await bootUnreachable(page)
+  await setAuthMode(page, 'ok')
+  /* supabase-js 對同一顆 refresh token 的失敗有 60 秒冷卻，之後 auto-refresh 的 tick（每 30 秒）
+     才會真的重試並發 TOKEN_REFRESHED；App 的訂閱收到就 setSession。 */
+  for (let i = 0; i < 120 && (await page.locator('#view-app').count()) === 0; i++) {
+    await page.clock.runFor(1000)
+  }
+  await expect(page.locator('#view-app'), '後端恢復後畫面沒有自己離開「連不上後端」').toHaveCount(1)
+})
+
+test('後端恢復但 refresh token 已被撤銷：進登入頁並說明登入過期', async ({ page }) => {
+  await bootUnreachable(page)
+  await setAuthMode(page, 'revoked')
+  for (let i = 0; i < 120 && (await page.locator('#view-login').count()) === 0; i++) {
+    await page.clock.runFor(1000)
+  }
+  await expect(page.locator('#view-login'), '撤銷後沒有進登入頁').toHaveCount(1)
+  await expect(page.locator('.err')).toContainText('登入已過期')
 })

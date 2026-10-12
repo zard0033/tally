@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Session } from '@supabase/supabase-js'
 import {
+  BackendUnreachableError,
   createFood as apiCreateFood,
   createIntake as apiCreateIntake,
   deleteIntake as apiDeleteIntake,
@@ -68,6 +69,14 @@ function friendlyError(message: string): string {
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
 
+/** 開機等這麼久還沒有 session 結果，就把「載入中…」換成說明。getSession 正常只讀 localStorage、
+ *  最多多一趟 refresh，到不了這裡；到了幾乎一定是 token 過期而後端沒回（supabase-js 會退避重試
+ *  近 30 秒才放棄），那段時間畫面不該只是一句一動不動的「載入中…」。 */
+const BOOT_SLOW_MS = 5000
+
+/** 開機畫面的三種樣子。unreachable＝getSession 明確回報後端連不上（不是沒登入）。 */
+type BootStatus = 'loading' | 'slow' | 'unreachable'
+
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
@@ -89,6 +98,7 @@ export default function App() {
   // undefined＝還在問 getSession()；null＝沒有 session；Session＝已登入
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [loginError, setLoginError] = useState<string | null>(null)
+  const [bootStatus, setBootStatus] = useState<BootStatus>('loading')
 
   const [currentDate, setCurrentDate] = useState<string>(() => localDate())
   const [profile, setProfile] = useState<ProfileRow | null>(null)
@@ -589,16 +599,25 @@ export default function App() {
    * 都由 supabase-js 處理，這裡只反應結果）。 */
   useEffect(() => {
     let cancelled = false
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setBootStatus((s) => (s === 'loading' ? 'slow' : s))
+    }, BOOT_SLOW_MS)
     void getSession()
       .then((s) => {
         if (!cancelled) setSession(s)
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
-          setSession(null)
-          setLoginError(errMsg(e))
+        if (cancelled) return
+        if (e instanceof BackendUnreachableError) {
+          // session 維持 undefined：連不上後端不等於沒登入，丟去登入頁只會多一個假問題。
+          // 網路回來時 supabase-js 的 auto-refresh 會發 TOKEN_REFRESHED，下面那支訂閱自己接手。
+          setBootStatus('unreachable')
+          return
         }
+        setSession(null)
+        setLoginError(errMsg(e))
       })
+      .finally(() => clearTimeout(slowTimer))
 
     const { data: sub } = onAuthStateChange((event, s) => {
       if (event === 'SIGNED_OUT') {
@@ -622,6 +641,7 @@ export default function App() {
     })
     return () => {
       cancelled = true
+      clearTimeout(slowTimer)
       sub.subscription.unsubscribe()
     }
   }, [])
@@ -641,8 +661,25 @@ export default function App() {
   if (session === undefined) {
     return (
       <div className="screen">
-        <div className="notice">
-          <p className="muted">載入中…</p>
+        <div className="notice" role="status">
+          {bootStatus === 'unreachable' ? (
+            <>
+              <p className="headline">連不上後端</p>
+              <p>可能是網路不通，或 Supabase 專案被閒置暫停。到 dashboard 按 Resume。</p>
+            </>
+          ) : (
+            <p className="muted">{bootStatus === 'slow' ? '連線比平常慢，還在等後端回應…' : '載入中…'}</p>
+          )}
+          {/* 「慢」也要有出口：連上了但永不回應時 fetch 不會 reject，getSession 不會 settle，
+              bootStatus 永遠到不了 unreachable（review H1）。standalone 的 PWA 沒有網址列也沒有
+              下拉重整，沒有這顆鈕就只能強制關閉 App。
+              重新載入而不是再叫一次 getSession：supabase-js 對同一顆 refresh token 的失敗有
+              60 秒冷卻，再叫只會立刻拿到同一個失敗；reload 才清得掉記憶體裡的冷卻。 */}
+          {bootStatus !== 'loading' && (
+            <button className="action-btn" type="button" onClick={() => location.reload()}>
+              重新載入
+            </button>
+          )}
         </div>
       </div>
     )

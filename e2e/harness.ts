@@ -12,7 +12,8 @@ import { FIX, TODAY, USER_ID } from './fixtures'
 import { seedFetchStub, type StubOptions } from './stub'
 
 /** 種好 fetch stub 與 session，開到今日頁且資料已到齊。零真實網路請求。
- *  opts 目前只轉發 intakeDelayMs，給要量「無感切日期」實際毫秒數的測試用。 */
+ *  opts 原樣轉發給 seedFetchStub（StubOptions）。**authMode 不適用這支**：那條路徑根本到不了
+ *  今日頁，會卡在等 #view-app——開機失敗的測試直接呼叫 seedFetchStub。 */
 export async function openApp(page: Page, opts: StubOptions = {}) {
   await seedFetchStub(page, FIX, TODAY, USER_ID, opts)
   await page.goto('/', { waitUntil: 'domcontentloaded' })

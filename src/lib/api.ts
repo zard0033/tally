@@ -4,7 +4,12 @@
    不在這裡搬——這是「換底層函式庫」帶來的刻意行為變更，不是遺漏。
    lib 內禁止碰 window／document：組 redirectTo 這種事留給呼叫端（UI／入口層）做，
    這裡只接受組好的字串。 */
-import { createClient, type Session, type AuthChangeEvent } from '@supabase/supabase-js'
+import {
+  createClient,
+  isAuthRetryableFetchError,
+  type Session,
+  type AuthChangeEvent,
+} from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config'
 import type { Profile } from './formulas'
 /* 型別匯入不會產生循環：meals.ts 是純常數與純函式，不反向依賴 api.ts。
@@ -43,9 +48,19 @@ export async function signOut(): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/* 後端連不上（斷網、DNS 被撤、免費專案被閒置暫停）。token 過期時 getSession 會對 refresh
+   指數退避重試近 30 秒才放棄，結果是 session:null＋AuthRetryableFetchError——跟「真的沒登入」
+   長得一樣，所以要在這裡分開。不分的話 App 會把人丟到登入頁、還秀 Safari 的原文 'Load failed'。
+   注意：supabase-js 對同一顆 refresh token 的失敗有 60 秒冷卻，期間再呼叫 getSession 會
+   立刻拿到同一個失敗——「重試」要重新載入頁面（清掉記憶體裡的冷卻），不是再叫一次。 */
+export class BackendUnreachableError extends Error {}
+
 export async function getSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession()
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (isAuthRetryableFetchError(error)) throw new BackendUnreachableError(error.message)
+    throw new Error(error.message)
+  }
   return data.session
 }
 

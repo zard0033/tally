@@ -19,7 +19,17 @@ export interface StubOptions {
   /** intake 查詢（listIntake）的人工延遲，只用來量「無感切日期」的實際毫秒數；
    *  不設就是 0——其餘測試不需要真的等這段時間。 */
   intakeDelayMs?: number
+  /** 認證端點（/auth/v1/）的行為。**設了就會種一個已過期的 session**——讓 supabase-js 非打
+   *  refresh 不可，不然根本走不到這條路徑。測試中途可改 `window.__authMode` 模擬後端恢復。
+   *   - down：TypeError('Load failed')——Safari 的原文，跟 DNS 被撤時 fetch 的反應一致
+   *   - hang：連上了但永不回應（fetch 不 reject，getSession 不 settle）
+   *   - ok：回一個新的合法 session
+   *   - revoked：400 refresh_token_not_found（refresh token 已被撤銷）
+   *  全部都記進 __blocked——這些仍是「沒有放行到真實網路」。rest/v1 不受影響。 */
+  authMode?: AuthMode
 }
+
+export type AuthMode = 'down' | 'hang' | 'ok' | 'revoked'
 
 export async function seedFetchStub(
   page: Page,
@@ -29,13 +39,13 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode }) => {
       localStorage.setItem(
         storageKey,
         JSON.stringify({
           access_token: 'stub-token',
           refresh_token: 'stub-refresh',
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          expires_at: Math.floor(Date.now() / 1000) + (authMode ? -3600 : 3600),
           expires_in: 3600,
           token_type: 'bearer',
           user: {
@@ -63,7 +73,10 @@ export async function seedFetchStub(
          * delayMs 是讓測試有時間在辨識途中操作畫面（例如打字），那正是 stale closure 那類
          * bug 唯一現形的時機。 */
         __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
+        /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
+        __authMode: 'down' | 'hang' | 'ok' | 'revoked' | null
       }
+      w.__authMode = authMode
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
@@ -94,6 +107,36 @@ export async function seedFetchStub(
           const s = w.__scan
           if (s.delayMs) await new Promise((r) => setTimeout(r, s.delayMs))
           return s.mode === 'fail' ? json({ error: '辨識失敗' }, 502) : json(s.body)
+        }
+
+        if (w.__authMode && u.includes('/auth/v1/')) {
+          w.__blocked.push(u)
+          switch (w.__authMode) {
+            case 'down':
+              throw new TypeError('Load failed')
+            case 'hang':
+              return new Promise<Response>(() => {})
+            case 'revoked':
+              return json(
+                { code: 400, error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token: Refresh Token Not Found' },
+                400,
+              )
+            case 'ok':
+              return json({
+                access_token: 'stub-token-2',
+                refresh_token: 'stub-refresh-2',
+                expires_in: 3600,
+                token_type: 'bearer',
+                user: {
+                  id: userId,
+                  aud: 'authenticated',
+                  email: 'stub@example.com',
+                  app_metadata: {},
+                  user_metadata: {},
+                  created_at: new Date().toISOString(),
+                },
+              })
+          }
         }
 
         if (u.includes('supabase.co') && !u.includes('/rest/v1/')) {
@@ -153,6 +196,13 @@ export async function seedFetchStub(
         return json([])
       }
     },
-    { fix, today, userId, storageKey: STORAGE_KEY, intakeDelayMs: opts.intakeDelayMs ?? 0 },
+    {
+      fix,
+      today,
+      userId,
+      storageKey: STORAGE_KEY,
+      intakeDelayMs: opts.intakeDelayMs ?? 0,
+      authMode: opts.authMode ?? null,
+    },
   )
 }
