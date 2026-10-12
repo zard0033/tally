@@ -14,8 +14,8 @@ import { seedFetchStub, type StubOptions } from './stub'
 /** 種好 fetch stub 與 session，開到今日頁且資料已到齊。零真實網路請求。
  *  opts 原樣轉發給 seedFetchStub（StubOptions）。**authMode 不適用這支**：那條路徑根本到不了
  *  今日頁，會卡在等 #view-app——開機失敗的測試直接呼叫 seedFetchStub。 */
-export async function openApp(page: Page, opts: StubOptions = {}) {
-  await seedFetchStub(page, FIX, TODAY, USER_ID, opts)
+export async function openApp(page: Page, opts: StubOptions = {}, fix: typeof FIX = FIX) {
+  await seedFetchStub(page, fix, TODAY, USER_ID, opts)
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
   // Today 只在 profile／weight／targets 都到齊才掛載，#view-app 出現不代表內容在了

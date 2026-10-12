@@ -75,8 +75,11 @@ export async function seedFetchStub(
         __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
         __authMode: 'down' | 'hang' | 'ok' | 'revoked' | null
+        /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
+        __kcalFail: boolean
       }
       w.__authMode = authMode
+      w.__kcalFail = false
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
@@ -182,6 +185,14 @@ export async function seedFetchStub(
         if (table === 'weight') return json(fix.weight)
         if (table === 'foods') return json(fix.foods)
         if (table === 'intake') {
+          /* 實測維持熱量卡的區間查詢：認的是「select 欄位含 eaten_on 且不含 meal」，不認欄位順序
+             （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。
+             stub 不看 filter，回整份 kcalWindow；測試要驗 filter 就讀 window.__allFetches。 */
+          const selectCols = (/select=([^&]*)/.exec(decodeURIComponent(path))?.[1] ?? '').split(',')
+          if (selectCols.includes('eaten_on') && !selectCols.includes('meal')) {
+            if (w.__kcalFail) return json({ message: '模擬的讀取失敗' }, 500)
+            return json(fix.kcalWindow)
+          }
           // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)
           if (m) {

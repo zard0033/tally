@@ -8,6 +8,8 @@
    fixture 的數字（e2e/fixtures.ts）：體重 75.95、身高 175、出生年 1993、男、活動 1.375、
    蛋白質 1.8 g/kg、goal=cut、rate_kg_per_week=0.5、無體脂率 → 走 Mifflin-St Jeor。 */
 import { test, expect, type Page } from '@playwright/test'
+import { shiftDate } from '../src/lib/dates'
+import { FIX, TODAY } from './fixtures'
 import { openApp } from './harness'
 
 async function openGoal(page: Page) {
@@ -273,4 +275,141 @@ test('自訂目標分頁完全繞過公式：送出四個數字並帶上 use_cus
     custom_fat_g: 60,
     custom_carb_g: 200,
   })
+})
+
+/* ═══════════ 實測維持熱量卡（v2.49，spec.md「實測維持熱量」）═══════════
+   **唯讀對帳**：這幾條鎖的是「它說了什麼」與「它沒動什麼」。算法本身（斜率、門檻、窗口邊界）
+   在 src/lib/baseline.test.ts 有單元測試，這裡不重複；e2e 守的是接線：資料有沒有進得來、
+   兩種模式都顯示、讀不到時不拖垮頁面、以及它**不寫任何東西**。 */
+
+/** 近 28 天每天吃 kcalPerDay、體重全程持平 75 kg（6 筆橫跨 26 天）⇒ 實測維持＝kcalPerDay。
+ *  體重陣列最新在前：stub 對 getLatestWeight 與 listWeights 回同一份，rows[0] 就是「最新」。 */
+function windowFix(kcalPerDay: number): typeof FIX {
+  const kcalWindow = [
+    ...Array.from({ length: 28 }, (_, i) => ({ eaten_on: shiftDate(TODAY, -1 - i), qty: 1, kcal: kcalPerDay })),
+    // 今天還沒記完，不進窗口：stub 不看 filter 會把這列一起回，守住的是「窗尾是昨天」
+    { eaten_on: TODAY, qty: 1, kcal: 9999 },
+  ]
+  const weight = [0, 5, 10, 15, 20, 26].map((i) => ({
+    weight_kg: 75,
+    measured_on: shiftDate(TODAY, -1 - i),
+    body_fat_pct: null,
+  }))
+  return { ...FIX, kcalWindow, weight }
+}
+
+const card = (page: Page) => page.locator('[data-card="maintenance"]')
+const cardRow = (page: Page, label: string) => card(page).locator('.goal-row', { hasText: label }).locator('.val')
+const writes = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)
+
+test('實測維持熱量：記錄不夠時說缺什麼、不給數字', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+
+  await expect(card(page)).toBeVisible()
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料不足')
+  await expect(card(page)).toContainText('記錄還差 21 天')
+  await expect(card(page)).toContainText('體重還差 4 筆')
+  // 不給數字：資料不足時不該出現「約 N 卡」
+  await expect(card(page)).not.toContainText('約')
+})
+
+test('實測維持熱量：資料夠時給數字，與畫面上的目前上限並列、說預期每週變化', async ({ page }) => {
+  await openApp(page, {}, windowFix(2000))
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('約 2000 卡')
+  await expect(
+    card(page).locator('.goal-row', { hasText: '估計範圍' }),
+    '體重全程持平＝沒有雜訊，區間收斂到一點，不該顯示「2000–2000」',
+  ).toHaveCount(0)
+  await expect(card(page)).toContainText('近 28 天記錄 28 天、體重 6 筆')
+  // 體重少於 8 筆時，依據行要多說一句誤差可能很大
+  await expect(card(page)).toContainText('體重只有 6 筆，誤差可能到幾百卡')
+
+  /* 查詢的日期範圍：stub 不看 filter、estimateMaintenance 又會自己再過濾一次，所以窗口寫錯
+     （例如 from 少算、to 傳成今天）在其他斷言裡完全看不見。這裡直接讀送出去的請求。 */
+  const req = await page.evaluate(() =>
+    (window as unknown as { __allFetches: string[] }).__allFetches
+      .map((u) => decodeURIComponent(u))
+      .find((u) => u.includes('/rest/v1/intake') && /select=[^&]*eaten_on/.test(u) && !/select=[^&]*meal/.test(u)),
+  )
+  expect(req, '卡片沒有送出區間查詢').toBeTruthy()
+  expect(req).toContain(`eaten_on=gte.${shiftDate(TODAY, -28)}`)
+  expect(req).toContain(`eaten_on=lte.${shiftDate(TODAY, -1)}`)
+  expect(await writes(page), '實測維持熱量卡不該送出任何寫入').toBe(0)
+
+  // 「目前上限」必須就是上方 hero 那個數，不是另算一份
+  const hero = await kcal(page)
+  await expect(cardRow(page, '畫面上的上限')).toHaveText(`${hero} 卡`)
+  // fixture 的上限低於 2000 ⇒ 預期在瘦；你設定的是減重 0.5 kg/週
+  expect(hero, '前提不成立：fixture 的上限不低於 2000，下面「瘦」的斷言沒有意義').toBeLessThan(2000)
+  await expect(cardRow(page, '照這個上限吃')).toHaveText(/^每週約瘦 \d\.\d\d kg$/)
+  await expect(cardRow(page, '你設定的')).toHaveText('每週約瘦 0.50 kg')
+})
+
+test('實測維持熱量：自訂目標模式也顯示，目前上限跟著輸入框走；沒有「你設定的」那列', async ({ page }) => {
+  await openApp(page, {}, windowFix(2000))
+  await openGoal(page)
+
+  await page.getByRole('button', { name: '自訂目標' }).click()
+  await page.locator('#g-custom-kcal').fill('1500')
+
+  await expect(card(page)).toBeVisible()
+  await expect(cardRow(page, '畫面上的上限')).toHaveText('1500 卡')
+  // (1500 − 2000) × 7 ÷ 7700 ≈ −0.45
+  await expect(cardRow(page, '照這個上限吃')).toHaveText('每週約瘦 0.45 kg')
+  await expect(card(page).locator('.goal-row', { hasText: '你設定的' })).toHaveCount(0)
+  expect(await writes(page), '實測維持熱量卡不該送出任何寫入').toBe(0)
+})
+
+test('實測維持熱量：唯讀且讀不到時不拖垮頁面', async ({ page }) => {
+  await openApp(page, {}, windowFix(2000))
+  await page.evaluate(() => { (window as unknown as { __kcalFail: boolean }).__kcalFail = true })
+  await openGoal(page)
+
+  await expect(card(page)).toContainText('讀不到記錄')
+  // 頁面其餘部分照常：hero 有數字、儲存鈕在
+  expect(await kcal(page)).toBeGreaterThan(0)
+  await expect(page.getByRole('button', { name: '儲存' })).toBeVisible()
+  // 唯讀：打開頁面並看完卡片，沒有任何寫入請求
+  expect(await writes(page), '實測維持熱量卡不該送出任何寫入').toBe(0)
+})
+
+test('實測維持熱量：體重有雜訊時顯示估計範圍，且包住估計值', async ({ page }) => {
+  const noisy: typeof FIX = {
+    ...windowFix(2000),
+    // 同樣 6 筆、同樣橫跨 26 天，但上下抖動——斜率的標準誤差不是 0，區間才有寬度
+    weight: [75.0, 75.9, 74.4, 75.7, 74.8, 75.3].map((kg, n) => ({
+      weight_kg: kg,
+      measured_on: shiftDate(TODAY, -1 - [0, 5, 10, 15, 20, 26][n]),
+      body_fat_pct: null,
+    })),
+  }
+  await openApp(page, {}, noisy)
+  await openGoal(page)
+
+  const main = Number(((await cardRow(page, '依你的記錄推算').textContent()) ?? '').replace(/[^\d]/g, ''))
+  const m = /^(\d+)–(\d+) 卡$/.exec(((await cardRow(page, '估計範圍').textContent()) ?? '').trim())
+  expect(m, '有雜訊時應顯示「low–high 卡」').not.toBeNull()
+  const [low, high] = [Number(m![1]), Number(m![2])]
+  expect(low).toBeLessThan(main)
+  expect(high).toBeGreaterThan(main)
+  expect(await writes(page), '實測維持熱量卡不該送出任何寫入').toBe(0)
+})
+
+test('實測維持熱量：一筆體重打錯（57.5 之於 75.5）時說資料有誤，不給離譜的數字', async ({ page }) => {
+  const dates = [0, 5, 10, 15, 20, 26].map((i) => shiftDate(TODAY, -1 - i))
+  const mistyped: typeof FIX = {
+    ...windowFix(1800),
+    // 最舊的一筆在窗口最前端；最新在前的順序不變。窗口最前端打錯會讓斜率變成每週 +3.6 kg
+    weight: dates.map((d, n) => ({ weight_kg: n === 5 ? 57.5 : 75.5, measured_on: d, body_fat_pct: null })),
+  }
+  await openApp(page, {}, mistyped)
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料看起來有誤')
+  await expect(card(page)).toContainText('不像真的')
+  await expect(card(page), '離譜的時候不該同時顯示一個「約 N 卡」').not.toContainText('約')
 })

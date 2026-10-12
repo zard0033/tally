@@ -137,6 +137,20 @@ export interface IntakeRow {
   foods: { name: string; vendor: string | null } | null
 }
 
+/** 區間內每筆的 eaten_on／qty／kcal（單份快照），實測維持熱量用。只撈三欄、不 join foods。
+ *  28 天每天不到 35 筆，在 PostgREST 預設的 1000 列上限之內；超過會被靜默截斷，要放寬窗口時回頭檢查。 */
+export async function listIntakeKcal(
+  from: string,
+  to: string,
+): Promise<{ eaten_on: string; qty: number; kcal: number }[]> {
+  return unwrap(await supabase
+    .from('intake')
+    .select<'eaten_on,qty,kcal', { eaten_on: string; qty: number; kcal: number }>('eaten_on,qty,kcal')
+    .gte('eaten_on', from)
+    .lte('eaten_on', to)
+    .abortSignal(dbSignal()))
+}
+
 /** 營養值取 intake 自己的快照欄，不取 foods——改食物庫的營養值不該改寫過去的紀錄。 */
 export async function listIntake(date: string): Promise<IntakeRow[]> {
   /* foods 是多對一（每筆 intake 對一個 food），但沒有 Database schema 時 postgrest-js

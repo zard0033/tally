@@ -48,6 +48,8 @@ export const FIX = {
     },
   ],
   weight: [{ weight_kg: 75.95, measured_on: '2026-07-24', body_fat_pct: null }],
+  // listIntakeKcal（實測維持熱量卡）的回應；預設空＝資料不足。要驗有結果的測試自己展開 FIX 覆寫。
+  kcalWindow: [] as { eaten_on: string; qty: number; kcal: number }[],
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。
   // 8 筆涵蓋：同一店家多筆食物（減醣廚房、全家各兩筆，測店家 Autocomplete 去重）、
   // vendor 為 null（乳清／地瓜／香蕉三筆，測「留空仍可送出」與去重時 null 不算進選項）。

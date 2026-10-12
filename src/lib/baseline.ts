@@ -36,6 +36,15 @@ export const MIN_DAY_KCAL = 1000
 /** 資料夠不夠的三道門檻，改數字要連 spec.md 一起改。 */
 export const BASELINE_NEEDS = { loggedDays: 21, weighIns: 4, weightSpanDays: 14 } as const
 
+/* 生理上不可能的結果不給數字（review M1）：一筆打錯的體重（57.5 打成 75.5 的反向、多打一個 0）
+   放在窗口兩端或後段，會讓斜率變成每週好幾公斤，算出「−2160 卡」「5760 卡」這種結果，而卡片是要當
+   「上限的尺」的——錯得看起來像權威的數字，比「資料不足」糟。
+   **這道守門只抓不可能的，不抓所有打錯的**：離群值放在中間時槓桿小，只會推到「看起來合理但錯」
+   的地方，這個方法本身抓不到。界取得寬：每週 1.5 kg 對一個 75 kg 的人已是極端，維持熱量
+   800–5000 涵蓋所有真實的人。 */
+const MAX_PLAUSIBLE_KG_PER_WEEK = 1.5
+const PLAUSIBLE_MAINTENANCE = { min: 800, max: 5000 } as const
+
 export type BaselineResult =
   | {
       status: 'insufficient'
@@ -44,6 +53,13 @@ export type BaselineResult =
       weighIns: number
       /** 窗口內最早與最晚體重相差幾天；不足 2 筆為 0 */
       weightSpanDays: number
+    }
+  | {
+      /** 算得出來但不可能是真的（見 MAX_PLAUSIBLE_KG_PER_WEEK 那段）——帶著數字是為了讓畫面說得出原因 */
+      status: 'implausible'
+      maintenance: number
+      /** kg/週，可能是 NaN／±Infinity（有非有限的體重時） */
+      slopeKgPerWeek: number
     }
   | {
       status: 'ok'
@@ -58,6 +74,31 @@ export type BaselineResult =
       loggedDays: number
       weighIns: number
     }
+
+/**
+ * 把 intake 的原始列加總成每日合計。營養值是**單份快照**，要乘 qty（Today.tsx 渲染時也是
+ * 這樣算）。數字欄位以字串回來也吃（PostgREST 的 numeric 可能是字串）。
+ * 不做窗口過濾——那是 estimateMaintenance 的事，界只在一處。
+ */
+export function dailyKcalFromRows(
+  rows: readonly { eaten_on: string; qty: number | string; kcal: number | string }[],
+): DailyKcal[] {
+  const byDate = new Map<string, number>()
+  for (const r of rows) byDate.set(r.eaten_on, (byDate.get(r.eaten_on) ?? 0) + Number(r.kcal) * Number(r.qty))
+  return [...byDate].map(([date, kcal]) => ({ date, kcal }))
+}
+
+/** 窗口的第一天（含）：窗尾往前 WINDOW_DAYS−1 天，窗口含窗尾共 WINDOW_DAYS 天。 */
+const windowStart = (end: string): string => shiftDate(end, -(WINDOW_DAYS - 1))
+
+/**
+ * 呼叫端的窗口：窗尾是**昨天**（今天還沒記完不算），窗首往前 27 天。
+ * 抓資料的範圍與 estimateMaintenance 的過濾共用這一處定義，不各自推一份（review L4）。
+ */
+export function baselineWindow(today: string): { from: string; end: string } {
+  const end = shiftDate(today, -1)
+  return { from: windowStart(end), end }
+}
 
 /** 兩個 yyyy-mm-dd 相差幾天。用 UTC 解析只為了算整數日差，不經本地時區的夏令時間。 */
 function daysBetween(from: string, to: string): number {
@@ -77,7 +118,7 @@ export function estimateMaintenance(
   weights: readonly WeightPoint[],
   endDate: string,
 ): BaselineResult {
-  const startDate = shiftDate(endDate, -(WINDOW_DAYS - 1))
+  const startDate = windowStart(endDate)
   const inWindow = (date: string) => date >= startDate && date <= endDate
 
   // 同一天若重複，後者覆蓋前者；呼叫端本來就該給每日合計，這裡不替它加總第二次
@@ -110,6 +151,17 @@ export function estimateMaintenance(
   const slopeSe = Math.sqrt(sse / (n - 2) / sxx)
 
   const maintenance = meanIntake - slope * KCAL_PER_KG
+  const slopeKgPerWeek = slope * 7
+  if (
+    !Number.isFinite(maintenance) ||
+    !Number.isFinite(slopeKgPerWeek) ||
+    Math.abs(slopeKgPerWeek) > MAX_PLAUSIBLE_KG_PER_WEEK ||
+    maintenance < PLAUSIBLE_MAINTENANCE.min ||
+    maintenance > PLAUSIBLE_MAINTENANCE.max
+  ) {
+    return { status: 'implausible', maintenance, slopeKgPerWeek }
+  }
+
   const half = slopeSe * KCAL_PER_KG
   return {
     status: 'ok',
@@ -117,7 +169,7 @@ export function estimateMaintenance(
     low: maintenance - half,
     high: maintenance + half,
     meanIntake,
-    slopeKgPerWeek: slope * 7,
+    slopeKgPerWeek,
     loggedDays: logged.length,
     weighIns: n,
   }

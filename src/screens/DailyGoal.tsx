@@ -20,6 +20,7 @@ import {
   type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
+import MaintenanceCard from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
 const ACTIVITY_LABELS = ['久坐不動', '輕度活動', '中度活動', '高度活動', '非常活躍']
@@ -199,6 +200,16 @@ export default function DailyGoal(props: DailyGoalProps) {
   const bodyFatPct = latestWeight.body_fat_pct
   const goal = draft.goal
   const goalLabel = goal === 'cut' ? '減重' : goal === 'bulk' ? '增肌' : '維持'
+
+  /* 實測維持熱量卡要比的「上限」＝畫面上算出來／填的那個數，連未儲存的預覽也算
+     （改一格就看得到預期週變化）。自訂模式吃輸入框；空白、非數字、≤ 0 都當算不出來。 */
+  const customKcal = reqNum(draft.customKcal)
+  const maintenanceTarget = draft.useCustom
+    ? Number.isFinite(customKcal) && customKcal > 0 ? customKcal : null
+    : preview?.kcal ?? null
+  /* 使用者設定的每週變化（負＝減）。維持與自訂目標沒有速度可言。 */
+  const plannedRate = draft.useCustom || goal === 'maintain' ? null : effectiveRateKgPerWeek()
+  const plannedKgPerWeek = plannedRate === null ? null : goal === 'cut' ? -plannedRate : plannedRate
 
   async function submit() {
     if (busy) return
@@ -464,6 +475,10 @@ export default function DailyGoal(props: DailyGoalProps) {
             </div>
           </>
         )}
+
+        {/* 實測維持熱量（v2.49）：唯讀對帳，兩種模式都顯示——自訂目標的人最需要知道自己填的數字準不準。
+            「目前上限」＝上面畫面上算出來／填的那個數，連未儲存的預覽也跟著動，改一格就看得到預期週變化。 */}
+        <MaintenanceCard targetKcal={maintenanceTarget} plannedKgPerWeek={plannedKgPerWeek} />
       </div>
 
       <div className="confirm-wrap">

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   BASELINE_NEEDS,
+  baselineWindow,
+  dailyKcalFromRows,
   estimateMaintenance,
   expectedWeeklyChangeKg,
   type DailyKcal,
@@ -126,5 +128,101 @@ describe('expectedWeeklyChangeKg', () => {
 
   it('上限等於維持熱量 → 0', () => {
     expect(expectedWeeklyChangeKg(1800, 1800)).toBe(0)
+  })
+})
+
+describe('dailyKcalFromRows', () => {
+  it('同一天多筆：單份 kcal × qty 加總', () => {
+    const rows = [
+      { eaten_on: '2026-10-10', qty: 1, kcal: 500 },
+      { eaten_on: '2026-10-10', qty: 2, kcal: 150 },
+    ]
+    expect(dailyKcalFromRows(rows)).toEqual([{ date: '2026-10-10', kcal: 800 }])
+  })
+
+  it('不同天分開；qty 可以是小數', () => {
+    const rows = [
+      { eaten_on: '2026-10-10', qty: 0.5, kcal: 400 },
+      { eaten_on: '2026-10-11', qty: 1, kcal: 300 },
+    ]
+    const got = dailyKcalFromRows(rows)
+    expect(got).toHaveLength(2)
+    expect(got.find((d) => d.date === '2026-10-10')?.kcal).toBe(200)
+    expect(got.find((d) => d.date === '2026-10-11')?.kcal).toBe(300)
+  })
+
+  it('數字欄位以字串回來也要算（numeric 欄位在 PostgREST 可能是字串）', () => {
+    expect(dailyKcalFromRows([{ eaten_on: '2026-10-10', qty: '1.5', kcal: '200' }])).toEqual([
+      { date: '2026-10-10', kcal: 300 },
+    ])
+  })
+
+  it('沒有資料回空陣列', () => {
+    expect(dailyKcalFromRows([])).toEqual([])
+  })
+})
+
+/* 守門只抓「生理上不可能」的結果（每週變化超過 1.5 kg、維持熱量落在 800–5000 之外、算出非有限數），
+   **不宣稱抓得到所有打錯的體重**：一筆離群值放在窗口中間時槓桿小，只會把結果推到「看起來合理但錯」
+   的地方（探針：第 3 筆 57.5 → 1008 卡、第 4 筆 → 2592 卡），那是這個方法抓不到的，卡片的依據行
+   與 spec 的誤差來源有寫。 */
+describe('estimateMaintenance — 離譜的結果寧可說資料有誤', () => {
+  const xs = [27, 22, 17, 12, 7, 2] // 6 筆，橫跨 25 天
+  const six = (kgs: number[]): WeightPoint[] => xs.map((x, i) => ({ date: dayAt(x), kg: kgs[i] }))
+  const flat = [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]
+  const withAt = (idx: number, kg: number) => flat.map((k, i) => (i === idx ? kg : k))
+
+  it('最後一筆打錯（57.5）：斜率每週 −3.6 kg，不給數字', () => {
+    const r = estimateMaintenance(log(28, 1800), six(withAt(5, 57.5)), END)
+    expect(r.status).toBe('implausible')
+  })
+
+  it('第一筆打錯：會算出負的維持熱量，不給數字', () => {
+    const r = estimateMaintenance(log(28, 1800), six(withAt(0, 57.5)), END)
+    expect(r.status).toBe('implausible')
+  })
+
+  it('多打一個 0（750 kg）', () => {
+    const r = estimateMaintenance(log(28, 1800), six(withAt(5, 750)), END)
+    expect(r.status).toBe('implausible')
+  })
+
+  it('體重是 NaN：不讓 "約 NaN 卡" 上畫面', () => {
+    const r = estimateMaintenance(log(28, 1800), six(withAt(2, NaN)), END)
+    expect(r.status).toBe('implausible')
+  })
+
+  it('正常的每週掉 0.5 kg 不被誤判', () => {
+    const r = estimateMaintenance(log(28, 1700), weightsAt(77, -0.5), END)
+    expect(r.status).toBe('ok')
+  })
+
+  it('界在每週 1.5 kg：1.4 還算合理、1.6 就不算', () => {
+    expect(estimateMaintenance(log(28, 2500), weightsAt(77, -1.4), END).status).toBe('ok')
+    expect(estimateMaintenance(log(28, 2500), weightsAt(77, -1.6), END).status).toBe('implausible')
+  })
+
+  it('維持熱量低於 800：斜率合理（每週 +1.0 kg）但攝取少得離譜，不給數字', () => {
+    // 1100 − (1.0 × 1100) ＝ 0，斜率本身沒超界，只有範圍那道能抓到
+    expect(estimateMaintenance(log(28, 1100), weightsAt(75, 1.0), END).status).toBe('implausible')
+  })
+
+  it('維持熱量高於 5000：斜率合理（每週 −1.0 kg）但攝取高得離譜，不給數字', () => {
+    expect(estimateMaintenance(log(28, 4500), weightsAt(75, -1.0), END).status).toBe('implausible')
+  })
+
+  it('implausible 帶著算出來的數字，讓畫面能說「為什麼不給」', () => {
+    const r = estimateMaintenance(log(28, 1800), six(withAt(5, 57.5)), END)
+    if (r.status === 'implausible') expect(r.slopeKgPerWeek).toBeCloseTo(-3.6, 1)
+    else throw new Error('前提不成立：應該是 implausible')
+  })
+})
+
+describe('baselineWindow', () => {
+  it('窗尾是昨天、窗首往前 27 天（共 28 天，含窗尾）', () => {
+    expect(baselineWindow('2026-10-12')).toEqual({ from: '2026-09-14', end: '2026-10-11' })
+  })
+  it('跨月與跨年', () => {
+    expect(baselineWindow('2026-01-02')).toEqual({ from: '2025-12-05', end: '2026-01-01' })
   })
 })
