@@ -1,7 +1,7 @@
 # Tally — session state
 
-最後更新：2026-10-12（**v2.47 已 push；Supabase 後端曾被閒置暫停、已 Resume，並加每日 keep-alive workflow（見已驗證事實）；
-等使用者真機回報鍵盤箭頭是否變順——若仍會斷，先分辨「焦點沒移動」還是「移了但看不到」，見續點 2 ③**）
+最後更新：2026-10-12（**v2.47 已 push；體重自動同步（Health→捷徑→Edge Function）spec 已核可、函式與 54 條測試已寫、
+已部署並線上驗證（續點 0 剩捷徑與回填）；鍵盤箭頭等真機回報（續點 2 ③）；Supabase 曾被閒置暫停、已 Resume 並加 keep-alive（見已驗證事實）**）
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -16,12 +16,12 @@
   **v2.47＝預先記錄明天的飲食**——往未來只開一天，界統一在 `dates.ts` 的 `maxPlanDate()`，
   主數字的分岔點改成 `isPast`。全文與三件刻意不做的事在 DESIGN.md v2.47。
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
-  理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。
+  理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`
   （iOS 鍵盤三題已真機驗過結案）；診斷用的 `?debug` 讀數列已整組移除，要用從 git 撿。
-- **測試**：`npx vitest run` 106/106；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+- **測試**：`npx vitest run` 160/160（含 `ingest-weight` 54 條）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **86/86 全綠**（約 1.3 分，十一個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（86／11／106）有四份文件在寫（CLAUDE.md、本檔、
+  2026-08-12 又漏算一條被 review 抓到；且條數（86／11／160）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
@@ -73,56 +73,56 @@
   一直「載入中…」⇒ 登入頁 `Load failed`。Gambit 舊版每 3 天一次、回 200 的匿名查詢仍被暫停（官方只說「每天幾次
   user 查詢通常夠」）。現行 `supabase-keep-alive.yml`（每天 5 次 `foods`、只認 200）是**降低機率不是保證**；變紅多半＝
   已暫停（000／curl exit 6＝DNS 已撤，去 dashboard 按 Resume）。App 端「後端不可達」提示尚未做（getSession 沒逾時）。
+- [追加] **手謄的資料帶著謄寫者的流程，下結論前要對第二個來源**（2026-10-12）：Tally 體重 7 筆有 2 筆日期錯（月初當日期、
+  填最近讀值：08-01＝08-21、09-01＝09-25 的讀值），我據此推出「記錄期間 +1.4kg」並駁倒使用者假設——被 Apple 健康匯出推翻：記錄 7 週持平、停記 5 週 +1.5kg。
+- [追加] **體重自動同步**（spec.md 同名節）：Health→iOS 捷徑→`ingest-weight`（共用祕密、只寫 `weight`）；捷徑實測已過（77.35kg／24.6%）。
+  mutation：token 比對／整批拒絕／同日先後各讓對應測試轉紅；**`user_id` 取自請求那個被權限擋下，該條未經 mutation 驗證。**
 - **已升格 DESIGN.md、這裡只留指標**：真機讀數的兩個判讀陷阱（v2.36——`getBoundingClientRect()`
   相對 visual viewport／指紋要先於一切數字被檢查）、motion 不把 drag 速度交給接手的 spring（v2.38）。
 
 ## 未解失敗
 
-- **2026-09-08 逐條查過，三條舊項沒有一條是待修的程式碼**：① vitest 在 Git Bash 全炸＝**環境**不是專案
-  （全域 ledger 有全文，已寫進 CLAUDE.md）② scrim 分區變色早在 `9782544` 修掉 ③ 改份量無 debounce 是刻意的
-  （`Today.tsx` 的 `ponytail:` 標記有升級路徑；觸發條件「畫面與 DB 真的對不上」尚未發生）。
+- **2026-09-08 查過，三條舊項都不是待修的程式碼**：vitest 在 Git Bash 全炸＝**環境**（全域 ledger 有全文，已寫進 CLAUDE.md）；
+  scrim 分區變色 `9782544` 已修；改份量無 debounce 是刻意的（`Today.tsx` 的 `ponytail:` 標記有升級路徑，觸發條件尚未發生）。
 - **已結案、別再撿回來的**：app icon（v2.19–v2.26）、就地編輯區 focus trap、scrim 模糊、`.tabbar`／`.datectl` 邊框（v2.39）。
 
 ## 待決問題
 
 - **拍照辨識**（需求／AC／選型／已否決路徑全文在 [spec.md](../spec.md)）：進度見續點 2。
-- **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` 定案，樣張在 `_design-sample/food-library.html` A3 frame；e2e 刻意只驗進出不鎖內容。**零碎（不擋上線）**：Notion 退場收尾未完成。
+- **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` 定案，樣張在 `_design-sample/food-library.html` A3 frame；e2e 刻意只驗進出不鎖內容。
+  體重同步上線後資料才會變稠密，那時再做才有意義。**零碎（不擋上線）**：Notion 退場收尾未完成。
 
 ## 下次續點
 
-1. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05）。**規模判為「大」**（壞掉的
-   SW 會把舊版鎖在使用者手機上＝不可逆）。**範圍（使用者裁決）**：離線可讀 ＋ 冷啟動加速；
-   更新走「下次開啟自動換」。**砍掉的兩件事別長回來**：
-   ① 不承諾「變快」（assets 帶 hash，HTTP cache 已蓋住重複載入，SW 只多買到 `index.html` 那一跳，
-      量不出來的東西不寫進 AC）② **SW 不快取 Supabase API 回應**——App.tsx 已有 `cacheRef` 日期
-      快取，兩層壽命必然對不上，且 SW 那層透明、App 拿到舊資料時不知道它舊就無法誠實標示；
-      離線資料改由 `cacheRef` 持久化到 localStorage 供給，一層快取、App 自己知道新舊。
-   **AC 與 plan 全文已遺失，下一輪直接重跑 spec**（範圍與上面兩條砍除決策仍有效）。**已定的補遺**：
-   SW 放 `public/` 以 `./sw.js` 註冊（scope 跟著 `base: '/tally/'`）；登出時一併清掉快照。**實作第一步
-   必須先實測「離線時 supabase-js 會不會把 App 踢回登入頁」**——唯一可能推翻整個設計的未知數。
-   **這條有 UI**（離線指示條），實作階段照 dev-flow 鐵律 4 轉 `ui-design-flow`。
+0. **體重自動同步（★核可已過，已部署並線上驗證：405／401×2／400／200 冪等，DB 列正確，回應無洩漏）**：①② **已完成**
+   ③ 捷徑「Tally 同步體重」**已建好、手動執行通過**（`written:1`）；**剩自動觸發**（關閉 MovingLife／每晚）待實測「立即執行」與鎖屏
+   ④ **已完成**（新增 44／修改 3／刪除 2，Tally 94 列與 Health 零差異；Health 以外的 19 筆 2023-06~2025-09 月底舊紀錄保留未動）
+   ⑤ 收尾：`.env.local` 的 `sb_secret` **使用者裁決保留**（2026-10-12，供之後查資料；**非唯讀**，只跑 SELECT、寫入先列清單確認，別再提議刪）；
+   iCloud 的 `輸出.zip`（含全部健康資料）與備忘錄裡的 token 由使用者自行刪。**已決不做**：每日提醒、記錄 vs 身體對照畫面（別再提案）。
 
-2. **拍照辨識：v2.42–v2.44 均已上線**（函式 version 7）。加速三條路全數實測否決、思考維持開啟，
-   全文與數據在 DESIGN.md v2.43。**「iOS 上下箭頭已結案」那句下早了**——2026-09-08 使用者回報
-   仍會中斷。**剩下的**：① `supabase/functions/**` 不在
-   `tsconfig.app.json` 的 include 內，**型別錯誤 CI 攔不到** ② **拍太遠會得到看起來合理、實際差一倍的
-   數字**（82 讀成 140）、app 察覺不到——**使用者 2026-09-08 裁決不處理，別再提案**
-   ③ **v2.46 已修掉兩半，等真機驗證**（全文與數據在 DESIGN.md v2.46）。機制找出來了：切欄位時
-   鍵盤高度沒變 ⇒ `visualViewport` 只發 `scroll` 不發 `resize`，而 iOS 靠捲 layout viewport
-   露出欄位、那正是 `--vvtop` 在補償的 ⇒ **iOS 的幫忙被我們依設計抵銷掉**。補了掛在
-   FoodFormFields 的 listener（含 `scroll`）在版面安定後再捲；另把 sheet 頂部 96px 空隙在鍵盤
-   升起時收回（實測：原本餘裕只有約 10px，中文鍵盤多一條候選列就溢出）。
-   **真機若仍會斷，先分辨兩種症狀再動手**（這輪沒能從桌面分辨出來）：
-   （a）**箭頭按了焦點根本沒移動**（游標留在原欄）⇒ 是 accessory bar 的分組問題，跟捲動無關，
-       嫌疑仍是 v2.34 關掉 `repositionInputs` 時一併關掉的那段 vaul hack（app.css `.sheet` 有記）；
-   （b）**焦點移了但看不到** ⇒ 還是空間／捲動，下一格可收的是「鍵盤升起時收起 AI 辨識鈕」
-       （量過值 60px，可把門檻再推到約 480），但會讓內容跳動，要先看值不值得。
-   探針 `scan-probe.local.mjs` 留在 repo 根（`*.local.mjs` 已 gitignore），要重測劣化矩陣直接跑；
-   `.env.local` 放 key。**那把 key 曾出現在對話紀錄裡，使用者裁決不撤換——別再提案。**
+1. **PWA / service worker：★核可已通過，實作零進度**（2026-08-05）。**規模「大」**（壞掉的 SW 會把舊版鎖在使用者手機上＝不可逆）。
+   **範圍（使用者裁決）**：離線可讀＋冷啟動加速；更新走「下次開啟自動換」。**砍掉的兩件事別長回來**：
+   ① 不承諾「變快」（assets 帶 hash，HTTP cache 已蓋住重複載入，SW 只多買到 `index.html` 那一跳，量不出來的不寫進 AC）
+   ② **SW 不快取 Supabase API 回應**——App.tsx 已有 `cacheRef` 日期快取，兩層壽命必然對不上，且 SW 那層透明、App 拿到舊資料
+   不知道它舊就無法誠實標示；離線資料改由 `cacheRef` 持久化到 localStorage，一層快取、App 自己知道新舊。
+   **AC 與 plan 全文已遺失，下一輪直接重跑 spec**。**已定的補遺**：SW 放 `public/` 以 `./sw.js` 註冊（scope 跟著 `base: '/tally/'`）；
+   登出時一併清掉快照。**實作第一步必須先實測「離線時 supabase-js 會不會把 App 踢回登入頁」**——唯一可能推翻整個設計的未知數。
+   **這條有 UI**（離線指示條），實作階段走設計樣張流程（原 `ui-design-flow` 已退役）。
+
+2. **拍照辨識：v2.42–v2.44 均已上線**（函式 version 7）。加速三條路全數實測否決、思考維持開啟，全文與數據在 DESIGN.md v2.43。
+   **「iOS 上下箭頭已結案」那句下早了**——2026-09-08 使用者回報仍會中斷。**剩下的**：
+   ① 型別檢查已由 `tsconfig.functions.json` 涵蓋 ② **拍太遠會得到看起來合理、實際差一倍的數字**（82 讀成 140）、app 察覺不到——
+   **使用者 2026-09-08 裁決不處理，別再提案** ③ **v2.46 已修掉兩半，等真機驗證**（全文與數據在 DESIGN.md v2.46）：切欄位時鍵盤高度沒變
+   ⇒ `visualViewport` 只發 `scroll` 不發 `resize`，而 iOS 靠捲 layout viewport 露出欄位、正是 `--vvtop` 在補償的 ⇒ **iOS 的幫忙被我們
+   依設計抵銷**。補了 FoodFormFields 的 listener（含 `scroll`）；sheet 頂部 96px 空隙在鍵盤升起時收回。
+   **真機若仍會斷，先分辨**：（a）箭頭按了焦點沒移動 ⇒ accessory bar 分組問題，嫌疑是 v2.34 一併關掉的 vaul hack（app.css `.sheet`）；
+   （b）焦點移了但看不到 ⇒ 空間／捲動，下一格可收「鍵盤升起時收起 AI 辨識鈕」（60px，會讓內容跳動，先看值不值得）。
+   探針 `scan-probe.local.mjs` 在 repo 根（`*.local.mjs` 已 gitignore）；`.env.local` 放 key，**那把 key 曾出現在對話紀錄裡，使用者裁決不撤換——別再提案。**
 
 3. 體重趨勢完整圖表——尚未開工，要先過 `dataviz`，範圍見待決問題。
 
-**dev-flow 申報（PWA）**：規模<大> 釐清／spec／plan／★核可<全部完成> 實作<未開始>——但 AC 與 plan 已遺失，實質要從 spec 重跑。
+4. **訓練紀錄（對標 Gymwork）**：診斷中，product-lens 七題已填 5 題，缺「目標與每週頻率」「Tally 版要得到 Gymwork 給不了的什麼」。
+   先用 Gymwork 勘查 2–4 週（也是出席率測試）再談 spec；線下運動紀錄使用者裁決當作沒有；會新增資料表＝先 spec 再動碼。
 
 **蒸餾（前四條關於「停在第一個看起來對的答案」，②③ 全文已升格 DESIGN.md v2.33／v2.34）**：
 ① 待決清單記的位置往往只是「當時看到的那一處」，**收零碎項時要重搜一次**（`aria-current`；
@@ -141,10 +141,10 @@
 測試根本沒跑）。**只動語意、不動符號的使用**——v2.47 一輪內踩了兩次。⑪ **修不好的時候
 先問「平台是不是已經在幫我做這件事、而我把它抵銷掉了」**（v2.46：iOS 會捲 layout viewport 去露出
 欄位，`--vvtop` 正是在補償它）——**補償一個平台行為，就等於接手它原本負責的全部後果。**
+⑮ **用資料推翻使用者的說法前，先確認這份資料本身對不對**（2026-10-12：兩筆日期錯的手謄體重，讓我「推翻」了一個其實成立的假設）。
 
 ## 教訓指標（本體已升格，這裡只留指標）
 
-- **設計決策與被否決的做法** → `DESIGN.md`（元件規則表＋版本紀錄）。動 UI 前必讀、改完必回寫，
-  已入 CLAUDE.md Pre-Push Checklist。
-- **三本全域 ledger memory**：`windows-shell-ledger`、`verification-ledger`（＋`ui-verify` skill）、`delegation-ledger`。
+- **設計決策與被否決的做法** → `DESIGN.md`（動 UI 前必讀、改完必回寫，已入 CLAUDE.md Pre-Push Checklist）。
+- **全域 ledger memory**：`windows-shell-ledger`、`verification-ledger`（＋`ui-verify` skill）、`delegation-ledger`。
 - **真機／真實資料試用是設計核可之外的必要一關**：三層（樣張核可／真機試用／deep review）各抓到不同類的問題。
