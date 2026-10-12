@@ -1,7 +1,7 @@
 # Tally — session state
 
-最後更新：2026-09-08（**v2.46 把鍵盤那題的真正機制找出來並修掉兩半（工作區待 push）；
-等使用者真機回報箭頭是否變順——若仍會斷，要先分辨是「焦點沒移動」還是「移了但看不到」，見續點 2 ③**）
+最後更新：2026-10-12（**v2.47 已 push；Supabase 後端曾被閒置暫停、已 Resume，並加每日 keep-alive workflow（見已驗證事實）；
+等使用者真機回報鍵盤箭頭是否變順——若仍會斷，先分辨「焦點沒移動」還是「移了但看不到」，見續點 2 ③**）
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -11,10 +11,9 @@
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + vaul + motion + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎＋食品庫管理
   與設定頁重構。逐版細節一律看 DESIGN.md 版本紀錄，這裡不再複述。
-  **已上線＝v2.45**（拍照讀營養標示：v2.40 本體、v2.41 圖片上限、v2.42 逾時方向訂反＋
-  StrictMode 守衛＋辨識秒數、v2.43 加速否決、v2.44 sheet 焦點、v2.45 切焦點自動捲）。
-  **v2.46／v2.47 已本機 commit、待 push**：v2.46＝鍵盤那題的真正機制＋輸入區空間（見續點 2 ③）；
-  **v2.47＝預先記錄明天的飲食（已完成）**——往未來只開一天，界統一在 `dates.ts` 的 `maxPlanDate()`，
+  **已上線＝v2.45**（拍照讀營養標示 v2.40–v2.45，逐版細節在 DESIGN.md）。**v2.46／v2.47 已 push**
+  （2026-10-12 核對 origin/main 同步）：v2.46＝鍵盤那題的真正機制＋輸入區空間（見續點 2 ③）；
+  **v2.47＝預先記錄明天的飲食**——往未來只開一天，界統一在 `dates.ts` 的 `maxPlanDate()`，
   主數字的分岔點改成 `isPast`。全文與三件刻意不做的事在 DESIGN.md v2.47。
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。
@@ -70,19 +69,19 @@
   理由是選單保證合法——但 `xTouchedRef` 沒被碰過時走的是 **DB 原值**那條分支，那個值
   沒有人驗過。新增 `clampToPresetRange()` 補上。**通則：拿「輸入源受控」當理由移除驗證前，
   先數清楚有幾條路徑通到那個變數**，受控的通常只有其中一條。
+- [追加] **Supabase 免費專案閒置會被暫停，keep-alive 要驗「有沒有真的擋住」**（2026-10-12）：久未開 App ⇒ 後端 DNS 被撤 ⇒
+  一直「載入中…」⇒ 登入頁 `Load failed`。Gambit 舊版每 3 天一次、回 200 的匿名查詢仍被暫停（官方只說「每天幾次
+  user 查詢通常夠」）。現行 `supabase-keep-alive.yml`（每天 5 次 `foods`、只認 200）是**降低機率不是保證**；變紅多半＝
+  已暫停（000／curl exit 6＝DNS 已撤，去 dashboard 按 Resume）。App 端「後端不可達」提示尚未做（getSession 沒逾時）。
 - **已升格 DESIGN.md、這裡只留指標**：真機讀數的兩個判讀陷阱（v2.36——`getBoundingClientRect()`
   相對 visual viewport／指紋要先於一切數字被檢查）、motion 不把 drag 速度交給接手的 spring（v2.38）。
 
 ## 未解失敗
 
-- **2026-09-08 逐條查過，三條舊項沒有一條是待修的程式碼**（清單過期比清單有內容更危險）：
-  ① **vitest 在 Git Bash 全炸且會表現成 flaky** ＝**環境**不是專案（全域 ledger 有全文），
-  repo 這邊唯一能做的是提醒，已寫進 CLAUDE.md 測試那行。
-  ② **scrim 分區變色早在 `9782544`（scrim 動畫單軌化）就修掉了**，只是沒人回來劃掉。
-  ③ **改份量無 debounce 是刻意的**（`Today.tsx` 有 `ponytail:` 標記與升級路徑）：觸發條件
-  「畫面與 DB 真的對不上」尚未發生，而該元件已在 timer 清理上翻船兩次。
-- **已結案、別再撿回來的**：app icon（DESIGN.md v2.19–v2.26）、就地編輯區的 focus trap
-  （inline 展開本來就不該有，那是 modal 的契約）、scrim 模糊、`.tabbar`／`.datectl` 邊框（v2.39）。
+- **2026-09-08 逐條查過，三條舊項沒有一條是待修的程式碼**：① vitest 在 Git Bash 全炸＝**環境**不是專案
+  （全域 ledger 有全文，已寫進 CLAUDE.md）② scrim 分區變色早在 `9782544` 修掉 ③ 改份量無 debounce 是刻意的
+  （`Today.tsx` 的 `ponytail:` 標記有升級路徑；觸發條件「畫面與 DB 真的對不上」尚未發生）。
+- **已結案、別再撿回來的**：app icon（v2.19–v2.26）、就地編輯區 focus trap、scrim 模糊、`.tabbar`／`.datectl` 邊框（v2.39）。
 
 ## 待決問題
 

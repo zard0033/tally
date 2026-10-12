@@ -1,0 +1,50 @@
+name: Supabase Keep Alive
+
+# Supabase Free Plan 在 7 天內 user database activity 不足會被暫停，暫停後連 DNS 都會撤掉
+# （症狀：App 一直「載入中…」、curl 回 Could not resolve host；2026-10-12 實際發生過）。
+# 每天跑一次，每次對一張真實存在的表（foods）連打 5 次 SELECT：官方說「每天幾次 user 查詢通常夠」，
+# 門檻沒公開，所以不只打一下。打不存在的表只回 404、不碰資料庫，不能算數，這裡只認 200。
+# 實證（Gambit 同機制）：每 3 天一次、回 200 的匿名查詢，專案仍在 9/10–9/13 間被暫停，
+# 所以這個 workflow 是「降低機率」不是保證。變紅多半＝專案已被暫停：先看各次 status 與 curl exit，
+# 000／exit 6＝DNS 已撤，去 Supabase dashboard 按 Resume；401／404／5xx 是別的原因（key、表、後端）。
+# URL／key 直接讀 src/lib/config.ts，不另存第二份（publishable key 設計上就公開）。
+# 注意：repo 連續 60 天無 commit，GitHub 會自動停用 scheduled workflow（會寄信通知）。
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Ping Supabase REST
+        run: |
+          url=$(sed -n "s/^export const SUPABASE_URL = '\(.*\)'.*/\1/p" src/lib/config.ts)
+          key=$(sed -n "s/^export const SUPABASE_ANON_KEY = '\(.*\)'.*/\1/p" src/lib/config.ts)
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "::error::讀不到 src/lib/config.ts 的 SUPABASE_URL／SUPABASE_ANON_KEY"
+            exit 1
+          fi
+          fail=0
+          for i in 1 2 3 4 5; do
+            # curl 連不上時 -w 仍印 000；用 && / || 接住結束碼，讓 -e 不中斷、狀態與 exit code 都留在 log
+            code=$(curl -sS --max-time 15 --retry 2 --retry-delay 10 --retry-max-time 60 \
+              -o /dev/null -w '%{http_code}' \
+              "$url/rest/v1/foods?select=id&limit=1" \
+              -H "apikey: $key") && rc=0 || rc=$?
+            echo "query $i status: $code (curl exit $rc)"
+            [ "$code" = "200" ] || fail=1
+            sleep 3
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::有查詢不是 200。000／exit 6＝DNS 已撤（多半專案被暫停，到 Supabase dashboard 按 Resume）；401／404／5xx 是別的原因"
+            exit 1
+          fi
