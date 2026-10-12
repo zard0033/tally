@@ -167,7 +167,7 @@ function basisText(shown: ShownBaseline, current: BaselineResult): string {
     : `依據近 ${WINDOW_DAYS} 天`
   const base = `${span}：記錄 ${loggedDays} 天、體重 ${weighIns} 筆。`
   // 回溯時近 28 天一定是資料不足；把缺什麼一併說出來，使用者才知道怎麼讓它跟上現在
-  const lack = shown.stale && current.status === 'insufficient' ? `近 ${WINDOW_DAYS} 天資料不足：${lackText(current)}` : ''
+  const lack = shown.stale && current.status === 'insufficient' ? `近 ${WINDOW_DAYS} 天資料不足：${lackShort(current)}。` : ''
   /* 「約要 3–4 週才跟上」只在最新窗口成立；回溯時什麼都不會自己跟上，要接回記錄才會更新（review M4） */
   const caveat = shown.stale
     ? '漏記的餐會讓這個數字偏低；接回記錄後，這張卡會自己更新到近 28 天。'
@@ -181,6 +181,15 @@ function implausibleText(slopeKgPerWeek: number): string {
     ? `近 ${WINDOW_DAYS} 天體重算出每週變化 ${Math.abs(slopeKgPerWeek).toFixed(1)} kg，不像真的`
     : '算不出體重變化'
   return `${what}。檢查一下近 ${WINDOW_DAYS} 天的體重紀錄有沒有打錯。`
+}
+
+/** 同一件事的短版，給依據行用：已經有「近 28 天資料不足」開頭，不必再把有幾天、需要幾天講第二遍。 */
+function lackShort(r: Extract<BaselineResult, { status: 'insufficient' }>): string {
+  const lack: string[] = []
+  if (r.loggedDays < BASELINE_NEEDS.loggedDays) lack.push(`記錄還差 ${BASELINE_NEEDS.loggedDays - r.loggedDays} 天`)
+  if (r.weighIns < BASELINE_NEEDS.weighIns) lack.push(`體重還差 ${BASELINE_NEEDS.weighIns - r.weighIns} 筆`)
+  else if (r.weightSpanDays < BASELINE_NEEDS.weightSpanDays) lack.push(`體重要橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上`)
+  return lack.join('、')
 }
 
 /** 資料不足時說清楚缺什麼，不給數字。 */
