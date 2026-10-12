@@ -46,7 +46,11 @@ const tx = async (mode, fn) => {
     t.onerror = () => rej(t.error)
   })
 }
+idb.catch((e) => log('IndexedDB 開啟失敗：' + (e && e.message ? e.message : e)))
 const queueAll = () => tx('readonly', (s) => s.getAll())
+const isStandalone = () => !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches)
+/* 儲存失敗正是這支探針要偵測的事，所以每個按鈕都要把錯誤顯示出來，不能靜默 */
+const safe = (fn) => async () => { try { await fn() } catch (e) { log('錯誤：' + (e && e.message ? e.message : e)) } }
 
 if (!localStorage.getItem('probe_first_run')) localStorage.setItem('probe_first_run', String(Date.now()))
 
@@ -57,36 +61,38 @@ async function render() {
   const first = Number(localStorage.getItem('probe_first_run'))
   const rows = {
     '連線狀態': navigator.onLine ? '線上' : '離線',
-    '主畫面模式': (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '是（standalone）' : '否（Safari 分頁）',
+    '主畫面模式': isStandalone() ? '是（standalone）' : '否（Safari 分頁）',
     'SW 控制中': navigator.serviceWorker && navigator.serviceWorker.controller ? '是' : '否',
     '持久儲存': persisted === null ? '不支援' : String(persisted),
     '儲存用量': est ? `${(est.usage / 1024).toFixed(1)} KB / ${(est.quota / 1048576).toFixed(0)} MB` : '不支援',
     '首次開啟': new Date(first).toLocaleString() + `（${((Date.now() - first) / 86400000).toFixed(2)} 天前）`,
-    'IndexedDB 筆數': q === null ? '讀取失敗' : String(q.length),
+    /* 儲存讀數是整個源站共用的，會被同源其他頁面干擾；所以每筆寫入記錄當下是主畫面還是分頁，分開數 */
+    'IndexedDB 筆數': q === null ? '讀取失敗' : `${q.length}（主畫面 ${q.filter((x) => x.m === 'standalone').length}／分頁 ${q.filter((x) => x.m !== 'standalone').length}）`,
     '最早一筆': q && q.length ? new Date(Math.min(...q.map((x) => x.t))).toLocaleString() : '—',
   }
   $('status').innerHTML = Object.entries(rows).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')
 }
 
-$('write').onclick = async () => {
-  await tx('readwrite', (s) => s.put({ id: crypto.randomUUID(), t: Date.now() }))
+$('write').onclick = safe(async () => {
+  await tx('readwrite', (s) => s.put({ id: crypto.randomUUID(), t: Date.now(), m: isStandalone() ? 'standalone' : 'tab' }))
   log('已寫入 1 筆'); render()
-}
-$('clear').onclick = async () => { await tx('readwrite', (s) => s.clear()); log('已清空'); render() }
+})
+$('clear').onclick = safe(async () => { await tx('readwrite', (s) => s.clear()); log('已清空'); render() })
 $('ping').onclick = async () => {
   try { const r = await fetch('./ping.txt?' + Date.now(), { cache: 'no-store' }); log('網路可達：HTTP ' + r.status) }
   catch (e) { log('網路不可達：' + e.message) }
 }
-$('persist').onclick = async () => {
+$('persist').onclick = safe(async () => {
   const ok = navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : null
   log('persist() 回傳：' + ok); render()
-}
-$('kill').onclick = async () => {
+})
+$('kill').onclick = safe(async () => {
+  if (!('serviceWorker' in navigator) || !self.caches) throw new Error('此環境沒有 serviceWorker 或 caches（是否不是 https？）')
   const regs = await navigator.serviceWorker.getRegistrations()
   await Promise.all(regs.map((r) => r.unregister()))
   await Promise.all((await caches.keys()).map((k) => caches.delete(k)))
   log('已解除 ' + regs.length + ' 個 SW 並清空快取，重新整理後生效')
-}
+})
 
 addEventListener('online', () => { log('事件：online'); render() })
 addEventListener('offline', () => { log('事件：offline'); render() })
