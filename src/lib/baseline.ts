@@ -88,6 +88,9 @@ export function dailyKcalFromRows(
   return [...byDate].map(([date, kcal]) => ({ date, kcal }))
 }
 
+/** 最新窗口不夠用時，最多往回找幾天（窗尾往回滑動的天數）。spec AC 11。 */
+export const LOOKBACK_DAYS = 90
+
 /** 窗口的第一天（含）：窗尾往前 WINDOW_DAYS−1 天，窗口含窗尾共 WINDOW_DAYS 天。 */
 const windowStart = (end: string): string => shiftDate(end, -(WINDOW_DAYS - 1))
 
@@ -98,6 +101,15 @@ const windowStart = (end: string): string => shiftDate(end, -(WINDOW_DAYS - 1))
 export function baselineWindow(today: string): { from: string; end: string } {
   const end = shiftDate(today, -1)
   return { from: windowStart(end), end }
+}
+
+/**
+ * 回溯時要抓多少資料：最新窗口再往前加 LOOKBACK_DAYS。
+ * 抓資料的範圍與過濾共用同一份窗口定義，不各自推算。
+ */
+export function baselineFetchRange(today: string): { from: string; end: string } {
+  const { from, end } = baselineWindow(today)
+  return { from: shiftDate(from, -LOOKBACK_DAYS), end }
 }
 
 /** 兩個 yyyy-mm-dd 相差幾天。用 UTC 解析只為了算整數日差，不經本地時區的夏令時間。 */
@@ -118,7 +130,19 @@ export function estimateMaintenance(
   weights: readonly WeightPoint[],
   endDate: string,
 ): BaselineResult {
-  const startDate = windowStart(endDate)
+  return estimateOnSpan(dailyKcal, weights, windowStart(endDate), endDate)
+}
+
+/**
+ * 任意一段 [startDate, endDate]（含）的估計。最新窗口是固定 28 天；回溯時用的是「一連串記錄」
+ * 的整段，長度不一——所以把算法與窗口長度拆開。範圍外的攝取與體重完全不參與。
+ */
+function estimateOnSpan(
+  dailyKcal: readonly DailyKcal[],
+  weights: readonly WeightPoint[],
+  startDate: string,
+  endDate: string,
+): BaselineResult {
   const inWindow = (date: string) => date >= startDate && date <= endDate
 
   // 同一天若重複，後者覆蓋前者；呼叫端本來就該給每日合計，這裡不替它加總第二次
@@ -181,4 +205,86 @@ export function estimateMaintenance(
  */
 export function expectedWeeklyChangeKg(maintenance: number, targetKcal: number): number {
   return ((targetKcal - maintenance) * 7) / KCAL_PER_KG
+}
+
+/** 畫面真正要顯示的那一段：可能是最新窗口，也可能是回溯找到的一連串記錄。 */
+export interface ShownBaseline {
+  result: Extract<BaselineResult, { status: 'ok' }>
+  /** 這一段的第一天／最後一天（含） */
+  from: string
+  end: string
+  /** true＝不是最新窗口，是回溯找到的——畫面必須明寫起訖日期，不能讓人當成近 28 天 */
+  stale: boolean
+}
+
+/** 「同一連串記錄」允許中間漏記幾天：連續記了三週、中間忘了一兩天，不該被切成兩段。 */
+const MAX_RUN_GAP_DAYS = 2
+
+interface LoggedRun {
+  from: string
+  end: string
+  loggedDays: number
+}
+
+/** 把有記的日子（單日合計 ≥ MIN_DAY_KCAL）串成「連串記錄」，漏記不超過 MAX_RUN_GAP_DAYS 天視為同一串。 */
+function loggedRuns(dailyKcal: readonly DailyKcal[], from: string, end: string): LoggedRun[] {
+  const days = [...new Set(dailyKcal.filter((d) => d.date >= from && d.date <= end && d.kcal >= MIN_DAY_KCAL).map((d) => d.date))].sort()
+  const runs: LoggedRun[] = []
+  let cur: LoggedRun | null = null
+  for (const day of days) {
+    // daysBetween 連續兩天是 1，所以漏記天數 ＝ daysBetween − 1
+    if (cur !== null && daysBetween(cur.end, day) - 1 <= MAX_RUN_GAP_DAYS) {
+      cur.end = day
+      cur.loggedDays += 1
+    } else {
+      if (cur !== null) runs.push(cur)
+      cur = { from: day, end: day, loggedDays: 1 }
+    }
+  }
+  if (cur !== null) runs.push(cur)
+  return runs
+}
+
+/**
+ * 最新窗口不夠用就往回找（spec AC 11）。
+ *
+ * - 最新窗口 ok ⇒ 用它。
+ * - 最新窗口 implausible ⇒ **不回溯**：資料有誤要讓人看見，不用一段乾淨的舊資料把它蓋過去。
+ * - 最新窗口 insufficient ⇒ 在抓回來的範圍（最新窗口往前再 LOOKBACK_DAYS）裡找**記錄最多的一連串**，
+ *   用**整段**（第一個有記的日子到最後一個有記的日子）與其中所有體重去估；同分取較近的。
+ *
+ * **為什麼是「一連串記錄的整段」，不是「滑動 28 天窗口」**（兩次踩到，都是真資料／探針抓到的）：
+ * ① 取最近一個合格的 28 天窗口——停記後的前幾天仍 ≥ 21 天有記，但體重已經在漲，把數字往下拉
+ *   （最近 28 天直接算出 1412，記錄完整那段是約 1780）。
+ * ② 滑動窗口再「同分取區間最窄」——每窗只有 4 筆體重時，估計在 1552–1787 之間亂跳，最窄的那個只是
+ *   剛好擬合得緊（贏家詛咒），而它的窄範圍連 ~1780 都沒包到。
+ * 整段的好處是兩個洞一起補：窗尾落在最後有記的那天（不含停記後的上升），又用上整段的所有體重
+ * （點數多、跨度長，斜率才穩）。
+ *
+ * `current` 一律回最新窗口的結果，讓卡片在顯示舊的一段時仍能說「近 28 天缺什麼」。
+ */
+export function baselineWithFallback(
+  dailyKcal: readonly DailyKcal[],
+  weights: readonly WeightPoint[],
+  today: string,
+): { current: BaselineResult; shown: ShownBaseline | null } {
+  const win = baselineWindow(today)
+  const current = estimateMaintenance(dailyKcal, weights, win.end)
+  if (current.status === 'ok') return { current, shown: { result: current, ...win, stale: false } }
+  if (current.status === 'implausible') return { current, shown: null }
+
+  const { from: horizon } = baselineFetchRange(today)
+  const runs = loggedRuns(dailyKcal, horizon, win.end)
+  let best: ShownBaseline | null = null
+  // 由近到遠走，只在「嚴格更多」時才換，所以同分自然留下較近的
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const run = runs[i]
+    if (run.loggedDays < BASELINE_NEEDS.loggedDays) continue
+    const r = estimateOnSpan(dailyKcal, weights, run.from, run.end)
+    if (r.status !== 'ok') continue
+    if (best === null || r.loggedDays > best.result.loggedDays) {
+      best = { result: r, from: run.from, end: run.end, stale: true }
+    }
+  }
+  return { current, shown: best }
 }

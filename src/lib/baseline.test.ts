@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   BASELINE_NEEDS,
+  LOOKBACK_DAYS,
+  baselineFetchRange,
   baselineWindow,
+  baselineWithFallback,
   dailyKcalFromRows,
   estimateMaintenance,
   expectedWeeklyChangeKg,
@@ -224,5 +227,162 @@ describe('baselineWindow', () => {
   })
   it('跨月與跨年', () => {
     expect(baselineWindow('2026-01-02')).toEqual({ from: '2025-12-05', end: '2026-01-01' })
+  })
+})
+
+/* 回溯（spec AC 11–12）。偏移量一律是「距離窗尾（昨天＝END）幾天前」：offset 0＝END。
+   最新窗口不夠時，往回找有記天數最多的合格窗口——**不是最近一個合格窗口**，因為停止記錄後的前幾天
+   窗口仍有 ≥ 21 天有記、體重卻已經開始漲，會把結果拉低。 */
+describe('baselineWithFallback', () => {
+  const TODAY = shiftDate(END, 1)
+  const logOffsets = (from: number, to: number, kcal = 1800): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal }))
+  const weighEvery = (from: number, to: number, step = 3, kg = 75): WeightPoint[] => {
+    const out: WeightPoint[] = []
+    for (let o = from; o >= to; o -= step) out.push({ date: dayAt(o), kg })
+    return out
+  }
+
+  it('最新窗口夠用：就用它，不回溯、不標舊', () => {
+    const r = baselineWithFallback(log(28, 1800), weightsAt(75, 0), TODAY)
+    expect(r.current.status).toBe('ok')
+    expect(r.shown?.stale).toBe(false)
+    expect(r.shown?.end).toBe(END)
+  })
+
+  it('最近一段沒記：往回找到記錄完整的那段，標舊並帶起訖日期', () => {
+    // 記錄只有 offset 57..30（正好 28 天），之後完全沒記
+    const r = baselineWithFallback(logOffsets(57, 30), weighEvery(60, 27), TODAY)
+    expect(r.current.status).toBe('insufficient')
+    expect(r.shown).not.toBeNull()
+    expect(r.shown?.stale).toBe(true)
+    expect(r.shown?.end).toBe(dayAt(30))
+    expect(r.shown?.from).toBe(dayAt(57))
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+
+  it('取有記天數最多的，不是最近一個合格的（停記後前幾天窗口仍 ≥ 21 天有記）', () => {
+    const r = baselineWithFallback(logOffsets(57, 30), weighEvery(60, 27), TODAY)
+    // 窗尾在 offset 29..24 的窗口都還有 ≥ 21 天有記（合格），但有記天數少於 28
+    expect(r.shown?.result.loggedDays).toBe(28)
+    expect(r.shown?.end).toBe(dayAt(30))
+  })
+
+  it('連續 40 天記錄：用整段，不切成 28 天；窗尾落在最後有記的那天', () => {
+    const r = baselineWithFallback(logOffsets(70, 31), weighEvery(72, 28), TODAY)
+    expect(r.shown?.from).toBe(dayAt(70))
+    expect(r.shown?.end).toBe(dayAt(31))
+    expect(r.shown?.result.loggedDays).toBe(40)
+  })
+
+  it('兩串記錄有記天數同分時取較近的', () => {
+    // 80..60 與 50..30 各 21 天，中間隔 9 天
+    const logs = [...logOffsets(80, 60), ...logOffsets(50, 30)]
+    const r = baselineWithFallback(logs, weighEvery(82, 28), TODAY)
+    expect(r.shown?.result.loggedDays).toBe(21)
+    expect(r.shown?.end).toBe(dayAt(30))
+  })
+
+  it(`超過 ${LOOKBACK_DAYS} 天前的記錄不回溯`, () => {
+    const r = baselineWithFallback(logOffsets(130, 103), weighEvery(132, 100), TODAY)
+    expect(r.current.status).toBe('insufficient')
+    expect(r.shown).toBeNull()
+  })
+
+  it('取有記天數最多：停記後體重在漲時，maintenance 不被停記後的天數拉低（有記 28 天、其後每天 +0.07 kg）', () => {
+    // 28 天連續記錄在 offset 57..30，體重到 offset 30 都是 75，其後每天 +0.07。
+    // 若取「最近一個合格窗口」（窗尾 offset 24 附近，仍有 ≥ 21 天有記），斜率會被停記後的上升拉高 → 約 1700。
+    const weights: WeightPoint[] = []
+    for (let o = 60; o >= 1; o -= 3) weights.push({ date: dayAt(o), kg: o >= 30 ? 75 : 75 + (30 - o) * 0.07 })
+    const r = baselineWithFallback(logOffsets(57, 30), weights, TODAY)
+    expect(r.shown?.end).toBe(dayAt(30))
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+
+  it('記錄只有 24 天連續：涵蓋整段的窗口同分，要挑窗尾在最後有記那天的（誤差最小），不是最近的', () => {
+    // 記錄 offset 60..37（24 天）。窗尾在 offset 33..37 的窗口都涵蓋全部 24 天，有記天數同分；
+    // 窗尾越靠近今天，窗口尾端包進越多「停記後體重在漲」的天數。
+    const logs = logOffsets(60, 37)
+    const weights: WeightPoint[] = []
+    for (let o = 63; o >= 1; o -= 3) weights.push({ date: dayAt(o), kg: o >= 37 ? 75 : 75 + (37 - o) * 0.07 })
+    const r = baselineWithFallback(logs, weights, TODAY)
+    expect(r.shown?.result.loggedDays).toBe(24)
+    expect(r.shown?.end).toBe(dayAt(37))
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+
+  it('停記後第一筆體重跳 +1 kg 再持平：同樣不該被拉低', () => {
+    const logs = logOffsets(60, 37)
+    const weights: WeightPoint[] = []
+    for (let o = 63; o >= 1; o -= 3) weights.push({ date: dayAt(o), kg: o >= 37 ? 75 : 76 })
+    const r = baselineWithFallback(logs, weights, TODAY)
+    expect(r.shown?.end).toBe(dayAt(37))
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+
+  it('回溯上限的邊界：窗尾最遠 90 天——117..97 的 21 天找得到，118..98 找不到', () => {
+    // 窗尾最遠在 offset 90，窗口涵蓋 offset 117..90。118 在它之外，所以整段記錄裝不進任何窗口。
+    const near = baselineWithFallback(logOffsets(117, 97), weighEvery(119, 95), TODAY)
+    expect(near.shown).not.toBeNull()
+    const far = baselineWithFallback(logOffsets(118, 98), weighEvery(120, 96), TODAY)
+    expect(far.shown).toBeNull()
+  })
+
+  it('最新窗口是「資料有誤」時不回溯——不用乾淨的舊資料把錯誤蓋掉', () => {
+    // 最新窗口：全記、但最後一筆體重打錯；更早還有一段乾淨的記錄
+    const logs = [...log(28, 1800), ...logOffsets(90, 60)]
+    const weights = [...weightsAt(75.5, 0, 5).slice(0, -1), { date: dayAt(2), kg: 57.5 }, ...weighEvery(90, 60)]
+    const r = baselineWithFallback(logs, weights, TODAY)
+    expect(r.current.status).toBe('implausible')
+    expect(r.shown).toBeNull()
+  })
+})
+
+describe('baselineWithFallback — 一連串記錄的界線', () => {
+  const TODAY = shiftDate(END, 1)
+  const logOffsets = (from: number, to: number, kcal = 1800): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal }))
+  const weighEvery = (from: number, to: number, step = 3, kg = 75): WeightPoint[] => {
+    const out: WeightPoint[] = []
+    for (let o = from; o >= to; o -= step) out.push({ date: dayAt(o), kg })
+    return out
+  }
+
+  it('中間漏記兩天仍是同一串：15＋14 天 ＝ 29 天', () => {
+    const logs = [...logOffsets(60, 46), ...logOffsets(43, 30)] // 漏 45、44
+    const r = baselineWithFallback(logs, weighEvery(62, 28), TODAY)
+    expect(r.shown?.from).toBe(dayAt(60))
+    expect(r.shown?.end).toBe(dayAt(30))
+    expect(r.shown?.result.loggedDays).toBe(29)
+  })
+
+  it('漏記三天就斷成兩串，各自不到 21 天 ⇒ 找不到', () => {
+    const logs = [...logOffsets(60, 46), ...logOffsets(42, 30)] // 漏 45、44、43
+    const r = baselineWithFallback(logs, weighEvery(62, 28), TODAY)
+    expect(r.shown).toBeNull()
+  })
+
+  it('每週只有一筆體重：用整段所有體重，不被切成每窗 4 筆的窗口', () => {
+    // 49 天連續記錄、每 7 天一筆體重 → 整段 8 筆；若切成 28 天窗口，每窗只有 4–5 筆
+    const logs = logOffsets(80, 32)
+    const r = baselineWithFallback(logs, weighEvery(80, 32, 7), TODAY)
+    expect(r.shown?.result.loggedDays).toBe(49)
+    expect(r.shown?.result.weighIns).toBe(7)
+    expect(r.shown?.from).toBe(dayAt(80))
+    expect(r.shown?.end).toBe(dayAt(32))
+  })
+
+  it('整段的估計不會被窗口切法左右：體重持平 ⇒ 維持熱量＝平均攝取', () => {
+    const r = baselineWithFallback(logOffsets(80, 32), weighEvery(80, 32, 7), TODAY)
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+})
+
+describe('baselineFetchRange', () => {
+  it('最新窗口往前再加回溯天數；窗尾是昨天', () => {
+    const { from, end } = baselineFetchRange('2026-10-12')
+    expect(end).toBe('2026-10-11')
+    // 窗首 2026-09-14，再往前 90 天
+    expect(from).toBe(shiftDate('2026-09-14', -LOOKBACK_DAYS))
   })
 })

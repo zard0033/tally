@@ -138,17 +138,33 @@ export interface IntakeRow {
 }
 
 /** 區間內每筆的 eaten_on／qty／kcal（單份快照），實測維持熱量用。只撈三欄、不 join foods。
- *  28 天每天不到 35 筆，在 PostgREST 預設的 1000 列上限之內；超過會被靜默截斷，要放寬窗口時回頭檢查。 */
+ *  **分頁抓到完**：PostgREST 單次最多 1000 列，超過會被**靜默截斷**——窗口拉到 118 天之後
+ *  不能再靠「每天不到幾筆」估。排序鍵含 id，翻頁才不會漏列或重複。 */
 export async function listIntakeKcal(
   from: string,
   to: string,
 ): Promise<{ eaten_on: string; qty: number; kcal: number }[]> {
-  return unwrap(await supabase
-    .from('intake')
-    .select<'eaten_on,qty,kcal', { eaten_on: string; qty: number; kcal: number }>('eaten_on,qty,kcal')
-    .gte('eaten_on', from)
-    .lte('eaten_on', to)
-    .abortSignal(dbSignal()))
+  const PAGE = 1000
+  const MAX_PAGES = 20 // 兩萬列還沒抓完就是哪裡錯了，寧可失敗也不回一份殘缺的
+  const out: { eaten_on: string; qty: number; kcal: number }[] = []
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const rows = unwrap(await supabase
+      .from('intake')
+      .select<'eaten_on,qty,kcal', { eaten_on: string; qty: number; kcal: number }>('eaten_on,qty,kcal')
+      .gte('eaten_on', from)
+      .lte('eaten_on', to)
+      .order('eaten_on', { ascending: true })
+      .order('id', { ascending: true })
+      .range(out.length, out.length + PAGE - 1)
+      .abortSignal(dbSignal()))
+    /* **停在空頁，不停在「不滿一頁」**（review M3）：伺服器的 max_rows 若低於 PAGE，
+       第一頁就會不滿 PAGE，那時用「不滿一頁」判結束會把最新的幾天靜默砍掉——
+       而升冪排序丟掉的正是最新的那幾天。offset 跟著實際拿到的列數走，對任何上限都對；
+       代價是每次多一趟請求（最後那頁一定是空的）。 */
+    if (rows.length === 0) return out
+    out.push(...rows)
+  }
+  throw new Error('intake 區間查詢超過分頁上限')
 }
 
 /** 營養值取 intake 自己的快照欄，不取 foods——改食物庫的營養值不該改寫過去的紀錄。 */

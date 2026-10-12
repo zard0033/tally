@@ -8,7 +8,7 @@
    fixture 的數字（e2e/fixtures.ts）：體重 75.95、身高 175、出生年 1993、男、活動 1.375、
    蛋白質 1.8 g/kg、goal=cut、rate_kg_per_week=0.5、無體脂率 → 走 Mifflin-St Jeor。 */
 import { test, expect, type Page } from '@playwright/test'
-import { shiftDate } from '../src/lib/dates'
+import { monthDay, shiftDate } from '../src/lib/dates'
 import { FIX, TODAY } from './fixtures'
 import { openApp } from './harness'
 
@@ -324,7 +324,7 @@ test('實測維持熱量：資料夠時給數字，與畫面上的目前上限�
     card(page).locator('.goal-row', { hasText: '估計範圍' }),
     '體重全程持平＝沒有雜訊，區間收斂到一點，不該顯示「2000–2000」',
   ).toHaveCount(0)
-  await expect(card(page)).toContainText('近 28 天記錄 28 天、體重 6 筆')
+  await expect(card(page)).toContainText('依據近 28 天：記錄 28 天、體重 6 筆')
   // 體重少於 8 筆時，依據行要多說一句誤差可能很大
   await expect(card(page)).toContainText('體重只有 6 筆，誤差可能到幾百卡')
 
@@ -336,7 +336,8 @@ test('實測維持熱量：資料夠時給數字，與畫面上的目前上限�
       .find((u) => u.includes('/rest/v1/intake') && /select=[^&]*eaten_on/.test(u) && !/select=[^&]*meal/.test(u)),
   )
   expect(req, '卡片沒有送出區間查詢').toBeTruthy()
-  expect(req).toContain(`eaten_on=gte.${shiftDate(TODAY, -28)}`)
+  // 最新窗口 28 天（窗尾是昨天）再往前加 90 天的回溯範圍
+  expect(req).toContain(`eaten_on=gte.${shiftDate(TODAY, -118)}`)
   expect(req).toContain(`eaten_on=lte.${shiftDate(TODAY, -1)}`)
   expect(await writes(page), '實測維持熱量卡不該送出任何寫入').toBe(0)
 
@@ -412,4 +413,62 @@ test('實測維持熱量：一筆體重打錯（57.5 之於 75.5）時說資料�
   await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料看起來有誤')
   await expect(card(page)).toContainText('不像真的')
   await expect(card(page), '離譜的時候不該同時顯示一個「約 N 卡」').not.toContainText('約')
+})
+
+test('實測維持熱量：近 28 天沒記、更早有完整一段 ⇒ 秀那一段並明寫起訖日期', async ({ page }) => {
+  // 記錄只有「距昨天 30–57 天前」那 28 天，其後完全沒記；體重全程 75 持平（6 筆橫跨 27 天）
+  const kcalWindow = Array.from({ length: 28 }, (_, i) => ({
+    eaten_on: shiftDate(TODAY, -1 - (30 + i)),
+    qty: 1,
+    kcal: 1800,
+  }))
+  const weight = [30, 35, 40, 45, 50, 57].map((o) => ({
+    weight_kg: 75,
+    measured_on: shiftDate(TODAY, -1 - o),
+    body_fat_pct: null,
+  }))
+  await openApp(page, {}, { ...FIX, kcalWindow, weight })
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('約 1800 卡')
+  const from = shiftDate(TODAY, -1 - 57)
+  const end = shiftDate(TODAY, -1 - 30)
+  // 日期要在**標題那一列**就出現：只放在灰色說明框的話，掃一眼的人會把舊數字當成現在的（review M4）
+  await expect(card(page).locator('.goal-row', { hasText: '依你的記錄推算' }).locator('.lb')).toContainText(
+    `${monthDay(from)}–${monthDay(end)}`,
+  )
+  await expect(card(page)).toContainText('不是近 28 天')
+  // 同時說最新窗口缺什麼，使用者才知道怎麼讓它跟上現在
+  await expect(card(page)).toContainText('近 28 天資料不足')
+  await expect(card(page)).toContainText('記錄還差 21 天')
+  // 回溯時「約要 3–4 週才跟上」是錯的——什麼都不會自己跟上，要接回記錄
+  await expect(card(page)).toContainText('接回記錄後')
+  await expect(card(page)).not.toContainText('3–4 週才跟上')
+})
+
+test('實測維持熱量：intake 超過一頁（2520 列）要翻頁抓完，不能只拿第一頁', async ({ page }) => {
+  // 近 28 天每天 90 筆 × 20 卡 ＝ 1800 卡/天，共 2520 列；只拿第一頁（1000 列）就只剩約 11 天，會變「資料不足」
+  const kcalWindow = Array.from({ length: 28 * 90 }, (_, n) => ({
+    eaten_on: shiftDate(TODAY, -1 - Math.floor(n / 90)),
+    qty: 1,
+    kcal: 20,
+  }))
+  const weight = [0, 5, 10, 15, 20, 26].map((i) => ({
+    weight_kg: 75,
+    measured_on: shiftDate(TODAY, -1 - i),
+    body_fat_pct: null,
+  }))
+  await openApp(page, {}, { ...FIX, kcalWindow, weight })
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('約 1800 卡')
+  await expect(card(page)).toContainText('記錄 28 天')
+
+  // 翻頁真的發生：offset 0／1000／2000，再加一頁確認結束（offset 跟著實際拿到的列數走）
+  const offsets = await page.evaluate(() =>
+    (window as unknown as { __allFetches: string[] }).__allFetches
+      .filter((u) => u.includes('/rest/v1/intake') && /select=eaten_on/.test(decodeURIComponent(u)))
+      .map((u) => new URL(u).searchParams.get('offset')),
+  )
+  expect(offsets).toEqual(['0', '1000', '2000', '2520'])
 })

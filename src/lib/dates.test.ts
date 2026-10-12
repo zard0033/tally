@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageFromYear, isPlannable, localDate, maxPlanDate, shiftDate, weekdayDate } from './dates'
+import { ageFromYear, isPlannable, localDate, maxPlanDate, monthDay, shiftDate, weekdayDate } from './dates'
 
 describe('localDate', () => {
   it('本地時區 yyyy-mm-dd，不受 UTC 偏移影響', () => {
@@ -77,5 +77,14 @@ describe('ageFromYear', () => {
   })
   it('無效輸入（NaN）回 NaN，不擋、不丟錯——由呼叫端（computeTargets → App.tsx 的 kcal 檢查）守門', () => {
     expect(Number.isNaN(ageFromYear(NaN, new Date(2026, 6, 29)))).toBe(true)
+  })
+})
+
+describe('monthDay', () => {
+  it('去掉年份與前導零：2026-09-06 → 9/6', () => {
+    expect(monthDay('2026-09-06')).toBe('9/6')
+  })
+  it('兩位數月日不變：2026-12-25 → 12/25', () => {
+    expect(monthDay('2026-12-25')).toBe('12/25')
   })
 })

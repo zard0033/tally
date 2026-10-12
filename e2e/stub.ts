@@ -191,7 +191,11 @@ export async function seedFetchStub(
           const selectCols = (/select=([^&]*)/.exec(decodeURIComponent(path))?.[1] ?? '').split(',')
           if (selectCols.includes('eaten_on') && !selectCols.includes('meal')) {
             if (w.__kcalFail) return json({ message: '模擬的讀取失敗' }, 500)
-            return json(fix.kcalWindow)
+            // 認 offset／limit（分頁）：listIntakeKcal 會一頁頁翻到空頁才停，stub 若每頁都回整份就停不下來
+            const qs = new URL(u).searchParams
+            const offset = Number(qs.get('offset') ?? 0)
+            const limit = qs.get('limit') === null ? Infinity : Number(qs.get('limit'))
+            return json(fix.kcalWindow.slice(offset, offset + limit))
           }
           // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)

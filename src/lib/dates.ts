@@ -48,6 +48,12 @@ export function isPlannable(iso: string, today: string = localDate()): boolean {
   return iso >= today
 }
 
+/** yyyy-mm-dd → 「9/6」：去掉年份與前導零，給「依據 8/15–9/11」這類只需要月日的標示用。 */
+export function monthDay(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${m}/${d}`
+}
+
 /** 出生年在 today 那年的年齡（今年－出生年）。只問年份，不問月日——
  *  換掉 date picker 要滾幾十年份的操作成本，換來的是 ±1 歲的誤差，對 BMR 影響是個位數卡路里等級。 */
 export function ageFromYear(birthYear: number, today: Date = new Date()): number {

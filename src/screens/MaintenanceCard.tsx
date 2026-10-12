@@ -1,24 +1,32 @@
-/* 實測維持熱量卡（spec.md「實測維持熱量」，DESIGN.md v2.49）。**唯讀對帳**：用近 28 天
-   吃了多少＋體重怎麼變，反推這個人實際每天燒多少，跟「畫面上的上限」並列，告訴使用者照這個上限吃
+/* 實測維持熱量卡（spec.md「實測維持熱量」，DESIGN.md v2.49／v2.50）。**唯讀對帳**：用一段 28 天的
+   攝取與體重走勢，反推這個人實際每天燒多少，跟「畫面上的上限」並列，告訴使用者照這個上限吃
    預期每週會變多少。不改目標、不寫任何資料。
 
+   最新 28 天資料不足時，往回找最近一段記錄完整的窗口顯示（spec AC 11），並**明寫起訖日期**——
+   不能讓人把它當成近 28 天。
+
    自己抓資料而不是由 DailyGoal 傳進來：這張卡只在每日目標頁出現，抓兩支唯讀查詢的成本
-   遠小於為它多開兩條 props 與 Settings 的狀態。算法與窗口定義全在 src/lib/baseline.ts
+   遠小於為它多開兩條 props 與 Settings 的狀態。算法、窗口與回溯規則全在 src/lib/baseline.ts
    （純函式，有單元測試）。 */
 import { useEffect, useState } from 'react'
 import { listIntakeKcal, listWeights } from '@/lib/api'
 import {
   BASELINE_NEEDS,
+  LOOKBACK_DAYS,
   WINDOW_DAYS,
-  baselineWindow,
+  baselineFetchRange,
+  baselineWithFallback,
   dailyKcalFromRows,
-  estimateMaintenance,
   expectedWeeklyChangeKg,
   type BaselineResult,
+  type ShownBaseline,
 } from '@/lib/baseline'
-import { localDate } from '@/lib/dates'
+import { localDate, monthDay } from '@/lib/dates'
 
-type Load = { state: 'loading' } | { state: 'error' } | { state: 'done'; result: BaselineResult }
+type Load =
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'done'; current: BaselineResult; shown: ShownBaseline | null }
 
 export interface MaintenanceCardProps {
   /** 畫面上顯示的上限（卡）——連未儲存的預覽也算；算不出來傳 null，卡片就只顯示實測值。 */
@@ -34,6 +42,10 @@ const FLAT_KG_PER_WEEK = 0.05
  *  4 筆時 p90 誤差約 250–480 卡、8 筆約 200 卡，而我們要對帳的赤字常常只有一兩百卡。 */
 const FEW_WEIGHINS = 8
 
+/** 抓體重的筆數：窗口含回溯的總天數，每天一筆（weight 表同一天只有一列）再留一點餘裕；
+ *  api 預設的 90 不夠。 */
+const WEIGHT_FETCH = WINDOW_DAYS + LOOKBACK_DAYS + 10
+
 const kg = (n: number) => Math.abs(n).toFixed(2)
 
 function weeklyText(delta: number): string {
@@ -46,16 +58,17 @@ export default function MaintenanceCard({ targetKcal, plannedKgPerWeek }: Mainte
 
   useEffect(() => {
     let cancelled = false
-    const { from, end } = baselineWindow(localDate())
-    void Promise.all([listIntakeKcal(from, end), listWeights()])
+    const today = localDate()
+    const { from, end } = baselineFetchRange(today)
+    void Promise.all([listIntakeKcal(from, end), listWeights(WEIGHT_FETCH)])
       .then(([rows, weights]) => {
         if (cancelled) return
-        const result = estimateMaintenance(
+        const r = baselineWithFallback(
           dailyKcalFromRows(rows),
           weights.map((w) => ({ date: w.measured_on, kg: Number(w.weight_kg) })),
-          end,
+          today,
         )
-        setLoad({ state: 'done', result })
+        setLoad({ state: 'done', ...r })
       })
       .catch(() => {
         if (!cancelled) setLoad({ state: 'error' })
@@ -74,56 +87,22 @@ export default function MaintenanceCard({ targetKcal, plannedKgPerWeek }: Mainte
       {load.state === 'error' && (
         <div className="goal-row"><span className="lb">讀不到記錄</span></div>
       )}
-      {load.state === 'done' && load.result.status === 'insufficient' && (
-        <>
-          <div className="goal-row"><span className="lb">依你的記錄推算</span><span className="val">資料不足</span></div>
-          <div className="goal-note-box" style={{ margin: 'var(--s-3)' }}>
-            {lackText(load.result)}
-          </div>
-        </>
+      {load.state === 'done' && load.shown !== null && (
+        <ShownRows shown={load.shown} current={load.current} targetKcal={targetKcal} plannedKgPerWeek={plannedKgPerWeek} />
       )}
-      {load.state === 'done' && load.result.status === 'implausible' && (
+      {load.state === 'done' && load.shown === null && load.current.status === 'implausible' && (
         <>
           <div className="goal-row"><span className="lb">依你的記錄推算</span><span className="val">資料看起來有誤</span></div>
           <div className="goal-note-box" style={{ margin: 'var(--s-3)' }}>
-            {implausibleText(load.result.slopeKgPerWeek)}
+            {implausibleText(load.current.slopeKgPerWeek)}
           </div>
         </>
       )}
-      {load.state === 'done' && load.result.status === 'ok' && (
+      {load.state === 'done' && load.shown === null && load.current.status === 'insufficient' && (
         <>
-          <div className="goal-row">
-            <span className="lb">依你的記錄推算</span>
-            <span className="val">約 {Math.round(load.result.maintenance)} 卡</span>
-          </div>
-          {/* 體重剛好沒有雜訊時區間收斂成一點，「1780–1780」讀起來像壞掉，那就不顯示這一列。
-              標籤寫「約六成」：區間是 ±1 個標準誤差，不是 95% 信賴區間，讀者很容易當成後者。 */}
-          {Math.round(load.result.low) !== Math.round(load.result.high) && (
-            <div className="goal-row">
-              <span className="lb">估計範圍（約六成把握）</span>
-              <span className="val">{Math.round(load.result.low)}–{Math.round(load.result.high)} 卡</span>
-            </div>
-          )}
-          {targetKcal !== null && (
-            <>
-              <div className="goal-row">
-                <span className="lb">畫面上的上限</span>
-                <span className="val">{Math.round(targetKcal)} 卡</span>
-              </div>
-              <div className="goal-row">
-                <span className="lb">照這個上限吃</span>
-                <span className="val">{weeklyText(expectedWeeklyChangeKg(load.result.maintenance, targetKcal))}</span>
-              </div>
-              {plannedKgPerWeek !== null && (
-                <div className="goal-row">
-                  <span className="lb">你設定的</span>
-                  <span className="val">{weeklyText(plannedKgPerWeek)}</span>
-                </div>
-              )}
-            </>
-          )}
+          <div className="goal-row"><span className="lb">依你的記錄推算</span><span className="val">資料不足</span></div>
           <div className="goal-note-box" style={{ margin: 'var(--s-3)' }}>
-            {basisText(load.result.loggedDays, load.result.weighIns)}
+            {lackText(load.current)}
           </div>
         </>
       )}
@@ -131,9 +110,70 @@ export default function MaintenanceCard({ targetKcal, plannedKgPerWeek }: Mainte
   )
 }
 
-function basisText(loggedDays: number, weighIns: number): string {
-  const base = `依據近 ${WINDOW_DAYS} 天記錄 ${loggedDays} 天、體重 ${weighIns} 筆。漏記的餐會讓這個數字偏低；改變運動習慣後約要 3–4 週才跟上。`
-  return weighIns < FEW_WEIGHINS ? `${base}體重只有 ${weighIns} 筆，誤差可能到幾百卡，多量幾次會更準。` : base
+interface ShownRowsProps {
+  shown: ShownBaseline
+  current: BaselineResult
+  targetKcal: number | null
+  plannedKgPerWeek: number | null
+}
+
+function ShownRows({ shown, current, targetKcal, plannedKgPerWeek }: ShownRowsProps) {
+  const r = shown.result
+  return (
+    <>
+      <div className="goal-row">
+        {/* 回溯時標題就帶日期：數字本身跟最新那段長得一模一樣，只有灰色說明框寫日期的話，
+            掃一眼的人會把三個月前的數字當成現在的（review M4） */}
+        <span className="lb">依你的記錄推算{shown.stale && `（${monthDay(shown.from)}–${monthDay(shown.end)}）`}</span>
+        <span className="val">約 {Math.round(r.maintenance)} 卡</span>
+      </div>
+      {/* 體重剛好沒有雜訊時區間收斂成一點，「1780–1780」讀起來像壞掉，那就不顯示這一列。
+          標籤寫「約六成」：區間是 ±1 個標準誤差，不是 95% 信賴區間，讀者很容易當成後者。 */}
+      {Math.round(r.low) !== Math.round(r.high) && (
+        <div className="goal-row">
+          <span className="lb">估計範圍（約六成把握）</span>
+          <span className="val">{Math.round(r.low)}–{Math.round(r.high)} 卡</span>
+        </div>
+      )}
+      {targetKcal !== null && (
+        <>
+          <div className="goal-row">
+            <span className="lb">畫面上的上限</span>
+            <span className="val">{Math.round(targetKcal)} 卡</span>
+          </div>
+          <div className="goal-row">
+            <span className="lb">照這個上限吃</span>
+            <span className="val">{weeklyText(expectedWeeklyChangeKg(r.maintenance, targetKcal))}</span>
+          </div>
+          {plannedKgPerWeek !== null && (
+            <div className="goal-row">
+              <span className="lb">你設定的</span>
+              <span className="val">{weeklyText(plannedKgPerWeek)}</span>
+            </div>
+          )}
+        </>
+      )}
+      <div className="goal-note-box" style={{ margin: 'var(--s-3)' }}>
+        {basisText(shown, current)}
+      </div>
+    </>
+  )
+}
+
+function basisText(shown: ShownBaseline, current: BaselineResult): string {
+  const { loggedDays, weighIns } = shown.result
+  const span = shown.stale
+    ? `依據 ${monthDay(shown.from)}–${monthDay(shown.end)}（記錄最多的一連串，不是近 ${WINDOW_DAYS} 天）`
+    : `依據近 ${WINDOW_DAYS} 天`
+  const base = `${span}：記錄 ${loggedDays} 天、體重 ${weighIns} 筆。`
+  // 回溯時近 28 天一定是資料不足；把缺什麼一併說出來，使用者才知道怎麼讓它跟上現在
+  const lack = shown.stale && current.status === 'insufficient' ? `近 ${WINDOW_DAYS} 天資料不足：${lackText(current)}` : ''
+  /* 「約要 3–4 週才跟上」只在最新窗口成立；回溯時什麼都不會自己跟上，要接回記錄才會更新（review M4） */
+  const caveat = shown.stale
+    ? '漏記的餐會讓這個數字偏低；接回記錄後，這張卡會自己更新到近 28 天。'
+    : '漏記的餐會讓這個數字偏低；改變運動習慣後約要 3–4 週才跟上。'
+  const few = weighIns < FEW_WEIGHINS ? `體重只有 ${weighIns} 筆，誤差可能到幾百卡，多量幾次會更準。` : ''
+  return `${base}${lack}${caveat}${few}`
 }
 
 function implausibleText(slopeKgPerWeek: number): string {
