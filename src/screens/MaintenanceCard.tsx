@@ -94,7 +94,7 @@ export default function MaintenanceCard({ targetKcal, plannedKgPerWeek }: Mainte
         <>
           <div className="goal-row"><span className="lb">依你的記錄推算</span><span className="val">資料看起來有誤</span></div>
           <div className="goal-note-box" style={{ margin: 'var(--s-3)' }}>
-            {implausibleText(load.current.slopeKgPerWeek)}
+            {implausibleText(load.current)}
           </div>
         </>
       )}
@@ -168,19 +168,28 @@ function basisText(shown: ShownBaseline, current: BaselineResult): string {
   const base = `${span}：記錄 ${loggedDays} 天、體重 ${weighIns} 筆。`
   // 回溯時近 28 天一定是資料不足；把缺什麼一併說出來，使用者才知道怎麼讓它跟上現在
   const lack = shown.stale && current.status === 'insufficient' ? `近 ${WINDOW_DAYS} 天資料不足：${lackShort(current)}。` : ''
-  /* 「約要 3–4 週才跟上」只在最新窗口成立；回溯時什麼都不會自己跟上，要接回記錄才會更新（review M4） */
-  const caveat = shown.stale
-    ? '漏記的餐會讓這個數字偏低；接回記錄後，這張卡會自己更新到近 28 天。'
-    : '漏記的餐會讓這個數字偏低；改變運動習慣後約要 3–4 週才跟上。'
+  /* 「約要 3–4 週才跟上」只在最新窗口成立；回溯時什麼都不會自己跟上。要補的是什麼要看最新窗口缺的是
+     記錄還是體重：天天有記只是體重太少時，寫「接回記錄」就是錯的（review）。 */
+  const missingLogs = current.status === 'insufficient' && current.loggedDays < BASELINE_NEEDS.loggedDays
+  const caveat = !shown.stale
+    ? '漏記的餐會讓這個數字偏低；改變運動習慣後約要 3–4 週才跟上。'
+    : missingLogs
+      ? '漏記的餐會讓這個數字偏低；接回記錄後，這張卡會自己更新到近 28 天。'
+      : '漏記的餐會讓這個數字偏低；多量幾次體重後，這張卡會自己更新到近 28 天。'
   const few = weighIns < FEW_WEIGHINS ? `體重只有 ${weighIns} 筆，誤差可能到幾百卡，多量幾次會更準。` : ''
   return `${base}${lack}${caveat}${few}`
 }
 
-function implausibleText(slopeKgPerWeek: number): string {
-  const what = Number.isFinite(slopeKgPerWeek)
-    ? `近 ${WINDOW_DAYS} 天體重算出每週變化 ${Math.abs(slopeKgPerWeek).toFixed(1)} kg，不像真的`
-    : '算不出體重變化'
-  return `${what}。檢查一下近 ${WINDOW_DAYS} 天的體重紀錄有沒有打錯。`
+/** 叫人去查**對的東西**（review）：體重走勢離譜就查體重，維持熱量落界外而斜率正常多半是飲食記錄打錯。 */
+function implausibleText(r: Extract<BaselineResult, { status: 'implausible' }>): string {
+  switch (r.reason) {
+    case 'slope':
+      return `近 ${WINDOW_DAYS} 天體重算出每週變化 ${Math.abs(r.slopeKgPerWeek).toFixed(1)} kg，不像真的。檢查一下這段時間的體重紀錄有沒有打錯。`
+    case 'range':
+      return `算出的維持熱量是 ${Math.round(r.maintenance)} 卡，超出合理範圍。體重走勢正常，所以先檢查近 ${WINDOW_DAYS} 天的飲食記錄，份量或熱量有沒有打錯。`
+    default:
+      return `近 ${WINDOW_DAYS} 天算不出結果。檢查一下體重與飲食記錄有沒有打錯。`
+  }
 }
 
 /** 同一件事的短版，給依據行用：已經有「近 28 天資料不足」開頭，不必再把有幾天、需要幾天講第二遍。 */

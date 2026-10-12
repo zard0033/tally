@@ -60,6 +60,9 @@ export type BaselineResult =
       maintenance: number
       /** kg/週，可能是 NaN／±Infinity（有非有限的體重時） */
       slopeKgPerWeek: number
+      /** 為什麼不可能——畫面要叫人去查對的東西：slope＝體重走勢離譜（查體重紀錄）、
+       *  range＝維持熱量落在界外而斜率正常（多半是飲食記錄的份量或熱量打錯）、non-finite＝算不出來。 */
+      reason: 'slope' | 'range' | 'non-finite'
     }
   | {
       status: 'ok'
@@ -176,14 +179,13 @@ function estimateOnSpan(
 
   const maintenance = meanIntake - slope * KCAL_PER_KG
   const slopeKgPerWeek = slope * 7
-  if (
-    !Number.isFinite(maintenance) ||
-    !Number.isFinite(slopeKgPerWeek) ||
-    Math.abs(slopeKgPerWeek) > MAX_PLAUSIBLE_KG_PER_WEEK ||
-    maintenance < PLAUSIBLE_MAINTENANCE.min ||
-    maintenance > PLAUSIBLE_MAINTENANCE.max
-  ) {
-    return { status: 'implausible', maintenance, slopeKgPerWeek }
+  const nonFinite = !Number.isFinite(maintenance) || !Number.isFinite(slopeKgPerWeek)
+  const slopeOut = Math.abs(slopeKgPerWeek) > MAX_PLAUSIBLE_KG_PER_WEEK
+  const rangeOut = maintenance < PLAUSIBLE_MAINTENANCE.min || maintenance > PLAUSIBLE_MAINTENANCE.max
+  if (nonFinite || slopeOut || rangeOut) {
+    // 斜率先判：體重走勢離譜時，維持熱量落界外只是它的後果，要叫人查的是體重
+    const reason = nonFinite ? 'non-finite' : slopeOut ? 'slope' : 'range'
+    return { status: 'implausible', maintenance, slopeKgPerWeek, reason }
   }
 
   const half = slopeSe * KCAL_PER_KG

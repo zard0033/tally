@@ -175,9 +175,10 @@ describe('estimateMaintenance — 離譜的結果寧可說資料有誤', () => {
   const flat = [75.5, 75.5, 75.5, 75.5, 75.5, 75.5]
   const withAt = (idx: number, kg: number) => flat.map((k, i) => (i === idx ? kg : k))
 
-  it('最後一筆打錯（57.5）：斜率每週 −3.6 kg，不給數字', () => {
+  it('最後一筆打錯（57.5）：斜率每週 −3.6 kg，不給數字，原因標 slope', () => {
     const r = estimateMaintenance(log(28, 1800), six(withAt(5, 57.5)), END)
     expect(r.status).toBe('implausible')
+    if (r.status === 'implausible') expect(r.reason).toBe('slope')
   })
 
   it('第一筆打錯：會算出負的維持熱量，不給數字', () => {
@@ -190,9 +191,10 @@ describe('estimateMaintenance — 離譜的結果寧可說資料有誤', () => {
     expect(r.status).toBe('implausible')
   })
 
-  it('體重是 NaN：不讓 "約 NaN 卡" 上畫面', () => {
+  it('體重是 NaN：不讓 "約 NaN 卡" 上畫面，原因標 non-finite', () => {
     const r = estimateMaintenance(log(28, 1800), six(withAt(2, NaN)), END)
     expect(r.status).toBe('implausible')
+    if (r.status === 'implausible') expect(r.reason).toBe('non-finite')
   })
 
   it('正常的每週掉 0.5 kg 不被誤判', () => {
@@ -207,11 +209,24 @@ describe('estimateMaintenance — 離譜的結果寧可說資料有誤', () => {
 
   it('維持熱量低於 800：斜率合理（每週 +1.0 kg）但攝取少得離譜，不給數字', () => {
     // 1100 − (1.0 × 1100) ＝ 0，斜率本身沒超界，只有範圍那道能抓到
-    expect(estimateMaintenance(log(28, 1100), weightsAt(75, 1.0), END).status).toBe('implausible')
+    const r = estimateMaintenance(log(28, 1100), weightsAt(75, 1.0), END)
+    expect(r.status).toBe('implausible')
+    if (r.status === 'implausible') expect(r.reason).toBe('range')
   })
 
   it('維持熱量高於 5000：斜率合理（每週 −1.0 kg）但攝取高得離譜，不給數字', () => {
-    expect(estimateMaintenance(log(28, 4500), weightsAt(75, -1.0), END).status).toBe('implausible')
+    const r = estimateMaintenance(log(28, 4500), weightsAt(75, -1.0), END)
+    expect(r.status).toBe('implausible')
+    if (r.status === 'implausible') expect(r.reason).toBe('range')
+  })
+
+  it('飲食記錄打錯（平均 5500 卡、體重持平）：原因是 range，不是體重——畫面才不會叫人去查體重', () => {
+    const r = estimateMaintenance(log(28, 5500), weightsAt(75, 0), END)
+    expect(r.status).toBe('implausible')
+    if (r.status === 'implausible') {
+      expect(r.reason).toBe('range')
+      expect(r.slopeKgPerWeek).toBeCloseTo(0, 5)
+    }
   })
 
   it('implausible 帶著算出來的數字，讓畫面能說「為什麼不給」', () => {

@@ -472,3 +472,29 @@ test('實測維持熱量：intake 超過一頁（2520 列）要翻頁抓完，�
   )
   expect(offsets).toEqual(['0', '1000', '2000', '2520'])
 })
+
+test('實測維持熱量：飲食記錄打錯（體重走勢正常）⇒ 叫人去查飲食記錄，不是體重', async ({ page }) => {
+  // 平均 5500 卡、體重全程持平：斜率正常，維持熱量卻落在合理範圍之外
+  await openApp(page, {}, windowFix(5500))
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料看起來有誤')
+  await expect(card(page)).toContainText('飲食記錄')
+  await expect(card(page), '真因是飲食記錄時不該叫人去查體重').not.toContainText('體重紀錄有沒有打錯')
+})
+
+test('實測維持熱量：天天有記只是體重太少 ⇒ 說「多量幾次體重」，不說「接回記錄」', async ({ page }) => {
+  // 連續 60 天都有記；近 28 天只有 1 筆體重（不足 4 筆），但整串有 5 筆、橫跨 50 天 ⇒ 回溯到整串，窗尾仍是昨天
+  const kcalWindow = Array.from({ length: 60 }, (_, i) => ({ eaten_on: shiftDate(TODAY, -1 - i), qty: 1, kcal: 1800 }))
+  const weight = [5, 40, 45, 50, 55].map((o) => ({
+    weight_kg: 75,
+    measured_on: shiftDate(TODAY, -1 - o),
+    body_fat_pct: null,
+  }))
+  await openApp(page, {}, { ...FIX, kcalWindow, weight })
+  await openGoal(page)
+
+  await expect(cardRow(page, '依你的記錄推算')).toContainText('約 1800 卡')
+  await expect(card(page)).toContainText('多量幾次體重')
+  await expect(card(page), '天天都有記，不該叫人去「接回記錄」').not.toContainText('接回記錄')
+})

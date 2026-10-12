@@ -74,7 +74,7 @@ export async function seedFetchStub(
          * bug 唯一現形的時機。 */
         __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
-        __authMode: 'down' | 'hang' | 'ok' | 'revoked' | null
+        __authMode: AuthMode | null
         /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
         __kcalFail: boolean
       }

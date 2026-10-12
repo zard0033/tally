@@ -51,7 +51,10 @@ const METHOD_NOT_ALLOWED = '只接受 POST'
 const BAD_REQUEST = '請求格式不正確'
 const WRITE_FAILED = '寫入失敗'
 
-/** 診斷 log：只進函式 log、不進回應；**只記原因代碼與筆數，不記讀數與 token**。 */
+/** 診斷 log：只進函式 log、不進回應；**一般路徑只記原因代碼與筆數，不記讀數與 token**。
+ *  **例外：502（寫入失敗）會記上游錯誤文字的前 200 字**——PostgREST 的約束錯誤 details 可能夾帶
+ *  失敗那一列（user_id 與體重）。log 只有專案擁有者在 Supabase 後台看得到、不進回應；要收緊就改
+ *  index.ts 只丟狀態碼，那要重新部署函式（2026-10-12 review 提出，未動）。 */
 function diag(tag: string, extra?: Record<string, unknown>): void {
   console.error(`[ingest-weight] ${tag}`, extra ? JSON.stringify(extra) : '')
 }

@@ -16,9 +16,9 @@
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`（iOS 鍵盤三題已真機驗過結案；`?debug` 讀數列已移除，要用從 git 撿）。
-- **測試**：`npx vitest run` 207/207（含 `ingest-weight` 54、`baseline` 45）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **98/98 全綠**（約 1.9 分，十一個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（98／11／207）有四份文件在寫（CLAUDE.md、本檔、
+- **測試**：`npx vitest run` 208/208（含 `ingest-weight` 54、`baseline` 46）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+  **100/100 全綠**（約 1.9 分，十一個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
+  2026-08-12 又漏算一條被 review 抓到；且條數（100／11／208）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
