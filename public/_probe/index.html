@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tally 離線探針</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="探針">
+<style>
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top)); color: #222; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  dl { display: grid; grid-template-columns: 8.5em 1fr; gap: 4px 8px; margin: 0 0 16px; }
+  dt { color: #666; } dd { margin: 0; font-weight: 600; word-break: break-all; }
+  button { font: inherit; padding: 10px 14px; margin: 0 8px 8px 0; border: 1px solid #999; border-radius: 8px; background: #f4f4f4; }
+  pre { background: #f4f4f4; padding: 8px; border-radius: 8px; white-space: pre-wrap; min-height: 3em; }
+</style>
+</head>
+<body>
+<h1>Tally 離線探針（暫時頁面，測完會移除）</h1>
+<dl id="status"></dl>
+<button id="write">寫一筆（離線佇列）</button>
+<button id="ping">檢查網路</button>
+<button id="persist">要求持久儲存</button>
+<button id="clear">清空佇列</button>
+<button id="kill">解除 SW 並清快取</button>
+<pre id="log"></pre>
+<script>
+const $ = (id) => document.getElementById(id)
+const log = (m) => { $('log').textContent = `${new Date().toLocaleTimeString()} ${m}\n` + $('log').textContent }
+
+/* IndexedDB 佇列：模擬「離線寫入先存手機」 */
+const idb = new Promise((res, rej) => {
+  const r = indexedDB.open('probe', 1)
+  r.onupgradeneeded = () => r.result.createObjectStore('queue', { keyPath: 'id' })
+  r.onsuccess = () => res(r.result)
+  r.onerror = () => rej(r.error)
+})
+const tx = async (mode, fn) => {
+  const db = await idb
+  return new Promise((res, rej) => {
+    const t = db.transaction('queue', mode)
+    const out = fn(t.objectStore('queue'))
+    t.oncomplete = () => res(out.result)
+    t.onerror = () => rej(t.error)
+  })
+}
+const queueAll = () => tx('readonly', (s) => s.getAll())
+
+if (!localStorage.getItem('probe_first_run')) localStorage.setItem('probe_first_run', String(Date.now()))
+
+async function render() {
+  const q = await queueAll().catch(() => null)
+  const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null
+  const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null
+  const first = Number(localStorage.getItem('probe_first_run'))
+  const rows = {
+    '連線狀態': navigator.onLine ? '線上' : '離線',
+    '主畫面模式': (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '是（standalone）' : '否（Safari 分頁）',
+    'SW 控制中': navigator.serviceWorker && navigator.serviceWorker.controller ? '是' : '否',
+    '持久儲存': persisted === null ? '不支援' : String(persisted),
+    '儲存用量': est ? `${(est.usage / 1024).toFixed(1)} KB / ${(est.quota / 1048576).toFixed(0)} MB` : '不支援',
+    '首次開啟': new Date(first).toLocaleString() + `（${((Date.now() - first) / 86400000).toFixed(2)} 天前）`,
+    'IndexedDB 筆數': q === null ? '讀取失敗' : String(q.length),
+    '最早一筆': q && q.length ? new Date(Math.min(...q.map((x) => x.t))).toLocaleString() : '—',
+  }
+  $('status').innerHTML = Object.entries(rows).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')
+}
+
+$('write').onclick = async () => {
+  await tx('readwrite', (s) => s.put({ id: crypto.randomUUID(), t: Date.now() }))
+  log('已寫入 1 筆'); render()
+}
+$('clear').onclick = async () => { await tx('readwrite', (s) => s.clear()); log('已清空'); render() }
+$('ping').onclick = async () => {
+  try { const r = await fetch('./ping.txt?' + Date.now(), { cache: 'no-store' }); log('網路可達：HTTP ' + r.status) }
+  catch (e) { log('網路不可達：' + e.message) }
+}
+$('persist').onclick = async () => {
+  const ok = navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : null
+  log('persist() 回傳：' + ok); render()
+}
+$('kill').onclick = async () => {
+  const regs = await navigator.serviceWorker.getRegistrations()
+  await Promise.all(regs.map((r) => r.unregister()))
+  await Promise.all((await caches.keys()).map((k) => caches.delete(k)))
+  log('已解除 ' + regs.length + ' 個 SW 並清空快取，重新整理後生效')
+}
+
+addEventListener('online', () => { log('事件：online'); render() })
+addEventListener('offline', () => { log('事件：offline'); render() })
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then((reg) => log('SW 已註冊，scope=' + reg.scope))
+    .catch((e) => log('SW 註冊失敗：' + e.message))
+  navigator.serviceWorker.addEventListener('controllerchange', () => { log('SW 接手控制'); render() })
+}
+render()
+</script>
+</body>
+</html>

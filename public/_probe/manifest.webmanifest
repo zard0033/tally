@@ -1,0 +1,9 @@
+{
+  "name": "Tally 離線探針",
+  "short_name": "探針",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}
