@@ -39,7 +39,7 @@ The bar for lifting UI into `src/components` is that the same set of fields appe
 
 ### 100 end-to-end tests, and a UI change runs all of them
 
-100 browser tests across 11 files, plus 208 unit tests covering the formulas, dates, rounding, image sizing, and the label-reading and weight-sync Edge Functions. Any UI change runs the entire browser suite, not the file that looks related. The whole thing finishes in under two minutes, and "the relevant tests passed" is the most common way a regression gets shipped.
+105 browser tests across 12 files, plus 208 unit tests covering the formulas, dates, rounding, image sizing, and the label-reading and weight-sync Edge Functions. Any UI change runs the entire browser suite, not the file that looks related. The whole thing finishes in about two minutes, and "the relevant tests passed" is the most common way a regression gets shipped.
 
 Every new test also gets checked by breaking the thing it covers on purpose and confirming it goes red. A test that has never failed hasn't been shown to test anything.
 
@@ -78,7 +78,7 @@ npm run dev        # http://localhost:5500
 
 ```bash
 npx vitest run     # 97 unit tests: formulas, dates, rounding, image sizing, edge function
-npm run e2e        # 100 browser tests, 11 files (WebKit, 393x745)
+npm run e2e        # 105 browser tests, 12 files (WebKit, 393x745)
 npm run build      # tsc -b + vite build
 npm run lint
 ```

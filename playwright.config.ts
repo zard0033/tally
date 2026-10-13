@@ -44,6 +44,10 @@ export default defineConfig({
     baseURL: E2E_URL,
     ...devices['iPhone 14 Pro'],
     viewport: { width: 393, height: 745 },
+    /* 擋掉 service worker：e2e 跑的是 production build，App 會註冊 SW（src/registerSW.ts），
+       放行的話 SW 的 precache 與接管會讓 100 條既有測試吃到快取的外殼。SW 本身的行為由
+       service-worker.spec.ts 自己用 test.use({ serviceWorkers: 'allow' }) 打開來測。 */
+    serviceWorkers: 'block',
     /* 單一操作等不到就快速失敗，不要把整份 harness 拖到 timeout。沒有這行時，一個被
        遮住／不存在的元素會讓 click 一路等到整份逾時，於是「一輪走完拿到全部問題」的
        紀律失效，而且報錯位置指向收尾那行 evaluate，跟真正卡住的地方無關。 */

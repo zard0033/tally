@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>重置離線快取 · Tally</title>
+    <!-- 救援頁（spec.md 階段 1 甲 AC 7）。刻意獨立：不載入 App 的任何檔案，所以 App 或 SW 壞掉時它仍能開。
+         vite.config.ts 讓它「不進 precache」且「列入 navigateFallbackDenylist」，導覽它一定走網路。
+         色值抄自 DESIGN.md 的 token，這頁不能引用 app.css（雜湊檔名會變、且正是可能壞掉的那一批）。 -->
+    <style>
+      :root {
+        --paper: #FAF6F0; --ink: #3D2210; --ink-muted: #7A5C44;
+        --accent: #1C7059; --accent-dark: #155747; --on-accent: #FFFFFF; --over: #9A4330;
+        --s-2: 8px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --r-btn: 16px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100dvh; background: var(--paper); color: var(--ink);
+        font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+        display: flex; flex-direction: column; justify-content: center; gap: var(--s-4);
+        padding: var(--s-6) var(--s-5); padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom));
+        max-width: 420px; margin-inline: auto;
+      }
+      h1 { margin: 0; font-size: 1.25rem; letter-spacing: -.005em; }
+      p { margin: 0; color: var(--ink-muted); line-height: 1.55; font-size: .875rem; }
+      button, a.back {
+        display: flex; align-items: center; justify-content: center; min-height: 52px; width: 100%;
+        border: none; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent);
+        font: inherit; font-size: 1rem; font-weight: 700; text-decoration: none; cursor: pointer;
+        -webkit-appearance: none; appearance: none;
+      }
+      button:active, a.back:active { transform: translateY(1px); }
+      button:disabled { opacity: .45; cursor: default; }
+      button:focus-visible, a.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      @media (hover: hover) { button:hover:not(:disabled), a.back:hover { background: var(--accent-dark); } }
+      #status { min-height: 1.55em; }
+      #status.err { color: var(--over); }
+      a.back[hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>重置離線快取</h1>
+      <p>Tally 打不開、或一直停在舊版時用。會解除離線快取，下次開啟重新下載。不會登出，也不會刪除任何記錄。</p>
+    </main>
+    <button id="reset" type="button">重置</button>
+    <p id="status" role="status" aria-live="polite"></p>
+    <a id="back" class="back" href="./" hidden>回到 Tally</a>
+    <script>
+      (function () {
+        var btn = document.getElementById('reset')
+        var status = document.getElementById('status')
+        var back = document.getElementById('back')
+        function say(text, isErr) {
+          status.textContent = text
+          status.className = isErr ? 'err' : ''
+        }
+        btn.addEventListener('click', function () {
+          btn.disabled = true
+          say('重置中…')
+          // 範圍只限 Tally 這個路徑：同一個 origin 還有 Gambit，getRegistrations() 與 caches.keys()
+          // 回的是整個 origin 的，不過濾會把它們的 SW 與快取一起清掉。
+          var scope = new URL('./', location.href).href
+          // 先解除註冊、再刪快取：並行的話，剛好有 installing 的 worker 可能在刪除之後又寫回去。
+          var unregister = 'serviceWorker' in navigator
+            ? navigator.serviceWorker.getRegistrations().then(function (list) {
+                return Promise.all(list
+                  .filter(function (r) { return r.scope.indexOf(scope) === 0 })
+                  .map(function (r) { return r.unregister() }))
+              })
+            : Promise.resolve([])
+          unregister
+            .then(function () {
+              if (!('caches' in window)) return []
+              return caches.keys().then(function (names) {
+                return Promise.all(names
+                  .filter(function (n) { return n.indexOf(scope) !== -1 })
+                  .map(function (n) { return caches.delete(n) }))
+              })
+            })
+            .then(function () {
+              say('已重置。回到 Tally 會重新下載。')
+              back.hidden = false
+              back.focus()
+            })
+            .catch(function () {
+              btn.disabled = false
+              say('重置失敗，請再按一次；還是不行就關掉這個頁面重開。', true)
+            })
+        })
+      })()
+    </script>
+  </body>
+</html>

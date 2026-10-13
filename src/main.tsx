@@ -5,9 +5,12 @@ import './index.css'
 // shadcn 的預設值。理由見 src/app.css 檔頭。
 import './app.css'
 import App from './App.tsx'
+import { registerSW } from './registerSW'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+
+registerSW()

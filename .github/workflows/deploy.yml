@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      self_destroy_sw:
+        description: 救援：部署自我解除版 sw.js（把手機上壞掉的 service worker 換掉；平常不要勾）
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +32,9 @@ jobs:
       # vitest 在 Linux 的執行結果同時是 runner flaky 的第二觀察點（見 session-state/active.md 未解失敗）
       - run: npx vitest run
       - run: npm run build
+        env:
+          # 手動觸發且勾了 self_destroy_sw 才為 1；push 觸發時 inputs 為空，這裡是空字串
+          SW_SELF_DESTROY: ${{ inputs.self_destroy_sw && '1' || '' }}
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
