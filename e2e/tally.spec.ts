@@ -18,7 +18,7 @@
 import { test, expect } from '@playwright/test'
 import { mkdir, rm } from 'node:fs/promises'
 import {
-  check, closeFirstRow, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, slowDrag,
+  check, closeFirstRow, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, prevDay, slowDrag,
 } from './harness'
 
 const SHOTS_DIR = 'e2e/shots'
@@ -332,7 +332,7 @@ test('Tally UI 回歸', async ({ page }) => {
     await page.waitForTimeout(500)
   })
 
-  await step('日期切換 — 停用態、歷史日語意、回今天焦點', async () => {
+  await step('日期切換 — 週列、歷史日語意、回今天焦點', async () => {
     // v2.3：今日頁 h1 就是置中的日期本身（靜態頁名「日記」已拿掉，分頁列已經寫了
     // 「日記」），格式「週X M/D」；今天時同位置不放任何東西（.date-today-label 已刪除）
     const h1TextToday = ((await page.locator('h1.date-title').first().textContent()) ?? '').trim()
@@ -340,19 +340,12 @@ test('Tally UI 回歸', async ({ page }) => {
       /^週[一二三四五六日] \d+\/\d+$/.test(h1TextToday),
       `今日頁 h1 應為「週X M/D」格式的日期，實際「${h1TextToday}」`,
     )
-    await must(page, 'button[aria-label="前一天"]', '前一天')
-    await must(page, 'button[aria-label="後一天"]', '後一天')
-    /* v2.47 翻案：這裡原本斷言「今天時後一天停用（看不了未來）」——**那條斷言鎖的是已經作廢的
-       決策**，所以它必須反過來，不是放寬。往未來只開一天（＝明天）的完整路徑在
-       interaction.spec.ts；這裡只鎖「今天可以往前走」這件事，避免累積回歸再長出第二份。 */
-    check(
-      !(await page.locator('button[aria-label="後一天"]').isDisabled()),
-      '今天時「後一天」應可按（v2.47 起可以排明天）',
-    )
+    await must(page, '.datectl-week', '週列')
+    // v2.47 翻案（往未來只開一天）與 v2.53 換元件之後，「界在哪」的完整路徑在 interaction.spec.ts；
+    // 這裡只鎖「今天可以往前走」與回今天的語意，避免累積回歸再長出第二份。
     check((await page.locator('button.date-today-btn').count()) === 0, '今天時不應出現「回今天」鈕')
-    await page.click('button[aria-label="前一天"]')
+    await prevDay(page)
     await page.waitForTimeout(500)
-    check(!(await page.locator('button[aria-label="後一天"]').isDisabled()), '離開今天後「後一天」仍停用')
     await mustText(page, '.gauge-lead', '攝取', '歷史日主數字標籤應為「攝取」不是「還能吃／超出」')
     await must(page, 'button.date-today-btn', '回今天鈕（歷史日應出現）')
     await page.click('button.date-today-btn')

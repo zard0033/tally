@@ -9,7 +9,7 @@
    驗不到真正的 DB 持久化——「切走再切回」那條驗的是 App.tsx `patchIntakeRow` 有沒有
    一併更新 cacheRef（走快取路徑時該顯示改過的值）。DB 那半靠 PATCH body 的斷言＋真機。 */
 import { test, expect, type Page } from '@playwright/test'
-import { openApp } from './harness'
+import { nextDay, openApp, prevDay } from './harness'
 
 /** fixture：id 102 是午餐「雞胸餐盒」，qty=1，kcal=420、protein=45、fat=12、carb=30 */
 const ROW = '.item[data-row="102"]'
@@ -189,9 +189,9 @@ test('改完切到別天再切回來（走快取）：新值還在，不會被�
   await fill(page, 'name', '雞胸餐盒（去皮）')
   await fill(page, 'kcal', '500')
 
-  await page.locator('.date-arrow').first().click() // 前一天
+  await prevDay(page)
   await expect(page.locator(ROW)).toHaveCount(0)
-  await page.locator('.date-arrow').last().click() // 回今天
+  await nextDay(page) // 回今天
 
   await expect(page.locator(`${ROW} .nm`)).toContainText('（去皮）')
   await expect(page.locator(`${ROW} .kc`)).toHaveText('500')

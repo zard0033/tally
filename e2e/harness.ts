@@ -22,6 +22,47 @@ export async function openApp(page: Page, opts: StubOptions = {}, fix: typeof FI
   await page.waitForSelector('.gauge-num', { timeout: 5000 })
 }
 
+/* ── 日期元件（v2.53：週列＋月曆，取代 ‹ 日期 › 膠囊） ──────────────────────────
+   v2.53 之前這裡的測試都是點「前一天／後一天」。那兩顆鈕沒了，改走下面三支 helper——
+   **它們從畫面上讀目前選中的日期再算目標，不依賴「今天是星期幾」**：今天若是週一，
+   前一天不在週列裡，要展開月曆去點；今天若是 1 號，還要翻到上個月。 */
+
+/** yyyy-mm-dd 加減天數（本地時區，不經 UTC）。e2e 不從 src 匯入——跑的是 build 後的 preview。 */
+export function shiftIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + days)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
+}
+
+/** 目前選中的日期（週列或月曆裡 aria-pressed 的那一格）。 */
+export async function currentIso(page: Page): Promise<string> {
+  const iso = await page.locator('.datectl .datectl-day[aria-pressed="true"]').getAttribute('data-date')
+  if (!iso) throw new Error('日期元件裡找不到選中的日期')
+  return iso
+}
+
+/** 切到某天：週列裡有就直接點，沒有就展開月曆（必要時翻月）再點。 */
+export async function gotoDate(page: Page, iso: string) {
+  const day = page.locator(`.datectl [data-date="${iso}"]`)
+  if ((await day.count()) === 0) {
+    if ((await page.locator('.datectl-month').count()) === 0) await page.locator('.datectl-title').click()
+    for (let i = 0; i < 24 && (await day.count()) === 0; i++) {
+      const shown = await page.locator('.datectl-month').getAttribute('data-month')
+      await page.getByRole('button', { name: iso.slice(0, 7) < shown! ? '上個月' : '下個月' }).click()
+    }
+  }
+  await day.click()
+}
+
+export async function prevDay(page: Page) {
+  await gotoDate(page, shiftIso(await currentIso(page), -1))
+}
+
+export async function nextDay(page: Page) {
+  await gotoDate(page, shiftIso(await currentIso(page), 1))
+}
+
 export async function must(page: Page, sel: string, label: string) {
   if ((await page.locator(sel).count()) === 0) {
     throw new Error(`契約缺失：${label}　selector \`${sel}\` 在畫面上不存在`)

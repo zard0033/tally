@@ -6,7 +6,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
-import { isPlannable, localDate, maxPlanDate, shiftDate, weekdayDate } from '@/lib/dates'
+import DateStrip from '@/components/DateStrip'
+import { isPlannable, weekdayDate } from '@/lib/dates'
 import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
@@ -54,8 +55,9 @@ export default function Today(props: TodayProps) {
     dayData,
     targets,
     currentDate,
-    onShiftDate,
+    markedDates,
     onGoToDate,
+    onViewMonth,
     onOpenSheet,
     onDeleteIntake,
     justAddedIds,
@@ -65,25 +67,12 @@ export default function Today(props: TodayProps) {
   } = props
 
   const rows = dayData.rows
-  const isToday = currentDate === localDate()
   /* v2.47：主數字的語意分岔點從「是不是今天」改成**「是不是過去」**。
      回頭看過去問的是「那天吃了多少」（顯示攝取量）；今天與明天問的都是「還剩多少／超了多少」
      ——明天那頁存在的理由就是這個數字，它跟今天是同一個問題，只是還沒發生。
      **判斷用 dates.ts 的共用函式**：記一筆 sheet 的確認列問的是同一件事，第一版兩處各算
      一份、只改了這裡，結果明天的確認列退化成「共 N」（deep review 抓到）。 */
   const isPast = !isPlannable(currentDate)
-
-  /* 「回今天」按下後原本的鈕會被靜態 span 取代（unmount），焦點跟著掉回 body；
-     「後一天」按到**上界**當下也會翻 disabled，同樣把焦點甩掉——兩條路徑都用這個容器
-     接住焦點（tabIndex=-1：只接受程式化 focus，不進 Tab 順序，不干擾原本的鍵盤走位）。
-
-     **v2.47 修**：這裡原本問的是「會不會落在今天」（`=== localDate()`），因為 v2.47 之前
-     停用邊界就是今天，兩者等價。邊界移到明天之後兩者分家，而且**剛好錯開最常走的那條路**：
-     今天→明天會讓鈕翻 disabled 卻不接焦點，昨天→今天不會 disabled 卻硬把焦點搶走。
-     所以判斷要直接照「這一按會不會落在停用邊界」寫，不要照某個剛好等價的日期寫
-     （deep review 抓到；跟 disabled 的條件同一個 `>=`，兩邊才不會再分家）。 */
-  const dateRegionRef = useRef<HTMLDivElement>(null)
-  const willLandOnMax = (days: number) => shiftDate(currentDate, days) >= maxPlanDate()
 
   /* 品項列同時只有一列是「活躍」的，而活躍有兩種樣子：左滑露出刪除鈕（swipe）、
      點按展開就地編輯（edit）。v2.0 曾拆成 raisedId／openingId／manualOpenId 三個並行
@@ -178,57 +167,10 @@ export default function Today(props: TodayProps) {
 
   return (
     <div className={`main${over ? ' is-over' : ''}`} data-screen="today">
-      {/* v2.4：日期組 `‹ 日期 › ` 包進一顆膠囊（.datectl 本身即容器），置中不受
-          「回今天」影響——後者移到左端、脫離膠囊，絕對定位貼 .topbar 左邊距，
-          與膠囊間距用 CSS padding 撐開，不吃版面流。今天時同位置不放東西。 */}
+      {/* v2.53：日期元件從 v2.4 的 `‹ 日期 ›` 膠囊換成週列＋月曆（src/components/DateStrip.tsx；
+          決策與被推翻的舊決定見 DESIGN.md「日期切換」）。h1 在元件裡面。 */}
       <header className="topbar">
-        {/* 「回今天」render 在膠囊**之前**：它視覺上在左端（絕對定位），DOM 順序必須跟著
-            視覺順序走，否則 Tab 會先跳到右邊的箭頭再回頭跳左邊這顆（WCAG 2.4.3 焦點順序）。 */}
-        {!isToday && (
-          <button
-            type="button"
-            className="date-today-btn"
-            onClick={() => {
-              onGoToDate(localDate())
-              // 這顆鈕自己會被 unmount（今天時同位置不放東西），焦點要在同一個
-              // click handler 裡搶先移到還會留著的容器，不能等 re-render 完才做
-              dateRegionRef.current?.focus()
-            }}
-          >
-            回今天
-          </button>
-        )}
-        <div className="datectl" ref={dateRegionRef} tabIndex={-1}>
-          <button
-            type="button"
-            className="date-arrow"
-            aria-label="前一天"
-            onClick={() => onShiftDate(-1)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-          </button>
-          <h1 className="date-title">{weekdayDate(currentDate)}</h1>
-          <button
-            type="button"
-            className="date-arrow"
-            aria-label="後一天"
-            /* v2.47：停用條件從 isToday 改成「已經在上界」。**不要寫成 `currentDate === maxPlanDate()`**
-               ——那樣萬一有別的路徑把日期帶到更遠，這顆鈕反而會變成可按的。用 `>=` 是把
-               「不得超過上界」這個規則本身寫進條件，而不是只擋住剛好那一天。 */
-            disabled={currentDate >= maxPlanDate()}
-            onClick={() => {
-              const landOnMax = willLandOnMax(1)
-              onShiftDate(1)
-              if (landOnMax) dateRegionRef.current?.focus()
-            }}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-          </button>
-        </div>
+        <DateStrip date={currentDate} marked={markedDates} onSelect={onGoToDate} onViewMonth={onViewMonth} />
       </header>
 
       {/* 補遺①：這個 aria-label 原本寫死「今日熱量」，**在歷史日就已經是錯的**（不是這輪引入，

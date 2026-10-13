@@ -34,10 +34,11 @@ import {
   type NewWeight,
   type ProfileRow,
   type Weight,
+  listIntakeDates,
 } from '@/lib/api'
 import { DUR, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
-import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
+import { localDate, maxPlanDate, monthBounds, shiftDate, type MonthKey } from '@/lib/dates'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -350,7 +351,43 @@ export default function App() {
     [currentDate, loadDay, prefetchAdjacent],
   )
 
-  const shiftDateBy = useCallback((days: number) => goToDate(shiftDate(currentDate, days)), [currentDate, goToDate])
+
+  /* 週列／月曆的小點（v2.53）：有飲食紀錄的日子。按「月」抓、抓過的月不重抓（loadedMonthsRef 去重，
+     失敗就放掉去重旗標讓下次再試）。失敗靜默——小點是附帶資訊，彈錯誤畫面是過度反應，
+     而且離線時整頁本來就已經有提示。沒載到的月份沒有小點，**不是「那個月沒紀錄」**。
+     之後在目前這一天做的增刪（見下面的 effect）直接改這份集合，不重撈。 */
+  const [markedDates, setMarkedDates] = useState<ReadonlySet<string>>(() => new Set())
+  const loadedMonthsRef = useRef<Set<MonthKey>>(new Set())
+  /* 畫面上讀過品項的日子，本機的「有沒有紀錄」比月份查詢新：查詢在飛的期間使用者刪光了某天，
+     回來的結果不可以把剛移掉的小點加回去（review 抓到）。 */
+  const localMarksRef = useRef<Map<string, boolean>>(new Map())
+  const loadMonthMarks = useCallback((key: MonthKey) => {
+    if (loadedMonthsRef.current.has(key)) return
+    loadedMonthsRef.current.add(key)
+    const { from, to } = monthBounds(key)
+    listIntakeDates(from, to)
+      .then((dates) => {
+        const fresh = [...dates].filter((d) => localMarksRef.current.get(d) !== false)
+        setMarkedDates((prev) => new Set([...prev, ...fresh]))
+      })
+      .catch(() => {
+        loadedMonthsRef.current.delete(key)
+      })
+  }, [])
+  /* 目前這一天的增刪即時反映在小點：rows 變了就把這天加進／移出集合（含刪除的樂觀移除與復原）。
+     rows 為 null＝載入中，不動。 */
+  useEffect(() => {
+    if (rows === null) return
+    const has = rows.length > 0
+    localMarksRef.current.set(currentDate, has)
+    setMarkedDates((prev) => {
+      if (prev.has(currentDate) === has) return prev
+      const next = new Set(prev)
+      if (has) next.add(currentDate)
+      else next.delete(currentDate)
+      return next
+    })
+  }, [rows, currentDate])
 
   const openSheet = useCallback((meal: MealKey) => {
     setSheetMeal(meal)
@@ -836,8 +873,9 @@ export default function App() {
             profile={profile}
             targets={targets}
             currentDate={currentDate}
-            onShiftDate={shiftDateBy}
+            markedDates={markedDates}
             onGoToDate={goToDate}
+            onViewMonth={loadMonthMarks}
             onOpenSheet={openSheet}
             onDeleteIntake={handleDeleteIntake}
             justAddedIds={justAddedIds}
@@ -915,7 +953,7 @@ export default function App() {
             className="tab"
             type="button"
             aria-current={tab === 'today' ? 'page' : undefined}
-            aria-label="日記"
+            aria-label="飲食"
             onClick={() => setTab('today')}
           >
             {tab === 'today' && (
@@ -926,9 +964,10 @@ export default function App() {
                 transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
               />
             )}
+            {/* 刀叉（v2.53：分頁從「日記」改名「飲食」——這頁現在只管吃，訓練有自己的分頁） */}
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 4h16v16H4z" />
-              <path d="M8 4v16" />
+              <path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21" />
+              <path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3" />
             </svg>
           </button>
           <button

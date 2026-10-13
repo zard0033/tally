@@ -8,6 +8,7 @@
 
 import type { Food, IntakeDetailPatch, IntakeRow, NewFood, NewIntake, NewWeight, ProfileRow, Weight } from '@/lib/api'
 import type { Targets } from '@/lib/formulas'
+import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
 
 /**
@@ -26,10 +27,12 @@ export interface TodayProps {
   profile: ProfileRow
   targets: Targets
   currentDate: string
-  /** 前一天／後一天；App 內部已擋看未來與非法日期，Today 只管呼叫。 */
-  onShiftDate: (days: number) => void
-  /** 原生 input[type=date] 直接跳到某天，同樣的擋法在 App 裡做一次。 */
+  /** 選了某天（週列／月曆）；App 內部已擋看超過明天與非法日期，Today 只管呼叫。 */
   onGoToDate: (iso: string) => void
+  /** 有飲食紀錄的日子，給週列／月曆的小點用。只含已載入的月份，沒載到的月份沒有小點。 */
+  markedDates: ReadonlySet<string>
+  /** 日期元件目前需要哪個月的小點資料（週列涵蓋的月份、月曆翻到的月份）。 */
+  onViewMonth: (key: MonthKey) => void
   /** 開記一筆 sheet；CTA 沒有預設餐別時由 Today 自己呼叫 lib/meals 的 defaultMeal() 決定。 */
   onOpenSheet: (meal: MealKey) => void
   /** 刪除單筆 intake；失敗會由 App 轉成全域 Notice 畫面（跟 legacy 的 deleteIntake 一致），

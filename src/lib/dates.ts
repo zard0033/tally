@@ -60,6 +60,72 @@ export function ageFromYear(birthYear: number, today: Date = new Date()): number
   return today.getFullYear() - birthYear
 }
 
+/* ── 週列／月曆（v2.53）的日期運算。一律週一起算（台灣習慣，Gymwork 也是）。
+   月份用「YYYY-MM」字串（MonthKey）當鍵：可直接字串比較、當 Map／Set 的 key，不必帶 Date。 */
+
+/** 'YYYY-MM'。 */
+export type MonthKey = string
+
+/** 日期所在的月份鍵。 */
+export function monthKeyOf(iso: string): MonthKey {
+  return iso.slice(0, 7)
+}
+
+/** 月份加減 n 個月（跨年正確）。 */
+export function addMonths(key: MonthKey, n: number): MonthKey {
+  const [y, m] = key.split('-').map(Number)
+  const d = new Date(y, m - 1 + n, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** 該月第一天與最後一天（含），給「撈這個月的紀錄」當查詢區間。 */
+export function monthBounds(key: MonthKey): { from: string; to: string } {
+  const [y, m] = key.split('-').map(Number)
+  return { from: `${key}-01`, to: localDate(new Date(y, m, 0)) }
+}
+
+/** 這個月整個都超過上界（第一天就晚於 max）——月曆的「下個月」據此停用。
+ *  e2e 只有「明天剛好跨月」那一天才走得到這條分支，所以規則抽成純函式用單元測試守。 */
+export function isMonthBeyond(key: MonthKey, max: string): boolean {
+  return monthBounds(key).from > max
+}
+
+/** 週一＝0 … 週日＝6。 */
+function mondayIndex(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return (new Date(y, m - 1, d).getDay() + 6) % 7
+}
+
+/** 含這一天的那一週，週一到週日七天。 */
+export function weekDates(iso: string): string[] {
+  const monday = shiftDate(iso, -mondayIndex(iso))
+  return Array.from({ length: 7 }, (_, i) => shiftDate(monday, i))
+}
+
+/** 月曆格：前面補 null 到該月 1 號所在的星期，之後是整個月的每一天；不補尾巴（格線自己換行）。 */
+export function monthGrid(key: MonthKey): (string | null)[] {
+  const { from, to } = monthBounds(key)
+  const lead = mondayIndex(from)
+  const days = Number(to.slice(8))
+  return [
+    ...Array<null>(lead).fill(null),
+    ...Array.from({ length: days }, (_, i) => `${key}-${String(i + 1).padStart(2, '0')}`),
+  ]
+}
+
+/** 「2026 年 10 月」。 */
+export function monthTitle(key: MonthKey): string {
+  const [y, m] = key.split('-').map(Number)
+  return `${y} 年 ${m} 月`
+}
+
+/** 週列／月曆每格的無障礙名稱：「10月13日 週二，今天，有紀錄」。 */
+export function dayLabel(iso: string, today: string, marked: boolean): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const weekday = '日一二三四五六'[new Date(y, m - 1, d).getDay()]
+  return `${m}月${d}日 週${weekday}${iso === today ? '，今天' : ''}${marked ? '，有紀錄' : ''}`
+}
+
 /**
  * 日期區文字（DESIGN.md v2.0）：「週二 7/28」——星期＋月/日，不帶年份。
  * 純字串解析＋`new Date(y, m-1, d)` 只用來查星期幾，不經過 UTC 轉換，跨時區安全；

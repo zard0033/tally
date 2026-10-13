@@ -173,6 +173,12 @@ export async function listIntakeKcal(
   throw new Error('intake 區間查詢超過分頁上限')
 }
 
+/** 區間內「有記錄的日子」，給週列／月曆的小點用（v2.53）。直接重用 listIntakeKcal 的分頁抓取
+ *  （一個月不到幾百列，多拿的 qty／kcal 兩欄可以忽略），不另開第二支幾乎一樣的查詢。 */
+export async function listIntakeDates(from: string, to: string): Promise<Set<string>> {
+  return new Set((await listIntakeKcal(from, to)).map((r) => r.eaten_on))
+}
+
 /** 營養值取 intake 自己的快照欄，不取 foods——改食物庫的營養值不該改寫過去的紀錄。 */
 export async function listIntake(date: string): Promise<IntakeRow[]> {
   /* foods 是多對一（每筆 intake 對一個 food），但沒有 Database schema 時 postgrest-js

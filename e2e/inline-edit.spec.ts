@@ -8,7 +8,7 @@
    守門擋下」。它鎖的是 App.tsx 的 patchIntakeRow，而那道防線這輪還從單一 mutation
    擴成份量與餐別共用，所以改成兩條路徑各驗一次。 */
 import { test, expect, type Page } from '@playwright/test'
-import { openApp } from './harness'
+import { nextDay, openApp, prevDay } from './harness'
 
 /** fixture：id 102 是午餐「雞胸餐盒」，qty=1，kcal=420（單份快照） */
 const ROW = '.item[data-row="102"]'
@@ -234,20 +234,14 @@ test('換日期時編輯區隨那一列一起卸載，且不留下任何 PATCH',
   await openApp(page)
   await expand(page)
 
-  await page.evaluate(() => {
-    const btn = document.querySelector('.date-arrow[aria-label="前一天"]') as HTMLButtonElement | null
-    btn?.click()
-  })
+  await prevDay(page)
 
   await expect(page.locator(ROW)).toHaveCount(0)
   await expect(page.locator('.timeline .item-editor'), '那一列走了，編輯區不該還留在畫面上').toHaveCount(0)
   expect(await patches(page), '只是換個日期，不該送出任何 PATCH').toHaveLength(0)
 
   // 切回今天：值沒被寫壞——qty 還是 1（不顯示 ×N）、熱量還是 420
-  await page.evaluate(() => {
-    const btn = document.querySelector('.date-arrow[aria-label="後一天"]') as HTMLButtonElement | null
-    btn?.click()
-  })
+  await nextDay(page)
   await expect(page.locator(ROW)).toHaveCount(1)
   await expect(page.locator(`${ROW} .qty`)).toHaveCount(0)
   await expect(page.locator(`${ROW} .kc`)).toHaveText('420')

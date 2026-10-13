@@ -330,11 +330,19 @@ test('實測維持熱量：資料夠時給數字，與畫面上的目前上限�
 
   /* 查詢的日期範圍：stub 不看 filter、estimateMaintenance 又會自己再過濾一次，所以窗口寫錯
      （例如 from 少算、to 傳成今天）在其他斷言裡完全看不見。這裡直接讀送出去的請求。 */
-  const req = await page.evaluate(() =>
-    (window as unknown as { __allFetches: string[] }).__allFetches
+  /* v2.53 起日期元件的月份小點也會打同形狀的區間查詢（一個月的範圍），所以「第一支符合形狀的」
+     不再一定是卡片的。卡片的窗口是 118 天，取跨度最大的那支。 */
+  const req = await page.evaluate(() => {
+    const span = (u: string) => {
+      const from = /eaten_on=gte\.([\d-]+)/.exec(u)?.[1]
+      const to = /eaten_on=lte\.([\d-]+)/.exec(u)?.[1]
+      return from && to ? Date.parse(to) - Date.parse(from) : 0
+    }
+    return (window as unknown as { __allFetches: string[] }).__allFetches
       .map((u) => decodeURIComponent(u))
-      .find((u) => u.includes('/rest/v1/intake') && /select=[^&]*eaten_on/.test(u) && !/select=[^&]*meal/.test(u)),
-  )
+      .filter((u) => u.includes('/rest/v1/intake') && /select=[^&]*eaten_on/.test(u) && !/select=[^&]*meal/.test(u))
+      .sort((a, b) => span(b) - span(a))[0]
+  })
   expect(req, '卡片沒有送出區間查詢').toBeTruthy()
   // 最新窗口 28 天（窗尾是昨天）再往前加 90 天的回溯範圍
   expect(req).toContain(`eaten_on=gte.${shiftDate(TODAY, -118)}`)
@@ -465,10 +473,13 @@ test('實測維持熱量：intake 超過一頁（2520 列）要翻頁抓完，�
   await expect(card(page)).toContainText('記錄 28 天')
 
   // 翻頁真的發生：offset 0／1000／2000，再加一頁確認結束（offset 跟著實際拿到的列數走）
-  const offsets = await page.evaluate(() =>
-    (window as unknown as { __allFetches: string[] }).__allFetches
-      .filter((u) => u.includes('/rest/v1/intake') && /select=eaten_on/.test(decodeURIComponent(u)))
-      .map((u) => new URL(u).searchParams.get('offset')),
+  // 只數卡片自己的那條（from＝今天往前 118 天）；月份小點的查詢（v2.53）形狀相同，不能混進來
+  const offsets = await page.evaluate(
+    (from) =>
+      (window as unknown as { __allFetches: string[] }).__allFetches
+        .filter((u) => u.includes('/rest/v1/intake') && decodeURIComponent(u).includes(`eaten_on=gte.${from}`))
+        .map((u) => new URL(u).searchParams.get('offset')),
+    shiftDate(TODAY, -118),
   )
   expect(offsets).toEqual(['0', '1000', '2000', '2520'])
 })

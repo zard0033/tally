@@ -121,10 +121,9 @@ button { -webkit-user-select: none; user-select: none; }
 .pair .sep { color: var(--ink-muted); }                   /* 分隔符 */
 .pair .tgt { color: var(--ink-muted); }                   /* 固定的參考值 */
 
-/* ── 頂欄（日期切換控制見下方 .datectl）。position:relative 是 .date-today-btn
-   的定位基準（絕對定位貼左邊距，見下方） ── */
+/* ── 頂欄（今日頁放日期元件 .datectl，見下方；設定頁放靜態標題 .today） ── */
 .topbar { position: relative; padding: var(--s-4) var(--s-5) 0; }
-/* .today：設定頁專用的靜態標題（今日頁 v2.3 起改用 .date-title，見下方 .datectl） */
+/* .today：設定頁專用的靜態標題（今日頁改用 .datectl 裡的 .date-title） */
 .topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md);
   margin: 0; line-height: 1.2; }
 
@@ -463,7 +462,7 @@ button { -webkit-user-select: none; user-select: none; }
    掛載點之間做 FLIP——上一顆卸載、下一顆掛載發生在同一次 React commit，projection
    系統會把這當成同一個元素「移動」而不是「消失又出現」，接管掉原本瞬跳的底色／邊框。
    inset:0 蓋滿整顆 56×44 按鈕，z-index:0 讓圖示（z-index:1）疊在它之上——絕對定位
-   的層預設會蓋掉靜態子元素，同 .item-delete::before／.datectl::before 同一個手法。
+   的層預設會蓋掉靜態子元素，同 .item-delete::before 同一個手法。
    只動 transform（FLIP 的位移與縮放走 transform，不是 left/top），遵守
    「只動 opacity／transform」的動效硬規則。 */
 .tab-indicator { position: absolute; inset: 0; z-index: 0; border-radius: var(--r-pill);
@@ -688,60 +687,59 @@ button { -webkit-user-select: none; user-select: none; }
    引進 motion：只有進場需要，退場直接消失可以接受，不值得為它拉 AnimatePresence。 */
 @keyframes undo-pill-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* ═══════════ 日期切換（v2.4：`‹ 日期 › ` 三件包進一顆膠囊，日期本身是 h1） ═══════════ */
-/* 膠囊＝.datectl 本身：--card 底、1px --rule 邊框、--r-pill 圓角，寬度收成內容自身
-   （width: fit-content ＋ margin: 0 auto，在 .topbar 裡置中）。裸 chevron 在 cream 上
-   沒有任何「可按」的訊號，容器補上這個訊號（DESIGN.md v2.4）。 */
-/* v2.5 真機第四輪：膠囊視覺高度收到約 36px，觸控區維持 44px——沿用 .item-delete
-   的手法（底色與邊框畫在絕對定位的 ::before，本體只當觸控容器）。.datectl 自己不再
-   有背景／邊框，改由 ::before 承擔，inset: 4px 0＝上下各收 4px、左右不收（水平寬度
-   仍等於內容自身寬度，不影響「置中」）。子元素（箭頭、h1）要顯式 position:relative
-   疊到 ::before 之上——絕對定位的 pseudo 預設會蓋掉靜態子元素，同 .item-delete svg
-   的手法（那邊的註解已經解釋過一次）。 */
-.datectl { position: relative; display: flex; align-items: center; width: fit-content; margin: 0 auto; }
-.datectl::before { content: ''; position: absolute; inset: 4px 0; z-index: 0;
-  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
-/* tabIndex=-1：只接受「回今天」「後一天」按到今天時的程式化焦點轉移，不進 Tab
-   順序。:not(:focus-visible) 只殺程式化 focus 的預設外框，鍵盤使用者的 :focus-visible
-   不受影響（這個容器本來就進不了 Tab 順序，正常操作下 :focus-visible 不會命中它）。 */
+/* ═══════════ 日期元件（v2.53：週列＋可展開月曆，取代 v2.4 的 `‹ 日期 ›` 膠囊；DESIGN.md「日期切換」） ═══════════ */
+/* 左右各外推 --s-2：格子要用滿寬（七格各約 52px），標題文字再用 padding 縮回頁面邊距，
+   讓「週二 10/13」與下面的熱量數字對齊同一條線。 */
+.datectl { margin: 0 calc(var(--s-2) * -1); padding-bottom: var(--s-2); } /* 底下留一點：週列最下面的小點不要貼著熱量條的標籤 */
+/* tabIndex=-1：只接「回今天」按下後的程式化焦點轉移，不進 Tab 順序。 */
 .datectl:focus:not(:focus-visible) { outline: none; }
-/* 膠囊內縮成 36px 寬（v2.5，原 40px；高度仍 44px 觸控區不變，視覺層見上方 ::before）*/
-.date-arrow { position: relative; z-index: 1; width: 36px; height: 44px; display: flex;
-  align-items: center; justify-content: center;
-  border: none; background: none; color: var(--ink-muted); cursor: pointer;
-  border-radius: var(--r-pill); -webkit-appearance: none; appearance: none;
-  transition: opacity var(--dur-base) var(--ease); }
-.date-arrow svg { width: 16px; height: 16px; }
-.date-arrow:active { opacity: .5; }
-.date-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.date-arrow:disabled { opacity: .3; cursor: default; }
-/* 日期本身是 h1，取代 v2.2 拿掉的靜態頁名「日記」。左右內距 --s-2
-   同時是膠囊內「箭頭緊貼日期兩側」的間距來源。
-   v2.7：16px/600（原 20px/700 使用者實機回報「有點大、有點突兀」）——日期是導覽元素
-   不是標題，主角是下面 44px 的主數字；20px/700 跟頂欄左端 12.8px 的「回今天」落差太大，
-   是突兀感的來源，見 DESIGN.md v2.7 版本紀錄。
-   v2.13：改套 --font-num——v2.7 當初「中文數字混排不套用」的例子是「7月30日」這種數字被
-   中文字直接夾住的格式，現在的「週日 8/2」中文與數字中間隔了空格，是兩個獨立區塊而非
-   夾在一起，斷裂感的前提已經不成立；Archivo 沒有 CJK 字形，「週日」兩字會自動 fallback
-   回 --font-body 字型堆疊裡的系統字體，不必拆成兩個 span */
-.date-title { position: relative; z-index: 1; font-family: var(--font-num); font-size: var(--t-md); font-weight: 600;
-  letter-spacing: var(--track-md);
-  margin: 0; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums;
-  white-space: nowrap; padding: 0 var(--s-2); }
-/* 回今天（v2.4）：移到頂欄左端、拿掉前置 chevron（與膠囊內的 ‹ 同向重複）。
-   絕對定位貼 .topbar（不是 .datectl）：定位基準若留在膠囊上，位置會跟著膠囊寬度
-   （隨日期文字長度）漂移；貼 .topbar 才能穩定貼齊頁面左邊距。絕對定位的 offset 是相對
-   容器的 padding box 起點，會跳過 .topbar 自己的 padding-left，所以要用 var(--s-5)
-   （不是 0）才真的對齊其他區塊共用的 20px 頁面邊距。今天時整個 unmount，
-   同位置不放任何東西（日期組置中後不需要佔位穩住寬度）。 */
-.date-today-btn { position: absolute; left: var(--s-5); top: 50%; transform: translateY(-50%);
-  display: inline-flex; align-items: center; min-height: 44px;
-  padding: 0 var(--s-3); border: none; background: none; color: var(--accent);
-  font-family: inherit; font-size: var(--t-sm); font-weight: 600; letter-spacing: var(--track-xs);
-  cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
+.datectl-head { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+/* h1 只當語意容器，字樣由裡面那顆按鈕決定（日期標題是月曆的開關，v2.53 起不再是靜態文字）。
+   字級承 v2.7（16px/600）、字型承 v2.13（--font-num，「週二」自動 fallback 回系統字）。 */
+.date-title { margin: 0; line-height: 1.2; font-size: var(--t-md); }
+.datectl-title { display: flex; align-items: center; gap: var(--s-1); min-height: 44px; padding: 0 var(--s-2);
+  border: none; background: none; border-radius: var(--r-pill); color: var(--ink); cursor: pointer;
+  font-family: var(--font-num); font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md);
+  font-variant-numeric: tabular-nums; white-space: nowrap; -webkit-appearance: none; appearance: none; }
+.datectl-title svg { width: 16px; height: 16px; color: var(--ink-muted); transition: transform var(--dur-mid) var(--ease); }
+.datectl-title[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* 回今天：現在在標題同一列的右端（v2.4 當初放左端是為了避開「後一天」箭頭，箭頭沒了、衝突也沒了）。
+   右內距 --s-2 剛好把文字收回頁面邊距。今天時整顆卸載，同位置不放東西。 */
+.date-today-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-2) 0 var(--s-3);
+  border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  letter-spacing: var(--track-xs); cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
 .date-today-btn:active { opacity: .6; }
-.date-today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.datectl-title:focus-visible, .datectl-day:focus-visible, .datectl-mnav:focus-visible, .date-today-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px; }
+.datectl-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+/* touch-action: pan-y：橫向手勢留給我們切週，垂直捲動照常（否則瀏覽器會把橫滑吃成 pointercancel） */
+.datectl-week { touch-action: pan-y; }
+.datectl-dow { text-align: center; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); padding: var(--s-1) 0; }
+/* 一格＝44px 以上的觸控區；視覺是 36px 的圓，小點畫在圓下方 */
+.datectl-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 2px; min-height: 52px; padding: var(--s-1) 0 0; border: none; background: none; cursor: pointer;
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; color: var(--ink);
+  -webkit-appearance: none; appearance: none; }
+.datectl-day .dw { font-family: var(--font-body); font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.datectl-day .n { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-pill); border: 1.5px solid transparent; }
+.datectl-day.is-today .n { color: var(--accent); border-color: var(--accent); }
+/* 選中＝實心。今天與選中是兩件事：今天只有外圈，選中才填色（今天被選中時兩者疊在一起） */
+.datectl-day[aria-pressed="true"] .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.datectl-day.is-marked::after { content: ''; position: absolute; bottom: 2px; width: 5px; height: 5px;
+  border-radius: var(--r-pill); background: var(--accent); }
+/* pointer-events: none：停用的 button 在部分瀏覽器不發 pointer 事件，落在它上面的滑動就不會被週列接到
+   （review 抓到）；none 讓事件落到底下的格線容器，切週手勢從哪格起手都有效。 */
+.datectl-day:disabled { color: var(--ink-faint); cursor: default; pointer-events: none; }
+.datectl-month .datectl-day { min-height: 48px; padding-top: 2px; }
+.datectl-mhead { display: flex; align-items: center; padding-left: var(--s-2); }
+.datectl-mt { flex: 1; font-size: var(--t-sm); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.datectl-mnav { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--ink-muted); border-radius: var(--r-pill); cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.datectl-mnav svg { width: 18px; height: 18px; }
+.datectl-mnav:disabled { opacity: .3; cursor: default; }
 
 /* ═══════════ 記一筆 sheet ═══════════ */
 /* v2.38：壓暗之外再加一層模糊。前綴不可省（同「區塊分隔」的 mask-image，舊 iOS Safari
@@ -1198,7 +1196,7 @@ button { -webkit-user-select: none; user-select: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
-  .chip, .icon-btn, .date-arrow, .date-today-btn, .pick-bar-btn, .field-float label,
+  .chip, .icon-btn, .datectl-title svg, .date-today-btn, .pick-bar-btn, .field-float label,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
   .qty-btn, .ed-del, .seg button { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，

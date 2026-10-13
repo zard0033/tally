@@ -5,7 +5,10 @@
    15 條路徑裡除錯，一輪 20 秒起跳，而且斷言會建在上一條留下的狀態上。 */
 import { expect, test, type Page } from '@playwright/test'
 import { FIX, TODAY, TOMORROW, USER_ID, YDAY } from './fixtures'
-import { check, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, rowState, slowDrag, waitCount } from './harness'
+import {
+  check, currentIso, deleteViaTap, gotoDate, grabPoint, leg, must, mustText, nextDay, numFrom, openApp, prevDay, rowState,
+  shiftIso, slowDrag, waitCount,
+} from './harness'
 import { seedFetchStub, type AuthMode } from './stub'
 
 /** window.__intakeCalls 的型別斷言（stub.ts 掛在 window 上，e2e 這邊只讀）。 */
@@ -95,7 +98,7 @@ test('undo 跨日期 1 — 刪一筆後切到前一天，提示條仍在（換�
   await waitCount(page, '.timeline .item', before - 1, '刪除沒生效，測不了跨日期 undo')
   await waitCount(page, '.undo-bar', 1, '刪除後應該有提示條')
 
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await waitCount(
     page,
     '.undo-bar',
@@ -111,7 +114,7 @@ test('undo 跨日期 2 — 別天按復原不改別天清單，切回原本那�
   await deleteViaTap(page)
   await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
 
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await waitCount(page, '.undo-bar', 1, '提示條應該跨日期還在')
   /* ydayCount 不能用單次 count() 快照：品項列包在 AnimatePresence 裡，換日期時
      「今天剩下那筆」的退場動畫跟「前一天那筆」的進場動畫會重疊一小段時間，這段重疊
@@ -127,7 +130,7 @@ test('undo 跨日期 2 — 別天按復原不改別天清單，切回原本那�
     '在別天按復原不該動到別天目前畫面的清單筆數——不可以把 A 日那筆插進 B 日',
   )
 
-  await page.click('button[aria-label="後一天"]')
+  await nextDay(page)
   await waitCount(
     page,
     '.timeline .item',
@@ -145,9 +148,9 @@ test('undo 跨日期 3 — 切走再切回、不按復原 → 那一筆仍不在
   await deleteViaTap(page)
   await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
 
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await page.waitForTimeout(500) // 換日期要等 fetch 落地才有東西可切回去，這裡沒有立即斷言
-  await page.click('button[aria-label="後一天"]')
+  await nextDay(page)
 
   await waitCount(
     page,
@@ -183,9 +186,9 @@ test('日期快取 1 — 切到前一天再切回今天，今天不會有新的 
   const today = calls1[0]! // 開機第一筆 fetch 就是今天，用它當比對基準，不必額外算日期字串
   const todayCountBefore = calls1.filter((d) => d === today).length
 
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await page.waitForTimeout(500) // 前一天可能命中快取也可能沒有，等它穩定（含它自己觸發的背景預取）
-  await page.click('button[aria-label="後一天"]')
+  await nextDay(page)
   await page.waitForTimeout(300)
 
   const calls2 = await intakeCalls(page)
@@ -198,7 +201,7 @@ test('日期快取 1 — 切到前一天再切回今天，今天不會有新的 
 
 test('日期快取 2 — 命中快取時畫面不出現「載入中…」（MutationObserver 全程監看，不是單次取樣）', async ({ page }) => {
   await openApp(page)
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await page.waitForTimeout(500) // 讓前一天穩定下來、今天留在快取裡
 
   /* click() 之前先掛好 observer：命中快取的 setRows 不是非同步的，一旦漏接就永遠補不回來，
@@ -219,7 +222,7 @@ test('日期快取 2 — 命中快取時畫面不出現「載入中…」（Muta
     check() // 掛上的當下也查一次，防止漏掉「掛上前就已經是這個狀態」的邊界
   })
 
-  await page.click('button[aria-label="後一天"]') // 切回今天：應該命中快取
+  await nextDay(page) // 切回今天：應該命中快取
   await page.waitForTimeout(300)
 
   const sawLoading = await page.evaluate(() => {
@@ -244,9 +247,9 @@ test('日期快取 4 — 刪一筆、切到前一天再切回來（走快取路�
   await deleteViaTap(page)
   await waitCount(page, '.timeline .item', before - 1, '刪除沒生效，測不了快取路徑的濾除')
 
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await page.waitForTimeout(500) // 讓今天的快取穩定（此時待刪仍在 5 秒窗內，還沒真的送出 DELETE）
-  await page.click('button[aria-label="後一天"]') // 切回今天：這次要走快取命中路徑，不是 loadDay 的 fetch 路徑
+  await nextDay(page) // 切回今天：這次要走快取命中路徑，不是 loadDay 的 fetch 路徑
 
   await waitCount(
     page,
@@ -270,9 +273,9 @@ test('日期快取 5 — 慢請求在使用者已經切回今天之後才落地�
   const todayItems = await page.locator('.timeline .item').count()
   check(todayItems > 0, '前置條件不成立：今天應該有品項才測得出「被蓋掉」')
 
-  await page.click('button[aria-label="前一天"]') // 命中快取，瞬間
+  await prevDay(page) // 命中快取，瞬間
   await page.waitForTimeout(300)
-  await page.click('button[aria-label="前一天"]') // 前兩天沒有快取 → 開始 1.5s 的慢 fetch
+  await prevDay(page) // 前兩天沒有快取 → 開始 1.5s 的慢 fetch
   await page.waitForTimeout(200)
   await page.click('button.date-today-btn') // 在慢請求落地前回到今天（命中快取，瞬間）
   await page.waitForTimeout(3000) // 等那支慢請求確實落地
@@ -342,45 +345,52 @@ const monthDay = (iso: string) => {
 
 test('v2.47 ① 往未來只開一天：今天可以往前走，明天就是上界', async ({ page }) => {
   await openApp(page)
-  const next = page.locator('button[aria-label="後一天"]')
-  check(!(await next.isDisabled()), '今天時「後一天」應可按（v2.47 起可以排明天）')
-
-  await next.click()
+  /* v2.53：界從「右箭頭停用」搬到日期格上——明天可選、明天的下一天停用，月曆的「下個月」只在
+     下個月第一天沒超過明天時可按。這條原本斷言「後一天停用」，鎖的是已被換掉的元件，
+     所以是改成相反方向的等價規則，不是放寬也不是刪掉。 */
+  await gotoDate(page, TOMORROW)
   await page.waitForTimeout(500)
   const title = ((await page.locator('h1.date-title').textContent()) ?? '').trim()
   check(
     title.endsWith(monthDay(TOMORROW)),
-    `按「後一天」應該落在明天（${monthDay(TOMORROW)}），實際 h1 是「${title}」`,
+    `選明天後 h1 應該是明天（${monthDay(TOMORROW)}），實際是「${title}」`,
   )
-  check(await next.isDisabled(), '到了明天，「後一天」必須停用——只開一天，不是開放任意未來')
   await must(page, 'button.date-today-btn', '「回今天」鈕（明天頁也要有，否則走得出去回不來）')
+
+  const after = shiftIso(TOMORROW, 1)
+  await page.locator('.datectl-title').click() // 展開月曆，停在明天所在的那個月
+  const cell = page.locator(`.datectl-month [data-date="${after}"]`)
+  if ((await cell.count()) > 0) {
+    check(await cell.isDisabled(), `明天的下一天（${after}）必須停用——只開一天，不是開放任意未來`)
+  } else {
+    check(
+      await page.getByRole('button', { name: '下個月' }).isDisabled(),
+      `明天的下一天（${after}）在下個月，「下個月」必須停用`,
+    )
+  }
 })
 
-/* deep review 補：**鈕在持有焦點的當下翻成 disabled，焦點會被瀏覽器甩回 body。**
-   v2.47 之前停用邊界是今天，接焦點的判斷寫成「會不會落在今天」剛好等價；邊界移到明天之後
-   兩者分家，而且**剛好錯開最常走的那條路**（今天→明天）。所以這條走鍵盤路徑：
-   用 focus() ＋ Enter，不是 click——`page.click` 在 WebKit 上不見得會讓 button 拿到焦點，
-   那樣測到的是「焦點本來就不在鈕上」，什麼都證明不了。 */
-test('v2.47 ①b 鍵盤按「後一天」到上界，焦點要被容器接住而不是掉回 body', async ({ page }) => {
+/* v2.53：原本這裡是「鍵盤按『後一天』到上界，焦點要被容器接住」——那顆鈕不存在了，焦點流失的
+   風險換了個形狀：月曆收合時被點的那格會卸載。同一個要守的事（鍵盤使用者不掉回 body）。 */
+test('v2.53 ①b 鍵盤在月曆選日期後收合，焦點回到標題，不是掉回 body', async ({ page }) => {
   await openApp(page)
-  const next = page.locator('button[aria-label="後一天"]')
-  await next.focus()
+  const title = page.locator('.datectl-title')
+  await title.focus()
+  await title.press('Enter')
+  await expect(title).toHaveAttribute('aria-expanded', 'true')
+  const cell = page.locator(`.datectl-month [data-date="${TODAY}"]`)
+  await cell.focus()
+  await cell.press('Enter')
+  await expect(title).toHaveAttribute('aria-expanded', 'false')
   check(
-    await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '後一天'),
-    '前提不成立：focus() 之後焦點不在「後一天」鈕上，這條測不到東西',
-  )
-  await next.press('Enter')
-  await page.waitForTimeout(500)
-  check(await next.isDisabled(), '前提不成立：按完之後「後一天」沒有變成停用')
-  check(
-    await page.evaluate(() => document.activeElement?.closest('.datectl') !== null),
-    '按到上界後焦點掉出 .datectl（鍵盤使用者失去位置）',
+    await page.evaluate(() => document.activeElement?.classList.contains('datectl-title') ?? false),
+    '選完日期、月曆收合後焦點沒有回到標題（掉回 body 或別處，鍵盤使用者失去位置）',
   )
 })
 
 test('v2.47 ② 明天問「還能吃」不是「攝取」——那正是這頁存在的理由', async ({ page }) => {
   await openApp(page)
-  await page.click('button[aria-label="後一天"]')
+  await nextDay(page)
   await page.waitForTimeout(500)
   /* 明天在 stub 裡是空的一天 ⇒ 還沒吃任何東西 ⇒ 「還能吃」＝整份目標。
      這一條同時證明**每日目標引擎在明天照常運作**（AC6）：數字不是 0、也不是「—」，
@@ -396,7 +406,7 @@ test('v2.47 ② 明天問「還能吃」不是「攝取」——那正是這頁�
   // 對照組：過去仍然是「攝取」。**沒有這一半，把標籤全站改成「還能吃」也會是綠的。**
   await page.click('button.date-today-btn')
   await page.waitForTimeout(400)
-  await page.click('button[aria-label="前一天"]')
+  await prevDay(page)
   await page.waitForTimeout(500)
   await mustText(page, '.gauge-lead', '攝取', '歷史日仍應顯示「攝取」——回頭看問的是那天吃了多少')
 })
@@ -405,7 +415,7 @@ test('v2.47 ③ 在明天記一筆會記到明天，今天的數字不受影響'
   await openApp(page)
   const todayNum = await numFrom(page, '.gauge-num')
 
-  await page.click('button[aria-label="後一天"]')
+  await nextDay(page)
   await page.waitForTimeout(500)
   await page.click('button.cta')
   await page.waitForSelector('.food-row', { timeout: 3000 })
@@ -454,6 +464,107 @@ test('v2.47 ④ 一開機就預取明天：按下箭頭時資料已經在手上'
     calls.includes(TOMORROW),
     `開機後應已預取明天（${TOMORROW}），實際打過的日期：${JSON.stringify(calls)}`,
   )
+})
+
+/* ── v2.53：日期元件（週列＋月曆，取代 ‹ 日期 › 膠囊）。決策與被推翻的舊決定見 DESIGN.md「日期切換」。
+   各鎖一件不同的事：分頁名稱／Escape／切週手勢與它的上界／小點資料來源。 */
+test('v2.53 分頁「日記」改名「飲食」', async ({ page }) => {
+  await openApp(page)
+  check(
+    (await page.locator('.tabbar .tab').first().getAttribute('aria-label')) === '飲食',
+    '今日頁的分頁 aria-label 應為「飲食」（v2.53 改名）',
+  )
+})
+
+test('v2.53 Escape 關閉月曆，焦點回標題', async ({ page }) => {
+  await openApp(page)
+  const title = page.locator('.datectl-title')
+  await title.click()
+  await expect(title).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Escape')
+  await expect(title).toHaveAttribute('aria-expanded', 'false')
+  check(
+    await page.evaluate(() => document.activeElement?.classList.contains('datectl-title') ?? false),
+    'Escape 關月曆後焦點沒有回到標題',
+  )
+})
+
+test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明天則不動', async ({ page }) => {
+  await openApp(page)
+  const box = await page.locator('.datectl-week').boundingBox()
+  check(box, '找不到週列')
+  const y = box.y + box.height / 2
+  const left = { x: box.x + box.width * 0.2, y }
+  const right = { x: box.x + box.width * 0.8, y }
+
+  await slowDrag(page, right, leg(right, left, 8)) // 往左滑＝下一週：今天 +7 超過明天，不該動
+  await page.waitForTimeout(300)
+  check((await currentIso(page)) === TODAY, '往左滑（下一週）超過明天的界，日期不該動')
+  /* 被擋下的滑動不可以留下「待搬焦點」的殘影：DateStrip 的 target > max 守衛在 App 的 goToDate 之外
+     是第二道，拿掉它日期照樣不動（mutation 實測：只靠日期斷言抓不到），但 refocus 旗標會停在
+     'day'，下一次展開月曆時焦點被搶到選中的那格，離開標題。 */
+  const title = page.locator('.datectl-title')
+  await title.focus()
+  await title.press('Enter')
+  await expect(title).toHaveAttribute('aria-expanded', 'true')
+  check(
+    await page.evaluate(() => document.activeElement?.classList.contains('datectl-title') ?? false),
+    '被擋下的滑動之後展開月曆，焦點被搶離了標題（refocus 旗標殘留）',
+  )
+  await title.press('Enter') // 收回週列，接下來的往右滑才有週列可滑
+  await expect(title).toHaveAttribute('aria-expanded', 'false')
+
+  await slowDrag(page, left, leg(left, right, 8)) // 往右滑＝前一週
+  await expect.poll(() => currentIso(page), '往右滑應回到前一週同一個星期').toBe(shiftIso(TODAY, -7))
+})
+
+test('v2.53 小點：刪光今天的品項後，晚到的月份查詢不會把今天的小點加回去', async ({ page }) => {
+  // stub 不看 filter：任何月份的查詢都會回這份窗口（含今天），等於「伺服器那邊今天還有紀錄」
+  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: TODAY, qty: 1, kcal: 100 }] })
+  const n = await page.locator('.timeline .item').count()
+  check(n > 0, '前提不成立：今天要有品項才能刪光')
+  for (let i = 0; i < n; i++) {
+    await deleteViaTap(page)
+    await waitCount(page, '.timeline .item', n - i - 1, '刪除沒生效')
+  }
+  await page.locator('.datectl-title').click()
+  const cell = page.locator(`.datectl-month [data-date="${TODAY}"]`)
+  await expect(cell, '前提：刪光之後今天沒有小點').not.toHaveClass(/is-marked/)
+  await page.getByRole('button', { name: '上個月' }).click() // 觸發另一個月的查詢，回來的窗口仍含今天
+  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: '下個月' }).click()
+  await expect(cell, '晚到的月份查詢把剛移掉的小點加回來了（本機已知這天沒有紀錄）').not.toHaveClass(/is-marked/)
+})
+
+test('v2.53 往未來滑夾到明天，不是整個丟掉；夾完還在同一週就不動', async ({ page }) => {
+  await openApp(page)
+  const from = shiftIso(TODAY, -4) // +7 天＝今天+3，一定越過明天（上界）
+  await gotoDate(page, from)
+  const box = await page.locator('.datectl-week').boundingBox()
+  check(box, '找不到週列')
+  const y = box.y + box.height / 2
+  const right = { x: box.x + box.width * 0.8, y } // 起手在右側——多半是已停用的格子，滑動照樣要接得到
+  const left = { x: box.x + box.width * 0.2, y }
+  await slowDrag(page, right, leg(right, left, 8))
+  await page.waitForTimeout(300)
+  const monday = (iso: string) => shiftIso(iso, -((new Date(`${iso}T00:00:00`).getDay() + 6) % 7))
+  const want = monday(from) !== monday(TOMORROW) ? TOMORROW : from
+  check(
+    (await currentIso(page)) === want,
+    `往左滑應${want === TOMORROW ? '夾到明天' : '不動（夾完還在同一週）'}（${want}），實際 ${await currentIso(page)}`,
+  )
+})
+
+test('v2.53 小點：有紀錄的日子（今天來自已載入的品項、其他天來自月份查詢）', async ({ page }) => {
+  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: YDAY, qty: 1, kcal: 100 }] })
+  await page.locator('.datectl-title').click()
+  await expect(page.locator(`.datectl-month [data-date="${TODAY}"]`), '今天有品項，該有小點').toHaveClass(/is-marked/)
+  const tomorrowCell = page.locator(`.datectl-month [data-date="${TOMORROW}"]`)
+  if ((await tomorrowCell.count()) > 0) {
+    await expect(tomorrowCell, '明天什麼都沒記，不該有小點（否則是「每格都有」的假綠）').not.toHaveClass(/is-marked/)
+  }
+  if (YDAY.slice(0, 7) !== TODAY.slice(0, 7)) await page.getByRole('button', { name: '上個月' }).click()
+  await expect(page.locator(`.datectl-month [data-date="${YDAY}"]`), '月份查詢回來有紀錄的日子，該有小點').toHaveClass(/is-marked/)
 })
 
 /* 後端連不上（2026-10-12 Supabase 被閒置暫停那次，v2.48；v2.51 離線開機改了這裡）。
