@@ -182,19 +182,44 @@ describe('appendEntry', () => {
     })
 
     it.each([
-      ['從未送過', { attempts: 0, failure: null }],
-      ['離線失敗', { attempts: 1, failure: 'offline' }],
-      ['暫時失敗', { attempts: 2, failure: 'transient' }],
       ['被拒絕', { attempts: 1, failure: 'rejected' }],
-      ['登入失效', { attempts: 1, failure: 'auth' }],
-    ] as const)('已有結果的舊 insert（%s）都清掉，delete 自己會把落地的列刪掉', (_label, state) => {
+      ['登入失效', { attempts: 2, failure: 'auth' }],
+    ] as const)('伺服器明確沒收（%s）的舊 insert 清掉；delete 照留（保守，對不存在的列無害）', (_label, state) => {
       const s = appendEntry(withEntry(state), del('a'), 2)
       expect(s.entries.map((e) => e.op)).toEqual(['delete'])
     })
 
-    it('正在送出（attempts>0、結果未回）的條目不清：回應曖昧時 delete 不能搶在它落地之前', () => {
-      const s = appendEntry(withEntry({ attempts: 1, failure: null }), del('a'), 2)
-      expect(s.entries.map((e) => e.op)).toEqual(['insert', 'delete'])
+    it.each([
+      ['正在送出', { attempts: 1, failure: null }],
+      ['逾時或連不上', { attempts: 1, failure: 'offline' }],
+      ['502／5xx', { attempts: 2, failure: 'transient' }],
+    ] as const)(
+      '結果曖昧的舊 insert（%s）不清：delete 不能搶在它可能的晚到落地之前，留著依 seq 先重送',
+      (_label, state) => {
+        const s = appendEntry(withEntry(state), del('a'), 2)
+        expect(s.entries.map((e) => e.op)).toEqual(['insert', 'delete'])
+      },
+    )
+
+    it('從未離開本機的 insert 被 delete 抵銷：兩者都不留，佇列是空的', () => {
+      const s = appendEntry(withEntry({ attempts: 0, failure: null }), del('a'), 2)
+      expect(s.entries).toEqual([])
+      expect(s.nextSeq).toBe(3) // seq 照樣前進，不重用
+    })
+
+    it('從未送過的 update 被 delete 清掉但 delete 要留：那一列可能早已在伺服器上', () => {
+      let s = appendEntry(emptySnapshot(), upd('a', { v: 2 }), 1)
+      s = appendEntry(s, del('a'), 2)
+      expect(s.entries.map((e) => e.op)).toEqual(['delete'])
+    })
+
+    it('同一列還有結果曖昧的舊條目時，delete 不能因為另一條未送的 insert 被抵銷就一起消失', () => {
+      // 第一條已送出且逾時（列可能已落地），第二條是之後又存的、從未送過
+      let s = appendEntry(emptySnapshot(), ins('a', { v: 1 }), 1)
+      s = { ...s, entries: [{ ...s.entries[0], attempts: 1, failure: 'offline' }] }
+      s = appendEntry(s, ins('a', { v: 2 }), 2)
+      s = appendEntry(s, del('a'), 3)
+      expect(s.entries.map((e) => [e.seq, e.op])).toEqual([[1, 'insert'], [3, 'delete']])
     })
 
     it('delete 之後才排進來的 insert 是重建，要留著', () => {
@@ -302,6 +327,15 @@ describe('重放順序（AC 14）', () => {
     expect(server.rows.get('t/a')).toEqual({ v: 3 })
   })
 
+  it('載入的 nextSeq 落後於已有的 seq：修正後再發號，不撞號', async () => {
+    let s = appendEntry(emptySnapshot(), ins('a'), 1)
+    s = { nextSeq: 1, entries: [{ ...s.entries[0], seq: 7 }] } // 儲存層的 nextSeq 壞了
+    const t = build(s)
+    const e = await t.queue.enqueue(ins('b'))
+    expect(e?.seq).toBe(8)
+    expect(t.mem.saved?.entries.map((x) => x.seq)).toEqual([7, 8])
+  })
+
   it('儲存層回傳的順序不可信：載入時重新依 seq 排好', async () => {
     let s = appendEntry(emptySnapshot(), ins('a', { v: 1 }), 1)
     s = appendEntry(s, upd('a', { v: 2 }), 2)
@@ -313,8 +347,9 @@ describe('重放順序（AC 14）', () => {
     expect(t.server.rows.get('t/a')).toEqual({ v: 3 })
   })
 
-  it('insert 落地但回應遺失後被刪：delete 蓋過它並把列刪掉，不留孤兒', async () => {
-    const t = build(null, (e) => (e.op === 'insert' ? 'lost503' : 'ok'))
+  it('insert 落地但回應遺失後被刪：先重送 insert、再 delete 把列刪掉，不留孤兒', async () => {
+    let insertCalls = 0
+    const t = build(null, (e) => (e.op === 'insert' && ++insertCalls === 1 ? 'lost503' : 'ok'))
     await t.queue.enqueue(ins('a'))
     await t.queue.flush('u1') // 列已在伺服器上，但佇列以為沒成功
     expect(t.server.rows.has('t/a')).toBe(true)
@@ -322,6 +357,32 @@ describe('重放順序（AC 14）', () => {
     await t.queue.flush('u1')
     expect(t.server.rows.has('t/a')).toBe(false)
     expect((await t.queue.summary('u1')).total).toBe(0)
+  })
+
+  it('離線新增又刪掉：佇列是空的，什麼都不送，也不會留下永遠卡住的 delete', async () => {
+    const t = build()
+    const first = await t.queue.enqueue(ins('a'))
+    expect(first).not.toBeNull()
+    const second = await t.queue.enqueue(del('a'))
+    expect(second).toBeNull() // 被抵銷，沒有條目
+    expect((await t.queue.summary('u1')).total).toBe(0)
+    expect(signOutPlan(await t.queue.summary('u1')).needsConfirm).toBe(false)
+    const r = await t.queue.flush('u1')
+    expect(t.sender.sent).toHaveLength(0)
+    expect(r.sent).toBe(0)
+  })
+
+  it('逾時（結果曖昧）的 insert 之後被刪：先重送 insert、再送 delete，列最後不在（晚到的落地被蓋過）', async () => {
+    let insertCalls = 0
+    const t = build(null, (e) => (e.op === 'insert' && ++insertCalls === 1 ? 'lost' : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    const r1 = await t.queue.flush('u1') // 落地但回應遺失，記成 offline
+    expect(r1.summary.failed.offline).toBe(1)
+    await t.queue.enqueue(del('a')) // 結果曖昧的 insert 不被清
+    expect(t.mem.saved?.entries.map((e) => e.op)).toEqual(['insert', 'delete'])
+    await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.op)).toEqual(['insert', 'insert', 'delete'])
+    expect(t.server.rows.has('t/a')).toBe(false)
   })
 
   it('delete 失敗時，後面的重建 insert 不得越過它（否則重建的列隨後被舊 delete 刪掉）', async () => {
@@ -546,8 +607,10 @@ describe('登出分流與帳號隔離（AC 13）', () => {
     const t = build()
     await t.queue.enqueue(ins('a', { v: 1 }, 'u1'))
     await t.queue.enqueue(ins('a', { v: 2 }, 'u2')) // 同一個 rowId
-    await t.queue.enqueue(del('a', 'u2'))
-    expect(t.mem.saved?.entries.map((e) => `${e.userId}/${e.op}`)).toEqual(['u1/insert', 'u2/delete'])
+    await t.queue.enqueue(upd('a', { v: 3 }, 'u2'))
+    await t.queue.enqueue(del('a', 'u2')) // u2 的整串被抵銷，u1 的不受影響
+    expect(t.mem.saved?.entries.map((e) => `${e.userId}/${e.op}`)).toEqual(['u1/insert'])
+    expect(t.mem.saved?.entries[0].payload).toEqual({ v: 1 })
   })
 
   it('clear 清空全部（主動登出）；seq 不歸零', async () => {
@@ -557,7 +620,7 @@ describe('登出分流與帳號隔離（AC 13）', () => {
     await t.queue.clear()
     expect((await t.queue.summary('u1')).total).toBe(0)
     const e = await t.queue.enqueue(ins('c'))
-    expect(e.seq).toBe(3)
+    expect(e?.seq).toBe(3)
   })
 
   it('被動掉線＝不呼叫 clear：條目與卡住標記都留著，重開 App、重新登入後能續送', async () => {
@@ -675,21 +738,27 @@ describe('並行', () => {
     expect(mem.saved?.entries).toEqual([])
   })
 
-  it('send 永不結束：逾時當離線處理，條目留著，之後的 flush 不被拖死（F2）', async () => {
+  it('send 永不結束：逾時當離線處理並 abort 傳給 sender 的 signal，條目留著，之後的 flush 不被拖死（F2）', async () => {
     const server = fakeServer()
     const mem = memoryStore()
     let calls = 0
+    let firstSignal: AbortSignal | undefined
     const queue = createQueue({
       store: mem.store,
       sendTimeoutMs: 15,
-      send: (e) => {
-        if (++calls === 1) return new Promise<SendResult>(() => {}) // 凍結的 fetch：既不 resolve 也不 reject
+      send: (e, signal) => {
+        if (++calls === 1) {
+          firstSignal = signal
+          return new Promise<SendResult>(() => {}) // 凍結的 fetch：既不 resolve 也不 reject
+        }
         server.apply(e)
         return Promise.resolve({ ok: true })
       },
     })
     await queue.enqueue(ins('a'))
+    expect(firstSignal).toBeUndefined()
     const r1 = await queue.flush('u1')
+    expect(firstSignal?.aborted).toBe(true) // 讓底層請求真的中止，晚到的落地才不會發生在記下失敗之後
     expect(r1.stoppedBy).toBe('offline')
     expect(mem.saved?.entries[0]).toMatchObject({ attempts: 1, failure: 'offline', lastError: '送出逾時' })
     const r2 = await queue.flush('u1')

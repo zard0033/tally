@@ -61,12 +61,17 @@ export interface NewEntry {
  *  只丟 `new Error(message)`，status 在那裡就掉了，不能拿它們當 sender。 */
 export type SendResult = { ok: true } | { ok: false; status: number; message: string }
 /** 傳送一條。**契約**（寫 adapter 的人要守，錯了就是丟資料，佇列在這頭看不出來）：
- *  - `ok: true` 必須代表「寫入確實生效」。update／delete 的 2xx 但 0 列受影響（RLS 擋下、列不存在）
+ *  - `ok: true` 必須代表「寫入確實生效」。insert／update 的 2xx 但 0 列受影響（RLS 擋下、列不存在）
  *    要自己檢查筆數並回失敗，否則佇列會把唯一的一份當成功移除。
+ *    **delete 例外：0 列＝目標狀態已達成，回 ok**（列本來就不在，或前一個請求已經刪掉了）。
+ *    RLS 擋下的 delete 與「列不在」在 PostgREST 看起來一樣、分不出來——接受這個缺口，
+ *    否則「離線新增又刪掉」這種最普通的流程會留下永遠卡住的 delete。
  *  - insert 必須是 upsert（以 rowId 為鍵）：回應遺失後重送若撞到 409，該列會被標 rejected 卡住。
  *  - update／delete 不要用 `.single()`：0 列會得 406，永遠重試不成功。
+ *  - `signal` 在逾時時會被 abort，**必須傳給底層 fetch**（supabase 的 `.abortSignal(signal)`）。
+ *    否則逾時只是佇列不再等，請求仍可能稍後落地——佇列對這種「晚到的落地」只能防到一半（見 appendEntry）。
  *  - 要在合理時間內 settle：佇列自己有逾時保險（sendTimeoutMs），但那是兜底，不是契約的替代。 */
-export type Sender = (entry: QueueEntry) => Promise<SendResult>
+export type Sender = (entry: QueueEntry, signal: AbortSignal) => Promise<SendResult>
 
 export interface QueueStore {
   /** 沒有存過就回 null。 */
@@ -113,26 +118,33 @@ export function classifyFailure(status: number): FailureKind {
 
 const keyOf = (e: { table: string; rowId: string }): string => `${e.table}\u0000${e.rowId}`
 
-/** 正在送出：attempts 已落地、結果還沒回來。送到一半被殺掉的條目重開後也長這樣。 */
-const inFlight = (e: QueueEntry): boolean => e.attempts > 0 && e.failure === null
+/** 確定「伺服器那邊沒有這一條的效果」：從未送過，或伺服器明確回 401／4xx（都在執行前就擋下）。
+ *  **結果曖昧的都不算**：正在送出（failure 為 null）、逾時或連不上（offline）、502／504／5xx（transient）——
+ *  請求可能已落地、或仍在路上，晚點才到。送到一半被殺掉的條目重開後也屬於這一類。 */
+const neverApplied = (e: QueueEntry): boolean =>
+  e.attempts === 0 || e.failure === 'rejected' || e.failure === 'auth'
 
-/** 加一條。delete 蓋過同一列、同一帳號的較舊條目（AC 14 的 tombstone）：
- *  它們不管送過沒有、落地沒有，delete 之後都會被它抹掉，留著只是白送。
- *  不用區分「已送出但回應遺失的 insert」——那種列可能已在伺服器上，但 delete 本身一定保留，
- *  之後送出時會把它刪掉（對不存在的列是無害的 no-op），不會留下孤兒。
- *  **例外：正在送出的那一條不清。** 它的結果還沒回來；若回的是曖昧回應（閘道 502／504，上游其實還在處理），
- *  清掉它再立刻送 delete，delete 會趕在它落地之前，之後列就復活了、佇列卻是空的。留著它，同一輪裡
- *  delete 被它擋住，等下一輪重送它（冪等）之後才輪到 delete。
+/** 加一條。delete 蓋過同一列、同一帳號「確定沒生效」的較舊條目（AC 14 的 tombstone）：留著只是白送。
+ *  **結果曖昧的較舊條目不清，留著依 seq 先重送、delete 排在後面**：清掉它再立刻送 delete，
+ *  delete 可能趕在它落地之前，之後列就復活了而佇列是空的——delete 一定保留只保證「之後會送」，
+ *  不保證「排在舊請求落地之後」。（舊請求若在重送之後才到，這裡防不到，靠 Sender 的 abort。）
+ *  另：這一列在佇列裡最早的條目是 insert（本機自己建的）、而且全部從未送出 → 這一列從沒離開過本機，
+ *  伺服器上不可能有它，delete 也不必存在（「離線新增、改了幾次、又刪掉」最後佇列是空的）。
+ *  最早的若是 update／delete，代表那一列來自伺服器，delete 要留。
  *  之後才排進來的 insert 是合法的重建，不受影響。 */
 export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): QueueSnapshot {
   if (input.op !== 'delete' && !input.payload) {
     throw new Error(`${input.op} 需要 payload`)
   }
   const target = keyOf(input)
-  const kept =
-    input.op === 'delete'
-      ? snap.entries.filter((e) => e.userId !== input.userId || keyOf(e) !== target || inFlight(e))
-      : snap.entries
+  const sameRow = (e: QueueEntry): boolean => e.userId === input.userId && keyOf(e) === target
+  const purged = input.op === 'delete' ? snap.entries.filter((e) => sameRow(e) && neverApplied(e)) : []
+  const kept = snap.entries.filter((e) => !purged.includes(e))
+  if (input.op === 'delete') {
+    const row = snap.entries.filter(sameRow).sort((a, b) => a.seq - b.seq)
+    const neverLeftDevice = row.length > 0 && row[0].op === 'insert' && row.every((e) => e.attempts === 0)
+    if (neverLeftDevice) return { nextSeq: snap.nextSeq + 1, entries: kept }
+  }
   const entry: QueueEntry = {
     seq: snap.nextSeq,
     op: input.op,
@@ -177,16 +189,19 @@ const removeEntry = (snap: QueueSnapshot, seq: number): QueueSnapshot => ({
   entries: snap.entries.filter((e) => e.seq !== seq),
 })
 
-/** 載入時依 seq 排好：重放順序只認它，不依賴儲存層回傳的順序。 */
-const normalize = (snap: QueueSnapshot): QueueSnapshot => ({
-  ...snap,
-  entries: [...snap.entries].sort((a, b) => a.seq - b.seq),
-})
+/** 載入時依 seq 排好：重放順序只認它，不依賴儲存層回傳的順序。nextSeq 也不盲信——
+ *  它若落後於已有的 seq，新條目會撞號，replaceEntry／removeEntry 就會同時動到兩條。 */
+const normalize = (snap: QueueSnapshot): QueueSnapshot => {
+  const entries = [...snap.entries].sort((a, b) => a.seq - b.seq)
+  const maxSeq = entries.reduce((m, e) => Math.max(m, e.seq), 0)
+  return { nextSeq: Math.max(snap.nextSeq, maxSeq + 1), entries }
+}
 
 /* ═══════════ 帶狀態的佇列 ═══════════ */
 
 export interface OfflineQueue {
-  enqueue(input: NewEntry): Promise<QueueEntry>
+  /** 回傳排進去的條目；若這次操作與佇列裡從未送出的條目互相抵銷（離線新增又刪掉）則回 null。 */
+  enqueue(input: NewEntry): Promise<QueueEntry | null>
   /** 依 seq 重放屬於 userId 的條目。同時只會有一輪在跑，重複呼叫（前景＋TOKEN_REFRESHED）共用同一輪，
    *  且保證 resolve 時「呼叫當下已在佇列裡的條目」都至少試過一次（併進來的呼叫只會發生在那一輪
    *  最後一次掃描之前；掃描之後的呼叫一律開新的一輪）。
@@ -211,8 +226,10 @@ interface Deps {
 
 const DEFAULT_SEND_TIMEOUT_MS = 20_000
 
-/** **同一個 store 全程序只能建一個實例**（模組單例）。兩個實例各自把整份快照寫回去，後寫的會蓋掉先寫的，
- *  seq 也會撞號。這裡不在執行期擋——「重開 App」本來就是在同一份儲存上重建——由持有實例的那一層保證。 */
+/** **同一份儲存同一時間只能有一個實例**。兩個實例各自把整份快照寫回去，後寫的會蓋掉先寫的，
+ *  seq 也會撞號。「全程序」不夠：同一個 origin 的多個分頁／視窗共用同一份 IndexedDB，它們是不同程序。
+ *  iOS 主畫面 App 只有一個實例，不受影響；桌機多分頁要由 adapter 層串行化（Web Locks）或每次操作前重讀。
+ *  這裡不在執行期擋——「重開 App」本來就是在同一份儲存上重建——由持有實例的那一層保證。 */
 export function createQueue({
   store,
   send,
@@ -239,12 +256,16 @@ export function createQueue({
 
   async function attemptSend(entry: QueueEntry): Promise<'ok' | { kind: FailureKind; message: string }> {
     let timer: ReturnType<typeof setTimeout> | undefined
+    const ctrl = new AbortController()
     const timedOut = new Promise<SendResult>((resolve) => {
-      timer = setTimeout(() => resolve({ ok: false, status: 0, message: '送出逾時' }), sendTimeoutMs)
+      timer = setTimeout(() => {
+        ctrl.abort() // 讓底層請求真的中止，晚到的落地才不會發生在我們記下「失敗」之後
+        resolve({ ok: false, status: 0, message: '送出逾時' })
+      }, sendTimeoutMs)
     })
     try {
       // 逾時當 status 0：attempts 已先落地，語意與「回應遺失」相同——可能已落地，下次重送是冪等的
-      const r = await Promise.race([send(entry), timedOut])
+      const r = await Promise.race([send(entry, ctrl.signal), timedOut])
       if (r.ok) return 'ok'
       return { kind: classifyFailure(r.status), message: r.message }
     } catch (e) {
@@ -330,7 +351,7 @@ export function createQueue({
         const snap = await current()
         const next = appendEntry(snap, input, now())
         await commit(next)
-        return next.entries[next.entries.length - 1]
+        return next.entries.find((e) => e.seq === snap.nextSeq) ?? null
       }),
 
     flush(userId) {

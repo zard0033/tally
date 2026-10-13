@@ -393,7 +393,7 @@ headless WebKit，**把預覽伺服器真的關掉**（網路確實沒了）後�
 2. ~~設計樣張~~（2026-10-13 評估後免做：(a) 之後甲沒有新元件。離線指示、「N 筆未同步」、卡住四種文案的樣張**移到階段 2 spec**，並須同時改寫 DESIGN.md「寫入失敗（記一筆）」那列的「不做離線佇列（YAGNI）」——階段 2 佇列接上就推翻它，照通則 ⑫ 明文改，不留矛盾）
 3. SW＋救援頁＋e2e 的 `serviceWorkers: 'block'` 設定
 4. ✔ 離線開機快速路徑（AC 2–4）、登出分流旗標（AC 13 的訊息分流；佇列的保留／清除在步驟 5 接上）——2026-10-13 完成，見 DESIGN.md v2.51
-5. ✔ 佇列核心＋vitest＋mutation——2026-10-13 完成，`src/lib/queue.ts`＋`queue.test.ts`（65 條）。**刻意不在這步**：IndexedDB adapter、真正的 Supabase sender、`App.tsx` 的實例與登出接線（`signOutPlan`／`clear` 已備好）——甲裡沒有呼叫者，現在寫只是一份驗不到的碼，留給階段 2 第一個呼叫者；sender 的契約已寫在 `queue.ts` 的 `Sender` 註解
+5. ✔ 佇列核心＋vitest＋mutation——2026-10-13 完成，`src/lib/queue.ts`＋`queue.test.ts`（70 條）。**刻意不在這步**：IndexedDB adapter、真正的 Supabase sender、`App.tsx` 的實例與登出接線（`signOutPlan`／`clear` 已備好）——甲裡沒有呼叫者，現在寫只是一份驗不到的碼，留給階段 2 第一個呼叫者；sender 的契約已寫在 `queue.ts` 的 `Sender` 註解
 6. ~~weight 接線與設定頁指示~~（Q0 已定 (a)，不做）
 7. 真機演練（含壞 SW 救援）
 8. 回寫 active.md、四份測試條數文件（甲無 UI 變動，DESIGN.md 不動）
