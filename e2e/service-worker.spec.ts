@@ -166,25 +166,35 @@ async function coldStartOffline(page: Page, expiresInSeconds: number): Promise<n
     },
     { key: STORAGE_KEY, expiresAt: Math.floor(Date.now() / 1000) + expiresInSeconds },
   )
-  // 之後每次載入都讓 supabase 的請求立刻失敗（跟 iOS 飛航模式下 fetch 的反應一致：TypeError）
+  // 之後每次載入都讓 supabase 的請求立刻失敗（跟 iOS 飛航模式下 fetch 的反應一致：TypeError）。
+  // 計數＋事後斷言：覆寫若沒套用，請求會打到真的 Supabase 拿到 401，postgrest-js 不重試、直接亮出
+  // 一模一樣的「讀不到你的資料／重試」——沒有這個計數，token 有效那條會在沒驗到離線行為時綠燈（審查抓到）
   await page.addInitScript(() => {
+    const w = window as unknown as { __supabaseRejected: number }
+    w.__supabaseRejected = 0
     const real = window.fetch.bind(window)
     // @ts-expect-error — 刻意覆寫全域 fetch
     window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
       const u = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
-      if (u.includes('supabase.co')) return Promise.reject(new TypeError('Load failed'))
+      if (u.includes('supabase.co')) {
+        w.__supabaseRejected++
+        return Promise.reject(new TypeError('Load failed'))
+      }
       return real(input, init)
     }
   })
 
+  /* 伺服器關掉不影響量測結果（外殼由 SW 供應、supabase 請求由上面的覆寫擋下），它證明的是
+     「外殼確實來自 service worker」——伺服器在，這次載入就可能走網路，那就不是離線冷啟動了。 */
   await stopServer()
-  expect(await isUp(), '伺服器沒有真的關掉，量到的就不是離線冷啟動').toBe(false)
+  expect(await isUp(), '伺服器沒有真的關掉，量到的就不是 SW 供應的冷啟動').toBe(false)
 
   const t0 = Date.now()
   await page.goto(`${ORIGIN}/tally/`, { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料', { timeout: 30_000 })
   const elapsed = Date.now() - t0
-  expect(await page.locator('#view-login').count(), '離線被當成沒登入，落到了登入頁').toBe(0)
+  const rejected = await page.evaluate(() => (window as unknown as { __supabaseRejected: number }).__supabaseRejected)
+  expect(rejected, '失敗不是來自注入的 TypeError（覆寫沒套用？請求打到了真的 Supabase）').toBeGreaterThan(0)
   return elapsed
 }
 
@@ -196,12 +206,17 @@ test('離線冷啟動、token 已過期：實際 6 秒內亮離線提示（AC 2�
   await expect(page.locator('.notice .action-btn')).toHaveText('重新載入') // 離線優先路徑的按鈕
 })
 
-test('離線冷啟動、token 仍有效：實際 12 秒內亮失敗提示，並記下量到的毫秒數（真機回報約 3 秒）', async ({ page }) => {
+/* 這條的量測值約 7 秒，來源是 postgrest-js 對 GET 網路錯誤的內建重試（1＋2＋4 秒），不是 DB_TIMEOUT
+   （注入的 TypeError 是立刻失敗，8 秒逾時從頭到尾沒被碰到）。所以它守的是「合理範圍內」，不是某個
+   產品常數；supabase-js 若升級改了重試設定，這裡會先紅。**不要拿它跟真機回報的秒數比**：那是真實網路堆疊。 */
+test('離線冷啟動、token 仍有效：12 秒內亮失敗提示（注入失敗；數字來自 postgrest-js 的重試退避）', async ({ page }) => {
   const ms = await coldStartOffline(page, 3600)
   test.info().annotations.push({ type: 'cold-start-valid-token', description: `${ms} ms` })
   console.log(`[cold-start] token 有效：${ms} ms`)
-  expect(ms, `冷啟動花了 ${ms} ms，超過 DB_TIMEOUT 8 秒加重試退避的合理範圍`).toBeLessThan(12_000)
+  expect(ms, `冷啟動花了 ${ms} ms，超出 postgrest-js 重試退避（約 7 秒）加載入的合理範圍`).toBeLessThan(12_000)
   await expect(page.locator('.notice .action-btn')).toHaveText('重試') // 一般失敗提示的按鈕
+  // friendlyError 把注入的 TypeError 轉成這句；真 401 的訊息不會是它，這條斷言把兩者分開
+  await expect(page.locator('.notice'), '失敗原因不是離線的 TypeError').toContainText('連不上網路')
 })
 
 /* 這條驗的是「新版裝好後不自動接手」（skipWaiting: false）。它**沒有**覆蓋 spec 說的另一個風險——
