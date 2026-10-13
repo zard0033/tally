@@ -16,8 +16,8 @@
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`（iOS 鍵盤三題已真機驗過結案；`?debug` 讀數列已移除，要用從 git 撿）。
 - **測試**：`npx vitest run` 296/296（含 `queue` 70、`ingest-weight` 54、`baseline` 46、`session` 18）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
-  **114/114 全綠**（約 2 分，十二個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
-  2026-08-12 又漏算一條被 review 抓到；且條數（114／12／296）有四份文件在寫（CLAUDE.md、本檔、
+  **116/116 全綠**（約 2 分，十二個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
+  2026-08-12 又漏算一條被 review 抓到；且條數（116／12／296）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
 
 ## 已驗證事實
@@ -119,7 +119,7 @@
    **推翻先前「建議不自建」與 spec「不做：運動」**）。五階段：0 離線實測→1 PWA 離線讀寫→2 訓練記錄最小版（與 Gymwork 並行 1–2 週後停用）→3 課表／計時器→4 分析與運動×飲食並排。
    **階段 0 已完成**（只剩七天觀察，見未解失敗）。**階段 1 範圍定為甲**（2026-10-13 使用者核可：SW、離線開機、寫入佇列地基，飲食頁不動；佇列只做模組＋測試、無呼叫者，「能記、連線後同步正確」的真機驗證移到階段 2 出口；Q1 登出時佇列非空先確認；Q2 Safari 與主畫面兩邊都能用、不擋）。決策與 AC 全文在 spec.md「階段 1 甲 spec」，不在這裡重寫。**進度（步驟 1–5 已 push 並部署，真機尚未驗）**：步驟 1 SW 工具 spike（採 vite-plugin-pwa 2.0.0）→ 步驟 2 設計樣張免做（甲無新元件；指示與未同步樣張移到階段 2，並須同時改寫 DESIGN.md「不做離線佇列（YAGNI）」那列）→ 步驟 3 `6ca796f` SW＋救援頁＋e2e＋deploy.yml 的 `self_destroy_sw` 手動選項（**[追加]**）→ 步驟 4 `51705c5` 離線開機快速路徑＋登出分流（DESIGN v2.51，推翻 v2.48 開機畫面決策）。vitest 226／e2e 112，兩輪 review 的發現都已處理。→ 步驟 5 佇列核心 `42b695b`＋review 修正 `5b6b049`：`src/lib/queue.ts`＋`queue.test.ts`，vitest 296／e2e 未動（無 UI 變動）。結構＝純函式（`appendEntry`／`classifyFailure`／`summarize`／`signOutPlan`）＋帶狀態的 `createQueue`（注入 `QueueStore`／`Sender`）；重放依 `seq`、同一列失敗擋後面、送出前先落地、單飛＋逾時（會 abort 傳給 sender 的 signal）。**delete 的清除規則**：只清「確定沒生效」的舊條目（從未送過、或 401／4xx），**結果曖昧的（送出中、逾時、5xx）留著依序重送**；從未離開本機的整串（最早是 insert、全未送）連 delete 一起抵銷。mutation 約 30 條全紅。review 兩輪：自己找的獨立 reviewer 抓 4 條；push 前 `orch-review`（file-diff 變體，4 維度）APPROVE、0 blocking、12 advisory，其中 sender 契約矛盾（delete 0 列）、逾時後的曖昧條目被清掉、nextSeq 未驗證三類已修；多分頁契約已寫進 `createQueue` 註解。**未處理（LOW）**：慢網路 2 秒閃提示且按「重新載入」可能打斷 refresh（上方已知取捨）、登出失敗被吞（既有行為）。
    **刻意沒做（與先前寫的「登出時清佇列接在 userSignOutRef 上」不同，請裁決）**：IndexedDB adapter、真正的 Supabase sender、`App.tsx` 的佇列實例與登出接線。理由：甲裡沒有呼叫者，這些碼現在驗不到，而佇列是資料唯一的一份，寧可等階段 2 第一個真實呼叫者再寫並真機驗；`App.tsx` 那段註解已改成與事實一致。**階段 2 要補的契約**寫在 `queue.ts` 的 `Sender` 註解（2xx 但 0 列要判失敗、insert 用 upsert、update／delete 不用 `.single()`）；`rejected` 標籤不等於「該放棄」（跨列外鍵 409 下輪會自癒）；全程序只能建一個實例。
-   **步驟 7 真機第一輪（2026-10-13）**：測 1 飛航冷啟動（token 有效）約 3 秒亮提示、按鈕「重試」——原始碼推算 postgrest-js 的 GET 重試退避最長約 7 秒，與「3 秒」對不上，**原因未查**，行為先維持；測 2 關飛航**不會自動恢復**＝AC 4 漏洞（只掛在 token 過期那條），已修並**真機重驗通過**（DESIGN v2.52：一般失敗提示亮著時 `online` 事件原地重撈；e2e 114；2026-10-13 使用者回報關飛航後沒按重試就自己恢復）；測 4 登出 OK。**還沒做**：測 3（token 過期後閒置 ≥1 小時再飛航冷啟動；使用者感覺「偏久」但未計時，要量）、救援演練（deploy 勾 self_destroy_sw → 驗 SW 已移除 → 回正常版）。**下一步＝**測 3、救援演練；再步驟 8。**push 前走全域 git-push gate。**
+   **步驟 7 真機第一輪（2026-10-13）**：測 1 飛航冷啟動（token 有效）約 3 秒亮提示、按鈕「重試」——原始碼推算 postgrest-js 的 GET 重試退避最長約 7 秒，與「3 秒」對不上，**原因未查**，行為先維持；測 2 關飛航**不會自動恢復**＝AC 4 漏洞（只掛在 token 過期那條），已修並**真機重驗通過**（DESIGN v2.52：一般失敗提示亮著時 `online` 事件原地重撈；e2e 114；2026-10-13 使用者回報關飛航後沒按重試就自己恢復）；測 4 登出 OK。**測 3 已用模擬量到**（真 SW＋真的關掉伺服器＋真實時鐘，`service-worker.spec` 兩條，headless WebKit）：token 過期 **約 2.6 秒**（舊行為 26 秒），token 有效 **約 7.5 秒**＝postgrest-js GET 重試退避 1＋2＋4 秒、與原始碼推算吻合；使用者真機回報有效 token 約 3 秒，比模擬快，原因未查。**有效 token 這條比過期那條慢**是已知取捨（要縮短＝一次失敗就亮提示、背景繼續重試，會在慢網路閃錯誤，另開一題）。**還沒做**：救援演練的手機端（AC 7 ①② 的 SW 移除與別人快取不動已由 headless 真伺服器測過；手機上只剩 iOS 專屬行為）。**下一步＝**救援演練（可選）；再步驟 8。**push 前走全域 git-push gate。**
    **待使用者決定**：Q3＝設定頁要不要放「重置離線快取」入口（建議不加；主畫面 App 沒有網址列，`reset.html` 進不去，見 spec AC 7）；2 秒門檻在慢網路上會閃一下含「專案被閒置暫停」的提示（DESIGN v2.51 取捨，緩解＝延後提示幾百毫秒）。**尚未真機驗證**：SW 與離線開機（AC 1、7）。**順帶（與本案無關，未處理）**：主 repo `npm audit` 本來就有 1 critical／13 high。使用者已接受：訓練不寫進 Apple 健康；運動熱量不進任何計算。待問：有氧怎麼記、RPE 要不要（階段 2 spec 前）。
 
 5. **實測維持熱量（spec.md 同名節；流程 A；v2.49 卡片＋v2.50 回溯，兩輪 review 都處理；體重門檻**使用者裁決維持 4**，別再提 6）**：

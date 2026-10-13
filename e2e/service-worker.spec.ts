@@ -140,6 +140,70 @@ test('首次安裝後，伺服器關掉也能開 App；快取只含同源外殼�
   expect(assetsOk).toEqual([true, true, true])
 })
 
+/* 冷啟動時間（AC 2）：真 SW、真的關掉伺服器、**真實時鐘**——interaction.spec 用的是假時鐘快轉，
+   驗得到「有沒有走到」，量不到「實際等多久」。這兩條就是量實際毫秒數：token 過期那條是健身房隔夜再開
+   的情境（舊行為約 26 秒），token 有效那條是一小時內再開。
+
+   上限刻意放寬（過期 6 秒、有效 12 秒）：設計值是 2 秒（FAST_BOOT_MS），workers 2 的負載下會晚幾百毫秒；
+   這裡要擋的是「退回 26 秒」那種量級的回歸，不是 2 秒本身。實測毫秒數寫進 annotation 與 console。 */
+const STORAGE_KEY = 'sb-bpnucfejoiazmsnsuzdb-auth-token' // 同步自 src/lib/config.ts 的 SUPABASE_URL（stub.ts 同值）
+
+async function coldStartOffline(page: Page, expiresInSeconds: number): Promise<number> {
+  await installAndControl(page)
+  await page.evaluate(
+    ({ key, expiresAt }) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          access_token: 'stub-token',
+          refresh_token: 'stub-refresh',
+          expires_at: expiresAt,
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: { id: 'u-stub', aud: 'authenticated', email: 'stub@example.com', app_metadata: {}, user_metadata: {} },
+        }),
+      )
+    },
+    { key: STORAGE_KEY, expiresAt: Math.floor(Date.now() / 1000) + expiresInSeconds },
+  )
+  // 之後每次載入都讓 supabase 的請求立刻失敗（跟 iOS 飛航模式下 fetch 的反應一致：TypeError）
+  await page.addInitScript(() => {
+    const real = window.fetch.bind(window)
+    // @ts-expect-error — 刻意覆寫全域 fetch
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
+      if (u.includes('supabase.co')) return Promise.reject(new TypeError('Load failed'))
+      return real(input, init)
+    }
+  })
+
+  await stopServer()
+  expect(await isUp(), '伺服器沒有真的關掉，量到的就不是離線冷啟動').toBe(false)
+
+  const t0 = Date.now()
+  await page.goto(`${ORIGIN}/tally/`, { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料', { timeout: 30_000 })
+  const elapsed = Date.now() - t0
+  expect(await page.locator('#view-login').count(), '離線被當成沒登入，落到了登入頁').toBe(0)
+  return elapsed
+}
+
+test('離線冷啟動、token 已過期：實際 6 秒內亮離線提示（AC 2；舊行為約 26 秒）', async ({ page }) => {
+  const ms = await coldStartOffline(page, -3600)
+  test.info().annotations.push({ type: 'cold-start-expired-token', description: `${ms} ms` })
+  console.log(`[cold-start] token 已過期：${ms} ms`)
+  expect(ms, `冷啟動花了 ${ms} ms，應接近 2 秒（FAST_BOOT_MS），遠低於舊行為的 26 秒`).toBeLessThan(6_000)
+  await expect(page.locator('.notice .action-btn')).toHaveText('重新載入') // 離線優先路徑的按鈕
+})
+
+test('離線冷啟動、token 仍有效：實際 12 秒內亮失敗提示，並記下量到的毫秒數（真機回報約 3 秒）', async ({ page }) => {
+  const ms = await coldStartOffline(page, 3600)
+  test.info().annotations.push({ type: 'cold-start-valid-token', description: `${ms} ms` })
+  console.log(`[cold-start] token 有效：${ms} ms`)
+  expect(ms, `冷啟動花了 ${ms} ms，超過 DB_TIMEOUT 8 秒加重試退避的合理範圍`).toBeLessThan(12_000)
+  await expect(page.locator('.notice .action-btn')).toHaveText('重試') // 一般失敗提示的按鈕
+})
+
 /* 這條驗的是「新版裝好後不自動接手」（skipWaiting: false）。它**沒有**覆蓋 spec 說的另一個風險——
    新 SW 啟用時清掉舊 precache、舊頁面要的舊雜湊檔就沒了：這裡新舊版的 precache 清單相同，
    清理不會動到任何條目。那一半由 workbox 的 cleanupOutdatedCaches 語意保證（舊快取留到新版啟用才清），
