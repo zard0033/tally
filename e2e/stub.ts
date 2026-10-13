@@ -32,6 +32,9 @@ export interface StubOptions {
    *  expires_at 三欄）。用來守那條退路：本機 session 一般會走離線快速路徑（v2.51），
    *  開機畫面的慢態／連不上後端只剩這條走得到。要搭配 authMode（過期才會觸發 refresh）。 */
   unparseableSession?: boolean
+  /** 資料請求（/rest/v1/）全部連不上、認證端點照常——模擬「token 有效但沒網路」（一小時內再開 App）。
+   *  跟 authMode 不同：不種過期 session，所以不會走離線優先那條。測試中途改 `window.__dataDown` 模擬網路回來。 */
+  dataDown?: boolean
 }
 
 export type AuthMode = 'down' | 'hang' | 'ok' | 'revoked'
@@ -44,7 +47,7 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown }) => {
       const stored: Record<string, unknown> = {
         access_token: 'stub-token',
         refresh_token: 'stub-refresh',
@@ -79,10 +82,13 @@ export async function seedFetchStub(
         __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
         __authMode: AuthMode | null
+        /* 設 true＝資料請求連不上（見 StubOptions.dataDown）。 */
+        __dataDown: boolean
         /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
         __kcalFail: boolean
       }
       w.__authMode = authMode
+      w.__dataDown = dataDown
       w.__kcalFail = false
       w.__writes = []
       w.__allFetches = []
@@ -153,7 +159,7 @@ export async function seedFetchStub(
         /* 'down'＝整條網路斷了（DNS 被撤、飛航模式），不只認證端點：資料 REST 一樣連不上。
            只斷 /auth/v1/ 的話，supabase-js 放棄 refresh 後會拿 anon key 繼續發請求、而這裡的 REST
            照常回資料，「離線」在 stub 裡自己痊癒了——真網路斷時不會（離線提示測試的前提）。 */
-        if (w.__authMode === 'down' && u.includes('/rest/v1/')) throw new TypeError('Load failed')
+        if ((w.__authMode === 'down' || w.__dataDown) && u.includes('/rest/v1/')) throw new TypeError('Load failed')
 
         if (u.includes('supabase.co') && !u.includes('/rest/v1/')) {
           w.__blocked.push(u)
@@ -232,6 +238,7 @@ export async function seedFetchStub(
       intakeDelayMs: opts.intakeDelayMs ?? 0,
       authMode: opts.authMode ?? null,
       unparseableSession: opts.unparseableSession ?? false,
+      dataDown: opts.dataDown ?? false,
     },
   )
 }

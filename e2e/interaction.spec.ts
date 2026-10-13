@@ -601,6 +601,48 @@ test('離線提示亮著時收到 online 事件：自動重新載入；沒有離
   expect(await mark(), '頁面沒有真的重載（標記還在）').toBeUndefined()
 })
 
+test('token 有效但資料請求連不上：亮「重試」提示；網路回來（online 事件）原地自動重撈，不重載頁面、不必按鈕', async ({ page }) => {
+  // 真機回報（2026-10-13，一小時內再開）：這條不走離線優先，原本只能手動按「重試」
+  await page.clock.install()
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { dataDown: true })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  // postgrest-js 對 GET 的網路錯誤退避重試 1＋2＋4 秒才放棄。要分段快轉：一口氣跳的話，每一段退避的
+  // 續行（promise）要等這次 tick 結束才跑，下一段計時器根本還沒排進去（waitRecovered 同理）
+  for (let i = 0; i < 30 && (await page.locator('.notice .headline').count()) === 0; i++) {
+    await page.clock.runFor(1000)
+  }
+  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  await expect(page.locator('.notice .action-btn'), '這條不是離線優先路徑，按鈕應是「重試」').toHaveText('重試')
+  await expect(page.locator('.notice'), '不該出現離線優先那段診斷').not.toContainText('Resume')
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __dataDown: boolean; __mark: number }
+    w.__dataDown = false // 網路回來
+    w.__mark = 1
+    window.dispatchEvent(new Event('online'))
+  })
+  await waitRecovered(page)
+  expect(
+    await page.evaluate(() => (window as unknown as { __mark?: number }).__mark),
+    '被整頁重載了（標記不見）：這條該原地重撈',
+  ).toBe(1)
+
+  // 恢復之後旗標要歸零：之後的 online 事件不可再撈（否則每次網路抖動都白打一輪）
+  const settled = (await intakeCalls(page)).length
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await page.clock.runFor(1000)
+  expect((await intakeCalls(page)).length, '已經恢復了，online 事件卻又重撈一次').toBe(settled)
+})
+
+test('資料載入沒有失敗時收到 online 事件：不重撈', async ({ page }) => {
+  await openApp(page)
+  const before = (await intakeCalls(page)).length
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await page.waitForTimeout(500)
+  expect((await intakeCalls(page)).length, '沒有失敗的載入卻被 online 事件重撈了').toBe(before)
+})
+
 test('正常使用中收到 online 事件：不重新載入（只有離線提示亮著才接手）', async ({ page }) => {
   await openApp(page)
   await page.evaluate(() => {

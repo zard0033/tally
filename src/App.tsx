@@ -113,6 +113,9 @@ export default function App() {
      TOKEN_REFRESHED 不要在它們還沒結束時重複再撈一次。 */
   const bootedFromLocalRef = useRef(false)
   const offlinePendingRef = useRef(false)
+  /* token 還有效、但資料請求連不上（健身房一小時內再開 App 的常態）：這條不走離線優先，亮的是一般的
+     「讀不到你的資料／重試」。旗標讓 online 事件知道「有一個失敗的載入在等人」，網路回來時自己重撈。 */
+  const loadFailedRef = useRef(false)
   /* 背景請求還在飛時 refresh 成功了：請求在建構當下就掛了 8 秒的 AbortSignal.timeout，多半在被放行前
      就已逾時作廢，光等它們落地會永遠等不到。記下來，等它們結束後若離線旗標還在就補撈一次。 */
   const refetchAfterPendingRef = useRef(false)
@@ -235,6 +238,7 @@ export default function App() {
       )
     }
     try {
+      loadFailedRef.current = false
       const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntake(date), listFoods()])
       bootedFromLocalRef.current = false // 資料回來了＝連得上，不再是離線優先狀態
       if (!p || !w) {
@@ -266,7 +270,10 @@ export default function App() {
       prefetchAdjacent(date)
     } catch (e) {
       // 離線提示已經在畫面上了；這裡的錯是那批背景請求終於放棄，不要拿較不精準的訊息蓋掉它
-      if (!offlineFirst) showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
+      if (!offlineFirst) {
+        loadFailedRef.current = true
+        showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
+      }
     } finally {
       if (offlineFirst) {
         offlinePendingRef.current = false
@@ -751,12 +758,15 @@ export default function App() {
     }
   }, [])
 
-  /* 離線提示亮著時網路回來：重新載入頁面。不叫 supabase-js 再試一次——它對同一顆 refresh token 的
-   * 失敗有 60 秒冷卻，reload 才清得掉。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
-   * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。 */
+  /* 網路回來（AC 4）。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
+   * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。兩種情形：
+   * - 離線提示亮著（靠本機 session 進來、refresh 還沒成功）：重新載入頁面。不叫 supabase-js 再試一次——
+   *   它對同一顆 refresh token 的失敗有 60 秒冷卻，reload 才清得掉。
+   * - 一般的「讀不到你的資料」亮著（token 有效、只是資料請求失敗）：沒有冷卻問題，原地重撈。 */
   useEffect(() => {
     const onOnline = () => {
       if (bootedFromLocalRef.current) location.reload()
+      else if (loadFailedRef.current) void loadRef.current(currentDateRef.current)
     }
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
