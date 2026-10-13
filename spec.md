@@ -400,9 +400,9 @@ headless WebKit，**把預覽伺服器真的關掉**（網路確實沒了）後�
 
 ### 階段 2 spec（2026-10-13 起草，**★ 待核可**；核可前不動碼、不動 schema）
 
-**範圍**：重訓記錄、有氧記錄、動作庫（預填＋要點）、歷史、離線寫入與離線可讀（**接上階段 1 甲的佇列，第一個真實呼叫者**）、同步狀態指示。**不含**：課表編輯、組間計時器、RPE、GIF／動作圖庫、1RM／趨勢圖（階段 4）、任何熱量計算。
+**範圍**：重訓記錄、課表、有氧記錄、動作庫（預填＋要點）、歷史、離線寫入與離線可讀（**接上階段 1 甲的佇列，第一個真實呼叫者**）、同步狀態指示。**不含**：組間計時器、RPE、GIF／動作圖庫、1RM／趨勢圖（階段 4）、任何熱量計算、課表的週期排程。
 
-**使用者裁決（2026-10-13 訪談）**：① 有氧要記**速度、坡度**，並開一個**「機器／遊戲顯示的熱量」欄讓使用者自填**，只存不算、留給未來推估 ② 有氧種類＝跑步機坡度健走、Switch 2 有氧拳擊（在家做，不在健身房） ③ RPE 不做（備註已夠用） ④ 動作庫先預填，另加「要點」欄（在器材前看的提示，取代 Gymwork 的 GIF 指南；GIF 無所謂） ⑤ 歷史紀錄階段 2、1RM／趨勢階段 4 ⑥ 「用歷史推估該吃多少」是**另一條獨立的 journey**（active.md 續點 7），階段 2 先做、產生資料。
+**使用者裁決（2026-10-13 訪談）**：① 有氧要記**速度、坡度**，並開一個**「機器／遊戲顯示的熱量」欄讓使用者自填**，只存不算、留給未來推估 ② 有氧種類＝跑步機坡度健走、Switch 2 有氧拳擊（在家做，不在健身房） ③ RPE 不做（備註已夠用） ④ 動作庫先預填，另加「要點」欄（在器材前看的提示，取代 Gymwork 的 GIF 指南；GIF 無所謂） ⑤ 歷史紀錄階段 2、1RM／趨勢階段 4 ⑥ 「用歷史推估該吃多少」是**另一條獨立的 journey**（active.md 續點 7），階段 2 先做、產生資料。⑦ **課表要做**（Gymwork 的用法：開始訓練時可空白一個個加動作，或選預先建好的課表；使用者有菜單 A、B 輪替，所以「複製上次」會帶出另一份、不夠用，原案作廢，課表從階段 3 提前） ⑧ **肌群分七類，沿用 Gymwork**：胸部、背部、下半身、肩膀、手臂、腹肌、其他。
 
 #### 資料表（**動 schema＝先核可**；DDL 草案，核可後由使用者在 Supabase Dashboard SQL Editor 執行，我提供回滾 SQL）
 
@@ -414,11 +414,31 @@ create table exercises (
   user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name         text not null check (length(btrim(name)) > 0),
   muscle_group text not null check (muscle_group in
-                 ('chest','back','shoulder','biceps','triceps','quads','hamstrings','glutes','calves','core','other')),
+                 ('chest','back','legs','shoulder','arms','core','other')),   -- 胸部／背部／下半身／肩膀／手臂／腹肌／其他（沿用 Gymwork）
   tips         text,                                   -- 動作要點；與每次訓練的備註分開
   archived     boolean not null default false,         -- 同 foods：不真刪，歷史才不爛
   created_at   timestamptz not null default now()
 );
+
+create table routines (                                  -- 課表（菜單 A、B…）
+  id         uuid primary key,
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name       text not null check (length(btrim(name)) > 0),
+  archived   boolean not null default false,             -- 同 exercises：不真刪
+  created_at timestamptz not null default now()
+);
+
+create table routine_exercises (
+  id          uuid primary key,
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  routine_id  uuid not null references routines(id) on delete cascade,
+  exercise_id uuid not null references exercises(id) on delete restrict,
+  position    smallint not null check (position >= 0),
+  target_sets smallint not null default 3 check (target_sets between 1 and 20),
+  target_reps smallint check (target_reps is null or (target_reps between 1 and 999)),
+  created_at  timestamptz not null default now()
+);
+create index routine_exercises_routine_idx on routine_exercises (routine_id);
 
 create table workouts (
   id           uuid primary key,
@@ -426,6 +446,7 @@ create table workouts (
   performed_on date not null,                          -- 本機日期（同 eaten_on）；跨午夜算開始那天
   started_at   timestamptz not null,
   ended_at     timestamptz,                            -- null＝進行中
+  routine_id   uuid references routines(id) on delete set null,   -- 這次照哪份課表做的；空白開始為 null
   note         text,
   created_at   timestamptz not null default now(),
   check (ended_at is null or ended_at >= started_at)
@@ -475,6 +496,10 @@ alter table workouts          enable row level security;
 alter table workout_exercises enable row level security;
 alter table workout_sets      enable row level security;
 alter table cardio_sessions   enable row level security;
+alter table routines          enable row level security;
+alter table routine_exercises enable row level security;
+create policy owner_all on routines          for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy owner_all on routine_exercises for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy owner_all on exercises         for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy owner_all on workouts          for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy owner_all on workout_exercises for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -482,9 +507,19 @@ create policy owner_all on workout_sets      for all using (auth.uid() = user_id
 create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-**設計說明**：① 客戶端產 uuid、不給 default，離線寫入才能用 upsert 冪等。② **預填動作用確定性 id**（由 user_id＋動作 key 雜湊產生）：Safari 分頁與主畫面兩個容器各自預填，也只會 upsert 到同一列，不會出現兩份。③ `exercises` 用 `on delete restrict`＋`archived`，同 `foods`。④ `workouts` 刪除會 cascade 子列；離線時只排一條 delete，畫面要連帶隱藏子項。⑤ 刻意不加 `unique (workout_exercise_id, set_no)`：離線編輯／重排會短暫撞號，排序用 `set_no`、`created_at`。⑥ `shown_kcal` 只存不算，欄名刻意不叫 `burned`／`calories_burned`，避免日後被當成可信的消耗量。⑦ 有氧自成一張表，不併入 sets：欄位性質不同（沒有組、沒有重量）。
+**設計說明**：① 客戶端產 uuid、不給 default，離線寫入才能用 upsert 冪等。② **預填動作用確定性 id**（由 user_id＋動作 key 雜湊產生）：Safari 分頁與主畫面兩個容器各自預填，也只會 upsert 到同一列，不會出現兩份。③ `exercises` 用 `on delete restrict`＋`archived`，同 `foods`。④ `workouts` 刪除會 cascade 子列；離線時只排一條 delete，畫面要連帶隱藏子項。⑤ 刻意不加 `unique (workout_exercise_id, set_no)`：離線編輯／重排會短暫撞號，排序用 `set_no`、`created_at`。⑥ `shown_kcal` 只存不算，欄名刻意不叫 `burned`／`calories_burned`，避免日後被當成可信的消耗量。⑦ 有氧自成一張表，不併入 sets：欄位性質不同（沒有組、沒有重量）。⑧ 課表（`routines`／`routine_exercises`）與 `exercises` 一樣用 `archived` 不真刪；`workouts.routine_id` 記這次照哪份課表做的，之後才看得到「菜單 A 的歷史」，課表被刪時設為 null；課表只存「動作、順序、預設組數與次數」，**不存重量**——重量永遠取自該動作上次實際完成的值。
 
-**預填動作（16 個，名稱＋肌群；搜尋確認的核心 6 個＋一般健身房配置）**：腿推舉（quads）、坐姿胸推（chest）、滑輪下拉（back）、坐姿划船（back）、肩推（shoulder）、腿屈伸（quads）、腿彎舉（hamstrings）、蝴蝶機夾胸（chest）、反向蝴蝶機（shoulder）、二頭彎舉（機械）（biceps）、三頭下壓（滑輪）（triceps）、小腿提踵（calves）、髖外展（glutes）、髖內收（other）、腹部捲曲機（core）、背伸展機（back）。`要點` 欄一律留空由使用者自己寫（我不替你寫動作要領，寫錯的建議比沒有更糟）。
+**預填動作（16 個，名稱＋肌群；搜尋確認的核心 6 個＋一般健身房配置）**：
+
+- 下半身（legs）：腿推舉、腿屈伸、腿彎舉、小腿提踵、髖外展、髖內收
+- 背部（back）：滑輪下拉、坐姿划船、背伸展機
+- 胸部（chest）：坐姿胸推、蝴蝶機夾胸
+- 肩膀（shoulder）：肩推、反向蝴蝶機
+- 手臂（arms）：二頭彎舉（機械）、三頭下壓（滑輪）
+- 腹肌（core）：腹部捲曲機
+- 其他（other）：（無）
+
+預填**不含課表**：菜單 A、B 由你自己建（或訓練後「存成課表」），我不替你猜你的菜單內容。`要點` 欄一律留空由使用者自己寫（我不替你寫動作要領，寫錯的建議比沒有更糟）。
 
 #### AC（＝將來的測試）
 
@@ -496,8 +531,10 @@ create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id
 
 **重訓**
 
-4. 開始一次訓練：選動作加入（可多個、可調順序、可移除），或**「以上次訓練為範本」**帶入上次那次的動作與組數（不帶打勾）。**[追加]**：這項原排在階段 3，提前理由見下。
-5. 每個動作的每一組：重量（kg，可小數，步進 0.5）、次數、打勾。新增組時預填該動作**上次已完成**的重量與次數；組數預設帶上次的組數。
+4. 開始一次訓練有兩個入口：**空白開始**（一個個加動作，可調順序、可移除），或**選一份課表開始**（帶入該課表的動作、順序與預設組數；不帶打勾）。**[追加]**：課表原排在階段 3，提前理由見下。
+4a. 課表：可建立（名稱＋依序加入動作，每個動作設預設組數與預設次數）、改名、增刪動作、調順序、封存／取消封存；**把一次已完成的訓練「存成課表」**（帶入動作、順序與當時的組數）。
+4b. 訓練記下它照哪份課表做的（`routine_id`）；之後可依課表看歷史。
+5. 每個動作的每一組：重量（kg，可小數，步進 0.5）、次數、打勾。新增組時預填該動作**上次已完成**的重量與次數；沒有歷史時用課表的預設次數；組數預設帶上次的組數（從課表開始則用課表的預設組數）。課表本身**不存重量**。
 6. 每個動作有「該次備註」，預填上次的備註。
 7. 頂部顯示：時長、**總訓練量＝已打勾各組 重量×次數 的總和**、已完成組數（驗算：腿推舉 60×12×3＝2160）。
 8. 結束訓練＝寫 `ended_at`；已結束的可重新打開編輯；可刪除整次訓練（需確認）。
@@ -531,14 +568,15 @@ create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id
 
 #### 與原計畫的差異（請確認）
 
-- **「以上次訓練為範本」從階段 3 提前到階段 2**。理由：你的菜單固定（菜單 A 全是機械、3 組×12 次），每次在健身房逐一從 16 個動作裡挑，不夠用的機率很高，而階段 2 的出口條件就是「並行 1–2 週後仍夠用」。只做「複製上次」，不做命名課表編輯（那仍是階段 3）。
+- **課表從階段 3 提前到階段 2**（取代原案「以上次訓練為範本」）。理由：使用者實際用法是菜單 A、B 輪替，開始訓練時選預先建好的課表（Gymwork 就是這樣）；「複製上次」會帶出另一份、不夠用。階段 2 的出口條件是「並行 1–2 週後仍夠用」，沒有課表過不了。**仍留在階段 3 的**：課表的週期排程、複製課表、組間計時器。
+- 多兩張表（`routines`、`routine_exercises`），`workouts` 多一欄 `routine_id`。
 - 有氧自成一張表，不放進 sets。
 - 預填走**客戶端確定性 id**，不做伺服器端 seed。
 - 主鍵用 uuid、不給 default，與既有四表的 identity 不同。
 
 #### 明確不做（階段 2）
 
-RPE；GIF 與動作圖庫；組間計時器；命名課表編輯；1RM 與趨勢圖；任何熱量計算；寫入 Apple 健康；多裝置同時編輯的衝突解決（單人使用，伺服器資料為底＋疊上本機未同步變更，不做合併 UI）。
+RPE；GIF 與動作圖庫；組間計時器；課表的週期排程與複製課表；1RM 與趨勢圖；任何熱量計算；寫入 Apple 健康；多裝置同時編輯的衝突解決（單人使用，伺服器資料為底＋疊上本機未同步變更，不做合併 UI）。
 
 #### 已知風險
 
@@ -546,12 +584,12 @@ RPE；GIF 與動作圖庫；組間計時器；命名課表編輯；1RM 與趨勢
 - **兩個容器各有一份「尚未上傳」的離線資料**（Safari 分頁與主畫面，Q2 已定不擋）：**連線時任何入口都直接寫進同一個資料庫，沒有差別**；風險只在離線、還沒上傳那段時間——那些資料只存在記錄當下那個入口，另一個入口看不到，要回到原入口（且在線上）才會補傳。Safari 分頁久沒互動（七天）網站資料可能被 iOS 清掉，主畫面 App 不受此限，所以**離線記錄建議用主畫面 App**。預填用確定性 id 避免重複。不做擋人機制。
 - **iOS 儲存是否被清**：主畫面 App 不受七天規則（WebKit 2020 年的聲明，之後有無變動沒再查證）；佇列的「未同步」警示是保險。
 - **錄影沒拍到的細節**（單位是否只有 kg、有沒有單邊重量或自重動作）：階段 2 先只做 kg 與總重量。
-- **UI 範圍大**：訓練頁、有氧、動作庫、同步指示至少四個畫面，且要改底部導覽；先出樣張再核可，不直接寫。
+- **UI 範圍大**：訓練頁、課表、有氧、動作庫、同步指示至少五個畫面，且要改底部導覽；先出樣張再核可，不直接寫。
 
 #### ★ 核可後的順序
 
 1. 核可本 spec（含 DDL）
-2. 設計樣張（訓練頁／有氧／動作庫／同步指示，與 DESIGN.md 對齊）核可
+2. 設計樣張（訓練頁／課表／有氧／動作庫／同步指示，與 DESIGN.md 對齊）核可
 3. 使用者在 Dashboard 執行 DDL；回滾 SQL 一併提供
 4. `src/lib/` 純邏輯＋佇列「父列依賴」＋vitest／mutation
 5. IndexedDB adapter、Supabase sender（契約測試）、佇列實例與 `App.tsx` 登出接線
