@@ -117,7 +117,8 @@ export default function App() {
      就已逾時作廢，光等它們落地會永遠等不到。記下來，等它們結束後若離線旗標還在就補撈一次。 */
   const refetchAfterPendingRef = useRef(false)
   /* 使用者按了登出。SIGNED_OUT 事件不分主動被動，靠這個旗標分流（AC 13）：主動不顯示
-     「登入已過期」；被動時階段 2 的離線佇列要保留（佇列在步驟 5 接上，這裡先把分流立起來）。 */
+     「登入已過期」；被動時離線佇列要保留、主動才清（lib/queue.ts 的 signOutPlan／clear）。
+     佇列實例與這裡的接線等階段 2 第一個呼叫者出現再做，現在只把分流立起來。 */
   const userSignOutRef = useRef(false)
 
   const [currentDate, setCurrentDate] = useState<string>(() => localDate())

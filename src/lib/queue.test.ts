@@ -1,0 +1,759 @@
+import { describe, expect, it } from 'vitest'
+import {
+  appendEntry,
+  classifyFailure,
+  createQueue,
+  emptySnapshot,
+  signOutPlan,
+  summarize,
+  type NewEntry,
+  type QueueEntry,
+  type QueueSnapshot,
+  type QueueStore,
+  type SendResult,
+} from './queue'
+
+/* ═══════════ 測試替身 ═══════════ */
+
+/** 假伺服器：insert＝upsert（冪等）、update 對不存在的列靜默 0 筆（PostgREST 不報錯）、delete 對不存在的列無害。
+ *  用最終狀態斷言，不只數呼叫次數——順序與冪等的錯，只有最終狀態看得出來。 */
+function fakeServer() {
+  const rows = new Map<string, Record<string, unknown>>()
+  const apply = (e: QueueEntry) => {
+    const k = `${e.table}/${e.rowId}`
+    if (e.op === 'insert') rows.set(k, { ...e.payload })
+    else if (e.op === 'update') {
+      const r = rows.get(k)
+      if (r) rows.set(k, { ...r, ...e.payload })
+    } else rows.delete(k)
+  }
+  return { rows, apply }
+}
+
+/** 可編排的 sender。behave 回傳：'ok'＝落地並成功；'lost'＝落地但回應遺失（status 0）；
+ *  'lost503'＝落地但回 503；數字＝沒落地、回該狀態碼；'throw'＝sender 本身丟例外。 */
+type Behaviour = 'ok' | 'lost' | 'lost503' | 'throw' | number
+function scriptedSender(server: ReturnType<typeof fakeServer>, behave: (e: QueueEntry, n: number) => Behaviour) {
+  const sent: QueueEntry[] = []
+  const send = async (e: QueueEntry): Promise<SendResult> => {
+    sent.push(e)
+    const b = behave(e, sent.length)
+    if (b === 'throw') throw new Error('boom')
+    if (b === 'ok') {
+      server.apply(e)
+      return { ok: true }
+    }
+    if (b === 'lost') {
+      server.apply(e)
+      return { ok: false, status: 0, message: 'TimeoutError' }
+    }
+    if (b === 'lost503') {
+      server.apply(e)
+      return { ok: false, status: 503, message: 'HTTP 503' }
+    }
+    return { ok: false, status: b, message: `HTTP ${b}` }
+  }
+  return { send, sent }
+}
+
+function memoryStore(initial: QueueSnapshot | null = null) {
+  const mem = {
+    saved: initial,
+    onSave: null as null | ((s: QueueSnapshot) => void),
+    store: null as unknown as QueueStore,
+  }
+  mem.store = {
+    load: async () => mem.saved,
+    save: async (s) => {
+      mem.onSave?.(s)
+      mem.saved = s
+    },
+  }
+  return mem
+}
+
+function deferred<T>() {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>((r) => (resolve = r))
+  return { promise, resolve }
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 0))
+
+const ins = (rowId: string, payload: Record<string, unknown> = { v: 1 }, userId = 'u1'): NewEntry => ({
+  op: 'insert', table: 't', rowId, payload, userId,
+})
+const upd = (rowId: string, payload: Record<string, unknown>, userId = 'u1'): NewEntry => ({
+  op: 'update', table: 't', rowId, payload, userId,
+})
+const del = (rowId: string, userId = 'u1'): NewEntry => ({ op: 'delete', table: 't', rowId, userId })
+
+const build = (initial: QueueSnapshot | null = null, behave: (e: QueueEntry, n: number) => Behaviour = () => 'ok') => {
+  const server = fakeServer()
+  const mem = memoryStore(initial)
+  const sender = scriptedSender(server, behave)
+  let clock = 1_000
+  const queue = createQueue({ store: mem.store, send: sender.send, now: () => clock++ })
+  return { server, mem, sender, queue }
+}
+
+/* ═══════════ 純函式 ═══════════ */
+
+describe('classifyFailure', () => {
+  it.each([
+    [0, 'offline'],
+    [401, 'auth'],
+    [400, 'rejected'],
+    [403, 'rejected'], // RLS 擋下是 403，不是 401：重新登入也沒用
+    [404, 'rejected'],
+    [409, 'rejected'],
+    [422, 'rejected'],
+    [408, 'transient'],
+    [425, 'transient'],
+    [429, 'transient'],
+    [500, 'transient'],
+    [503, 'transient'],
+    [302, 'transient'], // 怪碼寧可留著再試，不判死
+  ] as const)('%i → %s', (status, kind) => {
+    expect(classifyFailure(status)).toBe(kind)
+  })
+})
+
+describe('appendEntry', () => {
+  it('seq 單調遞增，同一毫秒也不平手', () => {
+    let s = emptySnapshot()
+    s = appendEntry(s, ins('a'), 5)
+    s = appendEntry(s, ins('b'), 5)
+    s = appendEntry(s, ins('c'), 5)
+    expect(s.entries.map((e) => e.seq)).toEqual([1, 2, 3])
+    expect(s.nextSeq).toBe(4)
+  })
+
+  it('新條目的初始欄位齊全（AC 9）', () => {
+    const s = appendEntry(emptySnapshot(), ins('a', { w: 60 }, 'u9'), 1234)
+    expect(s.entries[0]).toEqual({
+      seq: 1, op: 'insert', table: 't', rowId: 'a', payload: { w: 60 },
+      userId: 'u9', createdAt: 1234, attempts: 0, lastError: null, failure: null,
+    })
+  })
+
+  it('insert／update 沒有 payload 要丟錯，不默默存一條送不出去的', () => {
+    expect(() => appendEntry(emptySnapshot(), { op: 'insert', table: 't', rowId: 'a', userId: 'u1' }, 0)).toThrow()
+    expect(() => appendEntry(emptySnapshot(), { op: 'update', table: 't', rowId: 'a', userId: 'u1' }, 0)).toThrow()
+  })
+
+  it('delete 的 payload 一律 null，即使呼叫端塞了東西', () => {
+    const s = appendEntry(emptySnapshot(), { ...del('a'), payload: { x: 1 } }, 0)
+    expect(s.entries[0].payload).toBeNull()
+  })
+
+  it('不改動傳入的 snapshot，也不與呼叫端共用 payload 物件', () => {
+    const before = appendEntry(emptySnapshot(), ins('a'), 1)
+    const frozen = JSON.stringify(before)
+    const payload = { v: 7 }
+    const after = appendEntry(before, ins('b', payload), 2)
+    payload.v = 99
+    expect(JSON.stringify(before)).toBe(frozen)
+    expect(after.entries[1].payload).toEqual({ v: 7 })
+  })
+
+  describe('delete 的 tombstone（AC 14）', () => {
+    const withEntry = (e: Partial<QueueEntry>): QueueSnapshot => {
+      const base = appendEntry(emptySnapshot(), ins('a'), 1)
+      return { ...base, entries: [{ ...base.entries[0], ...e }] }
+    }
+
+    it('清掉同一列較舊的 insert、update 與 delete，只留新的 delete', () => {
+      let s = appendEntry(emptySnapshot(), del('a'), 1)
+      s = appendEntry(s, ins('a'), 2)
+      s = appendEntry(s, upd('a', { v: 2 }), 3)
+      s = appendEntry(s, del('a'), 4)
+      expect(s.entries.map((e) => [e.seq, e.op])).toEqual([[4, 'delete']])
+    })
+
+    it('不碰其他列、其他表、其他帳號', () => {
+      let s = appendEntry(emptySnapshot(), ins('b'), 1)
+      s = appendEntry(s, { ...ins('a'), table: 'other' }, 2)
+      s = appendEntry(s, ins('a', { v: 1 }, 'u2'), 3)
+      s = appendEntry(s, del('a'), 4)
+      expect(s.entries.map((e) => `${e.table}/${e.rowId}/${e.userId}/${e.op}`)).toEqual([
+        't/b/u1/insert', 'other/a/u1/insert', 't/a/u2/insert', 't/a/u1/delete',
+      ])
+    })
+
+    it.each([
+      ['從未送過', { attempts: 0, failure: null }],
+      ['離線失敗', { attempts: 1, failure: 'offline' }],
+      ['暫時失敗', { attempts: 2, failure: 'transient' }],
+      ['被拒絕', { attempts: 1, failure: 'rejected' }],
+      ['登入失效', { attempts: 1, failure: 'auth' }],
+    ] as const)('已有結果的舊 insert（%s）都清掉，delete 自己會把落地的列刪掉', (_label, state) => {
+      const s = appendEntry(withEntry(state), del('a'), 2)
+      expect(s.entries.map((e) => e.op)).toEqual(['delete'])
+    })
+
+    it('正在送出（attempts>0、結果未回）的條目不清：回應曖昧時 delete 不能搶在它落地之前', () => {
+      const s = appendEntry(withEntry({ attempts: 1, failure: null }), del('a'), 2)
+      expect(s.entries.map((e) => e.op)).toEqual(['insert', 'delete'])
+    })
+
+    it('delete 之後才排進來的 insert 是重建，要留著', () => {
+      let s = appendEntry(emptySnapshot(), del('a'), 1)
+      s = appendEntry(s, ins('a', { v: 2 }), 2)
+      expect(s.entries.map((e) => e.op)).toEqual(['delete', 'insert'])
+    })
+  })
+})
+
+describe('summarize／signOutPlan', () => {
+  it('分開數自己的、別人的，以及各分類的卡住數（AC 11、13）', () => {
+    const e = (rowId: string, patch: Partial<QueueEntry>): QueueEntry => ({
+      ...appendEntry(emptySnapshot(), ins(rowId), 1).entries[0],
+      ...patch,
+    })
+    const sum = summarize(
+      {
+        nextSeq: 5,
+        entries: [
+          e('a', { seq: 1 }),
+          e('b', { seq: 2, failure: 'offline' }),
+          e('c', { seq: 3, failure: 'rejected' }),
+          e('d', { seq: 4, userId: 'u2' }),
+        ],
+      },
+      'u1',
+    )
+    expect(sum).toEqual({
+      total: 4, mine: 3, foreign: 1, pending: 1,
+      failed: { offline: 1, auth: 0, rejected: 1, transient: 0 },
+    })
+  })
+
+  it('空佇列不需要確認；非空要確認並報出會遺失的條數（Q1）', () => {
+    const empty = summarize(emptySnapshot(), 'u1')
+    expect(signOutPlan(empty)).toEqual({ needsConfirm: false, lost: 0 })
+    const one = summarize(appendEntry(emptySnapshot(), ins('a'), 1), 'u1')
+    expect(signOutPlan(one)).toEqual({ needsConfirm: true, lost: 1 })
+    // 只有別人的殘留也算：登出會一併清掉
+    const foreign = summarize(appendEntry(emptySnapshot(), ins('a', { v: 1 }, 'u2'), 1), 'u1')
+    expect(signOutPlan(foreign)).toEqual({ needsConfirm: true, lost: 1 })
+  })
+})
+
+/* ═══════════ 帶狀態的佇列 ═══════════ */
+
+describe('持久化', () => {
+  it('enqueue 寫進儲存；用同一份儲存重新建立佇列，條目還在（重開 App）', async () => {
+    const a = build()
+    await a.queue.enqueue(ins('a'))
+    await a.queue.enqueue(upd('a', { v: 2 }))
+    const b = build(a.mem.saved)
+    expect((await b.queue.summary('u1')).mine).toBe(2)
+    await b.queue.flush('u1')
+    expect(b.sender.sent.map((e) => e.op)).toEqual(['insert', 'update'])
+  })
+
+  it('save 失敗：enqueue 丟錯，記憶體狀態不前進（不會出現磁碟上沒有的條目）', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a'))
+    t.mem.onSave = () => {
+      throw new Error('QuotaExceeded')
+    }
+    await expect(t.queue.enqueue(ins('b'))).rejects.toThrow('QuotaExceeded')
+    t.mem.onSave = null
+    expect((await t.queue.summary('u1')).mine).toBe(1)
+    expect(t.mem.saved?.entries).toHaveLength(1)
+    // 失敗之後佇列仍可用
+    await t.queue.enqueue(ins('c'))
+    expect((await t.queue.summary('u1')).mine).toBe(2)
+  })
+
+  it('成功送出後存檔失敗：條目仍在，下次重送，伺服器結果不變（冪等兜底）', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a', { v: 1 }))
+    t.mem.onSave = (s) => {
+      if (s.entries.length === 0) throw new Error('disk')
+    }
+    await expect(t.queue.flush('u1')).rejects.toThrow('disk')
+    t.mem.onSave = null
+    expect(t.server.rows.get('t/a')).toEqual({ v: 1 })
+    const r = await t.queue.flush('u1')
+    expect(r.sent).toBe(1)
+    expect(t.sender.sent).toHaveLength(2)
+    expect(t.server.rows.size).toBe(1)
+    expect(t.server.rows.get('t/a')).toEqual({ v: 1 })
+  })
+})
+
+describe('重放順序（AC 14）', () => {
+  it('依 seq 重放，不依 createdAt：時鐘倒退，重開 App 載入後也不亂序', async () => {
+    const server = fakeServer()
+    const mem = memoryStore()
+    const { send, sent } = scriptedSender(server, () => 'ok')
+    const times = [900, 500, 100] // 使用者把時鐘往回調
+    const first = createQueue({ store: mem.store, send, now: () => times.shift() ?? 0 })
+    await first.enqueue(ins('a', { v: 1 }))
+    await first.enqueue(upd('a', { v: 2 }))
+    await first.enqueue(upd('a', { v: 3 }))
+    // 重開：載入時 createdAt 的順序（100、500、900）與 seq 相反
+    const reopened = createQueue({ store: mem.store, send })
+    await reopened.flush('u1')
+    expect(sent.map((e) => e.seq)).toEqual([1, 2, 3])
+    expect(server.rows.get('t/a')).toEqual({ v: 3 })
+  })
+
+  it('儲存層回傳的順序不可信：載入時重新依 seq 排好', async () => {
+    let s = appendEntry(emptySnapshot(), ins('a', { v: 1 }), 1)
+    s = appendEntry(s, upd('a', { v: 2 }), 2)
+    s = appendEntry(s, upd('a', { v: 3 }), 3)
+    const shuffled: QueueSnapshot = { ...s, entries: [s.entries[2], s.entries[0], s.entries[1]] }
+    const t = build(shuffled)
+    await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.seq)).toEqual([1, 2, 3])
+    expect(t.server.rows.get('t/a')).toEqual({ v: 3 })
+  })
+
+  it('insert 落地但回應遺失後被刪：delete 蓋過它並把列刪掉，不留孤兒', async () => {
+    const t = build(null, (e) => (e.op === 'insert' ? 'lost503' : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.flush('u1') // 列已在伺服器上，但佇列以為沒成功
+    expect(t.server.rows.has('t/a')).toBe(true)
+    await t.queue.enqueue(del('a'))
+    await t.queue.flush('u1')
+    expect(t.server.rows.has('t/a')).toBe(false)
+    expect((await t.queue.summary('u1')).total).toBe(0)
+  })
+
+  it('delete 失敗時，後面的重建 insert 不得越過它（否則重建的列隨後被舊 delete 刪掉）', async () => {
+    let deleteCalls = 0
+    const t = build(null, (e) => (e.op === 'delete' && ++deleteCalls === 1 ? 503 : 'ok'))
+    t.server.rows.set('t/a', { v: 0 })
+    await t.queue.enqueue(del('a'))
+    await t.queue.enqueue(ins('a', { v: 2 })) // 使用者刪掉後又重新記了一筆同一列
+    const r1 = await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.op)).toEqual(['delete']) // insert 沒被送
+    expect(r1.summary.failed.transient).toBe(1)
+    await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.op)).toEqual(['delete', 'delete', 'insert'])
+    expect(t.server.rows.get('t/a')).toEqual({ v: 2 }) // 最後一次意圖（重建）得以保留
+  })
+
+  it('同一輪內 insert 失敗，後面同一列的 update 不得越過它（否則打到不存在的列、編輯靜默遺失）', async () => {
+    let first = true
+    const t = build(null, (e) => {
+      if (e.op === 'insert' && first) {
+        first = false
+        return 503
+      }
+      return 'ok'
+    })
+    await t.queue.enqueue(ins('a', { v: 1 }))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    const r1 = await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.op)).toEqual(['insert']) // update 沒被送
+    expect(r1.summary.failed.transient).toBe(1)
+    await t.queue.flush('u1')
+    expect(t.server.rows.get('t/a')).toEqual({ v: 2 })
+  })
+
+  it('失敗只擋同一列，不擋別的列', async () => {
+    const t = build(null, (e) => (e.rowId === 'a' ? 422 : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    await t.queue.enqueue(ins('b'))
+    const r = await t.queue.flush('u1')
+    expect(t.server.rows.has('t/b')).toBe(true)
+    expect(t.sender.sent.map((e) => e.rowId)).toEqual(['a', 'b'])
+    expect(r.stoppedBy).toBeNull()
+    expect(r.sent).toBe(1)
+  })
+
+  it('delete 之後的重建 insert 會被送出，列最後存在', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a', { v: 1 }))
+    await t.queue.flush('u1')
+    await t.queue.enqueue(del('a'))
+    await t.queue.enqueue(ins('a', { v: 2 }))
+    await t.queue.flush('u1')
+    expect(t.server.rows.get('t/a')).toEqual({ v: 2 })
+  })
+})
+
+describe('重送冪等（AC 10）', () => {
+  it.each([
+    ['insert', ins('a', { v: 1 })],
+    ['update', upd('a', { v: 2 })],
+    ['delete', del('a')],
+  ] as const)('%s：回應遺失後重送，伺服器結果與只送一次相同', async (_label, op) => {
+    const once = build()
+    const twice = build(null, (_e, n) => (n === 1 ? 'lost' : 'ok'))
+    for (const t of [once, twice]) {
+      // 先讓列存在，update／delete 才有東西可作用
+      t.server.rows.set('t/a', { v: 0 })
+      await t.queue.enqueue(op)
+    }
+    await once.queue.flush('u1')
+    const r1 = await twice.queue.flush('u1')
+    expect(r1.stoppedBy).toBe('offline')
+    await twice.queue.flush('u1')
+    expect(twice.sender.sent).toHaveLength(2)
+    expect([...twice.server.rows]).toEqual([...once.server.rows])
+  })
+
+  it('重送時條目的 rowId 不變（不重發主鍵）', async () => {
+    const t = build(null, (_e, n) => (n === 1 ? 503 : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.flush('u1')
+    await t.queue.flush('u1')
+    expect(t.sender.sent.map((e) => e.rowId)).toEqual(['a', 'a'])
+  })
+})
+
+describe('卡住的分類與出路（AC 11、12）', () => {
+  it('離線：整輪中止，後面的不送，全部留著；回線後依序送完', async () => {
+    let online = false
+    const t = build(null, () => (online ? 'ok' : 0))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b'))
+    const r1 = await t.queue.flush('u1')
+    expect(r1.stoppedBy).toBe('offline')
+    expect(t.sender.sent).toHaveLength(1)
+    expect(r1.summary).toMatchObject({ mine: 2, pending: 1, failed: { offline: 1 } })
+    online = true
+    const r2 = await t.queue.flush('u1')
+    expect(r2.sent).toBe(2)
+    expect(t.server.rows.size).toBe(2)
+  })
+
+  it('token 失效：401 → 整輪中止、條目全留、標成 auth；重新登入後繼續送且順序不變（必答②）', async () => {
+    let authed = false
+    const t = build(null, () => (authed ? 'ok' : 401))
+    await t.queue.enqueue(ins('a', { v: 1 }))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    const r1 = await t.queue.flush('u1')
+    expect(r1.stoppedBy).toBe('auth')
+    expect(r1.summary).toMatchObject({ mine: 2, failed: { auth: 1 } })
+    expect(t.mem.saved?.entries).toHaveLength(2) // 唯一的一份還在
+    authed = true
+    const r2 = await t.queue.flush('u1')
+    expect(r2.stoppedBy).toBeNull()
+    expect(t.server.rows.get('t/a')).toEqual({ v: 2 })
+  })
+
+  it('4xx（非 401）標成 rejected 並留著；下一輪會再試（例如伺服器端補了 migration）', async () => {
+    let fixed = false
+    const t = build(null, () => (fixed ? 'ok' : 404))
+    await t.queue.enqueue(ins('a'))
+    const r1 = await t.queue.flush('u1')
+    expect(r1.summary.failed.rejected).toBe(1)
+    expect(t.mem.saved?.entries[0]).toMatchObject({ failure: 'rejected', lastError: 'HTTP 404', attempts: 1 })
+    fixed = true
+    const r2 = await t.queue.flush('u1')
+    expect(r2.sent).toBe(1)
+    expect(r2.summary.total).toBe(0)
+  })
+
+  it('5xx 標成 transient 並留著', async () => {
+    const t = build(null, () => 503)
+    await t.queue.enqueue(ins('a'))
+    const r = await t.queue.flush('u1')
+    expect(r.summary.failed.transient).toBe(1)
+    expect(r.stoppedBy).toBeNull()
+  })
+
+  it('sender 丟例外：當 transient 留著，不判死、不讓整輪崩掉', async () => {
+    const t = build(null, (e) => (e.rowId === 'a' ? 'throw' : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b'))
+    const r = await t.queue.flush('u1')
+    expect(r.summary.failed.transient).toBe(1)
+    expect(t.mem.saved?.entries[0].lastError).toBe('boom')
+    expect(t.server.rows.has('t/b')).toBe(true)
+  })
+
+  it('discard 放棄被卡住的一條，解開同一列後面的條目', async () => {
+    const t = build(null, (e) => (e.op === 'insert' ? 422 : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    await t.queue.flush('u1')
+    expect(await t.queue.discard(1)).toBe(true)
+    expect(await t.queue.discard(1)).toBe(false)
+    const r = await t.queue.flush('u1')
+    expect(r.sent).toBe(1)
+    expect(t.sender.sent[t.sender.sent.length - 1].op).toBe('update')
+  })
+})
+
+describe('送出前先落地', () => {
+  it('sender 被呼叫時，儲存裡該條的 attempts 已經是 1（送到一半被殺掉也看得出可能已生效）', async () => {
+    const server = fakeServer()
+    const mem = memoryStore()
+    let seen: QueueEntry | undefined
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        seen = mem.saved?.entries.find((x) => x.seq === e.seq)
+        server.apply(e)
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(ins('a'))
+    await queue.flush('u1')
+    expect(seen?.attempts).toBe(1)
+  })
+
+  it('重送時 failure 先歸零：送出中的條目不帶上一輪的失敗標記', async () => {
+    const server = fakeServer()
+    const mem = memoryStore()
+    let calls = 0
+    let seen: QueueEntry | undefined
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        if (++calls === 1) return { ok: false, status: 422, message: 'bad' }
+        seen = mem.saved?.entries.find((x) => x.seq === e.seq)
+        server.apply(e)
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(ins('a'))
+    await queue.flush('u1')
+    expect(mem.saved?.entries[0].failure).toBe('rejected')
+    await queue.flush('u1')
+    expect(seen).toMatchObject({ attempts: 2, failure: null })
+  })
+
+  it('每條送完就存檔：第 2 條失敗時，第 1 條已移除、第 2 條 attempts=1（中途被殺不丟進度）', async () => {
+    const t = build(null, (e) => (e.rowId === 'b' ? 0 : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b'))
+    await t.queue.flush('u1')
+    expect(t.mem.saved?.entries.map((e) => [e.rowId, e.attempts])).toEqual([['b', 1]])
+  })
+})
+
+describe('登出分流與帳號隔離（AC 13）', () => {
+  it('別的帳號登入：不上傳、不動它的條目、報出數量', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a', { v: 1 }, 'u1'))
+    const r = await t.queue.flush('u2')
+    expect(t.sender.sent).toHaveLength(0)
+    expect(r.summary).toMatchObject({ total: 1, mine: 0, foreign: 1 })
+    expect(t.mem.saved?.entries[0]).toMatchObject({ userId: 'u1', attempts: 0 })
+  })
+
+  it('別的帳號加進來的條目不會覆寫原帳號的，各送各的', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a', { v: 1 }, 'u1'))
+    await t.queue.enqueue(ins('a', { v: 2 }, 'u2')) // 同一個 rowId
+    await t.queue.enqueue(del('a', 'u2'))
+    expect(t.mem.saved?.entries.map((e) => `${e.userId}/${e.op}`)).toEqual(['u1/insert', 'u2/delete'])
+  })
+
+  it('clear 清空全部（主動登出）；seq 不歸零', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b', { v: 1 }, 'u2'))
+    await t.queue.clear()
+    expect((await t.queue.summary('u1')).total).toBe(0)
+    const e = await t.queue.enqueue(ins('c'))
+    expect(e.seq).toBe(3)
+  })
+
+  it('被動掉線＝不呼叫 clear：條目與卡住標記都留著，重開 App、重新登入後能續送', async () => {
+    const t = build(null, () => 401)
+    await t.queue.enqueue(ins('a'))
+    await t.queue.flush('u1')
+    const reopened = build(t.mem.saved, () => 'ok')
+    expect((await reopened.queue.summary('u1')).failed.auth).toBe(1)
+    const r = await reopened.queue.flush('u1')
+    expect(r.sent).toBe(1)
+  })
+})
+
+describe('並行', () => {
+  it('前景與 TOKEN_REFRESHED 同時呼叫 flush：共用同一輪，每條只送一次（AC 15）', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b'))
+    const [r1, r2] = await Promise.all([t.queue.flush('u1'), t.queue.flush('u1')])
+    expect(t.sender.sent).toHaveLength(2)
+    expect(r1).toBe(r2)
+  })
+
+  it('上一輪結束後可以再開新的一輪', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a'))
+    await t.queue.flush('u1')
+    await t.queue.enqueue(ins('b'))
+    const r = await t.queue.flush('u1')
+    expect(r.sent).toBe(1)
+  })
+
+  it('送出途中進來的 enqueue 不被網路卡住，也不丟', async () => {
+    const gate = deferred<void>()
+    const server = fakeServer()
+    const mem = memoryStore()
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        if (e.rowId === 'a') await gate.promise
+        server.apply(e)
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(ins('a'))
+    const flushing = queue.flush('u1')
+    await tick()
+    await queue.enqueue(ins('b')) // a 還卡在網路上，這裡不能死鎖
+    gate.resolve()
+    const report = await flushing
+    expect(report.sent).toBe(2) // 同一輪就會撿到 b
+    expect(server.rows.size).toBe(2)
+  })
+
+  it('送出中的 insert 回 504（上游稍後才落地）：同一輪的 delete 不得搶在它前面，列最後是刪掉的', async () => {
+    const gate = deferred<void>()
+    const server = fakeServer()
+    const mem = memoryStore()
+    const sent: string[] = []
+    const late: { land: (() => void) | null } = { land: null } // 物件欄位：避開 TS 對 closure 內賦值的窄化
+    let insertCalls = 0
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        sent.push(e.op)
+        if (e.op === 'insert' && ++insertCalls === 1) {
+          await gate.promise
+          late.land = () => server.apply(e) // 閘道已回 504，上游過一會兒才真的寫入
+          return { ok: false, status: 504, message: 'gateway timeout' }
+        }
+        server.apply(e)
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(ins('a'))
+    const round1 = queue.flush('u1')
+    await tick()
+    await queue.enqueue(del('a')) // insert 正在送出：不清它
+    gate.resolve()
+    await round1
+    expect(sent).toEqual(['insert']) // delete 這一輪被擋住，沒有搶先
+    expect(mem.saved?.entries.map((e) => e.op)).toEqual(['insert', 'delete'])
+    late.land?.() // 第一次請求這時才在伺服器落地
+    await queue.flush('u1') // 重送 insert（冪等）→ 再 delete
+    expect(sent).toEqual(['insert', 'insert', 'delete'])
+    expect(server.rows.has('t/a')).toBe(false)
+    expect(mem.saved?.entries).toEqual([])
+  })
+
+  it('送出中的條目回失敗後，同一列後面的 delete 照樣被它擋住一輪，下一輪依序送完', async () => {
+    const gate = deferred<void>()
+    const mem = memoryStore()
+    const sent: string[] = []
+    let calls = 0
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        sent.push(e.op)
+        if (++calls === 1) {
+          await gate.promise
+          return { ok: false, status: 503, message: 'late' }
+        }
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(upd('a', { v: 2 }))
+    const round1 = queue.flush('u1')
+    await tick()
+    await queue.enqueue(del('a'))
+    gate.resolve()
+    await round1
+    expect(sent).toEqual(['update'])
+    await queue.flush('u1')
+    expect(sent).toEqual(['update', 'update', 'delete'])
+    expect(mem.saved?.entries).toEqual([])
+  })
+
+  it('send 永不結束：逾時當離線處理，條目留著，之後的 flush 不被拖死（F2）', async () => {
+    const server = fakeServer()
+    const mem = memoryStore()
+    let calls = 0
+    const queue = createQueue({
+      store: mem.store,
+      sendTimeoutMs: 15,
+      send: (e) => {
+        if (++calls === 1) return new Promise<SendResult>(() => {}) // 凍結的 fetch：既不 resolve 也不 reject
+        server.apply(e)
+        return Promise.resolve({ ok: true })
+      },
+    })
+    await queue.enqueue(ins('a'))
+    const r1 = await queue.flush('u1')
+    expect(r1.stoppedBy).toBe('offline')
+    expect(mem.saved?.entries[0]).toMatchObject({ attempts: 1, failure: 'offline', lastError: '送出逾時' })
+    const r2 = await queue.flush('u1')
+    expect(r2.sent).toBe(1)
+    expect(server.rows.has('t/a')).toBe(true)
+  })
+
+  it('flush resolve 時，呼叫當下已排進去的條目都試過了：不論 enqueue＋flush 落在上一輪的哪個時間點（F4）', async () => {
+    // 掃描上一輪的各個微工作間隙：舊實作在「掃完、尚未釋放」的縫裡，併進去的 flush 會漏掉剛排進來的條目
+    for (let hops = 0; hops <= 40; hops++) {
+      const t = build()
+      await t.queue.enqueue(ins('a'))
+      const first = t.queue.flush('u1')
+      for (let i = 0; i < hops; i++) await Promise.resolve()
+      await t.queue.enqueue(ins('b'))
+      const second = t.queue.flush('u1')
+      await Promise.all([first, second])
+      expect(t.server.rows.has('t/b'), `hops=${hops}`).toBe(true)
+    }
+  })
+
+  it('送出途中該條被 discard：遲到的失敗不擋住同一列後面新排進來的條目', async () => {
+    const gate = deferred<void>()
+    const mem = memoryStore()
+    const sent: number[] = []
+    let calls = 0
+    const queue = createQueue({
+      store: mem.store,
+      send: async (e) => {
+        sent.push(e.seq)
+        if (++calls === 1) {
+          await gate.promise
+          return { ok: false, status: 503, message: 'late' }
+        }
+        return { ok: true }
+      },
+    })
+    await queue.enqueue(upd('a', { v: 2 })) // seq 1
+    const round = queue.flush('u1')
+    await tick()
+    await queue.discard(1)
+    await queue.enqueue(upd('a', { v: 3 })) // seq 2：前面已經沒有東西了
+    gate.resolve()
+    await round
+    expect(sent).toEqual([1, 2]) // 同一輪就送了 seq 2，沒被已消失的 seq 1 擋住
+    expect(mem.saved?.entries).toEqual([])
+  })
+
+  it('送出途中被 clear：遲到的結果作廢，不復活條目', async () => {
+    const gate = deferred<void>()
+    const mem = memoryStore()
+    const queue = createQueue({
+      store: mem.store,
+      send: async () => {
+        await gate.promise
+        return { ok: false, status: 503, message: 'late' }
+      },
+    })
+    await queue.enqueue(ins('a'))
+    const flushing = queue.flush('u1')
+    await tick()
+    await queue.clear()
+    gate.resolve()
+    await flushing
+    expect(mem.saved?.entries).toEqual([])
+  })
+})
