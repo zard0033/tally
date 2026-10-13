@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Session } from '@supabase/supabase-js'
 import {
+  AUTH_STORAGE_KEY,
   BackendUnreachableError,
   createFood as apiCreateFood,
   createIntake as apiCreateIntake,
@@ -38,6 +39,7 @@ import { DUR, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { defaultMeal, type MealKey } from '@/lib/meals'
+import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
 import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
@@ -74,6 +76,11 @@ const UNDO_MS = 5000
  *  近 30 秒才放棄），那段時間畫面不該只是一句一動不動的「載入中…」。 */
 const BOOT_SLOW_MS = 5000
 
+/** 本機已有 session（認得你是誰），但 getSession 超過這麼久還沒回——token 過期、refresh 卡在
+ *  supabase-js 的退避裡（後端連不上時約 26 秒，探針 1 實測）——就先拿本機那份進外殼，不再等
+ *  （spec.md 階段 1 甲 AC 2）。比 BOOT_SLOW_MS 短，所以有本機 session 時不會走到「連線比平常慢」。 */
+const FAST_BOOT_MS = 2000
+
 /** 開機畫面的三種樣子。unreachable＝getSession 明確回報後端連不上（不是沒登入）。 */
 type BootStatus = 'loading' | 'slow' | 'unreachable'
 
@@ -99,6 +106,19 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [loginError, setLoginError] = useState<string | null>(null)
   const [bootStatus, setBootStatus] = useState<BootStatus>('loading')
+
+  /* 離線開機（AC 2–4）。bootedFromLocalRef＝這次是靠本機 session 進來的、refresh 還沒成功：
+     資料請求會被 supabase-js 擋在 refresh 退避裡，所以 load() 先把離線提示亮出來、請求留在背景，
+     資料真的回來時才清掉。第一次資料落地就歸零。offlinePendingRef＝那批背景請求還在飛，
+     TOKEN_REFRESHED 不要在它們還沒結束時重複再撈一次。 */
+  const bootedFromLocalRef = useRef(false)
+  const offlinePendingRef = useRef(false)
+  /* 背景請求還在飛時 refresh 成功了：請求在建構當下就掛了 8 秒的 AbortSignal.timeout，多半在被放行前
+     就已逾時作廢，光等它們落地會永遠等不到。記下來，等它們結束後若離線旗標還在就補撈一次。 */
+  const refetchAfterPendingRef = useRef(false)
+  /* 使用者按了登出。SIGNED_OUT 事件不分主動被動，靠這個旗標分流（AC 13）：主動不顯示
+     「登入已過期」；被動時階段 2 的離線佇列要保留（佇列在步驟 5 接上，這裡先把分流立起來）。 */
+  const userSignOutRef = useRef(false)
 
   const [currentDate, setCurrentDate] = useState<string>(() => localDate())
   const [profile, setProfile] = useState<ProfileRow | null>(null)
@@ -196,8 +216,26 @@ export default function App() {
    * 讓 LogSheet 拿到現成的 foods prop，不必自己管一份載入狀態，
    * 代價是開機多打一支 API，量體（23 筆）小到可以忽略。 */
   const load = useCallback(async (date: string) => {
+    /* 靠本機 session 進來、refresh 還卡著（見 bootedFromLocalRef）：請求要等 supabase-js 的退避
+       走完才會失敗，約 26 秒——所以先亮離線提示，請求留在背景。按鈕是「重新載入」不是「重試」：
+       supabase-js 對同一顆 refresh token 的失敗有 60 秒冷卻，再撈一次只會立刻拿到同一個失敗，
+       reload 才清得掉記憶體裡的冷卻（跟開機畫面那顆鈕同一個理由）。 */
+    const offlineFirst = bootedFromLocalRef.current
+    if (offlineFirst) {
+      offlinePendingRef.current = true
+      /* 兩種原因都要講：離線（健身房）與 Supabase 專案被閒置暫停（2026-10 兩次）從這裡看起來一樣，
+         v2.48 的開機畫面曾因此特地寫了「到 dashboard 按 Resume」。順序放網路在前，因為那是更常見
+         的那個；navigator.onLine 在伺服器死了仍回「線上」，不能拿來二選一（spec.md 探針 2）。 */
+      showNotice(
+        '讀不到你的資料',
+        '連不上後端：先確認 Wi-Fi 或行動網路；網路正常的話，可能是 Supabase 專案被閒置暫停（到 dashboard 按 Resume）。',
+        '重新載入',
+        () => location.reload(),
+      )
+    }
     try {
       const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntake(date), listFoods()])
+      bootedFromLocalRef.current = false // 資料回來了＝連得上，不再是離線優先狀態
       if (!p || !w) {
         const detail = !p && !w
           ? '這個帳號的身體參數與體重紀錄都是空的。若之前用另一組帳號登入過，資料可能掛在那組帳號下——請確認登入的是同一個 Google 帳號。'
@@ -226,11 +264,29 @@ export default function App() {
       // handleSaveWeight 呼叫（設定改動後重算），r 是這一天的最新狀態，讓快取跟著更新
       prefetchAdjacent(date)
     } catch (e) {
-      showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
+      // 離線提示已經在畫面上了；這裡的錯是那批背景請求終於放棄，不要拿較不精準的訊息蓋掉它
+      if (!offlineFirst) showNotice('讀不到你的資料', friendlyError(errMsg(e)), '重試', () => void load(date))
+    } finally {
+      if (offlineFirst) {
+        offlinePendingRef.current = false
+        /* 旗標只由 TOKEN_REFRESHED 事件立起，這裡一次就清掉，不會變成重撈迴圈；
+           補撈時 token 已是新的，請求不再被擋在 refresh 退避裡。 */
+        const refetch = refetchAfterPendingRef.current
+        refetchAfterPendingRef.current = false
+        if (refetch && bootedFromLocalRef.current) void load(currentDateRef.current)
+      }
     }
     // 日期走顯式參數（跟 loadDay 對稱）——closure 抓 currentDate 曾造成
     // 「歷史日存設定後畫面日期與資料錯位」，precommit review 抓到的，別改回去
   }, [showNotice, prefetchAdjacent])
+
+  /* 開機 effect 要呼叫最新的 load，但不能把 load 放進它的依賴——那個 effect 一重跑就會重讀
+     localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 依賴保持空陣列
+     （同 loadDayRef 的作法）。 */
+  const loadRef = useRef(load)
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
 
   /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變。
    *  這是「快取沒命中」的路徑，goToDate 命中快取時完全繞過這支函式。 */
@@ -593,22 +649,55 @@ export default function App() {
     [profile, load, currentDate],
   )
 
-  const handleSignOut = useCallback(() => void apiSignOut(), [])
+  const handleSignOut = useCallback(() => {
+    userSignOutRef.current = true
+    // 失敗（例如離線時伺服器端登出打不到）就把旗標放掉，免得之後一次真的被動掉線被當成主動
+    apiSignOut().catch(() => {
+      userSignOutRef.current = false
+    })
+  }, [])
 
   /* 開機：問一次目前 session，並訂閱後續變化（token 自動 refresh、登出、跨分頁同步
-   * 都由 supabase-js 處理，這裡只反應結果）。 */
+   * 都由 supabase-js 處理，這裡只反應結果）。
+   *
+   * 離線開機（AC 2）：本機若已有一份欄位齊全的 session，getSession 超過 FAST_BOOT_MS 還沒回
+   * （或明確回報後端連不上），就先拿本機那份進外殼，不再等 refresh。getSession 仍在背景跑：
+   * 成功就換成新的 session，確定登入已失效就由 SIGNED_OUT／null 把人帶去登入頁。
+   * 本機沒有 session 時完全照舊（含 OAuth 回跳那段會真的打網路的路徑）。 */
   useEffect(() => {
     let cancelled = false
+    let decided = false // getSession 或本機快速路徑已經替 session 定案
     const slowTimer = setTimeout(() => {
       if (!cancelled) setBootStatus((s) => (s === 'loading' ? 'slow' : s))
     }, BOOT_SLOW_MS)
+    let raw: string | null = null
+    try {
+      raw = localStorage.getItem(AUTH_STORAGE_KEY)
+    } catch {
+      // Safari 封鎖全部網站資料時存取 localStorage 會丟 SecurityError：當作沒有，交給 getSession 判斷
+    }
+    const local = parseStoredSession(raw)
+    const enterWithLocal = () => {
+      if (cancelled || decided || !local) return
+      decided = true
+      clearTimeout(slowTimer) // 已經進外殼了，開機畫面的慢態不會再出現
+      bootedFromLocalRef.current = true
+      setSession(local)
+    }
+    const fastTimer = local ? setTimeout(enterWithLocal, FAST_BOOT_MS) : undefined
     void getSession()
       .then((s) => {
-        if (!cancelled) setSession(s)
+        if (cancelled) return
+        decided = true
+        setSession(s)
       })
       .catch((e: unknown) => {
         if (cancelled) return
         if (e instanceof BackendUnreachableError) {
+          if (local) {
+            enterWithLocal()
+            return
+          }
           // session 維持 undefined：連不上後端不等於沒登入，丟去登入頁只會多一個假問題。
           // 網路回來時 supabase-js 的 auto-refresh 會發 TOKEN_REFRESHED，下面那支訂閱自己接手。
           setBootStatus('unreachable')
@@ -617,12 +706,20 @@ export default function App() {
         setSession(null)
         setLoginError(errMsg(e))
       })
-      .finally(() => clearTimeout(slowTimer))
+      .finally(() => {
+        clearTimeout(slowTimer)
+        clearTimeout(fastTimer)
+      })
 
     const { data: sub } = onAuthStateChange((event, s) => {
       if (event === 'SIGNED_OUT') {
+        const byUser = userSignOutRef.current
+        userSignOutRef.current = false
+        bootedFromLocalRef.current = false
+        offlinePendingRef.current = false
         setSession(null)
-        setLoginError('登入已過期，請重新登入')
+        // 「登入已過期」是給被動掉線的人看的；自己按的登出不該被告知過期
+        setLoginError(byUser ? null : '登入已過期，請重新登入')
         // 清掉上一個帳號的殘留狀態，避免下次登入短暫看到舊資料
         setProfile(null)
         setWeight(null)
@@ -637,13 +734,31 @@ export default function App() {
         prefetchingRef.current.clear()
       } else if (s) {
         setSession(s)
+        // 靠本機 session 進來、提示還亮著：refresh 終於成功，重新撈一次接手。
+        // 請求還在飛時不當場重撈（會重複），只記下旗標，等它們結束再補撈（見 load 的 finally）。
+        if (event === 'TOKEN_REFRESHED' && bootedFromLocalRef.current) {
+          if (offlinePendingRef.current) refetchAfterPendingRef.current = true
+          else void loadRef.current(currentDateRef.current)
+        }
       }
     })
     return () => {
       cancelled = true
       clearTimeout(slowTimer)
+      clearTimeout(fastTimer)
       sub.subscription.unsubscribe()
     }
+  }, [])
+
+  /* 離線提示亮著時網路回來：重新載入頁面。不叫 supabase-js 再試一次——它對同一顆 refresh token 的
+   * 失敗有 60 秒冷卻，reload 才清得掉。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
+   * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。 */
+  useEffect(() => {
+    const onOnline = () => {
+      if (bootedFromLocalRef.current) location.reload()
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
   }, [])
 
   /* 登入成功後載入一次資料。用 ref 而非把 session 物件放進依賴陣列，

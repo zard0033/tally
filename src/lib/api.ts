@@ -11,6 +11,7 @@ import {
   type AuthChangeEvent,
 } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config'
+import { authStorageKey } from './session'
 import type { Profile } from './formulas'
 /* 型別匯入不會產生循環：meals.ts 是純常數與純函式，不反向依賴 api.ts。
    收斂成 MealKey 而不是裸 string，讓非法餐別在 TS 邊界就擋掉，不必等 DB 約束
@@ -18,7 +19,12 @@ import type { Profile } from './formulas'
 import type { MealKey } from './meals'
 import type { LabelReading } from './foodForm'
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+/* 明確傳 storageKey：離線開機要自己讀本機 session（session.ts），讀的 key 必須與 supabase-js
+   寫的是同一個。值等於它的預設，所以既有登入不受影響。 */
+export const AUTH_STORAGE_KEY = authStorageKey(SUPABASE_URL)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { storageKey: AUTH_STORAGE_KEY },
+})
 
 /* 逾時是必要件不是保險：連上了但不回的失敗形態，fetch 對它永遠不 reject。
    數值照 legacy DB_TIMEOUT。只掛在資料 CRUD 上，auth 呼叫（signInWithOAuth/getSession）不掛。

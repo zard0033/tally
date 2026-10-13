@@ -456,44 +456,71 @@ test('v2.47 ④ 一開機就預取明天：按下箭頭時資料已經在手上'
   )
 })
 
-/* 後端連不上（2026-10-12 Supabase 被閒置暫停那次，v2.48）。token 過期時 supabase-js 對 refresh
-   做指數退避，約 25 秒（睡眠合計 25.4 秒加上每次 fetch 的時間）才放棄；那段時間畫面只有一句
-   不動的「載入中…」，放棄後還把人丟到登入頁、秀 Safari 的原文 'Load failed'。
-   用 page.clock 快轉那段時間，不真的等。四條測試各守一個形態：連不上／永不回應／恢復／撤銷。 */
+/* 後端連不上（2026-10-12 Supabase 被閒置暫停那次，v2.48；v2.51 離線開機改了這裡）。
+   token 過期時 supabase-js 對 refresh 做指數退避，約 25 秒才放棄。v2.48 的決策是：開機畫面先換成
+   「連線比平常慢」、放棄後停在「連不上後端」。**v2.51（階段 1 甲，spec.md AC 2）把它翻掉**：本機有
+   session 時，2 秒就拿它進外殼並亮離線提示，不再等 refresh。所以下面「本機有 session」的測試改成
+   相反的斷言（不是放寬、不是刪掉）；開機畫面的慢態／連不上後端現在只剩「本機沒有 session」
+   （OAuth 回跳要打網路）走得到，由最後兩條守著。
+   用 page.clock 快轉那段時間，不真的等。 */
+
+/** 同 App.tsx 的 FAST_BOOT_MS。兩邊是字面複本（理由同 stub.ts 的 SUPABASE_REF）：改一邊要改另一邊。 */
+const FAST_BOOT_MS = 2000
 
 const authKeyPresent = (page: Page) =>
   page.evaluate(() => Object.keys(localStorage).some((k) => k.endsWith('-auth-token')))
 const setAuthMode = (page: Page, mode: AuthMode) =>
   page.evaluate((m) => { (window as unknown as { __authMode: string }).__authMode = m }, mode)
 
-/** 開機並快轉到 supabase-js 放棄、畫面停在「連不上後端」。 */
-async function bootUnreachable(page: Page) {
+/** 開機（本機有一份已過期的 session）並快轉到離線提示亮起。settle＝再快轉 30 秒，讓 supabase-js
+ *  的 refresh 退避走完、背景的資料請求放棄——模擬「在健身房待了一陣子」。 */
+async function bootOffline(page: Page, authMode: AuthMode, settle = false) {
   await page.clock.install()
-  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down' })
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.notice .muted')).toHaveText('載入中…') // 等掛載，理由見永不回應那條
-  await page.clock.runFor(30_000)
-  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
+  // 先等 App 掛載：計時器在掛載後才註冊，時鐘若先跳走，它就從跳完的那刻才開始算
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  await page.clock.runFor(FAST_BOOT_MS + 500)
+  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  if (settle) {
+    await page.clock.runFor(30_000)
+    // 背景請求放棄之後，離線提示不可以被較不精準的訊息蓋掉：還是那段診斷、還是「重新載入」鈕
+    // （蓋掉的話會變成 friendlyError 的原文加「重試」，而「重試」在 60 秒冷卻內只會拿到同一個失敗）
+    await expect(page.locator('.notice'), '背景請求放棄後離線提示被蓋掉了').toContainText('Resume')
+    await expect(page.locator('.notice .action-btn')).toHaveText('重新載入')
+  }
 }
 
-test('後端連不上：先換掉「載入中…」，放棄後停在可重載的提示，不落到登入頁', async ({ page }) => {
+/** 後端恢復後等主數字出現（資料真的落地），並確認離線提示已經消失。 */
+async function waitRecovered(page: Page) {
+  for (let i = 0; i < 120 && (await page.locator('.gauge-num').count()) === 0; i++) {
+    await page.clock.runFor(1000)
+  }
+  await expect(page.locator('.gauge-num'), '後端恢復後資料沒有落地').toHaveCount(1)
+  await expect(page.locator('.notice'), '資料回來了，離線提示卻還在').toHaveCount(0)
+}
+
+test('後端連不上（本機有 session）：2 秒內進外殼並亮離線提示，不落到登入頁、不再說「連不上後端」', async ({ page }) => {
   await page.clock.install()
   await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down' })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.notice .muted'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
 
-  // 看門狗的下界：門檻若被改成 0.5 秒，只驗「5.5 秒後有換字」是抓不到的，所以先量 4 秒時還沒換
-  await page.clock.runFor(4000)
-  await expect(page.locator('.notice .muted'), '不到 5 秒就換字了').toHaveText('載入中…')
+  /* 快速路徑的下界：門檻若被改成 0，只驗「2.5 秒後進了外殼」抓不到，所以先量 1 秒時還在開機畫面。
+     餘裕留 1 秒不是 0.5：page.clock 裝了之後時間仍會自然流動（實測 1.5 秒的真實等待漂移約
+     1.5 秒），workers: 2 的負載下斷言晚到幾百毫秒是常態。 */
+  await page.clock.runFor(FAST_BOOT_MS - 1000)
+  await expect(page.locator('.notice .muted'), '不到 2 秒就進外殼了').toHaveText('載入中…')
   await page.clock.runFor(1500)
-  await expect(page.locator('.notice .muted'), '等過 5 秒畫面仍是「載入中…」').toContainText('比平常慢')
-  await must(page, '.notice .action-btn', '慢態的重新載入鈕')
 
-  await page.clock.runFor(30_000)
-  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
-  check((await page.locator('#view-login').count()) === 0, '連不上後端被當成沒登入，落到了登入頁')
+  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  // 兩種原因都要講（離線與專案被閒置暫停從這裡看起來一樣），網路排前面——v2.48 寫「Resume」是兩次真事故換來的
+  await expect(page.locator('.notice'), '離線提示沒先講確認網路').toContainText('先確認 Wi-Fi')
+  await expect(page.locator('.notice'), '專案被閒置暫停的診斷提示不見了（v2.48）').toContainText('Resume')
+  await expect(page.locator('#view-app'), '沒有進外殼').toHaveCount(1)
+  check((await page.locator('#view-login').count()) === 0, '離線被當成沒登入，落到了登入頁')
   // 重新載入有用的前提：retryable 錯誤不清 session，reload 之後還能拿同一顆 refresh token 再試
-  check(await authKeyPresent(page), '連不上後端時 session 被清掉了，重新載入也救不回來')
+  check(await authKeyPresent(page), '離線時 session 被清掉了，重新載入也救不回來')
 
   const blocked = await page.evaluate(() => (window as unknown as { __blocked: string[] }).__blocked)
   check(
@@ -506,11 +533,134 @@ test('後端連不上：先換掉「載入中…」，放棄後停在可重載�
   await expect(page.locator('.notice .muted'), '按「重新載入」後沒有回到開機畫面').toHaveText('載入中…')
 })
 
-test('後端連上了卻永不回應：慢態也要有出口（fetch 不會 reject，不能只等 unreachable）', async ({ page }) => {
+test('後端連上了卻永不回應（本機有 session）：同樣 2 秒進外殼，不會卡在慢態', async ({ page }) => {
+  await bootOffline(page, 'hang')
+  // fetch 永不 reject，getSession 永不 settle——靠本機 session 進來，之後一直停在離線提示、不跳登入頁
+  await page.clock.runFor(120_000)
+  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  check((await page.locator('#view-login').count()) === 0, '永不回應被當成沒登入，落到了登入頁')
+  await expect(page.locator('.notice'), '慢態文案不該出現（有本機 session 時走不到）').not.toContainText('比平常慢')
+  await must(page, '.notice .action-btn', '重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
+
+  await page.click('.notice .action-btn')
+  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+})
+
+test('離線提示亮著、背景請求還在飛時後端恢復：自己接手，不必重新載入', async ({ page }) => {
+  await bootOffline(page, 'down')
+  await setAuthMode(page, 'ok')
+  // supabase-js 的 refresh 退避還沒走完，下一次重試成功就放行被擋住的請求，資料自己落地
+  await waitRecovered(page)
+
+  // TOKEN_REFRESHED 來的時候請求還在飛：不可以當場又撈一次（不然每次恢復都多一輪重複請求）
+  const profileRequests = await page.evaluate(
+    () => (window as unknown as { __allFetches: string[] }).__allFetches.filter((u) => u.includes('/rest/v1/profile')).length,
+  )
+  expect(profileRequests, '請求還在飛時 TOKEN_REFRESHED 又重撈了一次').toBe(1)
+
+  // 恢復之後就是正常使用：離線優先的旗標要歸零，之後的 online 事件不可以再把畫面重載
+  await page.evaluate(() => {
+    ;(window as unknown as { __mark: number }).__mark = 1
+    window.dispatchEvent(new Event('online'))
+  })
+  await page.waitForTimeout(500)
+  expect(
+    await page.evaluate(() => (window as unknown as { __mark?: number }).__mark),
+    '資料已恢復，離線優先的旗標沒有歸零，online 事件又把畫面重載了',
+  ).toBe(1)
+})
+
+test('離線提示亮著、恢復落在請求逾時之後但 refresh 退避還沒走完（約 10–26 秒）：仍要自己接手', async ({ page }) => {
+  await bootOffline(page, 'down')
+  /* 背景請求在建構當下就掛了 8 秒的 AbortSignal.timeout（約 2 秒起算、10 秒到期），而 supabase-js 的
+     refresh 退避還沒走完（約 12.6 秒有下一次重試）。在兩者之間恢復：重試成功時請求早就被作廢，
+     但它們還「在飛」。v2.51 第一版的 TOKEN_REFRESHED 會因為請求還在飛而不重撈，請求隨後以
+     TimeoutError 失敗，畫面卡死在離線提示（review 抓到；2.5 秒就恢復的那條測試落在窗口內，抓不到）。 */
+  await page.clock.runFor(9_000)
+  await setAuthMode(page, 'ok')
+  await waitRecovered(page)
+})
+
+test('離線提示亮著、背景請求已放棄後後端恢復：靠 TOKEN_REFRESHED 重撈接手', async ({ page }) => {
+  await bootOffline(page, 'down', true)
+  await setAuthMode(page, 'ok')
+  /* supabase-js 對同一顆 refresh token 的失敗有 60 秒冷卻，之後 auto-refresh 的 tick（每 30 秒）
+     才會真的重試並發 TOKEN_REFRESHED；請求已經放棄，所以要 App 收到事件後自己重撈。 */
+  await waitRecovered(page)
+})
+
+test('離線提示亮著時收到 online 事件：自動重新載入；沒有離線提示時不亂重載', async ({ page }) => {
+  await bootOffline(page, 'down', true)
+  const mark = () => page.evaluate(() => (window as unknown as { __mark?: number }).__mark)
+  await page.evaluate(() => {
+    ;(window as unknown as { __mark: number }).__mark = 1
+    window.dispatchEvent(new Event('online'))
+  })
+  // 重載後 window 是全新的，標記會消失，且畫面回到開機第一眼
+  await expect(page.locator('.notice .muted'), 'online 事件後沒有重新載入').toHaveText('載入中…')
+  expect(await mark(), '頁面沒有真的重載（標記還在）').toBeUndefined()
+})
+
+test('正常使用中收到 online 事件：不重新載入（只有離線提示亮著才接手）', async ({ page }) => {
+  await openApp(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { __mark: number }).__mark = 1
+    window.dispatchEvent(new Event('online'))
+  })
+  await page.waitForTimeout(500)
+  expect(
+    await page.evaluate(() => (window as unknown as { __mark?: number }).__mark),
+    '沒有離線提示卻被 online 事件重新載入了',
+  ).toBe(1)
+})
+
+test('後端恢復但 refresh token 已被撤銷：進登入頁並說明登入過期', async ({ page }) => {
+  await bootOffline(page, 'down', true)
+  await setAuthMode(page, 'revoked')
+  for (let i = 0; i < 120 && (await page.locator('#view-login').count()) === 0; i++) {
+    await page.clock.runFor(1000)
+  }
+  await expect(page.locator('#view-login'), '撤銷後沒有進登入頁').toHaveCount(1)
+  await expect(page.locator('.err')).toContainText('登入已過期')
+})
+
+test('主動登出：回到登入頁且不說「登入已過期」（AC 13：主動與被動分流）', async ({ page }) => {
+  await openApp(page)
+  await page.locator('.tab[aria-label="設定"]').click()
+  await page.locator('.settings .signout').click()
+  await expect(page.locator('#view-login'), '登出後沒有回到登入頁').toHaveCount(1)
+  await expect(page.locator('.err'), '自己按的登出被告知「登入已過期」').toHaveCount(0)
+})
+
+/* 退路：本機那份 session 的格式 parseStoredSession 認不得（這裡用「缺 user 欄位」造）時，App
+   退回原本的 getSession() 開機流程，由 supabase-js 自己判斷。v2.48 的兩個開機畫面（慢態／
+   連不上後端）現在只有這條走得到，由下面兩條守著——它們是「格式認不得」的安全網，不是常態路徑。
+   （順帶一個實測發現：OAuth 回跳時網路失敗，supabase-js 的 getSession 不回報初始化階段的錯，
+   只回 session: null，所以人會直接落到登入頁、沒有任何說明。這不在本輪範圍，記在 active.md。） */
+
+test('本機 session 格式認不得、後端連不上：退回原開機流程，停在可重載的「連不上後端」', async ({ page }) => {
   await page.clock.install()
-  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'hang' })
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down', unparseableSession: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  // 先等 App 掛載：看門狗的計時器在掛載後才註冊，時鐘若先跳走它就從跳完的那刻才開始算
+  await expect(page.locator('.notice .muted'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
+
+  // 看門狗的下界：門檻若被改成 0.5 秒，只驗「5.5 秒後有換字」抓不到，所以先量 4 秒時還沒換
+  await page.clock.runFor(4000)
+  await expect(page.locator('.notice .muted'), '不到 5 秒就換字了').toHaveText('載入中…')
+  await page.clock.runFor(1500)
+  await expect(page.locator('.notice .muted'), '等過 5 秒畫面仍是「載入中…」').toContainText('比平常慢')
+  await must(page, '.notice .action-btn', '慢態的重新載入鈕')
+
+  await page.clock.runFor(30_000)
+  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
+  check((await page.locator('#view-login').count()) === 0, '連不上後端被當成沒登入，落到了登入頁')
+  check(await authKeyPresent(page), '連不上後端時 session 被清掉了，重新載入也救不回來')
+})
+
+test('本機 session 格式認不得、後端連上了卻永不回應：慢態有出口', async ({ page }) => {
+  await page.clock.install()
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'hang', unparseableSession: true })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.notice .muted')).toHaveText('載入中…')
   await page.clock.runFor(120_000)
 
@@ -518,28 +668,4 @@ test('後端連上了卻永不回應：慢態也要有出口（fetch 不會 reje
   await expect(page.locator('.notice .muted')).toContainText('比平常慢')
   check((await page.locator('.notice .headline').count()) === 0, '永不回應的情境不該出現「連不上後端」headline')
   await must(page, '.notice .action-btn', '慢態的重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
-
-  await page.click('.notice .action-btn')
-  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
-})
-
-test('後端恢復：停在「連不上後端」的畫面自己接手，不必重新載入', async ({ page }) => {
-  await bootUnreachable(page)
-  await setAuthMode(page, 'ok')
-  /* supabase-js 對同一顆 refresh token 的失敗有 60 秒冷卻，之後 auto-refresh 的 tick（每 30 秒）
-     才會真的重試並發 TOKEN_REFRESHED；App 的訂閱收到就 setSession。 */
-  for (let i = 0; i < 120 && (await page.locator('#view-app').count()) === 0; i++) {
-    await page.clock.runFor(1000)
-  }
-  await expect(page.locator('#view-app'), '後端恢復後畫面沒有自己離開「連不上後端」').toHaveCount(1)
-})
-
-test('後端恢復但 refresh token 已被撤銷：進登入頁並說明登入過期', async ({ page }) => {
-  await bootUnreachable(page)
-  await setAuthMode(page, 'revoked')
-  for (let i = 0; i < 120 && (await page.locator('#view-login').count()) === 0; i++) {
-    await page.clock.runFor(1000)
-  }
-  await expect(page.locator('#view-login'), '撤銷後沒有進登入頁').toHaveCount(1)
-  await expect(page.locator('.err')).toContainText('登入已過期')
 })

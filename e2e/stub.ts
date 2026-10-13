@@ -27,6 +27,11 @@ export interface StubOptions {
    *   - revoked：400 refresh_token_not_found（refresh token 已被撤銷）
    *  全部都記進 __blocked——這些仍是「沒有放行到真實網路」。rest/v1 不受影響。 */
   authMode?: AuthMode
+  /** 種一份**缺 user 欄位**的 session——App 的 parseStoredSession 認不得它，會退回原本的
+   *  getSession() 開機流程（由 supabase-js 自己判斷；它只要求 access_token／refresh_token／
+   *  expires_at 三欄）。用來守那條退路：本機 session 一般會走離線快速路徑（v2.51），
+   *  開機畫面的慢態／連不上後端只剩這條走得到。要搭配 authMode（過期才會觸發 refresh）。 */
+  unparseableSession?: boolean
 }
 
 export type AuthMode = 'down' | 'hang' | 'ok' | 'revoked'
@@ -39,25 +44,24 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode }) => {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({
-          access_token: 'stub-token',
-          refresh_token: 'stub-refresh',
-          expires_at: Math.floor(Date.now() / 1000) + (authMode ? -3600 : 3600),
-          expires_in: 3600,
-          token_type: 'bearer',
-          user: {
-            id: userId,
-            aud: 'authenticated',
-            email: 'stub@example.com',
-            app_metadata: {},
-            user_metadata: {},
-            created_at: new Date().toISOString(),
-          },
-        }),
-      )
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession }) => {
+      const stored: Record<string, unknown> = {
+        access_token: 'stub-token',
+        refresh_token: 'stub-refresh',
+        expires_at: Math.floor(Date.now() / 1000) + (authMode ? -3600 : 3600),
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: {
+          id: userId,
+          aud: 'authenticated',
+          email: 'stub@example.com',
+          app_metadata: {},
+          user_metadata: {},
+          created_at: new Date().toISOString(),
+        },
+      }
+      if (unparseableSession) delete stored.user
+      localStorage.setItem(storageKey, JSON.stringify(stored))
 
       const w = window as unknown as {
         __writes: { path: string; table: string; method: string; body: unknown }[]
@@ -101,6 +105,10 @@ export async function seedFetchStub(
       const real = window.fetch.bind(window)
       // @ts-expect-error — 刻意覆寫全域 fetch，型別對不上是預期的
       window.fetch = async (input: RequestInfo | URL, opts: RequestInit = {}) => {
+        /* 真的 fetch 收到已 abort 的 signal 會立刻 reject。這支 stub 原本不看 signal，於是 App 的
+           `AbortSignal.timeout(8000)` 在測試裡形同虛設——「請求在被放行前就已逾時」這類失敗形態
+           （v2.51 離線開機被 review 抓到的卡死）整個走不到。 */
+        if (opts.signal?.aborted) throw opts.signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')
         const u = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
         w.__allFetches.push(u)
 
@@ -141,6 +149,11 @@ export async function seedFetchStub(
               })
           }
         }
+
+        /* 'down'＝整條網路斷了（DNS 被撤、飛航模式），不只認證端點：資料 REST 一樣連不上。
+           只斷 /auth/v1/ 的話，supabase-js 放棄 refresh 後會拿 anon key 繼續發請求、而這裡的 REST
+           照常回資料，「離線」在 stub 裡自己痊癒了——真網路斷時不會（離線提示測試的前提）。 */
+        if (w.__authMode === 'down' && u.includes('/rest/v1/')) throw new TypeError('Load failed')
 
         if (u.includes('supabase.co') && !u.includes('/rest/v1/')) {
           w.__blocked.push(u)
@@ -218,6 +231,7 @@ export async function seedFetchStub(
       storageKey: STORAGE_KEY,
       intakeDelayMs: opts.intakeDelayMs ?? 0,
       authMode: opts.authMode ?? null,
+      unparseableSession: opts.unparseableSession ?? false,
     },
   )
 }
