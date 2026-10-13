@@ -402,7 +402,7 @@ headless WebKit，**把預覽伺服器真的關掉**（網路確實沒了）後�
 
 **範圍**：重訓記錄、課表、有氧記錄、動作庫（預填＋要點）、歷史、離線寫入與離線可讀（**接上階段 1 甲的佇列，第一個真實呼叫者**）、同步狀態指示。**不含**：組間計時器、RPE、GIF／動作圖庫、1RM／趨勢圖（階段 4）、任何熱量計算、課表的週期排程。
 
-**使用者裁決（2026-10-13 訪談）**：① 有氧要記**速度、坡度**，並開一個**「機器／遊戲顯示的熱量」欄讓使用者自填**，只存不算、留給未來推估 ② 有氧種類＝跑步機坡度健走、Switch 2 有氧拳擊（在家做，不在健身房） ③ RPE 不做（備註已夠用） ④ 動作庫先預填，另加「要點」欄（在器材前看的提示，取代 Gymwork 的 GIF 指南；GIF 無所謂） ⑤ 歷史紀錄階段 2、1RM／趨勢階段 4 ⑥ 「用歷史推估該吃多少」是**另一條獨立的 journey**（active.md 續點 7），階段 2 先做、產生資料。⑦ **課表要做**（Gymwork 的用法：開始訓練時可空白一個個加動作，或選預先建好的課表；使用者有菜單 A、B 輪替，所以「複製上次」會帶出另一份、不夠用，原案作廢，課表從階段 3 提前） ⑧ **肌群分七類，沿用 Gymwork**：胸部、背部、下半身、肩膀、手臂、腹肌、其他。⑨ **開始訓練時組數、次數、重量一律預填上次實際完成的值**，再依當次表現加減；課表只在「沒做過」時提供預設。⑩ **複製要有**：訓練存成課表、複製課表，都不用重頭一個個輸入。
+**使用者裁決（2026-10-13 訪談）**：① 有氧**依類型決定欄位**（2026-10-13 第二輪回饋修正）：跑步機坡度健走記分鐘、速度、坡度；有氧拳擊記分鐘、**預估熱量**（使用者自填，只存不算、留給未來推估）；**兩種都沒有備註** ② 有氧種類＝跑步機坡度健走、Switch 2 有氧拳擊（在家做，不在健身房）；現在只有這兩種，不做「新類型」入口 ③ RPE 不做、**也不做任何「備註」欄**——動作只有一個「要點」文字欄，要寫要領或當備忘都用它 ④ 動作庫先預填，另加「要點」欄（在器材前看的提示，取代 Gymwork 的 GIF 指南；GIF 無所謂） ⑤ 歷史紀錄階段 2、1RM／趨勢階段 4 ⑥ 「用歷史推估該吃多少」是**另一條獨立的 journey**（active.md 續點 7），階段 2 先做、產生資料。⑦ **課表要做**（Gymwork 的用法：開始訓練時可空白一個個加動作，或選預先建好的課表；使用者有菜單 A、B 輪替，所以「複製上次」會帶出另一份、不夠用，原案作廢，課表從階段 3 提前） ⑧ **肌群分七類，沿用 Gymwork**：胸部、背部、下半身、肩膀、手臂、腹肌、其他。⑨ **開始訓練時組數、次數、重量一律預填上次實際完成的值**，再依當次表現加減；課表只在「沒做過」時提供預設。⑩ **複製要有**：訓練存成課表、複製課表，都不用重頭一個個輸入。
 
 #### 資料表（**動 schema＝先核可**；DDL 草案，核可後由使用者在 Supabase Dashboard SQL Editor 執行，我提供回滾 SQL）
 
@@ -415,7 +415,7 @@ create table exercises (
   name         text not null check (length(btrim(name)) > 0),
   muscle_group text not null check (muscle_group in
                  ('chest','back','legs','shoulder','arms','core','other')),   -- 胸部／背部／下半身／肩膀／手臂／腹肌／其他（沿用 Gymwork）
-  tips         text,                                   -- 動作要點；與每次訓練的備註分開
+  tips         text,                                   -- 動作要點：唯一的文字欄（沒有「每次訓練的備註」），訓練中可直接改
   archived     boolean not null default false,         -- 同 foods：不真刪，歷史才不爛
   created_at   timestamptz not null default now()
 );
@@ -447,7 +447,6 @@ create table workouts (
   started_at   timestamptz not null,
   ended_at     timestamptz,                            -- null＝進行中
   routine_id   uuid references routines(id) on delete set null,   -- 這次照哪份課表做的；空白開始為 null
-  note         text,
   created_at   timestamptz not null default now(),
   check (ended_at is null or ended_at >= started_at)
 );
@@ -459,7 +458,6 @@ create table workout_exercises (
   workout_id  uuid not null references workouts(id) on delete cascade,
   exercise_id uuid not null references exercises(id) on delete restrict,
   position    smallint not null check (position >= 0),
-  note        text,                                    -- 該次備註（會帶到下次當預填）
   created_at  timestamptz not null default now()
 );
 create index workout_exercises_workout_idx  on workout_exercises (workout_id);
@@ -481,12 +479,11 @@ create table cardio_sessions (
   id           uuid primary key,
   user_id      uuid not null default auth.uid() references auth.users(id) on delete cascade,
   performed_on date not null,
-  kind         text not null check (length(btrim(kind)) > 0),     -- 自由輸入；畫面提供最近用過的
+  kind         text not null check (length(btrim(kind)) > 0),     -- 現有兩種：跑步機坡度健走／有氧拳擊；畫面依 kind 決定顯示哪些欄位（設定放客戶端，不另開表）
   minutes      numeric(5,1) not null check (minutes > 0 and minutes <= 1440),
-  speed_kmh    numeric(4,1) check (speed_kmh is null or (speed_kmh > 0 and speed_kmh <= 40)),
-  incline_pct  numeric(3,1) check (incline_pct is null or (incline_pct >= 0 and incline_pct <= 40)),
-  shown_kcal   numeric(6,1) check (shown_kcal is null or (shown_kcal >= 0 and shown_kcal <= 10000)),
-  note         text,
+  speed_kmh    numeric(4,1) check (speed_kmh is null or (speed_kmh > 0 and speed_kmh <= 40)),      -- 只有走路類型填
+  incline_pct  numeric(3,1) check (incline_pct is null or (incline_pct >= 0 and incline_pct <= 40)), -- 只有走路類型填
+  est_kcal     numeric(6,1) check (est_kcal is null or (est_kcal >= 0 and est_kcal <= 10000)),       -- 只有拳擊類型填；使用者自填的預估，只存不算
   created_at   timestamptz not null default now()
 );
 create index cardio_user_date_idx on cardio_sessions (user_id, performed_on);
@@ -507,7 +504,7 @@ create policy owner_all on workout_sets      for all using (auth.uid() = user_id
 create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-**設計說明**：① 客戶端產 uuid、不給 default，離線寫入才能用 upsert 冪等。② **預填動作用確定性 id**（由 user_id＋動作 key 雜湊產生）：Safari 分頁與主畫面兩個容器各自預填，也只會 upsert 到同一列，不會出現兩份。③ `exercises` 用 `on delete restrict`＋`archived`，同 `foods`。④ `workouts` 刪除會 cascade 子列；離線時只排一條 delete，畫面要連帶隱藏子項。⑤ 刻意不加 `unique (workout_exercise_id, set_no)`：離線編輯／重排會短暫撞號，排序用 `set_no`、`created_at`。⑥ `shown_kcal` 只存不算，欄名刻意不叫 `burned`／`calories_burned`，避免日後被當成可信的消耗量。⑦ 有氧自成一張表，不併入 sets：欄位性質不同（沒有組、沒有重量）。⑧ 課表（`routines`／`routine_exercises`）與 `exercises` 一樣用 `archived` 不真刪；`workouts.routine_id` 記這次照哪份課表做的，之後才看得到「菜單 A 的歷史」，課表被刪時設為 null；課表只存「動作、順序、預設組數與次數」，**不存重量**——重量永遠取自該動作上次實際完成的值。
+**設計說明**：① 客戶端產 uuid、不給 default，離線寫入才能用 upsert 冪等。② **預填動作用確定性 id**（由 user_id＋動作 key 雜湊產生）：Safari 分頁與主畫面兩個容器各自預填，也只會 upsert 到同一列，不會出現兩份。③ `exercises` 用 `on delete restrict`＋`archived`，同 `foods`。④ `workouts` 刪除會 cascade 子列；離線時只排一條 delete，畫面要連帶隱藏子項。⑤ 刻意不加 `unique (workout_exercise_id, set_no)`：離線編輯／重排會短暫撞號，排序用 `set_no`、`created_at`。⑥ `est_kcal`（畫面稱「預估熱量」）只存不算，欄名刻意不叫 `burned`／`calories_burned`，避免日後被當成可信的消耗量。⑦ 有氧自成一張表，不併入 sets：欄位性質不同（沒有組、沒有重量）。⑧ 課表（`routines`／`routine_exercises`）與 `exercises` 一樣用 `archived` 不真刪；`workouts.routine_id` 記這次照哪份課表做的，之後才看得到「菜單 A 的歷史」，課表被刪時設為 null；課表只存「動作、順序、預設組數與次數」，**不存重量**——重量永遠取自該動作上次實際完成的值。
 
 **預填動作（16 個，名稱＋肌群；搜尋確認的核心 6 個＋一般健身房配置）**：
 
@@ -527,7 +524,7 @@ create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id
 
 1. 該帳號沒有任何動作時預填上列 16 個；確定性 id，兩個容器各自預填不重複。
 2. 可新增、改名、改肌群、封存／取消封存；封存的動作不進選單，但歷史仍顯示它的名稱；不提供真刪。
-3. 每個動作有「要點」欄（純文字），選動作與訓練中都能展開閱讀與編輯；與每次訓練的備註分開存。
+3. 每個動作有「要點」欄（純文字），是動作**唯一**的文字欄、沒有「每次訓練的備註」；**訓練中只能閱讀**，點要點塊的筆圖示開「編輯動作」sheet（與動作庫同一張）才能改，不在卡片上就地編輯；兩處改的是同一欄（跟著動作走，下次訓練一樣看得到）。
 
 **重訓**
 
@@ -535,20 +532,21 @@ create policy owner_all on cardio_sessions   for all using (auth.uid() = user_id
 4a. 課表：可建立（名稱＋依序加入動作，每個動作可設「沒有歷史時」的預設組數與次數）、改名、增刪動作、調順序、封存／取消封存。**兩種複製**：①**把一次已完成的訓練「存成課表」**（帶入動作、順序與當時的組數與次數）；②**複製課表**（名稱預設「原名稱 複本」，帶入動作、順序與預設值）。複製只複製結構，**不複製重量**。
 4b. 訓練記下它照哪份課表做的（`routine_id`）；之後可依課表看歷史。
 5. 每個動作的每一組：重量（kg，可小數，步進 0.5）、次數、打勾。開始訓練時，**組數、次數、重量一律預填該動作上次實際完成的數值**（不論空白開始或從課表開始），使用者再依當次表現加減；沒有歷史才用課表的預設組數與次數。新增一組時同樣預填上一組的值。課表本身**不存重量**。
-6. 每個動作有「該次備註」，預填上次的備註。
+6. （已刪：不做「該次備註」，要點欄一個就夠；2026-10-13 使用者裁決。編號保留。）
 7. 頂部顯示：時長、**總訓練量＝已打勾各組 重量×次數 的總和**、已完成組數（驗算：腿推舉 60×12×3＝2160）。
 8. 結束訓練＝寫 `ended_at`；已結束的可重新打開編輯；可刪除整次訓練（需確認）。
+8a. **補記過去日子**：日期元件選到過去的日子再開始訓練＝記在那一天，**不跑計時**；完成時手填「時長（分鐘）」，可略過。存法：`started_at`＝該日 12:00（本機時間）、`ended_at`＝`started_at`＋填的分鐘（略過則等於 `started_at`）；`performed_on`＝選的那天。（原案是補記也跑計時，使用者裁決改手填。）
 9. 一天可以有多次訓練；進行中（`ended_at` 為空）的訓練在 App 重開後仍在，畫面提示可繼續。
 
 **有氧**
 
-10. 新增一筆：類型（自由輸入，提供最近用過的）、分鐘（必填）、速度 km/h、坡度 %、機器／遊戲顯示熱量 kcal、備註（其餘皆選填）；可編輯、刪除。
-11. **顯示熱量只存不算**：不進目標、剩餘熱量、實測維持熱量的任何計算；畫面標籤是「機器／遊戲顯示」，不稱「消耗」。
-12. 數值守門：分鐘 >0 且 ≤1440、速度 0–40、坡度 0–40、顯示熱量 0–10000；範圍外要擋並說明，不靜默截斷。
+10. 新增一筆（**sheet**，記在目前選的那天）：類型二選一，**類型決定欄位**——跑步機坡度健走＝分鐘（必填）＋速度 km/h＋坡度 %（選填）；有氧拳擊＝分鐘（必填）＋預估熱量 kcal（選填）。**沒有備註欄**，也不放「新類型」入口。可編輯、刪除。
+11. **預估熱量只存不算**：不進目標、剩餘熱量、實測維持熱量的任何計算；畫面標籤是「預估熱量」，不稱「消耗」。
+12. 數值守門：分鐘 >0 且 ≤1440、速度 0–40、坡度 0–40、預估熱量 0–10000；範圍外要擋並說明，不靜默截斷。
 
 **歷史**
 
-13. 每個動作可看過往每次：日期、各組 重量×次數（只含已打勾）、該次備註，由新到舊。
+13. 每個動作可看過往每次：日期、各組 重量×次數（只含已打勾），由新到舊。
 14. 訓練與有氧依日期列出，點進可編輯。
 
 **離線與同步**（接階段 1 甲佇列；契約見 `queue.ts` 的 `Sender` 註解）
@@ -601,7 +599,7 @@ RPE；GIF 與動作圖庫；組間計時器；課表的週期排程；1RM 與趨
 
 ### 資料模型草案（**已由上方「階段 2 spec」定案**，這裡保留當初草案；以上方為準）
 
-`exercises`（名稱、肌群、是否封存）／`workouts`（日期、起訖時間、備註）／`workout_exercises`（所屬訓練、動作、順序、**該次備註**）／`workout_sets`（所屬動作項、第幾組、重量、次數、是否完成）。全部走與既有四表相同的 `owner_all` RLS。主鍵由客戶端產 UUID（為了離線寫入冪等）。**不做**：存 Gymwork 歷史（使用者 10/12 才開始試用，只有一次紀錄，不需搬）。
+`exercises`（名稱、肌群、是否封存）／`workouts`（日期、起訖時間）／`workout_exercises`（所屬訓練、動作、順序）／`workout_sets`（所屬動作項、第幾組、重量、次數、是否完成）。全部走與既有四表相同的 `owner_all` RLS。主鍵由客戶端產 UUID（為了離線寫入冪等）。**不做**：存 Gymwork 歷史（使用者 10/12 才開始試用，只有一次紀錄，不需搬）。
 
 ### 明確不做（別在下一輪長回來）
 
