@@ -392,6 +392,14 @@ describe('沒有這個帳號的有效 session：不送、不讀（supabase-js �
     expect(v.summary.total, '不該排預填').toBe(0)
   })
 
+  it('load：沒有 session 且本機也沒有動作時不預填（不替已經離開的帳號排條目）', async () => {
+    const t = setup()
+    t.auth.user = null
+    const v = await t.rt.load(U1)
+    expect(v.summary.total).toBe(0)
+    expect(await t.rt.queue.entries()).toEqual([])
+  })
+
   it('load：讀到一半掉 session（讀完那次核對失敗），不採用這次讀到的', async () => {
     const t = setup()
     t.backend.seed('exercises', exercise('e1', '舊名'))

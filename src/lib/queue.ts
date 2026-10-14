@@ -197,8 +197,13 @@ function detachSetNull(entries: readonly QueueEntry[], userId: string, gone: Rea
  *  setNull 的子列改指向 null 留下。同一列後面的條目不動：放棄只動被點名的那一條（既有契約）。 */
 function withoutDiscarded(snap: QueueSnapshot, target: QueueEntry): QueueSnapshot {
   const next = removeEntry(snap, target.seq)
-  if (!(target.op === 'insert' && neverApplied(target))) return next
+  if (target.op !== 'insert') return next
   const root = keyOf(target)
+  if (!neverApplied(target)) {
+    // 可能已落地：子孫不能丟（父列也許真的在伺服器上），但 setNull 的連結照樣解開——父列若其實沒到，
+    // 子列會帶著它的 id 永遠撞外鍵；解開最多少一個連結（訓練變成「沒照課表」），不解開會賠上整次訓練
+    return { ...next, entries: detachSetNull(next.entries, target.userId, new Set([root])) }
+  }
   const doomed = orphanRows(next.entries, target.userId, root, true)
   doomed.delete(root)
   const kept = next.entries.filter((e) => !(e.userId === target.userId && doomed.has(keyOf(e)) && neverApplied(e)))

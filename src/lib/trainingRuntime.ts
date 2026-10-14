@@ -92,6 +92,13 @@ export interface TrainingRuntimeDeps {
 
 export const BASE_STORAGE_KEY = 'training-base'
 
+/** 目前的 session 不是這個帳號（或沒有 session）。與「連不上」分開：前者不該預填。 */
+class SessionMismatch extends Error {
+  constructor() {
+    super('登入已失效（沒有這個帳號的有效 session）')
+  }
+}
+
 /* ═══════════ 本機底的序列化 ═══════════ */
 
 interface StoredBase {
@@ -158,7 +165,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
 
   /** session 不是這個帳號就丟錯：呼叫端（load）會退回本機底，不會拿 anon 讀到的空表當真相。 */
   async function assertSession(userId: string): Promise<void> {
-    if ((await sessionUserId()) !== userId) throw new Error('登入已失效（沒有這個帳號的有效 session）')
+    if ((await sessionUserId()) !== userId) throw new SessionMismatch()
   }
 
   /** 讀之前、讀完都對一次 session：讀取途中被登出，最後幾頁可能已經是 anon 讀的。 */
@@ -247,9 +254,11 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   }
 
   /** 一個動作都沒有就預填。看的是疊上佇列後的畫面：預填排進佇列之後就不會再預填第二次。 */
-  async function seedIfEmpty(userId: string): Promise<TrainingView> {
+  async function seedIfEmpty(userId: string, gen: number): Promise<TrainingView> {
     const view = await composeView(userId)
     const rows = presetsToSeed(userId, view.db.exercises) // 已有動作就是空陣列，write 不排任何東西
+    // 這個檢查與下面 write 呼叫 enqueueMany 之間不能有 await：中間若插進 clearAll，預填會排在 clear 之後落地
+    if (gen !== generation) return view
     return write(
       userId,
       rows.map((r) => ({
@@ -269,8 +278,14 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
       const gen = generation
       try {
         await adoptFresh(userId, await fetchAll(userId), gen)
-      } catch {
+      } catch (e) {
         if (gen !== generation) return composeView(userId)
+        // 沒有這個帳號的 session（登出途中、換了人）：連本機底都不該拿來預填——那是在替一個已經離開的帳號排條目
+        if (e instanceof SessionMismatch) {
+          await readCachedBase(userId)
+          if (base && base.userId === userId) source = 'cache'
+          return composeView(userId)
+        }
         // 讀不到伺服器：退回本機底；本機也沒有就是 empty
         await readCachedBase(userId)
         if (base && base.userId === userId) source = 'cache'
@@ -280,8 +295,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
         }
       }
       // 讀取途中被主動登出：不預填（預填會在已清空的裝置上排 16 筆屬於舊帳號的條目）
-      if (gen !== generation) return composeView(userId)
-      return seedIfEmpty(userId)
+      return seedIfEmpty(userId, gen)
     },
 
     async view(userId) {

@@ -722,6 +722,21 @@ describe('父列依賴（AC 16）', () => {
       expect('parents' in s.entries[0]).toBe(false)
     })
 
+    it('父列「可能已落地」（先 504 再 422）也放棄時：子孫不丟，但 setNull 連結照樣解開，訓練不會永遠撞外鍵', async () => {
+      const t = build(null, (e, n) => (e.rowId === 'r1' ? (n === 1 ? 504 : 422) : 'ok'))
+      await t.queue.enqueue(R('r1'))
+      await t.queue.enqueue(WR('w1', 'r1'))
+      await t.queue.flush('u1') // r1：504（可能已落地）
+      await t.queue.flush('u1') // r1：422
+      const r1 = (await t.queue.entries()).find((e) => e.rowId === 'r1')!
+      expect(r1.maybeApplied).toBe(true)
+      expect(await t.queue.discardImpact(r1.seq)).toBe(0)
+      await t.queue.discard(r1.seq)
+      const w1 = (await t.queue.entries()).find((e) => e.rowId === 'w1')
+      expect(w1?.payload).toEqual({ routine_id: null })
+      expect(w1?.parents).toBeUndefined()
+    })
+
     it('沒標明 onDelete 的參照當 cascade（最保守）', () => {
       let s = appendEntry(emptySnapshot(), W('w1'), 1)
       s = appendEntry(s, WE('we1', 'w1'), 2)
