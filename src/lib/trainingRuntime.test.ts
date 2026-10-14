@@ -251,11 +251,11 @@ describe('write／flush', () => {
     expect(v.db.workout_sets).toHaveLength(1)
     expect(v.summary.mine).toBe(3)
     const entries = await t.rt.queue.entries()
-    expect(entries[1].parents).toEqual([
-      { table: 'workouts', rowId: 'w1' },
-      { table: 'exercises', rowId: 'e1' },
+    expect(entries[1].parents?.map((p) => [p.table, p.rowId])).toEqual([
+      ['workouts', 'w1'],
+      ['exercises', 'e1'],
     ])
-    expect(entries[2].parents).toEqual([{ table: 'workout_exercises', rowId: 'we1' }])
+    expect(entries[2].parents?.map((p) => [p.table, p.rowId])).toEqual([['workout_exercises', 'we1']])
   })
 
   it('flush 依父→子順序送出，伺服器上三列都在，佇列清空', async () => {

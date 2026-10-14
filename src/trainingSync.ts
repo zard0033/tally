@@ -12,7 +12,7 @@ import { createTrainingRuntime, type TrainingClient } from '@/lib/trainingRuntim
 let store: UseStore | null = null
 const getStore = (): UseStore => (store ??= createStore('tally', 'kv'))
 
-/** 全 App 唯一一份。「同一份儲存只能有一個實例」（queue.ts 的契約）靠它在模組層只建一次保證。
+/** 全 App（這個分頁）唯一一份；跨分頁靠 crossLock，兩者合起來才滿足 queue.ts「同一份儲存一次只有一個在寫」的契約。
  *  supabase-js 的 client 型別比執行期要的介面寬很多，這裡一次轉型成它要的最小形狀。 */
 export const trainingRuntime = createTrainingRuntime({
   kv: {
@@ -22,4 +22,6 @@ export const trainingRuntime = createTrainingRuntime({
   client: supabase as unknown as TrainingClient,
   // getSession 在 access token 過期時會先試 refresh，失敗就回 null session（不丟錯）
   sessionUserId: async () => (await supabase.auth.getSession()).data.session?.user.id ?? null,
+  // 桌機多分頁共用同一份 IndexedDB：沒有跨分頁鎖，兩邊各自整份寫回會互相蓋掉條目（Safari 15.4 起有）
+  crossLock: <T>(name: string, fn: () => Promise<T>) => navigator.locks.request(name, fn),
 })

@@ -19,10 +19,18 @@ export type QueueOp = 'insert' | 'update' | 'delete'
  *  也會落在這裡，下一輪就自己好了。介面文案別叫人據此丟掉那一條。 */
 export type FailureKind = 'offline' | 'auth' | 'rejected' | 'transient'
 
+/** 伺服器端外鍵的 on delete。決定父列「不會存在了」（離線新增又刪、被拒絕後放棄）時子列怎麼辦：
+ *  cascade＝子列跟著消失；setNull＝子列留下、那一欄改成 null；restrict＝子列沒有它就存不了。 */
+export type OnParentDelete = 'cascade' | 'restrict' | 'setNull'
+
 /** 指向一列。父列依賴用它描述「這一條要等哪幾列先到」。 */
 export interface RowRef {
   readonly table: string
   readonly rowId: string
+  /** 子列的哪一欄指向它；setNull 時改的就是這一欄。 */
+  readonly column?: string
+  /** 沒標明＝cascade（最保守的舊行為：父列不在，子列一起走）。 */
+  readonly onDelete?: OnParentDelete
 }
 
 export interface QueueEntry {
@@ -49,6 +57,9 @@ export interface QueueEntry {
   readonly lastError: string | null
   /** 最後一次失敗的分類；從未失敗、或正在重送時為 null。 */
   readonly failure: FailureKind | null
+  /** 曾經有一次嘗試結果曖昧（逾時、連不上、5xx）：請求可能已落地。**黏著的**——之後某次得到
+   *  401／4xx 不代表先前那次沒生效，不能因為「最後一次」是明確失敗就當它從沒到過伺服器。 */
+  readonly maybeApplied?: true
 }
 
 export interface QueueSnapshot {
@@ -139,24 +150,59 @@ const keyOf = (e: { table: string; rowId: string }): string => `${e.table}\u0000
  *  **結果曖昧的都不算**：正在送出（failure 為 null）、逾時或連不上（offline）、502／504／5xx（transient）——
  *  請求可能已落地、或仍在路上，晚點才到。送到一半被殺掉的條目重開後也屬於這一類。 */
 const neverApplied = (e: QueueEntry): boolean =>
-  e.attempts === 0 || e.failure === 'rejected' || e.failure === 'auth'
+  e.attempts === 0 || (!e.maybeApplied && (e.failure === 'rejected' || e.failure === 'auth'))
 
-/** 以 root 這一列為根，沿 parents 往下找出所有子孫列的 key（含 root 自己）。
+/** 父列不在時，這條參照會不會把子列一起帶走。restrict 只在「放棄被拒絕的父列」時算：
+ *  子列沒有它存不了；但離線刪除不走這條（動作不提供刪除，restrict 的父列不會被刪）。 */
+const follows = (p: RowRef, withRestrict: boolean): boolean => {
+  const kind = p.onDelete ?? 'cascade'
+  return kind === 'cascade' || (withRestrict && kind === 'restrict')
+}
+
+/** 以 root 這一列為根，沿會帶走子列的參照往下找出所有子孫列的 key（含 root 自己）。setNull 不跟——
+ *  那種子列留下來，由 detachSetNull 改掉指向。
  *  回傳的是「列」的集合而非條目：子列後來的 update 沒有 parents，只能靠列 key 認出它也屬於這一棵。 */
-function descendantKeys(entries: readonly QueueEntry[], userId: string, root: string): Set<string> {
+function orphanRows(entries: readonly QueueEntry[], userId: string, root: string, withRestrict: boolean): Set<string> {
   const keys = new Set([root])
   let grew = true
   while (grew) {
     grew = false
     for (const e of entries) {
       if (e.userId !== userId || keys.has(keyOf(e))) continue
-      if (e.parents?.some((p) => keys.has(keyOf(p)))) {
+      if (e.parents?.some((p) => keys.has(keyOf(p)) && follows(p, withRestrict))) {
         keys.add(keyOf(e))
         grew = true
       }
     }
   }
   return keys
+}
+
+/** 父列不會存在了（gone）：以 setNull 指向它的子列照伺服器的做法改成 null、拿掉這條依賴，
+ *  子列本身留下（課表被放棄，用它做的訓練不該跟著消失）。 */
+function detachSetNull(entries: readonly QueueEntry[], userId: string, gone: ReadonlySet<string>): QueueEntry[] {
+  return entries.map((e) => {
+    const cut = e.userId === userId ? (e.parents ?? []).filter((p) => p.onDelete === 'setNull' && gone.has(keyOf(p))) : []
+    if (cut.length === 0) return e
+    const payload = e.payload ? { ...e.payload } : null
+    for (const p of cut) if (payload && p.column && payload[p.column] === p.rowId) payload[p.column] = null
+    const parents = (e.parents ?? []).filter((p) => !cut.includes(p))
+    const { parents: _dropped, ...rest } = e
+    return parents.length > 0 ? { ...rest, payload, parents } : { ...rest, payload }
+  })
+}
+
+/** 放棄 seq 這一條之後的佇列。放棄的是確定沒生效的 insert 時，這一列不會存在：
+ *  cascade／restrict 掛在它底下、同樣沒生效的子孫一併放棄（留著只會撞外鍵、永遠卡成 rejected），
+ *  setNull 的子列改指向 null 留下。同一列後面的條目不動：放棄只動被點名的那一條（既有契約）。 */
+function withoutDiscarded(snap: QueueSnapshot, target: QueueEntry): QueueSnapshot {
+  const next = removeEntry(snap, target.seq)
+  if (!(target.op === 'insert' && neverApplied(target))) return next
+  const root = keyOf(target)
+  const doomed = orphanRows(next.entries, target.userId, root, true)
+  doomed.delete(root)
+  const kept = next.entries.filter((e) => !(e.userId === target.userId && doomed.has(keyOf(e)) && neverApplied(e)))
+  return { ...next, entries: detachSetNull(kept, target.userId, new Set([...doomed, root])) }
 }
 
 /** 加一條。delete 蓋過同一列、同一帳號「確定沒生效」的較舊條目（AC 14 的 tombstone）：留著只是白送。
@@ -181,9 +227,9 @@ export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): 
     if (neverLeftDevice) {
       // 這一列從沒到過伺服器，掛在它底下、同樣沒送過的子孫（離線新增的訓練連同動作與組）也只剩白送：
       // 留著，父列不存在，它們每一條都會撞外鍵、永遠卡成 rejected。
-      const doomed = descendantKeys(kept, input.userId, target)
+      const doomed = orphanRows(kept, input.userId, target, false)
       const rest = kept.filter((e) => !(e.userId === input.userId && doomed.has(keyOf(e)) && neverApplied(e)))
-      return { nextSeq: snap.nextSeq + 1, entries: rest }
+      return { nextSeq: snap.nextSeq + 1, entries: detachSetNull(rest, input.userId, doomed) }
     }
   }
   const entry: QueueEntry = {
@@ -246,6 +292,8 @@ const normalize = (snap: QueueSnapshot): QueueSnapshot => {
 export interface OfflineQueue {
   /** 回傳排進去的條目；若這次操作與佇列裡從未送出的條目互相抵銷（離線新增又刪掉）則回 null。 */
   enqueue(input: NewEntry): Promise<QueueEntry | null>
+  /** 一次排多條、只寫一次儲存：要嘛全部排進去、要嘛一條都沒有（一個動作＋三組不能只存下一半）。 */
+  enqueueMany(inputs: readonly NewEntry[]): Promise<void>
   /** 依 seq 重放屬於 userId 的條目。同時只會有一輪在跑，重複呼叫（前景＋TOKEN_REFRESHED）共用同一輪，
    *  且保證 resolve 時「呼叫當下已在佇列裡的條目」都至少試過一次（併進來的呼叫只會發生在那一輪
    *  最後一次掃描之前；掃描之後的呼叫一律開新的一輪）。
@@ -256,8 +304,11 @@ export interface OfflineQueue {
   entries(): Promise<readonly QueueEntry[]>
   summary(userId: string): Promise<QueueSummary>
   /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。
-   *  放棄的若是確定沒生效的 insert，掛在那一列底下的子孫條目會連帶放棄（它們沒有父列就送不出去）。 */
+   *  放棄的若是確定沒生效的 insert：cascade／restrict 掛在那一列底下的子孫條目連帶放棄（沒有父列存不了），
+   *  setNull 的子列留下、那一欄改成 null。會帶走幾條先用 discardImpact 問。 */
   discard(seq: number): Promise<boolean>
+  /** 放棄這一條會連帶清掉幾條（不含它自己）。UI 在「放棄這筆」前據此告知會一起消失多少。 */
+  discardImpact(seq: number): Promise<number>
   /** 清空全部。主動登出才呼叫；被動掉線（SIGNED_OUT 非使用者按的）一律不呼叫（AC 13）。 */
   clear(): Promise<void>
 }
@@ -269,25 +320,40 @@ interface Deps {
   /** 一條送出超過這麼久沒有結果就當「連不上」。iOS 把 App 凍結時，pending 的 fetch 不一定會 reject，
    *  沒有這個，一條永不結束的 send 會讓之後所有 flush 都卡死到重載頁面。 */
   sendTimeoutMs?: number
+  /** 跨分頁的互斥鎖（瀏覽器端接 Web Locks）。同名的 fn 在所有分頁之間一次只跑一個。
+   *  不給＝只在這個實例內互斥（測試、或確定只有一個實例的環境）。 */
+  crossLock?: <T>(name: string, fn: () => Promise<T>) => Promise<T>
 }
+
+const STATE_LOCK = 'tally-queue-state'
+const FLUSH_LOCK = 'tally-queue-flush'
+const noCrossLock = <T>(_name: string, fn: () => Promise<T>): Promise<T> => fn()
 
 const DEFAULT_SEND_TIMEOUT_MS = 20_000
 
-/** **同一份儲存同一時間只能有一個實例**。兩個實例各自把整份快照寫回去，後寫的會蓋掉先寫的，
+/** **同一份儲存上有多個實例時一定要給 `crossLock`**。兩個實例各自把整份快照寫回去，後寫的會蓋掉先寫的，
  *  seq 也會撞號。「全程序」不夠：同一個 origin 的多個分頁／視窗共用同一份 IndexedDB，它們是不同程序。
- *  iOS 主畫面 App 只有一個實例，不受影響；桌機多分頁要由 adapter 層串行化（Web Locks）或每次操作前重讀。
- *  這裡不在執行期擋——「重開 App」本來就是在同一份儲存上重建——由持有實例的那一層保證。 */
+ *  給了 crossLock：每次操作在鎖內重讀儲存再寫，整輪 flush 也持鎖（兩個分頁不會同時送同一條）。
+ *  iOS 主畫面 App 只有一個實例；桌機多分頁靠瀏覽器端接的 Web Locks。 */
 export function createQueue({
   store,
   send,
   now = Date.now,
   sendTimeoutMs = DEFAULT_SEND_TIMEOUT_MS,
+  crossLock,
 }: Deps): OfflineQueue {
   let state: QueueSnapshot | null = null
+  const lock = crossLock ?? noCrossLock
   // 所有對 state 的讀寫排進同一條鏈。flush 在 await send 期間放開，所以 enqueue 不會被網路卡住。
+  // 有跨分頁鎖時，每次進鎖都重讀儲存：別的分頁可能剛寫過，記憶體裡那份已經舊了，拿它整份寫回去會蓋掉對方。
   let chain: Promise<unknown> = Promise.resolve()
   const locked = <T>(fn: () => Promise<T>): Promise<T> => {
-    const p = chain.then(fn)
+    const p = chain.then(() =>
+      lock(STATE_LOCK, async () => {
+        if (crossLock) state = null
+        return fn()
+      }),
+    )
     chain = p.catch(() => undefined)
     return p
   }
@@ -323,12 +389,19 @@ export function createQueue({
     }
   }
 
-  async function runFlush(slot: Slot): Promise<FlushReport> {
+  /** 整輪持有跨分頁的 flush 鎖：兩個分頁同時送，會各自把對方正在送的條目再送一次，
+   *  晚到的舊 insert（upsert）可能蓋掉對方已送出的較新 update。 */
+  const runFlush = (slot: Slot): Promise<FlushReport> => lock(FLUSH_LOCK, () => runFlushRound(slot))
+
+  async function runFlushRound(slot: Slot): Promise<FlushReport> {
     const { userId } = slot
     let sent = 0
     let stoppedBy: FlushReport['stoppedBy'] = null
     const tried = new Set<number>() // 這一輪每條最多送一次，迴圈必然收斂
     const blocked = new Set<string>() // 這一輪已失敗的目標：同一列後面的條目不能越過它
+    // 這一列可能還不存在（它的 insert 失敗或被擋）：子列要等。與 blocked 分開——父列的 update 失敗時
+    // 列是存在的，子列的 insert 照送，不該被一起擋住、卡成看不出原因的「待上傳」。
+    const missing = new Set<string>()
     // 物件欄位而非區域變數：在 closure 裡賦值，區域變數會被 TS 的流程分析窄化成 null
     const done: { summary: QueueSummary | null } = { summary: null }
 
@@ -341,8 +414,9 @@ export function createQueue({
           if (e.userId !== userId || tried.has(e.seq) || blocked.has(keyOf(e))) continue
           // 父列這一輪沒送成：這一條不送，也不標失敗；它自己的那一列一併擋住，
           // 孫列（組）看到的父列（動作）才會是「被擋」，一路傳下去。
-          if (e.parents?.some((p) => blocked.has(keyOf(p)))) {
+          if (e.parents?.some((p) => missing.has(keyOf(p)))) {
             blocked.add(keyOf(e))
+            if (e.op === 'insert') missing.add(keyOf(e))
             continue
           }
           next = e
@@ -357,7 +431,14 @@ export function createQueue({
           return null
         }
         tried.add(next.seq)
-        const marked: QueueEntry = { ...next, attempts: next.attempts + 1, failure: null }
+        // 上一次送到一半被殺掉（attempts>0 而 failure 為 null）：那次可能已落地，先記下來再重送
+        const interrupted = next.attempts > 0 && next.failure === null
+        const marked: QueueEntry = {
+          ...next,
+          attempts: next.attempts + 1,
+          failure: null,
+          ...(next.maybeApplied || interrupted ? { maybeApplied: true as const } : {}),
+        }
         await commit(replaceEntry(snap, marked)) // 送出前先落地
         return marked
       })
@@ -372,7 +453,15 @@ export function createQueue({
           await commit(removeEntry(snap, entry.seq))
           sent++
         } else {
-          await commit(replaceEntry(snap, { ...entry, failure: outcome.kind, lastError: outcome.message }))
+          const ambiguous = outcome.kind === 'offline' || outcome.kind === 'transient'
+          await commit(
+            replaceEntry(snap, {
+              ...entry,
+              failure: outcome.kind,
+              lastError: outcome.message,
+              ...(entry.maybeApplied || ambiguous ? { maybeApplied: true as const } : {}),
+            }),
+          )
         }
         return true
       })
@@ -382,7 +471,10 @@ export function createQueue({
       // 其餘失敗只擋住「同一列」：同一列後面的條目（例如 insert 失敗後的 update、delete）若越過去，
       // update 會打到不存在的列、delete 之後舊 insert 重送會讓那筆復活（AC 14）。
       // 條目已被清掉就沒有東西在前面了，不擋（否則剛排進來的 delete 會白等一輪）。
-      else if (existed) blocked.add(keyOf(entry))
+      else if (existed) {
+        blocked.add(keyOf(entry))
+        if (entry.op === 'insert') missing.add(keyOf(entry))
+      }
     }
 
     // 中止的輪（離線／登入失效）沒走到上面的收尾，在這裡釋放。
@@ -411,6 +503,13 @@ export function createQueue({
         return next.entries.find((e) => e.seq === snap.nextSeq) ?? null
       }),
 
+    enqueueMany: (inputs) =>
+      locked(async () => {
+        const snap = await current()
+        const t = now()
+        await commit(inputs.reduce((acc, input) => appendEntry(acc, input, t), snap))
+      }),
+
     flush(userId) {
       if (inflight?.userId === userId) return inflight.promise
       const previous = inflight?.promise
@@ -437,22 +536,16 @@ export function createQueue({
         const snap = await current()
         const target = snap.entries.find((e) => e.seq === seq)
         if (!target) return false
-        let next = removeEntry(snap, seq)
-        // 放棄一條確定沒生效的 insert：這一列不會存在，掛在它底下的子孫列留著只會撞外鍵、
-        // 永遠卡成 rejected，連帶放棄。放棄 update／delete 不影響別條。
-        // 同一列後面的條目不動：放棄只動被點名的那一條，後面的因此被解開（既有契約）。
-        if (target.op === 'insert' && neverApplied(target)) {
-          const doomed = descendantKeys(next.entries, target.userId, keyOf(target))
-          doomed.delete(keyOf(target))
-          next = {
-            ...next,
-            entries: next.entries.filter(
-              (e) => !(e.userId === target.userId && doomed.has(keyOf(e)) && neverApplied(e)),
-            ),
-          }
-        }
-        await commit(next)
+        await commit(withoutDiscarded(snap, target))
         return true
+      }),
+
+    discardImpact: (seq) =>
+      locked(async () => {
+        const snap = await current()
+        const target = snap.entries.find((e) => e.seq === seq)
+        if (!target) return 0
+        return snap.entries.length - 1 - withoutDiscarded(snap, target).entries.length
       }),
 
     clear: () =>

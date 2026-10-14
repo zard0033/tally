@@ -81,6 +81,8 @@ export interface TrainingRuntimeDeps {
    *  （token 過期且 refresh 失敗、登出途中）會改用 anon key 送出——RLS 下 delete 0 列被當成功、讀取回空表，
    *  佇列的刪除就這樣丟了、本機底被空表蓋掉。對不上一律當登入失效，條目留在佇列。 */
   sessionUserId: () => Promise<string | null>
+  /** 跨分頁互斥（見 queue.ts 的 crossLock）。瀏覽器接 Web Locks；不給＝只有這一個實例。 */
+  crossLock?: <T>(name: string, fn: () => Promise<T>) => Promise<T>
   /** 單一請求的逾時。 */
   fetchTimeoutMs?: number
   /** 一頁拉幾列。PostgREST 預設單次最多 1000，不能超過。 */
@@ -221,7 +223,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     return result
   }
 
-  const queue = createQueue({ store: createQueueStore(kv), send, now: deps.now })
+  const queue = createQueue({ store: createQueueStore(kv), send, now: deps.now, crossLock: deps.crossLock })
 
   async function composeView(userId: string): Promise<TrainingView> {
     const entries = await queue.entries()
@@ -230,16 +232,17 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   }
 
   async function write(userId: string, ops: readonly WriteOp[]): Promise<TrainingView> {
-    for (const o of ops) {
-      await queue.enqueue({
+    // 一次寫進去：一個動作＋三組要嘛全存、要嘛都沒存——只存下一半，UI 說「沒有存下來」卻有半份會上傳
+    await queue.enqueueMany(
+      ops.map((o) => ({
         op: o.op,
         table: o.table,
         rowId: o.rowId,
         userId,
         ...(o.op === 'delete' ? {} : { payload: o.payload, parents: parentRefs(o.table, o.payload ?? {}) }),
         ...(o.ignoreDuplicates ? { ignoreDuplicates: true } : {}),
-      })
-    }
+      })),
+    )
     return composeView(userId)
   }
 

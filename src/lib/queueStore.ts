@@ -6,7 +6,7 @@
  * - 讀到格式不認得的內容就丟錯、不回 null——回 null 會讓佇列從空的開始，下一次 save 就把原本那份蓋掉。
  * - 寫入失敗（容量滿、隱私模式、IndexedDB 被關）一律丟 QueueStorageError，由 UI 告知「這筆沒有存下來」。 */
 
-import type { FailureKind, QueueOp, QueueSnapshot, QueueStore } from './queue'
+import type { FailureKind, OnParentDelete, QueueOp, QueueSnapshot, QueueStore } from './queue'
 
 export class QueueStorageError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -29,8 +29,16 @@ const FAILURES: readonly FailureKind[] = ['offline', 'auth', 'rejected', 'transi
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
 
+const ON_DELETE: readonly OnParentDelete[] = ['cascade', 'restrict', 'setNull']
+
 function isRowRef(v: unknown): boolean {
-  return isRecord(v) && typeof v.table === 'string' && typeof v.rowId === 'string'
+  return (
+    isRecord(v) &&
+    typeof v.table === 'string' &&
+    typeof v.rowId === 'string' &&
+    (v.column === undefined || typeof v.column === 'string') &&
+    (v.onDelete === undefined || ON_DELETE.includes(v.onDelete as OnParentDelete))
+  )
 }
 
 function isEntry(v: unknown): boolean {
@@ -45,7 +53,8 @@ function isEntry(v: unknown): boolean {
     isCount(v.attempts) &&
     (v.failure === null || FAILURES.includes(v.failure as FailureKind)) &&
     (v.parents === undefined || (Array.isArray(v.parents) && v.parents.every(isRowRef))) &&
-    (v.ignoreDuplicates === undefined || v.ignoreDuplicates === true)
+    (v.ignoreDuplicates === undefined || v.ignoreDuplicates === true) &&
+    (v.maybeApplied === undefined || v.maybeApplied === true)
   )
 }
 

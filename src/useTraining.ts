@@ -78,8 +78,11 @@ export function useTraining(userId: string | null): TrainingState {
         await perform(next)
         next = takeQueued()
       }
-    })().finally(() => {
+      // 同一個同步段落裡放開：takeQueued 回 null 之後若等到 finally（下一個 microtask）才清，
+      // 中間進來的要求會被記進 queued、卻沒有人再接，下一輪開頭又把它歸零
       running.current = null
+    })().finally(() => {
+      if (running.current === p) running.current = null // perform 之外丟錯時的兜底
     })
     running.current = p
     return p

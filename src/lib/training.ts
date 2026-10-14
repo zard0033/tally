@@ -4,7 +4,7 @@
  * （snake_case 欄位），讓佇列條目的 payload、伺服器回的列、畫面讀的列是同一個形狀、不必來回轉。
  * 接線（IndexedDB adapter、Supabase sender、App.tsx）不在這裡，等 UI 步驟。 */
 
-import type { QueueEntry, RowRef } from './queue'
+import type { OnParentDelete, QueueEntry, RowRef } from './queue'
 import { localDate } from './dates'
 import { uuidV5 } from './uuid'
 
@@ -50,34 +50,33 @@ const isTrainingTable = (t: string): t is TrainingTable => (TRAINING_TABLES as r
 interface ForeignKey {
   readonly column: string
   readonly parent: TrainingTable
-  /** 伺服器端是 on delete cascade：父列刪了，這一列跟著消失。restrict／set null 不是。 */
-  readonly cascade: boolean
+  /** 伺服器端的 on delete。三種都是「要等父列先到」，差別在父列不會存在了時子列怎麼辦（見 queue.ts）。 */
+  readonly onDelete: OnParentDelete
 }
 
-/** 與 DDL 逐條對應。`exercise_id` 是 restrict（動作不真刪、只封存），所以不級聯；
- *  `workouts.routine_id` 是 set null，同樣不級聯，但仍是「要等它先到」的父列。 */
+/** 與 DDL 逐條對應。`exercise_id` 是 restrict（動作不真刪、只封存）；`workouts.routine_id` 是 set null。 */
 const FOREIGN_KEYS: Readonly<Record<TrainingTable, readonly ForeignKey[]>> = {
   exercises: [],
   routines: [],
-  workouts: [{ column: 'routine_id', parent: 'routines', cascade: false }],
+  workouts: [{ column: 'routine_id', parent: 'routines', onDelete: 'setNull' }],
   routine_exercises: [
-    { column: 'routine_id', parent: 'routines', cascade: true },
-    { column: 'exercise_id', parent: 'exercises', cascade: false },
+    { column: 'routine_id', parent: 'routines', onDelete: 'cascade' },
+    { column: 'exercise_id', parent: 'exercises', onDelete: 'restrict' },
   ],
   workout_exercises: [
-    { column: 'workout_id', parent: 'workouts', cascade: true },
-    { column: 'exercise_id', parent: 'exercises', cascade: false },
+    { column: 'workout_id', parent: 'workouts', onDelete: 'cascade' },
+    { column: 'exercise_id', parent: 'exercises', onDelete: 'restrict' },
   ],
-  workout_sets: [{ column: 'workout_exercise_id', parent: 'workout_exercises', cascade: true }],
+  workout_sets: [{ column: 'workout_exercise_id', parent: 'workout_exercises', onDelete: 'cascade' }],
   cardio_sessions: [],
 }
 
 /** 一列 insert／update 的 payload 該帶哪些 `parents`（佇列的父列依賴，AC 16）。
  *  每次 enqueue 都經過它，才不會有人漏填而讓子列搶在父列之前送出。 */
 export function parentRefs(table: TrainingTable, payload: Readonly<Record<string, unknown>>): RowRef[] {
-  return FOREIGN_KEYS[table].flatMap(({ column, parent }) => {
+  return FOREIGN_KEYS[table].flatMap(({ column, parent, onDelete }) => {
     const v = payload[column]
-    return typeof v === 'string' ? [{ table: parent, rowId: v }] : []
+    return typeof v === 'string' ? [{ table: parent, rowId: v, column, onDelete }] : []
   })
 }
 
@@ -152,6 +151,9 @@ export function applyQueue(base: TrainingDb, entries: readonly QueueEntry[], use
       rows[t].delete(e.rowId)
       deleted[t].add(e.rowId)
     } else if (e.op === 'insert') {
+      // 預填（ignoreDuplicates）在伺服器上是 on conflict do nothing：列已在就不動它。
+      // 照一般 insert 疊上去，會把使用者改過名、封存、寫過要點的動作在畫面與本機底上蓋回預設值。
+      if (current && e.ignoreDuplicates) continue
       rows[t].set(e.rowId, { ...current, ...e.payload, id: e.rowId })
     } else if (current) {
       rows[t].set(e.rowId, { ...current, ...e.payload, id: e.rowId })
@@ -160,7 +162,7 @@ export function applyQueue(base: TrainingDb, entries: readonly QueueEntry[], use
 
   for (const t of TRAINING_TABLES) {
     for (const fk of FOREIGN_KEYS[t]) {
-      if (!fk.cascade || deleted[fk.parent].size === 0) continue
+      if (fk.onDelete !== 'cascade' || deleted[fk.parent].size === 0) continue
       for (const [id, row] of rows[t]) {
         const ref = row[fk.column]
         if (typeof ref === 'string' && deleted[fk.parent].has(ref)) {

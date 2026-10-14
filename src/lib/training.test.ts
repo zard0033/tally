@@ -106,24 +106,26 @@ describe('預填動作', () => {
 /* ═══════════ 外鍵（AC 16） ═══════════ */
 
 describe('parentRefs', () => {
-  it('組只依賴動作；動作依賴訓練與動作庫；課表動作依賴課表與動作庫', () => {
+  it('組只依賴動作；動作依賴訓練與動作庫；課表動作依賴課表與動作庫；帶欄位與 DDL 的 on delete', () => {
     expect(parentRefs('workout_sets', { workout_exercise_id: 'we1' })).toEqual([
-      { table: 'workout_exercises', rowId: 'we1' },
+      { table: 'workout_exercises', rowId: 'we1', column: 'workout_exercise_id', onDelete: 'cascade' },
     ])
     expect(parentRefs('workout_exercises', { workout_id: 'w1', exercise_id: 'e1' })).toEqual([
-      { table: 'workouts', rowId: 'w1' },
-      { table: 'exercises', rowId: 'e1' },
+      { table: 'workouts', rowId: 'w1', column: 'workout_id', onDelete: 'cascade' },
+      { table: 'exercises', rowId: 'e1', column: 'exercise_id', onDelete: 'restrict' },
     ])
     expect(parentRefs('routine_exercises', { routine_id: 'r1', exercise_id: 'e1' })).toEqual([
-      { table: 'routines', rowId: 'r1' },
-      { table: 'exercises', rowId: 'e1' },
+      { table: 'routines', rowId: 'r1', column: 'routine_id', onDelete: 'cascade' },
+      { table: 'exercises', rowId: 'e1', column: 'exercise_id', onDelete: 'restrict' },
     ])
   })
 
   it('可為空的外鍵沒填就不列（空白開始的訓練沒有課表）', () => {
     expect(parentRefs('workouts', { routine_id: null })).toEqual([])
     expect(parentRefs('workouts', {})).toEqual([])
-    expect(parentRefs('workouts', { routine_id: 'r1' })).toEqual([{ table: 'routines', rowId: 'r1' }])
+    expect(parentRefs('workouts', { routine_id: 'r1' })).toEqual([
+      { table: 'routines', rowId: 'r1', column: 'routine_id', onDelete: 'setNull' },
+    ])
   })
 
   it('沒有外鍵的表回空陣列', () => {
@@ -898,5 +900,24 @@ describe('有氧的顯示', () => {
       cardio('early', '2026-10-13', { created_at: '2026-10-13T08:00:00Z' }),
     ]
     expect(cardioOn(db({ cardio_sessions: rows }), '2026-10-13').map((r) => r.id)).toEqual(['early', 'late', 'q1', 'q2'])
+  })
+})
+
+describe('applyQueue 與預填（review #4）', () => {
+  const seed = (seq: number, id: string): QueueEntry => ({
+    ...entry(seq, 'insert', 'exercises', id, { name: '預設名', archived: false, tips: null }),
+    ignoreDuplicates: true,
+  })
+
+  it('ignoreDuplicates 的 insert：列已在就不動它（伺服器是 on conflict do nothing）', () => {
+    const base = db({ exercises: [{ id: 'e1', name: '我改的名', archived: true, tips: '我的要點' }] })
+    const out = applyQueue(base, [seed(1, 'e1')], 'u1')
+    expect(out.exercises).toEqual([{ id: 'e1', name: '我改的名', archived: true, tips: '我的要點' }])
+  })
+
+  it('列不在才放進去；一般 insert 照舊會覆蓋', () => {
+    expect(applyQueue(db(), [seed(1, 'e1')], 'u1').exercises[0]?.name).toBe('預設名')
+    const base = db({ exercises: [{ id: 'e1', name: '舊' }] })
+    expect(applyQueue(base, [entry(1, 'insert', 'exercises', 'e1', { name: '新' })], 'u1').exercises[0]?.name).toBe('新')
   })
 })

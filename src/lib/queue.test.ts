@@ -647,7 +647,8 @@ describe('父列依賴（AC 16）', () => {
     })
 
     it('放棄 update 不連帶子孫：那一列來自伺服器，子列仍然合法', async () => {
-      const t = strict(new Map([['workouts/w1', 422]]))
+      // we1 自己暫時失敗（503）才會留在佇列——父列 update 失敗不再擋它（見下方「父列的 update 失敗」）
+      const t = strict(new Map([['workouts/w1', 422], ['workout_exercises/we1', 503]]))
       t.server.rows.set('workouts/w1', { v: 0 })
       await t.queue.enqueue({ op: 'update', table: 'workouts', rowId: 'w1', payload: { v: 2 }, userId: 'u1' })
       await t.queue.enqueue(WE('we1', 'w1'))
@@ -655,6 +656,199 @@ describe('父列依賴（AC 16）', () => {
       expect(await t.queue.discard(1)).toBe(true)
       expect(t.mem.saved?.entries.map((e) => e.rowId)).toEqual(['we1'])
     })
+  })
+
+  describe('外鍵種類（review #1）', () => {
+    const ref = (table: string, rowId: string, column: string, onDelete: 'cascade' | 'restrict' | 'setNull') => ({
+      table, rowId, column, onDelete,
+    })
+    const R = (id: string): NewEntry => ({ op: 'insert', table: 'routines', rowId: id, payload: { name: 'A' }, userId: 'u1' })
+    const WR = (id: string, routine: string): NewEntry => ({
+      op: 'insert', table: 'workouts', rowId: id, payload: { routine_id: routine }, userId: 'u1',
+      parents: [ref('routines', routine, 'routine_id', 'setNull')],
+    })
+    const EX = (id: string): NewEntry => ({ op: 'insert', table: 'exercises', rowId: id, payload: { name: 'x' }, userId: 'u1' })
+    const WEX = (id: string, w: string, ex: string): NewEntry => ({
+      op: 'insert', table: 'workout_exercises', rowId: id, payload: { workout_id: w, exercise_id: ex }, userId: 'u1',
+      parents: [ref('workouts', w, 'workout_id', 'cascade'), ref('exercises', ex, 'exercise_id', 'restrict')],
+    })
+    const SET = (id: string, we: string): NewEntry => ({
+      op: 'insert', table: 'workout_sets', rowId: id, payload: { workout_exercise_id: we }, userId: 'u1',
+      parents: [ref('workout_exercises', we, 'workout_exercise_id', 'cascade')],
+    })
+
+    it('setNull：課表被拒絕時訓練先等著（不送、不標拒絕）；放棄課表後訓練留下、課表欄位改 null，下一輪送出', async () => {
+      const t = strict(new Map([['routines/r1', 422]]))
+      await t.queue.enqueue(R('r1'))
+      await t.queue.enqueue(WR('w1', 'r1'))
+      await t.queue.flush('u1')
+      const waiting = (await t.queue.entries()).find((e) => e.rowId === 'w1')
+      expect(waiting?.attempts, '父列沒到：不送').toBe(0)
+      expect(waiting?.failure, '也不標成被拒絕').toBeNull()
+
+      expect(await t.queue.discardImpact(1), '放棄課表不會帶走訓練').toBe(0)
+      await t.queue.discard(1)
+      const kept = (await t.queue.entries()).find((e) => e.rowId === 'w1')
+      expect(kept?.payload).toEqual({ routine_id: null })
+      expect(kept?.parents, '依賴拿掉了，不會再等一個不會來的父列').toBeUndefined()
+
+      await t.queue.flush('u1')
+      expect(t.server.rows.get('workouts/w1')).toEqual({ routine_id: null })
+      expect(await t.queue.entries()).toEqual([])
+    })
+
+    it('restrict：放棄被拒絕的動作，用到它的訓練動作與組一起放棄；discardImpact 先講會帶走幾條；訓練本身留下', async () => {
+      const t = strict(new Map([['exercises/x1', 422]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(EX('x1'))
+      await t.queue.enqueue(WEX('we1', 'w1', 'x1'))
+      await t.queue.enqueue(SET('s1', 'we1'))
+      await t.queue.enqueue(SET('s2', 'we1'))
+      await t.queue.flush('u1')
+      expect(t.server.rows.has('workouts/w1')).toBe(true)
+      const seq = (await t.queue.entries()).find((e) => e.rowId === 'x1')!.seq
+      expect(await t.queue.discardImpact(seq)).toBe(3)
+      await t.queue.discard(seq)
+      expect(await t.queue.entries()).toEqual([])
+      expect(t.server.rows.has('workouts/w1'), '訓練不受影響').toBe(true)
+    })
+
+    it('離線新增課表又刪掉：用它的訓練留下、課表欄位改 null（照伺服器的 on delete set null）', () => {
+      let s = appendEntry(emptySnapshot(), R('r1'), 1)
+      s = appendEntry(s, WR('w1', 'r1'), 2)
+      s = appendEntry(s, { op: 'delete', table: 'routines', rowId: 'r1', userId: 'u1' }, 3)
+      expect(s.entries.map((e) => e.rowId)).toEqual(['w1'])
+      expect(s.entries[0].payload).toEqual({ routine_id: null })
+      expect('parents' in s.entries[0]).toBe(false)
+    })
+
+    it('沒標明 onDelete 的參照當 cascade（最保守）', () => {
+      let s = appendEntry(emptySnapshot(), W('w1'), 1)
+      s = appendEntry(s, WE('we1', 'w1'), 2)
+      s = appendEntry(s, { op: 'delete', table: 'workouts', rowId: 'w1', userId: 'u1' }, 3)
+      expect(s.entries).toEqual([])
+    })
+  })
+
+  describe('父列的 update 失敗（review #6）', () => {
+    it('列是存在的：子列的 insert 照送，不被擋成看不出原因的待上傳', async () => {
+      const t = strict(new Map([['workouts/w1', 422]]))
+      t.server.rows.set('workouts/w1', { v: 0 })
+      await t.queue.enqueue({ op: 'update', table: 'workouts', rowId: 'w1', payload: { v: 2 }, userId: 'u1' })
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(WS('s1', 'we1'))
+      await t.queue.flush('u1')
+      expect(t.server.rows.has('workout_exercises/we1')).toBe(true)
+      expect(t.server.rows.has('workout_sets/s1')).toBe(true)
+      expect((await t.queue.entries()).map((e) => e.rowId)).toEqual(['w1'])
+    })
+
+    it('父列的 insert 失敗仍然擋住子孫（父列依賴照舊）', async () => {
+      const t = strict(new Map([['workouts/w1', 503]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(WS('s1', 'we1'))
+      await t.queue.flush('u1')
+      const es = await t.queue.entries()
+      expect(es.map((e) => [e.rowId, e.attempts])).toEqual([['w1', 1], ['we1', 0], ['s1', 0]])
+    })
+  })
+})
+
+describe('可能已落地是黏著的（review #7）', () => {
+  it('第一次 503（可能已落地）、第二次 401：放棄它不會連帶子孫——那一列可能真的在伺服器上', async () => {
+    const t = build(null, (e, n) => (e.rowId === 'w1' ? (n === 1 ? 'lost503' : 401) : 'ok'))
+    await t.queue.enqueue({ op: 'insert', table: 'workouts', rowId: 'w1', payload: { v: 1 }, userId: 'u1' })
+    await t.queue.enqueue({
+      op: 'insert', table: 'workout_exercises', rowId: 'we1', payload: { v: 1 }, userId: 'u1',
+      parents: [{ table: 'workouts', rowId: 'w1' }],
+    })
+    await t.queue.flush('u1') // w1：503
+    await t.queue.flush('u1') // w1：401，整輪停
+    const w1 = (await t.queue.entries()).find((e) => e.rowId === 'w1')!
+    expect(w1.failure).toBe('auth')
+    expect(w1.maybeApplied).toBe(true)
+    await t.queue.discard(w1.seq)
+    expect((await t.queue.entries()).map((e) => e.rowId)).toEqual(['we1'])
+  })
+
+  it('送到一半被殺掉（attempts>0、failure 為 null）後重送：也記成可能已落地', async () => {
+    const t = build(
+      {
+        nextSeq: 2,
+        entries: [{
+          seq: 1, op: 'insert', table: 'a', rowId: 'a', payload: { v: 1 }, userId: 'u1',
+          createdAt: 0, attempts: 1, lastError: null, failure: null,
+        }],
+      },
+      () => 422,
+    )
+    await t.queue.flush('u1')
+    expect((await t.queue.entries())[0].maybeApplied).toBe(true)
+  })
+
+  it('從頭到尾都是明確失敗：不標可能已落地', async () => {
+    const t = build(null, () => 422)
+    await t.queue.enqueue({ op: 'insert', table: 'a', rowId: 'a', payload: { v: 1 }, userId: 'u1' })
+    await t.queue.flush('u1')
+    expect('maybeApplied' in (await t.queue.entries())[0]).toBe(false)
+  })
+})
+
+describe('enqueueMany（review #5）', () => {
+  const one = (id: string): NewEntry => ({ op: 'insert', table: 'a', rowId: id, payload: { v: 1 }, userId: 'u1' })
+
+  it('只寫一次儲存；寫入失敗時一條都沒排進去', async () => {
+    const t = build()
+    let saves = 0
+    // 容量只夠一條：逐條寫的話第一條會先存進去、第二條才失敗——正是「UI 說沒存下來、卻有半份會上傳」
+    t.mem.onSave = (snap) => {
+      saves++
+      if (snap.entries.length >= 2) throw new Error('quota')
+    }
+    await expect(t.queue.enqueueMany([one('a'), one('b'), one('c')])).rejects.toThrow('quota')
+    expect(saves).toBe(1)
+    expect(await t.queue.entries()).toEqual([])
+    t.mem.onSave = null
+    await t.queue.enqueueMany([one('a'), one('b')])
+    expect((await t.queue.entries()).map((e) => [e.seq, e.rowId])).toEqual([[1, 'a'], [2, 'b']])
+  })
+})
+
+describe('跨分頁（review #3）', () => {
+  const one = (id: string): NewEntry => ({ op: 'insert', table: 'a', rowId: id, payload: { v: 1 }, userId: 'u1' })
+
+  /** 兩個分頁＝兩個實例、共用同一份儲存；鎖以名稱互斥，模擬 Web Locks。 */
+  function twoTabs() {
+    const mem = memoryStore()
+    const chains = new Map<string, Promise<unknown>>()
+    const crossLock = <T,>(name: string, fn: () => Promise<T>): Promise<T> => {
+      const p = (chains.get(name) ?? Promise.resolve()).then(fn)
+      chains.set(name, p.catch(() => undefined))
+      return p
+    }
+    const server = fakeServer()
+    const sender = scriptedSender(server, () => 'ok')
+    const tab = () => createQueue({ store: mem.store, send: sender.send, crossLock })
+    return { mem, server, sender, a: tab(), b: tab() }
+  }
+
+  it('兩個分頁各排一條：兩條都在，seq 不撞號', async () => {
+    const t = twoTabs()
+    await t.a.entries() // 兩邊都先讀過一次（記憶體裡各有一份空的）
+    await t.b.entries()
+    await t.a.enqueue(one('x'))
+    await t.b.enqueue(one('y'))
+    expect(t.mem.saved?.entries.map((e) => [e.seq, e.rowId])).toEqual([[1, 'x'], [2, 'y']])
+  })
+
+  it('兩個分頁同時 flush：每條只送一次', async () => {
+    const t = twoTabs()
+    await t.a.enqueue(one('x'))
+    await t.a.enqueue(one('y'))
+    await Promise.all([t.a.flush('u1'), t.b.flush('u1')])
+    expect(t.sender.sent.map((e) => e.rowId)).toEqual(['x', 'y'])
+    expect(t.mem.saved?.entries).toEqual([])
   })
 })
 
