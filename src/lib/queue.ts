@@ -19,6 +19,12 @@ export type QueueOp = 'insert' | 'update' | 'delete'
  *  也會落在這裡，下一輪就自己好了。介面文案別叫人據此丟掉那一條。 */
 export type FailureKind = 'offline' | 'auth' | 'rejected' | 'transient'
 
+/** 指向一列。父列依賴用它描述「這一條要等哪幾列先到」。 */
+export interface RowRef {
+  readonly table: string
+  readonly rowId: string
+}
+
 export interface QueueEntry {
   /** 佇列內單調遞增的序號，重放順序以它為準。不用 createdAt 排序：Date.now() 同毫秒會平手、
    *  使用者調時鐘會倒退，而順序錯了會讓舊編輯蓋掉新編輯。 */
@@ -30,6 +36,9 @@ export interface QueueEntry {
   readonly rowId: string
   /** insert／update 的欄位；delete 為 null。 */
   readonly payload: Readonly<Record<string, unknown>> | null
+  /** 外鍵指向的父列（AC 16）。父列這一輪沒送成，這一條就不送——送了只會撞外鍵 409，
+   *  被標成 rejected，把「父列還沒到」誤報成「這條被拒絕」。沒有父列（或父列早已在伺服器）就省略。 */
+  readonly parents?: readonly RowRef[]
   readonly userId: string
   readonly createdAt: number
   /** 已開始送出的次數。**送出前**就寫進儲存：送到一半被殺掉，重開後看得出「可能已生效」。 */
@@ -52,6 +61,8 @@ export interface NewEntry {
   rowId: string
   /** insert／update 必填；delete 忽略。 */
   payload?: Readonly<Record<string, unknown>>
+  /** 見 QueueEntry.parents。delete 不需要（刪除靠伺服器端 cascade）。 */
+  parents?: readonly RowRef[]
   userId: string
 }
 
@@ -124,6 +135,24 @@ const keyOf = (e: { table: string; rowId: string }): string => `${e.table}\u0000
 const neverApplied = (e: QueueEntry): boolean =>
   e.attempts === 0 || e.failure === 'rejected' || e.failure === 'auth'
 
+/** 以 root 這一列為根，沿 parents 往下找出所有子孫列的 key（含 root 自己）。
+ *  回傳的是「列」的集合而非條目：子列後來的 update 沒有 parents，只能靠列 key 認出它也屬於這一棵。 */
+function descendantKeys(entries: readonly QueueEntry[], userId: string, root: string): Set<string> {
+  const keys = new Set([root])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const e of entries) {
+      if (e.userId !== userId || keys.has(keyOf(e))) continue
+      if (e.parents?.some((p) => keys.has(keyOf(p)))) {
+        keys.add(keyOf(e))
+        grew = true
+      }
+    }
+  }
+  return keys
+}
+
 /** 加一條。delete 蓋過同一列、同一帳號「確定沒生效」的較舊條目（AC 14 的 tombstone）：留著只是白送。
  *  **結果曖昧的較舊條目不清，留著依 seq 先重送、delete 排在後面**：清掉它再立刻送 delete，
  *  delete 可能趕在它落地之前，之後列就復活了而佇列是空的——delete 一定保留只保證「之後會送」，
@@ -143,7 +172,13 @@ export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): 
   if (input.op === 'delete') {
     const row = snap.entries.filter(sameRow).sort((a, b) => a.seq - b.seq)
     const neverLeftDevice = row.length > 0 && row[0].op === 'insert' && row.every((e) => e.attempts === 0)
-    if (neverLeftDevice) return { nextSeq: snap.nextSeq + 1, entries: kept }
+    if (neverLeftDevice) {
+      // 這一列從沒到過伺服器，掛在它底下、同樣沒送過的子孫（離線新增的訓練連同動作與組）也只剩白送：
+      // 留著，父列不存在，它們每一條都會撞外鍵、永遠卡成 rejected。
+      const doomed = descendantKeys(kept, input.userId, target)
+      const rest = kept.filter((e) => !(e.userId === input.userId && doomed.has(keyOf(e)) && neverApplied(e)))
+      return { nextSeq: snap.nextSeq + 1, entries: rest }
+    }
   }
   const entry: QueueEntry = {
     seq: snap.nextSeq,
@@ -151,6 +186,8 @@ export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): 
     table: input.table,
     rowId: input.rowId,
     payload: input.op === 'delete' ? null : { ...input.payload },
+    // delete 不帶：刪除靠伺服器端 cascade，沒有「等父列」的問題（而且帶了會被自己的父列擋住）
+    ...(input.op !== 'delete' && input.parents?.length ? { parents: input.parents.map((p) => ({ ...p })) } : {}),
     userId: input.userId,
     createdAt: now,
     attempts: 0,
@@ -209,7 +246,8 @@ export interface OfflineQueue {
    *  進度也已逐條落地，下次 flush 從停下的地方接著送。 */
   flush(userId: string): Promise<FlushReport>
   summary(userId: string): Promise<QueueSummary>
-  /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。 */
+  /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。
+   *  放棄的若是確定沒生效的 insert，掛在那一列底下的子孫條目會連帶放棄（它們沒有父列就送不出去）。 */
   discard(seq: number): Promise<boolean>
   /** 清空全部。主動登出才呼叫；被動掉線（SIGNED_OUT 非使用者按的）一律不呼叫（AC 13）。 */
   clear(): Promise<void>
@@ -288,9 +326,19 @@ export function createQueue({
     while (!stoppedBy) {
       const entry = await locked(async () => {
         const snap = await current()
-        const next = snap.entries.find(
-          (e) => e.userId === userId && !tried.has(e.seq) && !blocked.has(keyOf(e)),
-        )
+        // entries 已依 seq 排好，父列的條目一定在子列之前被看到並嘗試過。
+        let next: QueueEntry | undefined
+        for (const e of snap.entries) {
+          if (e.userId !== userId || tried.has(e.seq) || blocked.has(keyOf(e))) continue
+          // 父列這一輪沒送成：這一條不送，也不標失敗；它自己的那一列一併擋住，
+          // 孫列（組）看到的父列（動作）才會是「被擋」，一路傳下去。
+          if (e.parents?.some((p) => blocked.has(keyOf(p)))) {
+            blocked.add(keyOf(e))
+            continue
+          }
+          next = e
+          break
+        }
         if (!next) {
           // 掃完了：**在同一個鎖內回呼裡**總結並釋放這一輪。不能把總結留給後面另一個 locked 步驟——
           // 它會排在別人（剛進來的 enqueue）後面，那段空檔裡併進來的 flush 會拿到一輪「已掃完、
@@ -376,8 +424,23 @@ export function createQueue({
     discard: (seq) =>
       locked(async () => {
         const snap = await current()
-        if (!snap.entries.some((e) => e.seq === seq)) return false
-        await commit(removeEntry(snap, seq))
+        const target = snap.entries.find((e) => e.seq === seq)
+        if (!target) return false
+        let next = removeEntry(snap, seq)
+        // 放棄一條確定沒生效的 insert：這一列不會存在，掛在它底下的子孫列留著只會撞外鍵、
+        // 永遠卡成 rejected，連帶放棄。放棄 update／delete 不影響別條。
+        // 同一列後面的條目不動：放棄只動被點名的那一條，後面的因此被解開（既有契約）。
+        if (target.op === 'insert' && neverApplied(target)) {
+          const doomed = descendantKeys(next.entries, target.userId, keyOf(target))
+          doomed.delete(keyOf(target))
+          next = {
+            ...next,
+            entries: next.entries.filter(
+              (e) => !(e.userId === target.userId && doomed.has(keyOf(e)) && neverApplied(e)),
+            ),
+          }
+        }
+        await commit(next)
         return true
       }),
 

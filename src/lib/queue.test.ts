@@ -470,6 +470,194 @@ describe('重送冪等（AC 10）', () => {
   })
 })
 
+describe('父列依賴（AC 16）', () => {
+  const row = (table: string, rowId: string, ...parents: [string, string][]): NewEntry => ({
+    op: 'insert', table, rowId, payload: { v: 1 }, userId: 'u1',
+    ...(parents.length ? { parents: parents.map(([t, r]) => ({ table: t, rowId: r })) } : {}),
+  })
+  const W = (id: string) => row('workouts', id)
+  const WE = (id: string, parent: string) => row('workout_exercises', id, ['workouts', parent])
+  const WS = (id: string, parent: string) => row('workout_sets', id, ['workout_exercises', parent])
+
+  const fkOk = (server: ReturnType<typeof fakeServer>, e: QueueEntry): boolean =>
+    (e.parents ?? []).every((p) => server.rows.has(`${p.table}/${p.rowId}`))
+
+  /** 外鍵很嚴的伺服器：父列不在就 409。failing 內的列直接回指定狀態碼（沒落地）。 */
+  const strict = (failing = new Map<string, number>()) => {
+    const t: ReturnType<typeof build> = build(null, (e) => {
+      const forced = failing.get(`${e.table}/${e.rowId}`)
+      if (forced !== undefined) return forced
+      if (e.op === 'insert' && !fkOk(t.server, e)) return 409
+      return 'ok'
+    })
+    return t
+  }
+
+  describe('純函式', () => {
+    it('parents 記進條目、與呼叫端不共用；沒有就不出現這個欄位', () => {
+      const given = [{ table: 'workouts', rowId: 'w1' }]
+      const s = appendEntry(emptySnapshot(), { ...WE('we1', 'w1'), parents: given }, 1)
+      given[0].rowId = 'changed'
+      expect(s.entries[0].parents).toEqual([{ table: 'workouts', rowId: 'w1' }])
+      expect('parents' in appendEntry(emptySnapshot(), W('w1'), 1).entries[0]).toBe(false)
+    })
+
+    it('delete 不帶 parents：刪除靠伺服器 cascade，帶了反而會被自己的父列擋住', () => {
+      const s = appendEntry(
+        emptySnapshot(),
+        { op: 'delete', table: 'workout_exercises', rowId: 'we1', userId: 'u1', parents: [{ table: 'workouts', rowId: 'w1' }] },
+        1,
+      )
+      expect('parents' in s.entries[0]).toBe(false)
+    })
+
+    it('離線新增整棵樹再刪根：子孫連同它們之後的 update 一起抵銷，佇列是空的', () => {
+      let s = appendEntry(emptySnapshot(), W('w1'), 1)
+      s = appendEntry(s, WE('we1', 'w1'), 2)
+      s = appendEntry(s, WS('s1', 'we1'), 3)
+      s = appendEntry(s, { op: 'update', table: 'workout_sets', rowId: 's1', payload: { reps: 5 }, userId: 'u1' }, 4)
+      s = appendEntry(s, { op: 'delete', table: 'workouts', rowId: 'w1', userId: 'u1' }, 5)
+      expect(s.entries).toEqual([])
+      expect(s.nextSeq).toBe(6)
+    })
+
+    it('只清自己那一棵：別的訓練、別的帳號的同名列不受影響', () => {
+      let s = appendEntry(emptySnapshot(), W('w1'), 1)
+      s = appendEntry(s, WE('we1', 'w1'), 2)
+      s = appendEntry(s, W('w2'), 3)
+      s = appendEntry(s, WE('we2', 'w2'), 4)
+      s = appendEntry(s, { ...WE('we1', 'w1'), userId: 'u2', parents: [{ table: 'workouts', rowId: 'w1' }] }, 5)
+      s = appendEntry(s, { op: 'delete', table: 'workouts', rowId: 'w1', userId: 'u1' }, 6)
+      expect(s.entries.map((e) => `${e.rowId}/${e.userId}`)).toEqual(['w2/u1', 'we2/u1', 'we1/u2'])
+    })
+  })
+
+  describe('flush', () => {
+    it('父列這一輪送不出去：子列不送、也不被標成被拒絕，下一輪依序補上', async () => {
+      const failing = new Map([['workouts/w1', 503]])
+      const t = strict(failing)
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      const r1 = await t.queue.flush('u1')
+      expect(t.sender.sent.map((e) => e.rowId)).toEqual(['w1']) // 子列根本沒被送
+      expect(r1.summary.failed).toEqual({ offline: 0, auth: 0, rejected: 0, transient: 1 })
+      expect(r1.summary.pending).toBe(1) // 子列仍是「從未失敗」
+      failing.clear()
+      const r2 = await t.queue.flush('u1')
+      expect([...t.server.rows.keys()].sort()).toEqual(['workout_exercises/we1', 'workouts/w1'])
+      expect(r2.summary.mine).toBe(0)
+    })
+
+    it('一路傳下去：祖父列失敗，孫列（組）也不送', async () => {
+      const failing = new Map([['workouts/w1', 503]])
+      const t = strict(failing)
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(WS('s1', 'we1'))
+      const r1 = await t.queue.flush('u1')
+      expect(t.sender.sent.map((e) => e.rowId)).toEqual(['w1'])
+      expect(r1.summary.pending).toBe(2)
+      expect(r1.summary.failed.rejected).toBe(0)
+      failing.clear()
+      await t.queue.flush('u1')
+      expect([...t.server.rows.keys()].sort()).toEqual(['workout_exercises/we1', 'workout_sets/s1', 'workouts/w1'])
+    })
+
+    it('父列被伺服器明確拒絕（4xx）一樣擋住子列，子列不跟著被標拒絕', async () => {
+      const t = strict(new Map([['workouts/w1', 422]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      const r = await t.queue.flush('u1')
+      expect(r.summary.failed).toEqual({ offline: 0, auth: 0, rejected: 1, transient: 0 })
+      expect(r.summary.pending).toBe(1)
+    })
+
+    it('只擋有依賴的那一棵，別棵照送', async () => {
+      const t = strict(new Map([['workouts/w1', 503]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(W('w2'))
+      await t.queue.enqueue(WE('we2', 'w2'))
+      await t.queue.flush('u1')
+      expect(t.sender.sent.map((e) => e.rowId)).toEqual(['w1', 'w2', 'we2'])
+      expect([...t.server.rows.keys()].sort()).toEqual(['workout_exercises/we2', 'workouts/w2'])
+    })
+
+    it('父列早已在伺服器（不在佇列裡）：子列直接送', async () => {
+      const t = strict()
+      t.server.rows.set('workouts/w1', { v: 0 })
+      await t.queue.enqueue(WE('we1', 'w1'))
+      const r = await t.queue.flush('u1')
+      expect(t.server.rows.has('workout_exercises/we1')).toBe(true)
+      expect(r.sent).toBe(1)
+    })
+
+    it('全部順利時一輪就送完整棵樹，且父在子前', async () => {
+      const t = strict()
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(WS('s1', 'we1'))
+      const r = await t.queue.flush('u1')
+      expect(t.sender.sent.map((e) => e.seq)).toEqual([1, 2, 3])
+      expect(r.sent).toBe(3)
+      expect(r.summary.total).toBe(0)
+    })
+
+    it('結果曖昧的父 insert 之後整棵被刪：不抵銷，父→子→delete 照序送，列最後不在', async () => {
+      const t = build(null, (e, n) => (e.rowId === 'w1' && e.op === 'insert' && n === 1 ? 'lost' : 'ok'))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.flush('u1') // 落地但回應遺失
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue({ op: 'delete', table: 'workouts', rowId: 'w1', userId: 'u1' })
+      await t.queue.flush('u1')
+      expect(t.sender.sent.map((e) => `${e.op}/${e.rowId}`)).toEqual([
+        'insert/w1', 'insert/w1', 'insert/we1', 'delete/w1',
+      ])
+      expect(t.server.rows.has('workouts/w1')).toBe(false)
+      expect((await t.queue.summary('u1')).total).toBe(0)
+    })
+
+    it('重開 App 後 parents 仍在，依賴照守', async () => {
+      const failing = new Map([['workouts/w1', 503]])
+      const t = strict(failing)
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.flush('u1')
+      const stored = JSON.parse(JSON.stringify(t.mem.saved)) as QueueSnapshot // 真的經過序列化
+      const server = fakeServer()
+      const { send, sent } = scriptedSender(server, (e) => (e.op === 'insert' && !fkOk(server, e) ? 409 : 'ok'))
+      const reopened = createQueue({ store: memoryStore(stored).store, send })
+      await reopened.flush('u1')
+      expect(sent.map((e) => e.rowId)).toEqual(['w1', 'we1'])
+      expect([...server.rows.keys()]).toEqual(['workouts/w1', 'workout_exercises/we1'])
+    })
+  })
+
+  describe('discard', () => {
+    it('放棄一條被拒絕的父 insert：掛在它底下的子孫連帶放棄', async () => {
+      const t = strict(new Map([['workouts/w1', 422]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(WS('s1', 'we1'))
+      await t.queue.enqueue(W('w2'))
+      await t.queue.flush('u1')
+      expect(await t.queue.discard(1)).toBe(true)
+      expect(t.mem.saved?.entries.map((e) => e.rowId)).toEqual([]) // w2 已送成而移除，w1 這棵全清
+      expect((await t.queue.summary('u1')).total).toBe(0)
+    })
+
+    it('放棄 update 不連帶子孫：那一列來自伺服器，子列仍然合法', async () => {
+      const t = strict(new Map([['workouts/w1', 422]]))
+      t.server.rows.set('workouts/w1', { v: 0 })
+      await t.queue.enqueue({ op: 'update', table: 'workouts', rowId: 'w1', payload: { v: 2 }, userId: 'u1' })
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.flush('u1')
+      expect(await t.queue.discard(1)).toBe(true)
+      expect(t.mem.saved?.entries.map((e) => e.rowId)).toEqual(['we1'])
+    })
+  })
+})
+
 describe('卡住的分類與出路（AC 11、12）', () => {
   it('離線：整輪中止，後面的不送，全部留著；回線後依序送完', async () => {
     let online = false
