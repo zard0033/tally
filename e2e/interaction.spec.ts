@@ -168,7 +168,7 @@ test('undo 跨日期 4 — 切分頁到設定，提示條消失（這一半沒�
   await deleteViaTap(page)
   await waitCount(page, '.undo-bar', 1, '刪除後應該有提示條')
 
-  await page.locator('.tabbar .tab').nth(1).click()
+  await page.locator('.tab[aria-label="設定"]').click()
   await waitCount(page, '.undo-bar', 0, '切到設定頁後復原提示條仍殘留——分頁這一路仍該結清')
 })
 

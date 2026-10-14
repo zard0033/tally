@@ -282,6 +282,61 @@ export function workoutSummary(
   }
 }
 
+/* ═══════════ 訓練頁的資料（日期小點、當天的訓練卡） ═══════════ */
+
+/** 有訓練（重訓或有氧）的日子，給日期元件的小點用。 */
+export function trainingDates(db: TrainingDb): Set<string> {
+  const out = new Set<string>()
+  for (const w of db.workouts) if (typeof w.performed_on === 'string') out.add(w.performed_on)
+  for (const c of db.cardio_sessions) if (typeof c.performed_on === 'string') out.add(c.performed_on)
+  return out
+}
+
+export interface WorkoutCard extends WorkoutSummary {
+  readonly id: string
+  readonly startedAt: string
+  /** null＝進行中（App 重開後仍在，畫面提示可繼續，AC 9）。 */
+  readonly endedAt: string | null
+  readonly inProgress: boolean
+  readonly exerciseCount: number
+}
+
+/** 某一天的重訓，依開始時間由早到晚。一天可以有多次（AC 9）。 */
+export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard[] {
+  const exercisesOf = new Map<string, Row[]>()
+  for (const we of db.workout_exercises) {
+    const key = String(we.workout_id)
+    exercisesOf.set(key, [...(exercisesOf.get(key) ?? []), we])
+  }
+  const setsOf = new Map<string, Row[]>()
+  for (const s of db.workout_sets) {
+    const key = String(s.workout_exercise_id)
+    setsOf.set(key, [...(setsOf.get(key) ?? []), s])
+  }
+  return db.workouts
+    .filter((w) => w.performed_on === date)
+    .sort((a, b) => startedMs(a) - startedMs(b))
+    .map((w) => {
+      const exercises = exercisesOf.get(w.id) ?? []
+      const sets = exercises.flatMap((e) => setsOf.get(e.id) ?? [])
+      const endedAt = typeof w.ended_at === 'string' ? w.ended_at : null
+      const summary = workoutSummary(
+        sets.map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps), done: s.done === true })),
+        String(w.started_at),
+        endedAt,
+        now,
+      )
+      return {
+        ...summary,
+        id: w.id,
+        startedAt: String(w.started_at),
+        endedAt,
+        inProgress: endedAt === null,
+        exerciseCount: exercises.length,
+      }
+    })
+}
+
 /* ═══════════ 補記過去日子（AC 8a） ═══════════ */
 
 /** 補記不跑計時：started_at＝該日本機 12:00，ended_at＝started_at＋手填分鐘（略過＝null＝相等）。

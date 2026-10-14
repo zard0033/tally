@@ -48,6 +48,25 @@ export const FIX = {
     },
   ],
   weight: [{ weight_kg: 75.95, measured_on: '2026-07-24', body_fat_pct: null }],
+  // 訓練動作庫：預設「伺服器上已有動作」＝App 不會預填，開機不多出任何寫入（daily-goal 有整頁零寫入的斷言）。
+  // 要驗預填的測試自己把它覆寫成 []。
+  exercises: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '腿推舉',
+      muscle_group: 'legs',
+      tips: null,
+      archived: false,
+      created_at: '2026-10-01T00:00:00.000Z',
+    },
+  ] as Record<string, unknown>[],
+  // 其餘六張訓練表預設為空；要驗「已有訓練」的測試自己展開 FIX 覆寫。
+  routines: [] as Record<string, unknown>[],
+  routine_exercises: [] as Record<string, unknown>[],
+  workouts: [] as Record<string, unknown>[],
+  workout_exercises: [] as Record<string, unknown>[],
+  workout_sets: [] as Record<string, unknown>[],
+  cardio_sessions: [] as Record<string, unknown>[],
   // listIntakeKcal（實測維持熱量卡）的回應；預設空＝資料不足。要驗有結果的測試自己展開 FIX 覆寫。
   kcalWindow: [] as { eaten_on: string; qty: number; kcal: number }[],
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。

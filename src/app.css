@@ -1252,3 +1252,27 @@ button { -webkit-user-select: none; user-select: none; }
 /* 2026-08-05 從 LogSheet 的內嵌 <style> 搬來這裡：選擇器本來就是全域的，而食品庫的
    新增 sheet（同樣走 vaul）在設定分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
    會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
+
+/* ═══ 訓練分頁（階段 2；樣式來自已核可的 _design-sample/training.html，token 一律引用） ═══ */
+.tr-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-1) var(--s-5) var(--s-4); }
+.tr-scroll::-webkit-scrollbar { display: none; }
+.tr-scroll .muted { color: var(--ink-muted); margin: var(--s-4) 0 0; }
+.tr-sec { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs);
+  margin: var(--s-4) 0 var(--s-2); }
+.tr-sec:first-child { margin-top: var(--s-2); }
+.tr-card { background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-tab); overflow: clip; }
+.tr-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: 0 var(--s-4);
+  border: none; border-top: 1px solid var(--rule-subtle); background: none; text-align: left;
+  font-family: inherit; color: inherit; }
+.tr-card > :first-child { border-top: none; }
+.tr-row .grow { flex: 1; min-width: 0; }
+.tr-row .nm { display: block; font-size: var(--t-base); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-row .sub { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: 2px;
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-xs); }
+/* 狀態細條（離線／未同步）：一直在、不擋操作，不是 toast */
+.tr-status { display: flex; align-items: center; gap: var(--s-2); margin: 0 var(--s-5) var(--s-2); min-height: 36px;
+  padding: 0 var(--s-3); border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted);
+  font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); flex-shrink: 0; }
+.tr-status .grow { flex: 1; min-width: 0; }
+.tr-status.is-error { color: var(--over); }

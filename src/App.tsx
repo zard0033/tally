@@ -45,8 +45,10 @@ import Login from '@/screens/Login'
 import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
 import Settings from '@/screens/Settings'
+import Training from '@/screens/Training'
+import { useTraining } from '@/useTraining'
 
-type Tab = 'today' | 'settings'
+type Tab = 'today' | 'training' | 'settings'
 
 interface Notice {
   headline: string
@@ -107,6 +109,10 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [loginError, setLoginError] = useState<string | null>(null)
   const [bootStatus, setBootStatus] = useState<BootStatus>('loading')
+  /* 訓練資料（階段 2）。與飲食資料完全分開載入、分開失敗：健身房沒網路時飲食那邊會亮「讀不到」，
+     訓練分頁不能跟著壞——它靠本機底與佇列照常用。所以下面的 render 把訓練分支放在飲食的
+     failed／ready 判斷之前。 */
+  const training = useTraining(session ? session.user.id : null)
 
   /* 離線開機（AC 2–4）。bootedFromLocalRef＝這次是靠本機 session 進來的、refresh 還沒成功：
      資料請求會被 supabase-js 擋在 refresh 退避裡，所以 load() 先把離線提示亮出來、請求留在背景，
@@ -697,10 +703,13 @@ export default function App() {
   const handleSignOut = useCallback(() => {
     userSignOutRef.current = true
     // 失敗（例如離線時伺服器端登出打不到）就把旗標放掉，免得之後一次真的被動掉線被當成主動
-    apiSignOut().catch(() => {
-      userSignOutRef.current = false
-    })
-  }, [])
+    apiSignOut()
+      // 登出成功才收尾訓練的本機資料；佇列有東西時原樣保留（確認對話框之後再做，現在寧可不清）
+      .then(() => training.settleOnSignOut())
+      .catch(() => {
+        userSignOutRef.current = false
+      })
+  }, [training])
 
   /* 開機：問一次目前 session，並訂閱後續變化（token 自動 refresh、登出、跨分頁同步
    * 都由 supabase-js 處理，這裡只反應結果）。
@@ -855,7 +864,9 @@ export default function App() {
   return (
     <div className="screen" id="view-app">
       <main className="main">
-        {failed && notice ? (
+        {tab === 'training' ? (
+          <Training view={training.view} error={training.error} />
+        ) : failed && notice ? (
           <div className="notice">
             <p className="headline">{notice.headline}</p>
             {notice.detail && <p>{notice.detail}</p>}
@@ -968,6 +979,26 @@ export default function App() {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21" />
               <path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3" />
+            </svg>
+          </button>
+          <button
+            className="tab"
+            type="button"
+            aria-current={tab === 'training' ? 'page' : undefined}
+            aria-label="訓練"
+            onClick={() => setTab('training')}
+          >
+            {tab === 'training' && (
+              <motion.span
+                className="tab-indicator"
+                layoutId="tab-indicator"
+                aria-hidden="true"
+                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
+              />
+            )}
+            {/* 啞鈴（樣張 ①）：兩端的片與中間的槓 */}
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
             </svg>
           </button>
           <button

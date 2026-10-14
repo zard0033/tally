@@ -97,6 +97,15 @@ export async function seedFetchStub(
       w.__failNext = null
       w.__scan = null
 
+      const TRAINING_TABLES = [
+        'exercises',
+        'routines',
+        'routine_exercises',
+        'workouts',
+        'workout_exercises',
+        'workout_sets',
+        'cardio_sessions',
+      ]
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
@@ -203,6 +212,10 @@ export async function seedFetchStub(
         if (table === 'profile') return json(fix.profile)
         if (table === 'weight') return json(fix.weight)
         if (table === 'foods') return json(fix.foods)
+        // 訓練表（階段 2）：stub 不看 filter／range，七張表各回自己的 fixture（預設只有 exercises 非空）。
+        // 單頁就回完（列數 < pageSize），執行期的分頁迴圈一頁就停。
+        // 注意：stub 的寫入不落地——寫進去的列下一次 GET 不會出現（intake 也是這樣）。
+        if (TRAINING_TABLES.includes(table)) return json((fix as Record<string, unknown>)[table] ?? [])
         if (table === 'intake') {
           /* 實測維持熱量卡的區間查詢：認的是「select 欄位含 eaten_on 且不含 meal」，不認欄位順序
              （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。

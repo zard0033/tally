@@ -78,7 +78,7 @@ test('Tally UI 回歸', async ({ page }) => {
     ] as const) {
       await must(page, sel, label)
     }
-    check((await page.locator('.tabbar .tab').count()) === 2, '分頁按鈕數：預期 2（日記／設定）')
+    check((await page.locator('.tabbar .tab').count()) === 3, '分頁按鈕數：預期 3（飲食／訓練／設定）')
     // v2.3：CTA 已無文字，改驗 aria-label
     check(
       (await page.locator('button.cta').getAttribute('aria-label')) === '記一筆',
@@ -325,7 +325,7 @@ test('Tally UI 回歸', async ({ page }) => {
     await must(page, '.undo-bar', '刪除後的復原提示條')
     // 提示條掛在 <main> 下、與 Today／Settings 同層，且定位是照今日頁 CTA 高度算的，
     // 不結清的話它會浮在設定頁半空中（precommit review 抓到）
-    await page.locator('.tabbar .tab').nth(1).click()
+    await page.locator('.tab[aria-label="設定"]').click()
     await page.waitForTimeout(300)
     check((await page.locator('.undo-bar').count()) === 0, '切到設定頁後復原提示條仍殘留')
     await page.locator('.tabbar .tab').nth(0).click()
@@ -361,7 +361,7 @@ test('Tally UI 回歸', async ({ page }) => {
 
   await step('切設定頁 — 契約與標題', async () => {
     const tabs = page.locator('.tabbar .tab')
-    await tabs.nth(1).click() // 設定
+    await tabs.nth(2).click() // 設定（第三顆：飲食／訓練／設定）
     await page.waitForTimeout(400)
     await mustText(page, 'h1.today', '設定', '設定頁標題')
     await must(page, '.settings', '設定面板')

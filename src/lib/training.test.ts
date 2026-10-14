@@ -12,7 +12,9 @@ import {
   prefillSets,
   presetExerciseId,
   presetsToSeed,
+  trainingDates,
   workoutSummary,
+  workoutsOn,
   type Row,
   type TrainingDb,
   type TrainingTable,
@@ -319,6 +321,63 @@ describe('workoutSummary', () => {
     expect(workoutSummary([], '2026-10-14T10:00:00.000Z', null, at('2026-10-14T10:00:00.000Z'))).toEqual({
       volume: 0, doneSets: 0, totalSets: 0, minutes: 0,
     })
+  })
+})
+
+/* ═══════════ 訓練頁的資料 ═══════════ */
+
+describe('trainingDates', () => {
+  it('重訓與有氧的日子都算，同一天只算一次', () => {
+    const d = db({
+      workouts: [workout('w1', '2026-10-10'), workout('w2', '2026-10-10'), workout('w3', '2026-10-12')],
+      cardio_sessions: [{ id: 'c1', performed_on: '2026-10-11' }, { id: 'c2', performed_on: '2026-10-12' }],
+    })
+    expect([...trainingDates(d)].sort()).toEqual(['2026-10-10', '2026-10-11', '2026-10-12'])
+  })
+
+  it('沒有任何訓練＝空集合', () => {
+    expect(trainingDates(db()).size).toBe(0)
+  })
+})
+
+describe('workoutsOn', () => {
+  const now = new Date('2026-10-14T10:36:59.000Z')
+  const d = db({
+    workouts: [
+      { ...workout('late', '2026-10-14', '2026-10-14T09:00:00.000Z'), ended_at: null },
+      { ...workout('early', '2026-10-14', '2026-10-14T01:00:00.000Z'), ended_at: '2026-10-14T01:36:00.000Z' },
+      workout('other-day', '2026-10-13'),
+    ],
+    workout_exercises: [we('we1', 'early', 'e1'), we('we2', 'early', 'e2'), we('we3', 'late', 'e1')],
+    workout_sets: [
+      set('s1', 'we1', 1, 60, 12),
+      set('s2', 'we1', 2, 60, 12),
+      set('s3', 'we2', 1, 40, 10, false),
+      set('s4', 'we3', 1, 50, 10),
+    ],
+  })
+
+  it('只列這一天的，依開始時間由早到晚', () => {
+    expect(workoutsOn(d, '2026-10-14', now).map((c) => c.id)).toEqual(['early', 'late'])
+    expect(workoutsOn(d, '2026-10-13', now).map((c) => c.id)).toEqual(['other-day'])
+    expect(workoutsOn(d, '2026-10-01', now)).toEqual([])
+  })
+
+  it('動作數、組數、訓練量只算已打勾的、時長用結束時間', () => {
+    const [early] = workoutsOn(d, '2026-10-14', now)
+    expect(early).toMatchObject({
+      exerciseCount: 2, doneSets: 2, totalSets: 3, volume: 1440, minutes: 36, inProgress: false,
+    })
+  })
+
+  it('進行中的（沒有結束時間）標記出來，時長算到現在', () => {
+    const late = workoutsOn(d, '2026-10-14', now)[1]
+    expect(late).toMatchObject({ inProgress: true, endedAt: null, minutes: 96, volume: 500 })
+  })
+
+  it('沒有任何動作的訓練也列出來（剛開始、還沒加動作）', () => {
+    const only = db({ workouts: [workout('w', '2026-10-14')] })
+    expect(workoutsOn(only, '2026-10-14', now)[0]).toMatchObject({ exerciseCount: 0, totalSets: 0, volume: 0 })
   })
 })
 
