@@ -4,15 +4,23 @@ import { localDate } from './dates'
 import {
   MUSCLE_GROUPS,
   PRESET_EXERCISES,
+  addExerciseOps,
+  addSetOps,
   applyQueue,
   backfillTimes,
   emptyTrainingDb,
+  finishWorkoutOps,
+  formatLastSets,
+  isBackfilled,
   lastCompletedSets,
   parentRefs,
   prefillSets,
   presetExerciseId,
   presetsToSeed,
+  setsOfDetail,
+  startWorkoutOps,
   trainingDates,
+  workoutDetail,
   workoutSummary,
   workoutsOn,
   type Row,
@@ -46,6 +54,7 @@ const we = (id: string, workout_id: string, exercise_id: string, position = 0): 
 const set = (
   id: string, workout_exercise_id: string, set_no: number, weight_kg: number, reps: number, done = true,
 ): Row => ({ id, workout_exercise_id, set_no, weight_kg, reps, done })
+const exercise = (id: string, name = id): Row => ({ id, name, muscle_group: 'legs', tips: null, archived: false })
 
 /* ═══════════ 預填動作（AC 1） ═══════════ */
 
@@ -378,6 +387,199 @@ describe('workoutsOn', () => {
   it('沒有任何動作的訓練也列出來（剛開始、還沒加動作）', () => {
     const only = db({ workouts: [workout('w', '2026-10-14')] })
     expect(workoutsOn(only, '2026-10-14', now)[0]).toMatchObject({ exerciseCount: 0, totalSets: 0, volume: 0 })
+  })
+})
+
+/* ═══════════ 一次訓練的內容與寫入組裝 ═══════════ */
+
+const idGen = () => {
+  let i = 0
+  return () => `n${++i}`
+}
+
+describe('workoutDetail／setsOfDetail', () => {
+  const d = db({
+    exercises: [exercise('e1', '腿推舉'), exercise('e2', '坐姿胸推')],
+    workouts: [workout('w1', '2026-10-14'), workout('w2', '2026-10-14')],
+    workout_exercises: [we('we2', 'w1', 'e2', 1), we('we1', 'w1', 'e1', 0), we('weX', 'w2', 'e1', 0), we('weGone', 'w1', 'e-deleted', 2)],
+    workout_sets: [
+      set('s2', 'we1', 2, 62.5, 10),
+      set('s1', 'we1', 1, 60, 12),
+      set('s3', 'we2', 1, 35, 12, false),
+      set('sx', 'weX', 1, 99, 1),
+    ],
+  })
+
+  it('動作依 position、組依 set_no 排好，且只含這一次訓練的列', () => {
+    const detail = workoutDetail(d, 'w1')!
+    expect(detail.exercises.map((e) => e.entry.id)).toEqual(['we1', 'we2', 'weGone'])
+    expect(detail.exercises[0].sets.map((s) => s.id)).toEqual(['s1', 's2'])
+    expect(detail.exercises.flatMap((e) => e.sets).some((s) => s.id === 'sx')).toBe(false)
+  })
+
+  it('帶出動作庫那一列；動作庫裡找不到時是 null，不讓畫面崩', () => {
+    const detail = workoutDetail(d, 'w1')!
+    expect(detail.exercises[0].exercise?.name).toBe('腿推舉')
+    expect(detail.exercises[2].exercise).toBeNull()
+  })
+
+  it('找不到這次訓練（被刪了）回 null', () => {
+    expect(workoutDetail(d, 'nope')).toBeNull()
+  })
+
+  it('攤平成各組，供 workoutSummary 計算', () => {
+    const flat = setsOfDetail(workoutDetail(d, 'w1')!)
+    expect(flat).toEqual([
+      { weight_kg: 60, reps: 12, done: true },
+      { weight_kg: 62.5, reps: 10, done: true },
+      { weight_kg: 35, reps: 12, done: false },
+    ])
+  })
+})
+
+describe('isBackfilled', () => {
+  const TODAY = '2026-10-14'
+  const synthetic = (date: string) => ({ ...workout('w', date), started_at: backfillTimes(date, null).started_at })
+
+  it('過去的日子、起點剛好是當天本機 12:00＝補記', () => {
+    expect(isBackfilled(synthetic('2026-10-10'), TODAY)).toBe(true)
+  })
+
+  it('今天的不算補記，即使時間剛好是 12:00', () => {
+    expect(isBackfilled(synthetic(TODAY), TODAY)).toBe(false)
+  })
+
+  it('過去那天真的開始、沒結束的（跨午夜忘了按完成）不算補記：它有真的起點', () => {
+    expect(isBackfilled({ ...workout('w', '2026-10-10'), started_at: '2026-10-10T02:17:00.000Z' }, TODAY)).toBe(false)
+  })
+
+  it('壞掉的日期不丟錯', () => {
+    expect(isBackfilled({ id: 'w', performed_on: 'garbage', started_at: 'x' }, TODAY)).toBe(false)
+  })
+})
+
+describe('startWorkoutOps', () => {
+  const now = new Date(2026, 9, 14, 10, 30, 0) // 本機 2026-10-14 10:30
+
+  it('選到今天：現在開始，進行中', () => {
+    const [op] = startWorkoutOps({ workoutId: 'w1', date: '2026-10-14', now })
+    expect(op).toEqual({
+      op: 'insert', table: 'workouts', rowId: 'w1',
+      payload: { performed_on: '2026-10-14', started_at: now.toISOString(), ended_at: null, routine_id: null },
+    })
+  })
+
+  it('選到過去：補記，起點是那天中午、一樣是進行中（完成時才手填時長）', () => {
+    const [op] = startWorkoutOps({ workoutId: 'w1', date: '2026-10-10', now })
+    expect(op.payload).toMatchObject({ performed_on: '2026-10-10', ended_at: null })
+    const started = new Date(String(op.payload?.started_at))
+    expect(localDate(started)).toBe('2026-10-10')
+    expect(started.getHours()).toBe(12)
+  })
+})
+
+describe('addExerciseOps', () => {
+  const history = db({
+    workouts: [workout('old', '2026-10-01')],
+    workout_exercises: [we('weOld', 'old', 'e1')],
+    workout_sets: [set('o1', 'weOld', 1, 60, 10), set('o2', 'weOld', 2, 62.5, 8)],
+  })
+  const setsOf = (ops: ReturnType<typeof addExerciseOps>) => ops.filter((o) => o.table === 'workout_sets')
+
+  it('有歷史：各組取上次實際完成的值、都沒打勾、組號從 1 起', () => {
+    const ops = addExerciseOps({ db: history, workoutId: 'w', exerciseId: 'e1', newId: idGen() })
+    expect(ops[0]).toMatchObject({ op: 'insert', table: 'workout_exercises', payload: { workout_id: 'w', exercise_id: 'e1', position: 0 } })
+    expect(setsOf(ops).map((o) => o.payload)).toEqual([
+      { workout_exercise_id: ops[0].rowId, set_no: 1, weight_kg: 60, reps: 10, done: false },
+      { workout_exercise_id: ops[0].rowId, set_no: 2, weight_kg: 62.5, reps: 8, done: false },
+    ])
+  })
+
+  it('沒歷史：用課表預設的組數與次數，重量 0', () => {
+    const ops = addExerciseOps({ db: db(), workoutId: 'w', exerciseId: 'e9', newId: idGen(), target: { target_sets: 2, target_reps: 8 } })
+    expect(setsOf(ops).map((o) => [o.payload?.weight_kg, o.payload?.reps])).toEqual([[0, 8], [0, 8]])
+  })
+
+  it('沒歷史也沒課表預設：3 組、次數 0', () => {
+    const ops = addExerciseOps({ db: db(), workoutId: 'w', exerciseId: 'e9', newId: idGen() })
+    expect(setsOf(ops)).toHaveLength(3)
+  })
+
+  it('position 接在這次訓練已有的動作後面', () => {
+    const d = db({ workout_exercises: [we('a', 'w', 'e1', 0), we('b', 'w', 'e2', 1), we('c', 'other', 'e1', 5)] })
+    const ops = addExerciseOps({ db: d, workoutId: 'w', exerciseId: 'e3', newId: idGen() })
+    expect(ops[0].payload?.position).toBe(2)
+  })
+
+  it('這一次訓練自己打勾的組不能當成「上次」', () => {
+    const d = db({
+      workouts: [workout('w', '2026-10-14')],
+      workout_exercises: [we('weNow', 'w', 'e1')],
+      workout_sets: [set('now1', 'weNow', 1, 99, 1)],
+    })
+    const ops = addExerciseOps({ db: d, workoutId: 'w', exerciseId: 'e1', newId: idGen() })
+    expect(setsOf(ops).map((o) => o.payload?.weight_kg)).toEqual([0, 0, 0])
+  })
+
+  it('每一列的 id 都不同', () => {
+    const ops = addExerciseOps({ db: history, workoutId: 'w', exerciseId: 'e1', newId: idGen() })
+    expect(new Set(ops.map((o) => o.rowId)).size).toBe(ops.length)
+  })
+})
+
+describe('addSetOps', () => {
+  it('預填上一組的值，組號接在最大的後面', () => {
+    const d = db({ workout_sets: [set('a', 'we', 1, 60, 12), set('b', 'we', 2, 62.5, 10), set('z', 'other', 1, 5, 5)] })
+    const [op] = addSetOps({ db: d, workoutExerciseId: 'we', newId: () => 'new' })
+    expect(op).toEqual({
+      op: 'insert', table: 'workout_sets', rowId: 'new',
+      payload: { workout_exercise_id: 'we', set_no: 3, weight_kg: 62.5, reps: 10, done: false },
+    })
+  })
+
+  it('這個動作還沒有任何組：第 1 組、0×0', () => {
+    const [op] = addSetOps({ db: db(), workoutExerciseId: 'we', newId: () => 'new' })
+    expect(op.payload).toMatchObject({ set_no: 1, weight_kg: 0, reps: 0, done: false })
+  })
+})
+
+describe('finishWorkoutOps', () => {
+  const now = new Date(2026, 9, 14, 11, 0, 0)
+
+  it('即時的訓練：ended_at＝現在，不動 started_at', () => {
+    const w = { ...workout('w', '2026-10-14'), started_at: new Date(2026, 9, 14, 10, 0, 0).toISOString() }
+    const [op] = finishWorkoutOps({ workout: w, now, minutes: null })
+    expect(op).toEqual({ op: 'update', table: 'workouts', rowId: 'w', payload: { ended_at: now.toISOString() } })
+  })
+
+  it('補記的訓練：由手填分鐘算出 started_at／ended_at，略過就相等', () => {
+    const w = { ...workout('w', '2026-10-10'), started_at: backfillTimes('2026-10-10', null).started_at }
+    const [withMin] = finishWorkoutOps({ workout: w, now, minutes: 45 })
+    const p = withMin.payload as { started_at: string; ended_at: string }
+    expect(Date.parse(p.ended_at) - Date.parse(p.started_at)).toBe(45 * 60_000)
+    const [skipped] = finishWorkoutOps({ workout: w, now, minutes: null })
+    const q = skipped.payload as { started_at: string; ended_at: string }
+    expect(q.ended_at).toBe(q.started_at)
+  })
+
+  it('補記的時長超出範圍：丟錯，不默默改', () => {
+    const w = { ...workout('w', '2026-10-10'), started_at: backfillTimes('2026-10-10', null).started_at }
+    expect(() => finishWorkoutOps({ workout: w, now, minutes: 5000 })).toThrow()
+  })
+})
+
+describe('formatLastSets', () => {
+  it('各組一樣：合成「重量 × 次數 × 組數」', () => {
+    expect(formatLastSets([{ weight_kg: 60, reps: 12 }, { weight_kg: 60, reps: 12 }, { weight_kg: 60, reps: 12 }])).toBe('60 kg × 12 × 3')
+    expect(formatLastSets([{ weight_kg: 22.5, reps: 10 }])).toBe('22.5 kg × 10 × 1')
+  })
+
+  it('各組不一樣：逐組列', () => {
+    expect(formatLastSets([{ weight_kg: 60, reps: 10 }, { weight_kg: 62.5, reps: 8 }])).toBe('60 × 10 · 62.5 × 8')
+  })
+
+  it('沒有歷史：空字串（畫面不顯示「上次」）', () => {
+    expect(formatLastSets([])).toBe('')
   })
 })
 

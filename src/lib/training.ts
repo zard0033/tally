@@ -337,6 +337,157 @@ export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard
     })
 }
 
+/* ═══════════ 一次訓練的內容與寫入組裝（AC 4、5、8、8a） ═══════════ */
+
+export interface WorkoutExerciseDetail {
+  /** workout_exercises 那一列。 */
+  readonly entry: Row
+  /** 動作庫的那一列；動作被刪（理論上 restrict 擋著）或底還沒載到時是 null，畫面要有退路。 */
+  readonly exercise: Row | null
+  /** 依 set_no 排好。 */
+  readonly sets: readonly Row[]
+}
+
+export interface WorkoutDetail {
+  readonly workout: Row
+  /** 依 position 排好。 */
+  readonly exercises: readonly WorkoutExerciseDetail[]
+}
+
+/** 訓練中／編輯一次訓練時畫面要的整份資料。找不到這次訓練（被刪了）回 null。 */
+export function workoutDetail(db: TrainingDb, workoutId: string): WorkoutDetail | null {
+  const workout = db.workouts.find((w) => w.id === workoutId)
+  if (!workout) return null
+  const exerciseById = new Map(db.exercises.map((e) => [e.id, e]))
+  const byPosition = (a: Row, b: Row) => Number(a.position) - Number(b.position)
+  const bySetNo = (a: Row, b: Row) =>
+    Number(a.set_no) - Number(b.set_no) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
+  const exercises = db.workout_exercises
+    .filter((we) => we.workout_id === workoutId)
+    .sort(byPosition)
+    .map((entry) => ({
+      entry,
+      exercise: exerciseById.get(String(entry.exercise_id)) ?? null,
+      sets: db.workout_sets.filter((s) => s.workout_exercise_id === entry.id).sort(bySetNo),
+    }))
+  return { workout, exercises }
+}
+
+/** 一組一組攤平，給 workoutSummary 用。 */
+export function setsOfDetail(detail: WorkoutDetail): SetLike[] {
+  return detail.exercises.flatMap((e) =>
+    e.sets.map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps), done: s.done === true })),
+  )
+}
+
+/** 寫入的最小描述；與 trainingRuntime 的 WriteOp 同形（不引用它，那邊反過來引用這裡）。 */
+export interface RowOp {
+  op: 'insert' | 'update' | 'delete'
+  table: TrainingTable
+  rowId: string
+  payload?: Record<string, unknown>
+}
+
+/** 這次訓練是不是「補記」建的：started_at 剛好是 performed_on 當天本機 12:00:00.000（補記的合成起點，
+ *  `backfillTimes`），而且不是今天。真的在 12:00:00.000 整按下開始的機率是零。補記不跑計時，完成時要手填時長。 */
+export function isBackfilled(workout: Row, today: string = localDate()): boolean {
+  const performedOn = String(workout.performed_on)
+  if (performedOn >= today) return false
+  try {
+    return backfillTimes(performedOn, null).started_at === new Date(String(workout.started_at)).toISOString()
+  } catch {
+    return false
+  }
+}
+
+/** 開始一次訓練。選到今天＝現在開始、開始跑計時；選到過去＝補記（起點 12:00、不計時）。
+ *  ended_at 一律 null＝進行中，App 重開後仍在、畫面提示可繼續（AC 9）。 */
+export function startWorkoutOps(args: { workoutId: string; date: string; now: Date }): RowOp[] {
+  const { workoutId, date, now } = args
+  const live = date === localDate(now)
+  const startedAt = live ? now.toISOString() : backfillTimes(date, null).started_at
+  return [
+    {
+      op: 'insert',
+      table: 'workouts',
+      rowId: workoutId,
+      payload: { performed_on: date, started_at: startedAt, ended_at: null, routine_id: null },
+    },
+  ]
+}
+
+/** 把一個動作加進這次訓練：一列 workout_exercises ＋ 預填的各組（有歷史就取上次實際完成的值）。 */
+export function addExerciseOps(args: {
+  db: TrainingDb
+  workoutId: string
+  exerciseId: string
+  newId: () => string
+  target?: PrefillTarget
+}): RowOp[] {
+  const { db, workoutId, exerciseId, newId, target } = args
+  const taken = db.workout_exercises.filter((we) => we.workout_id === workoutId).map((we) => Number(we.position))
+  const position = taken.length === 0 ? 0 : Math.max(...taken) + 1
+  const entryId = newId()
+  const prefilled = prefillSets(db, exerciseId, target, workoutId)
+  return [
+    {
+      op: 'insert',
+      table: 'workout_exercises',
+      rowId: entryId,
+      payload: { workout_id: workoutId, exercise_id: exerciseId, position },
+    },
+    ...prefilled.map(
+      (s, i): RowOp => ({
+        op: 'insert',
+        table: 'workout_sets',
+        rowId: newId(),
+        payload: { workout_exercise_id: entryId, set_no: i + 1, weight_kg: s.weight_kg, reps: s.reps, done: false },
+      }),
+    ),
+  ]
+}
+
+/** 新增一組：預填上一組的值（AC 5）；這個動作還沒有任何組就 0×0。 */
+export function addSetOps(args: { db: TrainingDb; workoutExerciseId: string; newId: () => string }): RowOp[] {
+  const { db, workoutExerciseId, newId } = args
+  const sets = db.workout_sets.filter((s) => s.workout_exercise_id === workoutExerciseId)
+  const last = [...sets].sort((a, b) => Number(a.set_no) - Number(b.set_no)).at(-1)
+  const setNo = sets.length === 0 ? 1 : Math.max(...sets.map((s) => Number(s.set_no))) + 1
+  return [
+    {
+      op: 'insert',
+      table: 'workout_sets',
+      rowId: newId(),
+      payload: {
+        workout_exercise_id: workoutExerciseId,
+        set_no: setNo,
+        weight_kg: last ? Number(last.weight_kg) : 0,
+        reps: last ? Number(last.reps) : 0,
+        done: false,
+      },
+    },
+  ]
+}
+
+/** 結束一次進行中的訓練。即時的：ended_at＝現在；補記的：started_at／ended_at 由手填分鐘算
+ *  （略過＝等於起點）。已結束的訓練重新打開編輯時，修改都是當下就存，不再呼叫這個。 */
+export function finishWorkoutOps(args: { workout: Row; now: Date; minutes: number | null }): RowOp[] {
+  const { workout, now, minutes } = args
+  const payload = isBackfilled(workout, localDate(now))
+    ? backfillTimes(String(workout.performed_on), minutes)
+    : { ended_at: now.toISOString() }
+  return [{ op: 'update', table: 'workouts', rowId: workout.id, payload }]
+}
+
+/** 「上次 60 kg × 12 × 3」：各組一樣就合成一句，不一樣就逐組列。沒有歷史回空字串。 */
+export function formatLastSets(sets: readonly PrefillSet[]): string {
+  if (sets.length === 0) return ''
+  const kg = (n: number) => String(Number(n.toFixed(2)))
+  const same = sets.every((s) => s.weight_kg === sets[0].weight_kg && s.reps === sets[0].reps)
+  if (same) return `${kg(sets[0].weight_kg)} kg × ${sets[0].reps} × ${sets.length}`
+  return sets.map((s) => `${kg(s.weight_kg)} × ${s.reps}`).join(' · ')
+}
+
 /* ═══════════ 補記過去日子（AC 8a） ═══════════ */
 
 /** 補記不跑計時：started_at＝該日本機 12:00，ended_at＝started_at＋手填分鐘（略過＝null＝相等）。
