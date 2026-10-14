@@ -1282,6 +1282,8 @@ button.tr-row:disabled { opacity: .45; cursor: default; }
 button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tr-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
 .tr-row-compact { min-height: 48px; }
+.tr-row .lead { width: 20px; height: 20px; color: var(--ink-muted); flex-shrink: 0; }
+.tr-entry { margin-top: var(--s-4); }
 
 /* 訓練中整頁（樣張 ③）：頂欄、三格統計、動作卡、一組一列、調整列、底部列 */
 .tr-top { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) var(--s-1);
@@ -1314,9 +1316,17 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-head .chev { width: 14px; height: 14px; color: var(--ink-muted); margin-right: var(--s-3);
   transition: transform var(--dur-base) var(--ease); }
 .ex-head .chev.is-open { transform: rotate(90deg); }
-.ex-tips { margin: 0 var(--s-4) var(--s-3); padding: var(--s-3); border-radius: var(--r-tab); background: var(--raised);
-  font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; }
-.ex-tips .t { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); display: block; margin-bottom: 2px; }
+.ex-tips { display: block; width: calc(100% - 2 * var(--s-4)); margin: 0 var(--s-4) var(--s-3); padding: var(--s-3);
+  border: none; border-radius: var(--r-tab); background: var(--raised); text-align: left; white-space: pre-wrap;
+  font-family: inherit; font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.ex-tips:active { opacity: .6; }
+.ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ex-tips .t { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); display: flex;
+  align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.ex-tips .pen { width: 14px; height: 14px; color: var(--ink-faint); }
+.ex-tips.is-empty { color: var(--accent); }
+.ex-tips.is-empty .t { margin-bottom: 0; }
 .set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;
   padding: 0 var(--s-4); }
 .set-head { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); text-align: center; min-height: 24px; }
@@ -1342,6 +1352,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   cursor: pointer; -webkit-appearance: none; appearance: none; }
 .tr-text-btn svg { width: 16px; height: 16px; }
 .tr-text-btn.is-quiet { color: var(--ink-muted); font-weight: 400; }
+.tr-text-btn-center { width: 100%; justify-content: center; margin-top: var(--s-1); }
 .tr-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .adj { margin: 0 var(--s-4) var(--s-2); padding: var(--s-2); border-radius: var(--r-tab); background: var(--raised); }
 .adj-line { display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; gap: 6px; align-items: center; }
@@ -1370,6 +1381,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-sheet-body .muted { color: var(--ink-muted); margin: var(--s-3) 0 0; }
 .tr-sheet-body .action-btn { margin-top: var(--s-4); }
 .tr-form-error { color: var(--over); font-size: var(--t-sm); margin: var(--s-2) 0; }
+.tr-filter { margin: 0 calc(var(--s-5) * -1) var(--s-2); padding: 0 var(--s-5) var(--s-1); }
 .tr-search { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3);
   margin: 0 0 var(--s-3); border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--raised); }
 .tr-search svg { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
@@ -1383,11 +1395,21 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field { display: block; margin: var(--s-3) 0; }
 .tr-field .lb { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
-.tr-field .lb em { font-style: normal; font-weight: 400; color: var(--ink-faint); }
+.tr-field .lb em { font-style: normal; font-weight: 400; color: var(--ink-faint); margin-left: var(--s-2); }
 .tr-field input { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
   background: var(--raised); padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-md); color: var(--ink); -webkit-appearance: none; appearance: none; }
 .tr-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tr-field input.is-text, .tr-field textarea { font-family: var(--font-body); font-variant-numeric: normal; }
+.tr-field select { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
+  background-color: var(--raised); padding: 0 40px 0 var(--s-3); font-family: var(--font-body); font-size: var(--t-md);
+  color: var(--ink); -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237A5C44' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 18px; }
+.tr-field textarea { width: 100%; min-height: 96px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
+  background: var(--raised); padding: var(--s-3); font-size: var(--t-md); line-height: 1.6; color: var(--ink);
+  resize: none; -webkit-appearance: none; appearance: none; }
+.tr-field select:focus-visible, .tr-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tr-field .hint { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-1); line-height: 1.5; }
 .tr-field .hint.is-error { color: var(--over); }
 

@@ -1,10 +1,11 @@
-/* 選動作 sheet：訓練中「加動作」用。搜尋＋依肌群排好的清單，點一列就加進這次訓練。
-   動作庫的管理（改名、肌群、要點、封存）是另一個畫面（第 3 段）；這裡只負責「挑」。
-   搜尋框字級 16px（iOS 聚焦 <16px 會 zoom，DESIGN「表單控件字級下限」）。 */
-import { useMemo, useState } from 'react'
+/* 選動作 sheet：訓練中「加動作」用。搜尋＋肌群橫條＋依肌群排好的清單，點一列就加進這次訓練。
+   動作庫的管理（改名、肌群、要點、封存）是另一個畫面（ExerciseLibrary）；這裡只負責「挑」。
+   搜尋與橫條與動作庫頁共用 ExerciseFilterBar。 */
+import { useEffect, useMemo, useState } from 'react'
 import { Drawer } from 'vaul'
+import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import { useSheetFocus } from '@/components/useSheetFocus'
-import { MUSCLE_GROUPS, MUSCLE_GROUP_LABEL, type MuscleGroup, type Row } from '@/lib/training'
+import { MUSCLE_GROUP_LABEL, filterExercises, type ExerciseFilter, type MuscleGroup, type Row } from '@/lib/training'
 
 interface ExercisePickerProps {
   open: boolean
@@ -14,33 +15,23 @@ interface ExercisePickerProps {
   onPick: (exerciseId: string) => void
 }
 
-const groupOrder = (g: unknown): number => {
-  const i = MUSCLE_GROUPS.indexOf(g as MuscleGroup)
-  return i === -1 ? MUSCLE_GROUPS.length : i
-}
+const NO_FILTER: ExerciseFilter = { q: '', group: 'all' }
 
 export default function ExercisePicker({ open, exercises, onClose, onPick }: ExercisePickerProps) {
   const attach = useSheetFocus()
-  const [q, setQ] = useState('')
-  const list = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return [...exercises]
-      .filter((e) => needle === '' || String(e.name).toLowerCase().includes(needle))
-      .sort(
-        (a, b) =>
-          groupOrder(a.muscle_group) - groupOrder(b.muscle_group) ||
-          String(a.name).localeCompare(String(b.name), 'zh-Hant'),
-      )
-  }, [exercises, q])
+  const [filter, setFilter] = useState<ExerciseFilter>(NO_FILTER)
+  const list = useMemo(() => filterExercises(exercises, filter), [exercises, filter])
+
+  // 關閉的出口不只 vaul 的 onOpenChange（挑一個動作、右上 X 都是父層直接關），所以看 open 本身
+  useEffect(() => {
+    if (!open) setFilter(NO_FILTER)
+  }, [open])
 
   return (
     <Drawer.Root
       open={open}
       onOpenChange={(v) => {
-        if (!v) {
-          setQ('')
-          onClose()
-        }
+        if (!v) onClose()
       }}
       direction="bottom"
       shouldScaleBackground={false}
@@ -59,19 +50,7 @@ export default function ExercisePicker({ open, exercises, onClose, onPick }: Exe
             </button>
           </div>
           <div className="tr-sheet-body tr-sheet-scroll">
-            <label className="tr-search">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="6" />
-                <path d="M20 20l-4.5-4.5" />
-              </svg>
-              <input
-                type="search"
-                value={q}
-                placeholder="搜尋動作"
-                aria-label="搜尋動作"
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </label>
+            <ExerciseFilterBar value={filter} onChange={setFilter} />
             {list.length === 0 ? (
               <p className="muted">{exercises.length === 0 ? '動作庫是空的' : '沒有符合的動作'}</p>
             ) : (

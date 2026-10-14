@@ -509,3 +509,91 @@ export function backfillTimes(
   const end = new Date(start.getTime() + (minutes ?? 0) * 60_000)
   return { started_at: start.toISOString(), ended_at: end.toISOString() }
 }
+
+/* ═══════════ 動作庫管理（AC 2、3） ═══════════ */
+
+export interface ExerciseDraft {
+  name: string
+  muscle_group: string
+  tips: string
+}
+
+/** 通過檢查、可以寫進去的值。tips 空白存成 null（DDL 的 tips 可為 null，「沒寫」只有一種表示）。 */
+export interface ExerciseValue {
+  name: string
+  muscle_group: MuscleGroup
+  tips: string | null
+}
+
+export type ExerciseCheck = { ok: true; value: ExerciseValue } | { ok: false; error: string }
+
+/** 比對用：全形／半形、大小寫、連續空白都視為同一個名字（存的仍是使用者輸入的原樣）。 */
+const foldName = (s: unknown): string => String(s).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
+const sameName = (a: unknown, b: string) => foldName(a) === foldName(b)
+
+/** 表單送出前的檢查。名稱不能空（DDL 有 btrim 檢查，擋在這裡才說得出白話）、肌群必須是七類之一、
+ *  名稱不與其他動作重複（含已封存的——重複的名稱在清單與歷史裡分不出誰是誰）。
+ *  `selfId`＝正在編輯的那列，不與自己比。 */
+export function checkExercise(draft: ExerciseDraft, existing: readonly Row[], selfId?: string): ExerciseCheck {
+  const name = draft.name.trim()
+  if (name === '') return { ok: false, error: '名稱不能是空的' }
+  if (!(MUSCLE_GROUPS as readonly string[]).includes(draft.muscle_group)) {
+    return { ok: false, error: '肌群要選七類其中一個' }
+  }
+  const clash = existing.find((e) => e.id !== selfId && sameName(e.name, name))
+  if (clash) {
+    return {
+      ok: false,
+      error: clash.archived === true ? `「${name}」已經在封存裡，到封存區取消封存就能用` : `已經有「${name}」這個動作`,
+    }
+  }
+  const tips = draft.tips.trim()
+  return {
+    ok: true,
+    value: { name, muscle_group: draft.muscle_group as MuscleGroup, tips: tips === '' ? null : tips },
+  }
+}
+
+/** 新增動作。不帶 user_id（伺服器 default auth.uid()），與 startWorkoutOps 等其他寫入一致。 */
+export function createExerciseOps(args: { id: string; value: ExerciseValue }): RowOp[] {
+  const { id, value } = args
+  return [{ op: 'insert', table: 'exercises', rowId: id, payload: { ...value, archived: false } }]
+}
+
+/** 更新動作：只帶有變的欄位，全沒變回空陣列（不排一筆空的 PATCH 進佇列）。
+ *  tips 的 null 與空字串視為同一件事（都是「沒寫」）。 */
+export function updateExerciseOps(args: { current: Row; value: ExerciseValue }): RowOp[] {
+  const { current, value } = args
+  const payload: Record<string, unknown> = {}
+  if (String(current.name) !== value.name) payload.name = value.name
+  if (current.muscle_group !== value.muscle_group) payload.muscle_group = value.muscle_group
+  const curTips = typeof current.tips === 'string' && current.tips !== '' ? current.tips : null
+  if (curTips !== value.tips) payload.tips = value.tips
+  return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'exercises', rowId: current.id, payload }]
+}
+
+/** 封存／取消封存。不提供真刪：歷史才不會爛（AC 2）。 */
+export function setExerciseArchivedOps(args: { id: string; archived: boolean }): RowOp[] {
+  return [{ op: 'update', table: 'exercises', rowId: args.id, payload: { archived: args.archived } }]
+}
+
+export interface ExerciseFilter {
+  q: string
+  group: MuscleGroup | 'all'
+}
+
+/** 認得的肌群回它在七類裡的位置；資料異常（不在七類）歸「其他」，才不會被篩選藏起來。 */
+const groupOf = (e: Row): MuscleGroup =>
+  (MUSCLE_GROUPS as readonly string[]).includes(String(e.muscle_group)) ? (e.muscle_group as MuscleGroup) : 'other'
+
+/** 搜尋名稱＋肌群條件，依肌群順序再依名稱排。動作庫頁與加動作 sheet 共用。 */
+export function filterExercises(exercises: readonly Row[], filter: ExerciseFilter): Row[] {
+  const needle = filter.q.trim().toLowerCase()
+  return exercises
+    .filter((e) => (filter.group === 'all' || groupOf(e) === filter.group) && (needle === '' || String(e.name).toLowerCase().includes(needle)))
+    .sort(
+      (a, b) =>
+        MUSCLE_GROUPS.indexOf(groupOf(a)) - MUSCLE_GROUPS.indexOf(groupOf(b)) ||
+        String(a.name).localeCompare(String(b.name), 'zh-Hant'),
+    )
+}

@@ -339,3 +339,236 @@ test('登出時佇列是空的：不多問一句', async ({ page }) => {
   await expect(page.locator('#view-login')).toHaveCount(1)
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
 })
+
+/* ═══════════ 動作庫與編輯動作（第一輪第 3 段） ═══════════ */
+
+const LEG_ID = EX_ID
+const ROW_ID = '22222222-2222-4222-8222-222222222222'
+const OLD_ID = '33333333-3333-4333-8333-333333333333'
+
+/** 三個動作：腿推舉（下半身、有要點）、坐姿划船（背部）、舊的肩推（肩膀、已封存）。 */
+const LIBRARY_FIX: typeof FIX = {
+  ...FIX,
+  exercises: [
+    { id: LEG_ID, name: '腿推舉', muscle_group: 'legs', tips: '背貼緊椅背', archived: false, created_at: '2026-10-01T00:00:00.000Z' },
+    { id: ROW_ID, name: '坐姿划船', muscle_group: 'back', tips: null, archived: false, created_at: '2026-10-01T00:00:01.000Z' },
+    { id: OLD_ID, name: '舊的肩推', muscle_group: 'shoulder', tips: null, archived: true, created_at: '2026-10-01T00:00:02.000Z' },
+  ],
+}
+
+const library = (page: Page) => page.locator('[data-screen="exercise-library"]')
+const editSheet = (page: Page) => page.locator('[data-screen="exercise-edit"]')
+
+async function openLibrary(page: Page) {
+  await page.locator('[data-action="open-library"]').click()
+  await expect(library(page)).toBeVisible()
+}
+
+test('動作庫：入口顯示未封存的動作數、整頁接管（底部列收起）、返回回到訓練頁', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await expect(page.locator('[data-action="open-library"]')).toContainText('2 個動作')
+
+  await openLibrary(page)
+  await expect(page.locator('.bottom-bar')).toHaveCount(0)
+  await expect(library(page).locator('.tr-row')).toHaveCount(3)
+  await expect(library(page).locator('.tr-row', { hasText: '腿推舉' })).toContainText('有要點')
+
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await expect(page.locator('.bottom-bar')).toBeVisible()
+})
+
+test('動作庫：搜尋名稱與肌群橫條同時成立；封存的列在底下的「已封存」區', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  const archived = library(page).locator('[data-section="archived"] .tr-row')
+  await expect(archived).toHaveCount(1)
+  await expect(archived).toContainText('舊的肩推')
+
+  await library(page).getByRole('searchbox', { name: '搜尋動作' }).fill('划船')
+  await expect(library(page).locator('.tr-row')).toHaveCount(1)
+  await expect(library(page).locator('.tr-row')).toContainText('坐姿划船')
+
+  await library(page).getByRole('searchbox', { name: '搜尋動作' }).fill('')
+  await library(page).getByRole('button', { name: '下半身', exact: true }).click()
+  await expect(library(page).locator('.tr-row')).toHaveCount(1)
+  await expect(library(page).locator('.tr-row')).toContainText('腿推舉')
+  await library(page).getByRole('button', { name: '手臂', exact: true }).click()
+  await expect(library(page).getByText('沒有符合的動作')).toBeVisible()
+})
+
+test('編輯動作：改名、肌群、要點，儲存後落到伺服器', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  await library(page).locator('.tr-row', { hasText: '坐姿划船' }).click()
+  await expect(editSheet(page)).toBeVisible()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('  坐姿划船（機械）  ')
+  await editSheet(page).getByRole('combobox', { name: '肌群' }).selectOption('arms')
+  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('挺胸；拉到肚臍')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+
+  const row = library(page).locator('.tr-row', { hasText: '坐姿划船（機械）' })
+  await expect(row).toContainText('手臂 · 有要點')
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === ROW_ID))
+    .toMatchObject({ name: '坐姿划船（機械）', muscle_group: 'arms', tips: '挺胸；拉到肚臍', archived: false })
+})
+
+test('新增動作：右上＋、預設肌群「其他」、儲存後進清單與伺服器', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await expect(editSheet(page).getByRole('combobox', { name: '肌群' })).toHaveValue('other')
+  await expect(editSheet(page).getByRole('button', { name: '封存這個動作' }), '新增時不顯示封存').toHaveCount(0)
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('硬舉')
+  await editSheet(page).getByRole('combobox', { name: '肌群' }).selectOption('back')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+
+  await expect(library(page).locator('.tr-row', { hasText: '硬舉' })).toContainText('背部')
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length).toBe(4)
+  const rows = await trainRows(page, 'exercises')
+  expect(rows.find((r) => r.name === '硬舉')).toMatchObject({ muscle_group: 'back', tips: null, archived: false })
+})
+
+test('名稱空白或與別的動作重複：擋在 sheet 裡說明，不寫入；撞到已封存的提示可取消封存', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page).getByRole('alert')).toContainText('名稱不能是空的')
+
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill(' 腿推舉 ')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page).getByRole('alert')).toContainText('已經有「腿推舉」')
+
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('舊的肩推')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page).getByRole('alert')).toContainText('取消封存')
+
+  expect(await trainRows(page, 'exercises'), '被擋下的都不該寫入').toHaveLength(3)
+})
+
+test('封存：從「加動作」的選單消失；選單也有肌群橫條', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  await library(page).locator('.tr-row', { hasText: '腿推舉' }).click()
+  await editSheet(page).getByRole('button', { name: '封存這個動作' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.archived).toBe(true)
+
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const picker = page.locator('[data-screen="exercise-picker"]')
+  await expect(picker.locator('.tr-row', { hasText: '坐姿划船' })).toBeVisible()
+  await expect(picker.locator('.tr-row', { hasText: '腿推舉' })).toHaveCount(0)
+  await expect(picker.locator('.tr-row', { hasText: '舊的肩推' })).toHaveCount(0)
+
+  await picker.getByRole('button', { name: '背部', exact: true }).click()
+  await expect(picker.locator('.tr-row')).toHaveCount(1)
+})
+
+test('取消封存：回到清單與選單', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  await library(page).locator('[data-section="archived"] .tr-row', { hasText: '舊的肩推' }).click()
+  await editSheet(page).getByRole('button', { name: '取消封存這個動作' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(library(page).locator('[data-section="archived"]')).toHaveCount(0)
+  await expect(library(page).locator('.tr-row', { hasText: '舊的肩推' })).toHaveCount(1)
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
+})
+
+test('訓練中：要點只能看，筆圖示開同一張編輯 sheet；改完卡片上立刻是新的；清空顯示「＋ 加要點」', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+
+  const tips = page.locator('.ex .ex-tips')
+  await expect(tips).toContainText('背貼緊椅背')
+  // 不能就地改：卡片上沒有可打字的要點欄
+  await expect(page.locator('.ex textarea')).toHaveCount(0)
+
+  await tips.click()
+  await expect(editSheet(page).getByRole('textbox', { name: '要點' })).toHaveValue('背貼緊椅背')
+  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('第三組吃力就降 2.5')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(tips).toContainText('第三組吃力就降 2.5')
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips)
+    .toBe('第三組吃力就降 2.5')
+
+  // 清空＝回到「＋ 加要點」，伺服器存 null
+  await tips.click()
+  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('   ')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(page.locator('.ex .ex-tips')).toHaveText('＋ 加要點')
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
+})
+
+test('離線改要點：畫面立刻是新的，回線後上傳', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await setOffline(page, true)
+  await openLibrary(page)
+
+  await library(page).locator('.tr-row', { hasText: '坐姿划船' }).click()
+  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('離線時寫的')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(library(page).locator('.tr-row', { hasText: '坐姿划船' })).toContainText('有要點')
+  expect((await trainRows(page, 'exercises')).find((r) => r.id === ROW_ID)?.tips, '離線時伺服器還沒有').toBeNull()
+
+  await setOffline(page, false)
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === ROW_ID)?.tips, { timeout: 15_000 })
+    .toBe('離線時寫的')
+})
+
+test('篩選中新增動作：成功後篩選清掉、新動作看得到；名稱欄按 Enter 就送出', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  await library(page).getByRole('button', { name: '胸部', exact: true }).click()
+  await expect(library(page).getByText('沒有符合的動作')).toBeVisible()
+
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await editSheet(page).getByRole('combobox', { name: '肌群' }).selectOption('core')
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('腹部滾輪')
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).press('Enter')
+  await expect(editSheet(page)).toHaveCount(0)
+
+  await expect(library(page).locator('.tr-row', { hasText: '腹部滾輪' })).toContainText('腹肌')
+  await expect(library(page).getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('加動作 sheet：選了肌群與搜尋字之後挑一個動作，下次打開篩選是乾淨的', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const picker = page.locator('[data-screen="exercise-picker"]')
+  await picker.getByRole('button', { name: '背部', exact: true }).click()
+  await picker.locator('.tr-row', { hasText: '坐姿划船' }).click()
+  await expect(page.locator('.ex .set').first()).toBeVisible()
+
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await expect(picker.getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(picker.locator('.tr-row', { hasText: '腿推舉' })).toBeVisible()
+})

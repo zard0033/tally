@@ -8,7 +8,10 @@ import {
   addSetOps,
   applyQueue,
   backfillTimes,
+  checkExercise,
+  createExerciseOps,
   emptyTrainingDb,
+  filterExercises,
   finishWorkoutOps,
   formatLastSets,
   isBackfilled,
@@ -17,9 +20,11 @@ import {
   prefillSets,
   presetExerciseId,
   presetsToSeed,
+  setExerciseArchivedOps,
   setsOfDetail,
   startWorkoutOps,
   trainingDates,
+  updateExerciseOps,
   workoutDetail,
   workoutSummary,
   workoutsOn,
@@ -615,5 +620,129 @@ describe('backfillTimes', () => {
     ['NaN', '2026-10-10', Number.NaN],
   ])('%s 要丟錯，不默默修正', (_label, date, minutes) => {
     expect(() => backfillTimes(date, minutes)).toThrow()
+  })
+})
+
+/* ═══════════ 動作庫管理（AC 2、3） ═══════════ */
+
+const ex = (id: string, name: string, muscle_group: string, extra: Record<string, unknown> = {}): Row => ({
+  id,
+  name,
+  muscle_group,
+  tips: null,
+  archived: false,
+  ...extra,
+})
+
+describe('checkExercise', () => {
+  const existing = [ex('a', '腿推舉', 'legs'), ex('b', '舊的肩推', 'shoulder', { archived: true })]
+  const draft = { name: '深蹲', muscle_group: 'legs', tips: '' }
+
+  it('合法：名稱去頭尾空白、要點空白存成 null', () => {
+    const r = checkExercise({ name: '  深蹲 ', muscle_group: 'legs', tips: '   ' }, existing)
+    expect(r).toEqual({ ok: true, value: { name: '深蹲', muscle_group: 'legs', tips: null } })
+  })
+
+  it('要點保留內容（只去頭尾空白），不改寫', () => {
+    const r = checkExercise({ ...draft, tips: ' 背貼緊\n第三組降 2.5 ' }, existing)
+    expect(r.ok && r.value.tips).toBe('背貼緊\n第三組降 2.5')
+  })
+
+  it('名稱空白要擋（DDL 的 btrim 檢查），並說明', () => {
+    const r = checkExercise({ ...draft, name: '   ' }, existing)
+    expect(r.ok).toBe(false)
+    expect(!r.ok && r.error).toMatch(/名稱/)
+  })
+
+  it('肌群不在七類之中要擋，不靜默改成「其他」', () => {
+    expect(checkExercise({ ...draft, muscle_group: 'neck' }, existing).ok).toBe(false)
+  })
+
+  it('同名（忽略大小寫與頭尾空白）要擋；撞到已封存的要說明可以取消封存', () => {
+    const dup = checkExercise({ ...draft, name: ' 腿推舉 ' }, existing)
+    expect(dup.ok).toBe(false)
+    const archived = checkExercise({ ...draft, name: '舊的肩推' }, existing)
+    expect(!archived.ok && archived.error).toMatch(/封存/)
+    expect(checkExercise({ ...draft, name: 'LEG PRESS' }, [ex('c', 'leg press', 'legs')]).ok).toBe(false)
+  })
+
+  it('全形／半形與連續空白視為同名（列表上看起來一樣）', () => {
+    const base = [ex('c', '槓鈴 臥推', 'chest'), ex('d', 'Bench', 'chest')]
+    expect(checkExercise({ ...draft, name: '槓鈴　臥推' }, base).ok).toBe(false)
+    expect(checkExercise({ ...draft, name: '槓鈴  臥推' }, base).ok).toBe(false)
+    expect(checkExercise({ ...draft, name: 'Ｂench' }, base).ok).toBe(false)
+  })
+
+  it('改自己：同名不算重複（只改肌群或要點時名稱不變）', () => {
+    expect(checkExercise({ name: '腿推舉', muscle_group: 'back', tips: '' }, existing, 'a').ok).toBe(true)
+  })
+})
+
+describe('動作庫的寫入描述', () => {
+  it('新增：insert exercises、不封存、不帶 user_id（伺服器 default auth.uid()）', () => {
+    const ops = createExerciseOps({ id: 'n1', value: { name: '深蹲', muscle_group: 'legs', tips: null } })
+    expect(ops).toEqual([
+      {
+        op: 'insert',
+        table: 'exercises',
+        rowId: 'n1',
+        payload: { name: '深蹲', muscle_group: 'legs', tips: null, archived: false },
+      },
+    ])
+  })
+
+  it('更新：只帶有變的欄位；全沒變回空陣列（不排一筆空的 PATCH）', () => {
+    const cur = ex('a', '腿推舉', 'legs', { tips: '背貼緊' })
+    const changed = updateExerciseOps({ current: cur, value: { name: '腿推舉', muscle_group: 'back', tips: '背貼緊' } })
+    expect(changed).toEqual([{ op: 'update', table: 'exercises', rowId: 'a', payload: { muscle_group: 'back' } }])
+    expect(updateExerciseOps({ current: cur, value: { name: '腿推舉', muscle_group: 'legs', tips: '背貼緊' } })).toEqual([])
+  })
+
+  it('更新：要點清掉 ＝ 寫 null；原本就是 null／空字串視為沒變', () => {
+    const had = ex('a', '腿推舉', 'legs', { tips: '背貼緊' })
+    expect(updateExerciseOps({ current: had, value: { name: '腿推舉', muscle_group: 'legs', tips: null } })[0].payload).toEqual({
+      tips: null,
+    })
+    const blank = ex('b', '腿屈伸', 'legs', { tips: '' })
+    expect(updateExerciseOps({ current: blank, value: { name: '腿屈伸', muscle_group: 'legs', tips: null } })).toEqual([])
+  })
+
+  it('封存／取消封存：只動 archived，不真刪', () => {
+    expect(setExerciseArchivedOps({ id: 'a', archived: true })).toEqual([
+      { op: 'update', table: 'exercises', rowId: 'a', payload: { archived: true } },
+    ])
+    expect(setExerciseArchivedOps({ id: 'a', archived: false })[0].op).toBe('update')
+  })
+})
+
+describe('filterExercises', () => {
+  const rows = [
+    ex('1', '肩推', 'shoulder'),
+    ex('2', '腿推舉', 'legs'),
+    ex('3', '坐姿胸推', 'chest'),
+    ex('4', '腿屈伸', 'legs'),
+    ex('5', '二頭彎舉', 'arms'),
+  ]
+
+  it('依肌群順序（胸→背→下半身→肩→手臂→腹→其他）再依名稱排', () => {
+    expect(filterExercises(rows, { q: '', group: 'all' }).map((r) => r.id)).toEqual(['3', '4', '2', '1', '5'])
+  })
+
+  it('搜尋比對名稱（忽略大小寫與頭尾空白）；肌群條件與搜尋同時成立', () => {
+    expect(filterExercises(rows, { q: ' 推', group: 'all' }).map((r) => r.id).sort()).toEqual(['1', '2', '3'])
+    expect(filterExercises(rows, { q: '推', group: 'legs' }).map((r) => r.id)).toEqual(['2'])
+  })
+
+  it('沒有符合的回空陣列；不改動傳進來的陣列', () => {
+    const copy = [...rows]
+    expect(filterExercises(rows, { q: 'zzz', group: 'all' })).toEqual([])
+    expect(rows).toEqual(copy)
+  })
+
+  it('肌群欄位不認得的列（資料異常）歸在「其他」，不會因篩選而消失', () => {
+    const odd = [ex('x', '怪動作', 'weird')]
+    expect(filterExercises(odd, { q: '', group: 'all' })).toHaveLength(1)
+    expect(filterExercises(odd, { q: '', group: 'other' })).toHaveLength(1)
+    expect(filterExercises(odd, { q: '', group: 'chest' })).toHaveLength(0)
   })
 })

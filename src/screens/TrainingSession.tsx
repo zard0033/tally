@@ -6,6 +6,7 @@
    當下就寫。不合法的輸入（負數、超過 DDL 的上限）不寫、放回原值，不靜默截斷成別的數字。 */
 import { useCallback, useEffect, useState } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
 import {
@@ -197,6 +198,9 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [openEx, setOpenEx] = useState<string | null>(() => exercises[0]?.entry.id ?? null)
   const [activeSet, setActiveSet] = useState<string | null>(null)
   const [picker, setPicker] = useState(false)
+  // 目標與開關分開：關閉動畫期間表單不能跳成別的動作
+  const [tipsTarget, setTipsTarget] = useState<Row | null>(null)
+  const [tipsOpen, setTipsOpen] = useState(false)
   const [finish, setFinish] = useState(false)
   const [askDelete, setAskDelete] = useState(false)
   const [askRemove, setAskRemove] = useState<string | null>(null)
@@ -340,11 +344,31 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
               </button>
               {open && (
                 <>
-                  {tips && (
-                    <div className="ex-tips">
-                      <span className="t">要點</span>
-                      {tips}
-                    </div>
+                  {/* 訓練中只能看；筆圖示開「編輯動作」sheet 才能改（AC 3），免得流汗時手滑 */}
+                  {exercise && (
+                    <button
+                      className={`ex-tips${tips ? '' : ' is-empty'}`}
+                      type="button"
+                      aria-label={tips ? `編輯要點：${tips}` : '加要點'}
+                      onClick={() => {
+                        setTipsTarget(exercise)
+                        setTipsOpen(true)
+                      }}
+                    >
+                      {tips ? (
+                        <>
+                          <span className="t">
+                            要點
+                            <svg className="pen" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+                            </svg>
+                          </span>
+                          {tips}
+                        </>
+                      ) : (
+                        <span className="t">＋ 加要點</span>
+                      )}
+                    </button>
                   )}
                   <div className="set-head" aria-hidden="true">
                     <span>組</span>
@@ -402,6 +426,14 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
       </div>
 
       <ExercisePicker open={picker} exercises={pickable} onClose={() => setPicker(false)} onPick={(id) => void addExercise(id)} />
+
+      <ExerciseEditSheet
+        open={tipsOpen}
+        exercise={tipsTarget}
+        exercises={db.exercises}
+        onClose={() => setTipsOpen(false)}
+        onWrite={onWrite}
+      />
 
       <FinishSheet
         open={finish}
