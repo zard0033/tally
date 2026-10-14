@@ -49,8 +49,9 @@ type Announcements = NonNullable<NonNullable<ConstructorParameters<typeof Access
 /** 螢幕閱讀器的朗讀改成中文；預設是英文且念的是 id（我們的 id 是 uuid，聽不懂）。 */
 const announcements: Announcements = {
   dragstart: ({ operation: { source } }) => (source ? `拿起${nameOf(source)}` : undefined),
+  // source 與 target 同一個＝移動後它成了自己的碰撞目標，念出來是「X移到X的位置」，函式庫預設也不念
   dragover: ({ operation: { source, target } }) =>
-    source && target ? `${nameOf(source)}移到${nameOf(target)}的位置` : undefined,
+    source && target && source.id !== target.id ? `${nameOf(source)}移到${nameOf(target)}的位置` : undefined,
   dragend: ({ operation: { source }, canceled }) =>
     source ? (canceled ? `取消，${nameOf(source)}回到原位` : `放下${nameOf(source)}`) : undefined,
 }
@@ -107,14 +108,13 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
   // 目標與開關分開：關閉動畫期間標題不能跳掉
   const [targetRow, setTargetRow] = useState<Row | null>(null)
   const [targetOpen, setTargetOpen] = useState(false)
-  // 同步的重入擋：busy state 要等下一次 render 才生效，連按兩次會送兩筆
+  // 同步的重入擋（busy state 要等下一次 render 才生效）：只給非冪等的寫入用，見 runOnce
   const inFlight = useRef(false)
   // 放下後到寫入完成之間的顯示順序（entry id）；null＝照資料的順序
   const [pending, setPending] = useState<string[] | null>(null)
 
   const run = async (ops: RowOp[]): Promise<boolean> => {
-    if (ops.length === 0 || inFlight.current) return false
-    inFlight.current = true
+    if (ops.length === 0) return false
     setError(null)
     try {
       await onWrite(ops)
@@ -122,6 +122,16 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
     } catch (e) {
       setError(`這筆沒有存下來：${errText(e)}`)
       return false
+    }
+  }
+
+  /** 加動作、複製連按兩次會多一列／多一份複本，要同步擋；改名、封存、移除、排序重送是冪等的，不擋——
+   *  擋了的話，剛失焦的名稱寫入還在路上時按 × 或複製，那一下會被默默吃掉。 */
+  const runOnce = async (ops: RowOp[]): Promise<boolean> => {
+    if (inFlight.current) return false
+    inFlight.current = true
+    try {
+      return await run(ops)
     } finally {
       inFlight.current = false
     }
@@ -140,12 +150,12 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
   }
 
   const addExercise = async (exerciseId: string) => {
-    if (await run(addRoutineExerciseOps({ db, routineId: routine.id, exerciseId, newId }))) setPicker(false)
+    if (await runOnce(addRoutineExerciseOps({ db, routineId: routine.id, exerciseId, newId }))) setPicker(false)
   }
 
   const copy = async () => {
     const ops = copyRoutineOps({ db, routineId: routine.id, newId })
-    if (await run(ops)) onOpen(ops[0].rowId)
+    if (await runOnce(ops)) onOpen(ops[0].rowId)
   }
 
   const toggleArchive = async () => {

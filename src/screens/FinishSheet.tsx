@@ -2,7 +2,7 @@
    補記過去日子時多一欄「時長（分鐘）」，手填、可略過，不跑計時（AC 8a）。
    「存成課表」只在空白開始的訓練出現（照課表開的已經有課表了）；這張 sheet 本身的狀態記得存過一次、
    不再提供第二次，所以不會連按存出兩份。輸入欄字級 16px；sheet 規則同 StartSheet。 */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Drawer } from 'vaul'
 import { useSheetFocus } from '@/components/useSheetFocus'
 import { checkRoutineName } from '@/lib/training'
@@ -64,16 +64,25 @@ export default function FinishSheet({
   const [nameError, setNameError] = useState<string | null>(null)
   const [savedAs, setSavedAs] = useState<string | null>(null)
 
+  // 同步的重入擋：Enter 不經過按鈕的 disabled，連按兩次會存出兩份同名課表（課表只能封存、刪不掉）
+  const saving = useRef(false)
+
   const saveRoutine = async () => {
+    if (saving.current) return
     const check = checkRoutineName(routineName)
     if (!check.ok) {
       setNameError(check.error)
       return
     }
     setNameError(null)
-    if (await onSaveRoutine(check.name)) {
-      setSavedAs(check.name)
-      setNaming(false)
+    saving.current = true
+    try {
+      if (await onSaveRoutine(check.name)) {
+        setSavedAs(check.name)
+        setNaming(false)
+      }
+    } finally {
+      saving.current = false
     }
   }
   const parsed = backfill ? parseMinutes(raw) : null

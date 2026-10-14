@@ -1,4 +1,4 @@
-﻿/* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
+/* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
  * 以及「開始訓練 sheet → 訓練中整頁」這條主流程；課表下方的「動作庫」入口進整頁的動作庫。
  * 有氧從開始訓練 sheet 進、記完回到這頁，列在「已完成」裡（點了編輯）。課表區在已完成之後、動作庫之前：
  * 點一份進課表編輯整頁，「＋ 新課表」先問名稱；開始訓練 sheet 裡選課表會照它開一次訓練。
@@ -170,17 +170,20 @@ export default function Training({
   const startFromRoutine = (fromId: string) => {
     if (!view) return
     const id = crypto.randomUUID()
-    return start(
-      id,
-      startWorkoutFromRoutineOps({
-        db: view.db,
-        routineId: fromId,
-        workoutId: id,
-        date,
-        now: new Date(),
-        newId: () => crypto.randomUUID(),
-      }),
-    )
+    const ops = startWorkoutFromRoutineOps({
+      db: view.db,
+      routineId: fromId,
+      workoutId: id,
+      date,
+      now: new Date(),
+      newId: () => crypto.randomUUID(),
+    })
+    // 課表剛好在別處被改掉的競態：不寫任何東西也不進訓練頁，說清楚
+    if (ops.length === 0) {
+      setStartError('找不到這份課表')
+      return
+    }
+    return start(id, ops)
   }
 
   if (detail && view) {

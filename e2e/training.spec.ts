@@ -1180,3 +1180,23 @@ test('空白開始、還沒加任何動作：完成時不提供「存成課表�
   await expect(finishSheet(page)).toBeVisible()
   await expect(finishSheet(page).locator('[data-section="save-routine"]')).toHaveCount(0)
 })
+
+test('存成課表連按兩次 Enter：只存一份（Enter 不經過按鈕的 disabled）', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await page.getByRole('button', { name: '完成訓練' }).click()
+  const sheet = finishSheet(page)
+  await sheet.locator('[data-action="save-as-routine"]').click()
+  const input = sheet.getByRole('textbox', { name: '課表名稱' })
+  await input.fill('菜單 D')
+  // 同一個 tick 內連送兩次 Enter：第二次發生時第一次的寫入還沒回來
+  await input.evaluate((el) => {
+    for (let i = 0; i < 2; i++) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+  })
+  await expect(sheet.locator('[data-section="save-routine"]')).toContainText('已存成課表「菜單 D」')
+  await page.waitForTimeout(500)
+  expect((await trainRows(page, 'routines')).map((r) => r.name)).toEqual(['菜單 D'])
+})
