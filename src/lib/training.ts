@@ -404,8 +404,8 @@ export function isBackfilled(workout: Row, today: string = localDate()): boolean
 
 /** 開始一次訓練。選到今天＝現在開始、開始跑計時；選到過去＝補記（起點 12:00、不計時）。
  *  ended_at 一律 null＝進行中，App 重開後仍在、畫面提示可繼續（AC 9）。 */
-export function startWorkoutOps(args: { workoutId: string; date: string; now: Date }): RowOp[] {
-  const { workoutId, date, now } = args
+export function startWorkoutOps(args: { workoutId: string; date: string; now: Date; routineId?: string }): RowOp[] {
+  const { workoutId, date, now, routineId } = args
   const live = date === localDate(now)
   const startedAt = live ? now.toISOString() : backfillTimes(date, null).started_at
   return [
@@ -413,7 +413,7 @@ export function startWorkoutOps(args: { workoutId: string; date: string; now: Da
       op: 'insert',
       table: 'workouts',
       rowId: workoutId,
-      payload: { performed_on: date, started_at: startedAt, ended_at: null, routine_id: null },
+      payload: { performed_on: date, started_at: startedAt, ended_at: null, routine_id: routineId ?? null },
     },
   ]
 }
@@ -425,10 +425,12 @@ export function addExerciseOps(args: {
   exerciseId: string
   newId: () => string
   target?: PrefillTarget
+  /** 一口氣加好幾個動作時由呼叫端指定：db 還看不到前面幾個，自己算會全部撞在同一個位置。 */
+  position?: number
 }): RowOp[] {
   const { db, workoutId, exerciseId, newId, target } = args
   const taken = db.workout_exercises.filter((we) => we.workout_id === workoutId).map((we) => Number(we.position))
-  const position = taken.length === 0 ? 0 : Math.max(...taken) + 1
+  const position = args.position ?? (taken.length === 0 ? 0 : Math.max(...taken) + 1)
   const entryId = newId()
   const prefilled = prefillSets(db, exerciseId, target, workoutId)
   return [
@@ -577,6 +579,257 @@ export function updateExerciseOps(args: { current: Row; value: ExerciseValue }):
 /** 封存／取消封存。不提供真刪：歷史才不會爛（AC 2）。 */
 export function setExerciseArchivedOps(args: { id: string; archived: boolean }): RowOp[] {
   return [{ op: 'update', table: 'exercises', rowId: args.id, payload: { archived: args.archived } }]
+}
+
+/* ═══════════ 課表（AC 4、4a、4b） ═══════════ */
+
+export const MAX_TARGET_SETS = 20
+export const MAX_TARGET_REPS = 999
+
+const byPositionAsc = (a: Row, b: Row) => Number(a.position) - Number(b.position)
+
+/** 可為 null 的數字欄（伺服器回 null；佇列疊上的列可能整欄缺）。 */
+const optNum = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
+
+/** 建立時間由早到晚；剛記、還在佇列裡的沒有 created_at（伺服器才給），排最後——它就是最新的。 */
+const byCreatedAsc = (a: Row, b: Row) => {
+  const x = typeof a.created_at === 'string' ? a.created_at : null
+  const y = typeof b.created_at === 'string' ? b.created_at : null
+  if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1
+  return x.localeCompare(y)
+}
+
+export interface RoutineCard {
+  readonly routine: Row
+  readonly exerciseCount: number
+}
+
+/** 課表列表：使用中與已封存分開，各依建立順序。 */
+export function routineList(db: TrainingDb): { active: RoutineCard[]; archived: RoutineCard[] } {
+  const counts = new Map<string, number>()
+  for (const re of db.routine_exercises) {
+    const key = String(re.routine_id)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const cards = [...db.routines]
+    .sort(byCreatedAsc)
+    .map((routine): RoutineCard => ({ routine, exerciseCount: counts.get(routine.id) ?? 0 }))
+  return {
+    active: cards.filter((c) => c.routine.archived !== true),
+    archived: cards.filter((c) => c.routine.archived === true),
+  }
+}
+
+export interface RoutineExerciseDetail {
+  /** routine_exercises 那一列（含 target_sets／target_reps）。 */
+  readonly entry: Row
+  /** 動作庫那一列；底還沒載到時是 null，畫面要有退路。 */
+  readonly exercise: Row | null
+}
+
+export interface RoutineDetail {
+  readonly routine: Row
+  /** 依 position 排好。 */
+  readonly exercises: readonly RoutineExerciseDetail[]
+}
+
+export function routineDetail(db: TrainingDb, routineId: string): RoutineDetail | null {
+  const routine = db.routines.find((r) => r.id === routineId)
+  if (!routine) return null
+  const exerciseById = new Map(db.exercises.map((e) => [e.id, e]))
+  const exercises = db.routine_exercises
+    .filter((re) => re.routine_id === routineId)
+    .sort(byPositionAsc)
+    .map((entry) => ({ entry, exercise: exerciseById.get(String(entry.exercise_id)) ?? null }))
+  return { routine, exercises }
+}
+
+export type RoutineNameCheck = { ok: true; name: string } | { ok: false; error: string }
+
+/** 名稱不能空（DDL 有 btrim 檢查，擋在這裡才說得出白話）。不查重複：複製出來的「原名稱 複本」本來就會撞第二次。 */
+export function checkRoutineName(name: string): RoutineNameCheck {
+  const trimmed = name.trim()
+  return trimmed === '' ? { ok: false, error: '名稱不能是空的' } : { ok: true, name: trimmed }
+}
+
+export interface RoutineTargetDraft {
+  sets: string
+  reps: string
+}
+
+export interface RoutineTarget {
+  target_sets: number
+  target_reps: number | null
+}
+
+export type RoutineTargetCheck = { ok: true; value: RoutineTarget } | { ok: false; error: string }
+
+const parseWholeNumber = (raw: string): number | null => {
+  const s = raw.normalize('NFKC').trim()
+  return /^\d+$/.test(s) ? Number(s) : null
+}
+
+/** 範圍與 DDL 一致（組數 1–20 必填、次數 1–999 選填）。次數空白＝沒設，存 null。 */
+export function checkRoutineTarget(draft: RoutineTargetDraft): RoutineTargetCheck {
+  const sets = parseWholeNumber(draft.sets)
+  if (sets === null || sets < 1 || sets > MAX_TARGET_SETS) {
+    return { ok: false, error: `組數要是 1–${MAX_TARGET_SETS} 的整數` }
+  }
+  if (draft.reps.trim() === '') return { ok: true, value: { target_sets: sets, target_reps: null } }
+  const reps = parseWholeNumber(draft.reps)
+  if (reps === null || reps < 1 || reps > MAX_TARGET_REPS) {
+    return { ok: false, error: `次數要是 1–${MAX_TARGET_REPS} 的整數，或留空` }
+  }
+  return { ok: true, value: { target_sets: sets, target_reps: reps } }
+}
+
+export function createRoutineOps(args: { id: string; name: string }): RowOp[] {
+  return [{ op: 'insert', table: 'routines', rowId: args.id, payload: { name: args.name, archived: false } }]
+}
+
+/** 名稱沒變回空陣列（不排一筆空的 PATCH 進佇列）。 */
+export function renameRoutineOps(args: { current: Row; name: string }): RowOp[] {
+  const { current, name } = args
+  return String(current.name) === name ? [] : [{ op: 'update', table: 'routines', rowId: current.id, payload: { name } }]
+}
+
+/** 封存／取消封存。不提供真刪（同動作庫）；已經用過的課表，歷史上的 routine_id 才不會斷。 */
+export function setRoutineArchivedOps(args: { id: string; archived: boolean }): RowOp[] {
+  return [{ op: 'update', table: 'routines', rowId: args.id, payload: { archived: args.archived } }]
+}
+
+/** 把一個動作加到課表尾端。沒給 target 就用預設 3 組、次數不設。 */
+export function addRoutineExerciseOps(args: {
+  db: TrainingDb
+  routineId: string
+  exerciseId: string
+  newId: () => string
+  target?: RoutineTarget
+}): RowOp[] {
+  const { db, routineId, exerciseId, newId, target } = args
+  const taken = db.routine_exercises.filter((re) => re.routine_id === routineId).map((re) => Number(re.position))
+  return [
+    {
+      op: 'insert',
+      table: 'routine_exercises',
+      rowId: newId(),
+      payload: {
+        routine_id: routineId,
+        exercise_id: exerciseId,
+        position: taken.length === 0 ? 0 : Math.max(...taken) + 1,
+        target_sets: target?.target_sets ?? DEFAULT_TARGET_SETS,
+        target_reps: target?.target_reps ?? null,
+      },
+    },
+  ]
+}
+
+/** 只帶有變的欄位；全沒變回空陣列。 */
+export function updateRoutineExerciseTargetOps(args: { current: Row; value: RoutineTarget }): RowOp[] {
+  const { current, value } = args
+  const payload: Record<string, unknown> = {}
+  if (Number(current.target_sets) !== value.target_sets) payload.target_sets = value.target_sets
+  if (optNum(current.target_reps) !== value.target_reps) payload.target_reps = value.target_reps
+  return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'routine_exercises', rowId: current.id, payload }]
+}
+
+export function removeRoutineExerciseOps(id: string): RowOp[] {
+  return [{ op: 'delete', table: 'routine_exercises', rowId: id }]
+}
+
+/** 拖曳排序的結果 → 只更新位置有變的列。`orderedIds` 必須正好是這份課表現有的那些列（順序不同而已）；
+ *  對不上代表畫面與資料已經分岔，丟錯而不是默默排出一份缺漏的課表。 */
+export function reorderRoutineExercisesOps(args: { entries: readonly Row[]; orderedIds: readonly string[] }): RowOp[] {
+  const { entries, orderedIds } = args
+  const known = new Map(entries.map((e) => [e.id, e]))
+  if (new Set(orderedIds).size !== known.size || !orderedIds.every((id) => known.has(id))) {
+    throw new Error('排序的項目與課表現有的動作對不上')
+  }
+  return orderedIds.flatMap((id, i): RowOp[] =>
+    Number(known.get(id)?.position) === i
+      ? []
+      : [{ op: 'update', table: 'routine_exercises', rowId: id, payload: { position: i } }],
+  )
+}
+
+/** 複製課表：只複製結構（動作、順序、預設組次），名稱預設「原名稱 複本」。找不到來源回空陣列。 */
+export function copyRoutineOps(args: { db: TrainingDb; routineId: string; newId: () => string; name?: string }): RowOp[] {
+  const { db, routineId, newId } = args
+  const source = routineDetail(db, routineId)
+  if (!source) return []
+  const copyId = newId()
+  return [
+    ...createRoutineOps({ id: copyId, name: args.name ?? `${String(source.routine.name)} 複本` }),
+    ...source.exercises.map(
+      ({ entry }, i): RowOp => ({
+        op: 'insert',
+        table: 'routine_exercises',
+        rowId: newId(),
+        payload: {
+          routine_id: copyId,
+          exercise_id: entry.exercise_id,
+          position: i,
+          target_sets: entry.target_sets,
+          target_reps: entry.target_reps ?? null,
+        },
+      }),
+    ),
+  ]
+}
+
+/** 把一次訓練存成課表：帶入動作與順序，組數＝當時有幾組、次數＝第一組的次數（各組不同時取第一組；0 次不設）。
+ *  不帶重量（課表不存重量）。找不到這次訓練回空陣列。 */
+export function routineFromWorkoutOps(args: { db: TrainingDb; workoutId: string; name: string; newId: () => string }): RowOp[] {
+  const { db, workoutId, name, newId } = args
+  const detail = workoutDetail(db, workoutId)
+  if (!detail) return []
+  const routineId = newId()
+  return [
+    ...createRoutineOps({ id: routineId, name }),
+    ...detail.exercises.map(({ entry, sets }, i): RowOp => {
+      const reps = sets.length > 0 ? Number(sets[0].reps) : 0
+      return {
+        op: 'insert',
+        table: 'routine_exercises',
+        rowId: newId(),
+        payload: {
+          routine_id: routineId,
+          exercise_id: entry.exercise_id,
+          position: i,
+          target_sets: sets.length === 0 ? DEFAULT_TARGET_SETS : Math.min(MAX_TARGET_SETS, sets.length),
+          target_reps: reps >= 1 ? Math.min(MAX_TARGET_REPS, reps) : null,
+        },
+      }
+    }),
+  ]
+}
+
+/** 照課表開始一次訓練：訓練記下 routine_id（AC 4b），課表的動作依序帶入，各組一律預填上次實際完成的值，
+ *  沒歷史才用課表的預設組次（addExerciseOps → prefillSets）。找不到課表回空陣列，不悄悄變成空白開始。 */
+export function startWorkoutFromRoutineOps(args: {
+  db: TrainingDb
+  routineId: string
+  workoutId: string
+  date: string
+  now: Date
+  newId: () => string
+}): RowOp[] {
+  const { db, routineId, workoutId, date, now, newId } = args
+  const routine = routineDetail(db, routineId)
+  if (!routine) return []
+  return [
+    ...startWorkoutOps({ workoutId, date, now, routineId }),
+    ...routine.exercises.flatMap(({ entry }, position) =>
+      addExerciseOps({
+        db,
+        workoutId,
+        exerciseId: String(entry.exercise_id),
+        newId,
+        position,
+        target: { target_sets: Number(entry.target_sets), target_reps: optNum(entry.target_reps) },
+      }),
+    ),
+  ]
 }
 
 /* ═══════════ 有氧（AC 10–12） ═══════════ */

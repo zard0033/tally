@@ -14,8 +14,22 @@ import {
   updateCardioOps,
   type CardioDraft,
   addExerciseOps,
+  addRoutineExerciseOps,
   addSetOps,
   applyQueue,
+  checkRoutineName,
+  checkRoutineTarget,
+  copyRoutineOps,
+  createRoutineOps,
+  removeRoutineExerciseOps,
+  renameRoutineOps,
+  reorderRoutineExercisesOps,
+  routineDetail,
+  routineFromWorkoutOps,
+  routineList,
+  setRoutineArchivedOps,
+  startWorkoutFromRoutineOps,
+  updateRoutineExerciseTargetOps,
   backfillTimes,
   checkExercise,
   createExerciseOps,
@@ -931,5 +945,283 @@ describe('applyQueue 與預填（review #4）', () => {
     expect(applyQueue(db(), [seed(1, 'e1')], 'u1').exercises[0]?.name).toBe('預設名')
     const base = db({ exercises: [{ id: 'e1', name: '舊' }] })
     expect(applyQueue(base, [entry(1, 'insert', 'exercises', 'e1', { name: '新' })], 'u1').exercises[0]?.name).toBe('新')
+  })
+})
+
+/* ═══════════ 課表 ═══════════ */
+
+const routine = (id: string, name: string, extra: Record<string, unknown> = {}): Row => ({ id, name, archived: false, ...extra })
+const re = (id: string, routine_id: string, exercise_id: string, position: number, target_sets = 3, target_reps: number | null = null): Row => ({
+  id, routine_id, exercise_id, position, target_sets, target_reps,
+})
+
+describe('routineList', () => {
+  it('使用中與已封存分開，各依建立時間；還在佇列裡（沒有 created_at）的排最後', () => {
+    const d = db({
+      routines: [
+        routine('queued', '新的'),
+        routine('b', 'B', { created_at: '2026-10-02T00:00:00Z' }),
+        routine('old', '舊的', { created_at: '2026-10-01T00:00:00Z', archived: true }),
+        routine('a', 'A', { created_at: '2026-10-01T00:00:00Z' }),
+      ],
+    })
+    const { active, archived } = routineList(d)
+    expect(active.map((c) => c.routine.id)).toEqual(['a', 'b', 'queued'])
+    expect(archived.map((c) => c.routine.id)).toEqual(['old'])
+  })
+
+  it('動作數只算自己這份課表的', () => {
+    const d = db({
+      routines: [routine('a', 'A'), routine('b', 'B')],
+      routine_exercises: [re('1', 'a', 'e1', 0), re('2', 'a', 'e2', 1), re('3', 'b', 'e1', 0)],
+    })
+    expect(routineList(d).active.map((c) => c.exerciseCount)).toEqual([2, 1])
+  })
+})
+
+describe('routineDetail', () => {
+  const d = db({
+    exercises: [{ id: 'e1', name: '腿推舉' }, { id: 'e2', name: '肩推' }],
+    routines: [routine('a', 'A')],
+    routine_exercises: [re('x2', 'a', 'e2', 1), re('x1', 'a', 'e1', 0), re('other', 'zzz', 'e1', 0)],
+  })
+
+  it('動作依 position 排、帶出動作庫那一列，不混入別份課表的', () => {
+    const detail = routineDetail(d, 'a')
+    expect(detail?.exercises.map((e) => [e.entry.id, e.exercise?.name])).toEqual([['x1', '腿推舉'], ['x2', '肩推']])
+  })
+
+  it('動作庫還沒載到：exercise 是 null，不丟錯', () => {
+    const lonely = db({ routines: [routine('a', 'A')], routine_exercises: [re('x', 'a', 'gone', 0)] })
+    expect(routineDetail(lonely, 'a')?.exercises[0].exercise).toBeNull()
+  })
+
+  it('找不到課表回 null', () => {
+    expect(routineDetail(d, 'nope')).toBeNull()
+  })
+})
+
+describe('checkRoutineName／checkRoutineTarget', () => {
+  it('名稱空白不行，前後空白去掉', () => {
+    expect(checkRoutineName('   ')).toEqual({ ok: false, error: '名稱不能是空的' })
+    expect(checkRoutineName(' 菜單 A ')).toEqual({ ok: true, name: '菜單 A' })
+  })
+
+  it('組數 1–20 整數必填；次數 1–999 整數或留空', () => {
+    expect(checkRoutineTarget({ sets: '3', reps: '12' })).toEqual({ ok: true, value: { target_sets: 3, target_reps: 12 } })
+    expect(checkRoutineTarget({ sets: '3', reps: '' })).toEqual({ ok: true, value: { target_sets: 3, target_reps: null } })
+    expect(checkRoutineTarget({ sets: '20', reps: '999' }).ok).toBe(true)
+    for (const sets of ['', '0', '21', '2.5', '-1', 'abc']) {
+      expect(checkRoutineTarget({ sets, reps: '' }).ok, `組數 ${sets}`).toBe(false)
+    }
+    for (const reps of ['0', '1000', '8.5', 'x']) {
+      expect(checkRoutineTarget({ sets: '3', reps }).ok, `次數 ${reps}`).toBe(false)
+    }
+  })
+
+  it('全形數字也認得（中文鍵盤）', () => {
+    expect(checkRoutineTarget({ sets: '３', reps: '１２' })).toEqual({ ok: true, value: { target_sets: 3, target_reps: 12 } })
+  })
+})
+
+describe('課表的寫入組裝', () => {
+  it('建立：名稱、未封存；不帶 user_id', () => {
+    expect(createRoutineOps({ id: 'r', name: 'A' })).toEqual([
+      { op: 'insert', table: 'routines', rowId: 'r', payload: { name: 'A', archived: false } },
+    ])
+  })
+
+  it('改名：沒變回空陣列', () => {
+    expect(renameRoutineOps({ current: routine('r', 'A'), name: 'A' })).toEqual([])
+    expect(renameRoutineOps({ current: routine('r', 'A'), name: 'B' })).toEqual([
+      { op: 'update', table: 'routines', rowId: 'r', payload: { name: 'B' } },
+    ])
+  })
+
+  it('封存只改 archived，不提供真刪', () => {
+    expect(setRoutineArchivedOps({ id: 'r', archived: true })).toEqual([
+      { op: 'update', table: 'routines', rowId: 'r', payload: { archived: true } },
+    ])
+  })
+
+  it('加動作：接在這份課表最大 position 後面，預設 3 組、次數不設', () => {
+    const d = db({ routine_exercises: [re('1', 'a', 'e1', 0), re('2', 'a', 'e2', 4), re('3', 'b', 'e1', 9)] })
+    const [op] = addRoutineExerciseOps({ db: d, routineId: 'a', exerciseId: 'e3', newId: () => 'new' })
+    expect(op).toEqual({
+      op: 'insert', table: 'routine_exercises', rowId: 'new',
+      payload: { routine_id: 'a', exercise_id: 'e3', position: 5, target_sets: 3, target_reps: null },
+    })
+  })
+
+  it('加動作：空課表從 0 開始，可帶預設組次', () => {
+    const [op] = addRoutineExerciseOps({
+      db: db(), routineId: 'a', exerciseId: 'e1', newId: () => 'n', target: { target_sets: 4, target_reps: 10 },
+    })
+    expect(op.payload).toMatchObject({ position: 0, target_sets: 4, target_reps: 10 })
+  })
+
+  it('改預設組次：只帶有變的欄位，null 與缺欄視為同一件事', () => {
+    const cur = re('x', 'a', 'e1', 0, 3, null)
+    expect(updateRoutineExerciseTargetOps({ current: cur, value: { target_sets: 3, target_reps: null } })).toEqual([])
+    expect(updateRoutineExerciseTargetOps({ current: { id: 'x', target_sets: 3 }, value: { target_sets: 3, target_reps: null } })).toEqual([])
+    expect(updateRoutineExerciseTargetOps({ current: cur, value: { target_sets: 4, target_reps: null } })[0].payload).toEqual({ target_sets: 4 })
+    expect(updateRoutineExerciseTargetOps({ current: cur, value: { target_sets: 3, target_reps: 12 } })[0].payload).toEqual({ target_reps: 12 })
+    expect(updateRoutineExerciseTargetOps({ current: re('x', 'a', 'e1', 0, 3, 12), value: { target_sets: 3, target_reps: null } })[0].payload).toEqual({ target_reps: null })
+  })
+
+  it('移除動作：一條 delete', () => {
+    expect(removeRoutineExerciseOps('x')).toEqual([{ op: 'delete', table: 'routine_exercises', rowId: 'x' }])
+  })
+})
+
+describe('reorderRoutineExercisesOps', () => {
+  const entries = [re('a', 'r', 'e1', 0), re('b', 'r', 'e2', 1), re('c', 'r', 'e3', 2)]
+
+  it('只更新位置有變的列', () => {
+    const ops = reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'c', 'b'] })
+    expect(ops.map((o) => [o.rowId, o.payload])).toEqual([['c', { position: 1 }], ['b', { position: 2 }]])
+  })
+
+  it('順序沒變回空陣列', () => {
+    expect(reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'b', 'c'] })).toEqual([])
+  })
+
+  it('刪過動作留下的空洞會被整理成 0..n-1', () => {
+    const gappy = [re('a', 'r', 'e1', 0), re('c', 'r', 'e3', 5)]
+    const ops = reorderRoutineExercisesOps({ entries: gappy, orderedIds: ['a', 'c'] })
+    expect(ops.map((o) => [o.rowId, o.payload])).toEqual([['c', { position: 1 }]])
+  })
+
+  it('項目對不上（缺、多、重複）丟錯，不默默排出缺漏的課表', () => {
+    expect(() => reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'b'] })).toThrow()
+    expect(() => reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'b', 'c', 'd'] })).toThrow()
+    expect(() => reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'a', 'b'] })).toThrow()
+    expect(() => reorderRoutineExercisesOps({ entries, orderedIds: ['a', 'b', 'z'] })).toThrow()
+  })
+})
+
+describe('copyRoutineOps', () => {
+  const d = db({
+    routines: [routine('r', '菜單 A')],
+    routine_exercises: [re('x2', 'r', 'e2', 7, 4, 10), re('x1', 'r', 'e1', 3, 3, null), re('other', 'zz', 'e9', 0)],
+  })
+
+  it('複製結構：名稱「原名稱 複本」、動作與預設組次照搬、順序整理成 0..n-1，id 全新', () => {
+    const ops = copyRoutineOps({ db: d, routineId: 'r', newId: idGen() })
+    const [head, ...rest] = ops
+    expect(head).toMatchObject({ op: 'insert', table: 'routines', payload: { name: '菜單 A 複本', archived: false } })
+    expect(rest.map((o) => o.payload)).toEqual([
+      { routine_id: head.rowId, exercise_id: 'e1', position: 0, target_sets: 3, target_reps: null },
+      { routine_id: head.rowId, exercise_id: 'e2', position: 1, target_sets: 4, target_reps: 10 },
+    ])
+    expect(new Set(ops.map((o) => o.rowId)).size).toBe(ops.length)
+    expect(head.rowId).not.toBe('r')
+  })
+
+  it('可指定名稱；找不到來源回空陣列', () => {
+    expect(copyRoutineOps({ db: d, routineId: 'r', newId: idGen(), name: 'B' })[0].payload?.name).toBe('B')
+    expect(copyRoutineOps({ db: d, routineId: 'nope', newId: idGen() })).toEqual([])
+  })
+
+  it('課表本身沒有重量：複製出來的列沒有 weight 欄', () => {
+    const rest = copyRoutineOps({ db: d, routineId: 'r', newId: idGen() }).slice(1)
+    expect(rest.every((o) => !('weight_kg' in (o.payload ?? {})))).toBe(true)
+  })
+})
+
+describe('routineFromWorkoutOps（存成課表）', () => {
+  const d = db({
+    workouts: [workout('w', '2026-10-14')],
+    workout_exercises: [we('weB', 'w', 'e2', 1), we('weA', 'w', 'e1', 0), we('weC', 'w', 'e3', 2), we('weD', 'w', 'e4', 3)],
+    workout_sets: [
+      set('a1', 'weA', 1, 60, 12), set('a2', 'weA', 2, 65, 10), set('a3', 'weA', 3, 65, 8, false),
+      set('b1', 'weB', 1, 20, 15),
+      set('c1', 'weC', 1, 10, 0),
+    ],
+  })
+
+  it('依訓練中的順序帶入動作；組數＝當時有幾組（含沒打勾）、次數＝第一組；不帶重量', () => {
+    const ops = routineFromWorkoutOps({ db: d, workoutId: 'w', name: '菜單 C', newId: idGen() })
+    const [head, ...rest] = ops
+    expect(head).toMatchObject({ table: 'routines', payload: { name: '菜單 C', archived: false } })
+    expect(rest.map((o) => o.payload)).toEqual([
+      { routine_id: head.rowId, exercise_id: 'e1', position: 0, target_sets: 3, target_reps: 12 },
+      { routine_id: head.rowId, exercise_id: 'e2', position: 1, target_sets: 1, target_reps: 15 },
+      { routine_id: head.rowId, exercise_id: 'e3', position: 2, target_sets: 1, target_reps: null }, // 0 次＝沒設
+      { routine_id: head.rowId, exercise_id: 'e4', position: 3, target_sets: 3, target_reps: null }, // 沒有任何組＝預設 3 組
+    ])
+    expect(rest.every((o) => !('weight_kg' in (o.payload ?? {})))).toBe(true)
+  })
+
+  it('組數超過 DDL 上限 20 時收斂到 20，不讓伺服器拒掉整批', () => {
+    const many = db({
+      workouts: [workout('w', '2026-10-14')],
+      workout_exercises: [we('we', 'w', 'e1', 0)],
+      workout_sets: Array.from({ length: 25 }, (_, i) => set(`s${i}`, 'we', i + 1, 10, 5)),
+    })
+    const [, row] = routineFromWorkoutOps({ db: many, workoutId: 'w', name: 'x', newId: idGen() })
+    expect(row.payload?.target_sets).toBe(20)
+  })
+
+  it('找不到訓練回空陣列', () => {
+    expect(routineFromWorkoutOps({ db: d, workoutId: 'nope', name: 'x', newId: idGen() })).toEqual([])
+  })
+})
+
+describe('startWorkoutFromRoutineOps', () => {
+  const now = new Date(2026, 9, 14, 10, 30, 0)
+  const base = db({
+    routines: [routine('r', '菜單 A')],
+    routine_exercises: [re('x2', 'r', 'e2', 1, 2, 8), re('x1', 'r', 'e1', 0, 3, 12)],
+    workouts: [workout('old', '2026-10-01')],
+    workout_exercises: [we('weOld', 'old', 'e1', 0)],
+    workout_sets: [set('o1', 'weOld', 1, 60, 10), set('o2', 'weOld', 2, 62.5, 8)],
+  })
+  const ops = () => startWorkoutFromRoutineOps({ db: base, routineId: 'r', workoutId: 'w', date: '2026-10-14', now, newId: idGen() })
+
+  it('訓練記下 routine_id（AC 4b）', () => {
+    expect(ops()[0]).toMatchObject({ table: 'workouts', rowId: 'w', payload: { routine_id: 'r', ended_at: null } })
+  })
+
+  it('動作依課表順序帶入，position 各自不同（0、1）', () => {
+    const entries = ops().filter((o) => o.table === 'workout_exercises')
+    expect(entries.map((o) => [o.payload?.exercise_id, o.payload?.position])).toEqual([['e1', 0], ['e2', 1]])
+  })
+
+  it('有歷史的動作取上次實際完成的值；沒歷史的用課表預設組次、重量 0', () => {
+    const all = ops()
+    const [e1, e2] = all.filter((o) => o.table === 'workout_exercises')
+    const setsOf = (id: string) => all.filter((o) => o.table === 'workout_sets' && o.payload?.workout_exercise_id === id)
+    expect(setsOf(e1.rowId).map((o) => [o.payload?.weight_kg, o.payload?.reps])).toEqual([[60, 10], [62.5, 8]])
+    expect(setsOf(e2.rowId).map((o) => [o.payload?.weight_kg, o.payload?.reps])).toEqual([[0, 8], [0, 8]])
+  })
+
+  it('所有組都沒打勾', () => {
+    expect(ops().filter((o) => o.table === 'workout_sets').every((o) => o.payload?.done === false)).toBe(true)
+  })
+
+  it('找不到課表回空陣列，不悄悄變成空白開始', () => {
+    expect(startWorkoutFromRoutineOps({ db: base, routineId: 'nope', workoutId: 'w', date: '2026-10-14', now, newId: idGen() })).toEqual([])
+  })
+
+  it('選到過去的日子＝補記，照樣記 routine_id', () => {
+    const [head] = startWorkoutFromRoutineOps({ db: base, routineId: 'r', workoutId: 'w', date: '2026-10-10', now, newId: idGen() })
+    expect(head.payload).toMatchObject({ performed_on: '2026-10-10', routine_id: 'r' })
+  })
+})
+
+describe('startWorkoutOps 的 routineId', () => {
+  it('不給＝null（空白開始）', () => {
+    expect(startWorkoutOps({ workoutId: 'w', date: '2026-10-14', now: new Date(2026, 9, 14, 10) })[0].payload?.routine_id).toBeNull()
+  })
+})
+
+describe('課表的寫入經 parentRefs 補父列依賴', () => {
+  it('routine_exercises 依賴 routine（cascade）與 exercise（restrict）；workouts 依賴 routine（setNull）', () => {
+    expect(parentRefs('routine_exercises', { routine_id: 'r', exercise_id: 'e' }).map((p) => [p.table, p.onDelete])).toEqual([
+      ['routines', 'cascade'],
+      ['exercises', 'restrict'],
+    ])
+    expect(parentRefs('workouts', { routine_id: 'r' }).map((p) => [p.table, p.onDelete])).toEqual([['routines', 'setNull']])
   })
 })
