@@ -658,6 +658,27 @@ describe('父列依賴（AC 16）', () => {
   })
 })
 
+describe('entries（唯讀快照）', () => {
+  it('依 seq 排好、含別的帳號的；送成功的條目消失', async () => {
+    const t = build()
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(ins('b', { v: 1 }, 'u2'))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    expect((await t.queue.entries()).map((e) => [e.seq, e.rowId, e.userId])).toEqual([
+      [1, 'a', 'u1'], [2, 'b', 'u2'], [3, 'a', 'u1'],
+    ])
+    await t.queue.flush('u1')
+    expect((await t.queue.entries()).map((e) => e.rowId)).toEqual(['b'])
+  })
+
+  it('載入時儲存層亂序也回傳排好的', async () => {
+    let s = appendEntry(emptySnapshot(), ins('a'), 1)
+    s = appendEntry(s, ins('b'), 2)
+    const t = build({ ...s, entries: [s.entries[1], s.entries[0]] })
+    expect((await t.queue.entries()).map((e) => e.rowId)).toEqual(['a', 'b'])
+  })
+})
+
 describe('ignoreDuplicates（預填用的 insert-ignore）', () => {
   const preset = (rowId: string): NewEntry => ({ ...ins(rowId), ignoreDuplicates: true })
 

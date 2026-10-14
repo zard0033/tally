@@ -252,6 +252,8 @@ export interface OfflineQueue {
    *  儲存寫入失敗（`QueueStore.save` 丟錯）時整個 reject——呼叫端要自己 catch；條目不會因此遺失，
    *  進度也已逐條落地，下次 flush 從停下的地方接著送。 */
   flush(userId: string): Promise<FlushReport>
+  /** 目前佇列內全部條目（含其他帳號的），依 seq 排好。給「把未同步的變更疊在畫面上」用，唯讀。 */
+  entries(): Promise<readonly QueueEntry[]>
   summary(userId: string): Promise<QueueSummary>
   /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。
    *  放棄的若是確定沒生效的 insert，掛在那一列底下的子孫條目會連帶放棄（它們沒有父列就送不出去）。 */
@@ -425,6 +427,8 @@ export function createQueue({
       slot.promise.then(release, release)
       return slot.promise
     },
+
+    entries: () => locked(async () => (await current()).entries),
 
     summary: (userId) => locked(async () => summarize(await current(), userId)),
 
