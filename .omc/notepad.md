@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14）：本機領先 origin，未 push：fbeec7c CLAUDE.md 指路、3d935d2 v2.55 有氧（A 段，未經 review）、41bd5cd／ab27dc0／61fcdd6 佇列 review 修正（#1–#9＋斷網 refresh 失敗標離線）。vitest／e2e 152／lint／build 全綠，mutation 全轉紅。
-下一步：①push gate：原 reviewer 驗修正、新 reviewer 審 A 段 UI ②B 段（課表＋拖曳，先選函式庫）③真機試用離線記錄。D 段追加項與待決在 MANUAL。
-視覺待辦：sheet 內確認框偏低。
+現況（2026-10-14）：本機領先 origin 12 個 commit（fbeec7c..323b114），push gate 進行中：兩路 review 已完成並修掉 blocking（佇列複審 APPROVE；有氧 review 的 HIGH＋3 MEDIUM 已修），連續兩次全跑 e2e 155/155、vitest 512、lint、tsc 綠。待使用者確認「準備 push」。
+下一步：①push ②B 段（課表＋拖曳，先選函式庫）③真機試用離線記錄（重訓＋有氧）。
+未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -63,4 +63,14 @@ review 修正後留給 D 段（同步指示完整版）與待決（2026-10-14）
 - D 範圍追加：①被拒絕父列底下的子列仍是 attempts 0／failure null，summarize 看起來跟「還沒送」一樣——D 要從條目推出「等父列」並顯示（AC 17 的另一半）②discardImpact 數的是條目不是列（同一列後來的 update 也算），確認文案用「N 筆變更」或改成數列，寫文案前先定③failure 'auth' 現在只代表「有網路但沒有有效 session」（網路類 refresh 失敗已改標 offline，61fcdd6），UI 可以直接說要重新登入。
 - 待決（review 的 open questions，未在核可範圍內）：①佇列格式認不得時每次操作都丟錯、沒有出路——要不要做「原樣備份到另一個 key、清空重來」的逃生口（產品決定）②queueStore 的 isEntry 沒交叉檢查 op 與 payload（insert 帶 null payload 會只 upsert {id}），低風險。
 - 環境：Web Locks 只在 secure context 有；localhost:5500 與 GitHub Pages https 都是，真機一律走部署網址，不會用到區網 http。
+### 2026-10-14 10:08
+A 段（有氧）push 前 review 沒修的 LOW（2026-10-14，之後再說）
+- input 的 aria-label 蓋掉 label 裡的「選填」，讀屏念不到（拿掉 aria-label 要連 e2e 的 getByRole name 一起改）；錯誤沒有 aria-invalid／aria-describedby 綁到欄位。
+- sheet 關閉後焦點落到 body（從開始訓練 sheet 串過來、或刪掉了觸發那一列），可能所有串接的 vaul sheet 都有；修法是 onCloseAutoFocus 指到主 CTA 或清單。
+- 320px 寬時走路三欄的「速度 km/h 選填」約 92px 放不下 85px 欄（目標機 393 沒事）。
+- cardioTarget 是開 sheet 當下的快照：編輯中同步改了那一列，diff 以舊的為準（逐欄後寫贏）。
+- 「1,210」千分位、逗號小數、「。」不接受（只會擋下說明，不會存錯）。
+- ExerciseEditSheet 有同一個「成功後 busy 放回去」的寫法，連按兩次會送兩次 update（update 是冪等的，新增動作才會多一筆）。
+### 2026-10-14 10:59
+sheet 收合動畫期間的點擊會落空（2026-10-14 e2e 診斷，既有問題）：vaul sheet 關閉的約 0.5 秒內點下面的按鈕，pointerdown 在按鈕、pointerup 落在正在收的 sheet 上，click 跑到 body。訓練中「挑完動作馬上點加動作／打勾」會吃掉那一下。跨分頁鎖讓寫入時主執行緒較忙、動畫拉長，機率變高（e2e 已改成等 sheet 收完）。要修的話：收合中讓 sheet 不吃 pointer（pointer-events: none on closing），或縮短收合時間；先看真機有沒有感覺。同類：vaul 收合中再打開會被延遲的 close 再關一次（advisor 指出，未驗證）。
 
