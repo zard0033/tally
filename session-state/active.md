@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-10-13 晚（**v2.52 已上線；階段 1 甲（離線地基）完成。階段 2 訓練記錄：spec 與 DDL 草案已核可、設計樣張已出待核可。**樣張 14 畫面整版已核可（2026-10-13）**；[追加] **v2.53（週列＋月曆日期元件、分頁「日記」改名「飲食」）已實作完成**（不在原 spec，來自樣張回饋；`/code-review high` 八條處理六條、兩條記為取捨；本機 vitest 307／build／lint 綠、e2e 121/122——唯一的紅見未解失敗；mutation 全數轉紅；webkit 393×745 截圖看過；DESIGN.md 已回寫），push 前走全域 git-push gate（review→測試→「準備 push」）。之後接訓練頁；DDL 草案改過，寫訓練碼前要使用者重新核可定稿，才請他在 Supabase 執行（續點 4）。v2.53 探索結論（已落地）：`goToDate` 本來就收任意日期（≤明天），週列／月曆直接呼叫；月曆標點重用 `listIntakeKcal`（只取日期集合）；e2e 約 60 處 `前一天／後一天` 要改（計畫：e2e 加 `gotoDate`／`prevDay`／`nextDay` helper，新元件沿用 `.datectl`、`h1.date-title`、`.date-today-btn` 的 class 名以減少改動）**；鍵盤箭頭仍等真機回報（續點 2 ③））
+最後更新：2026-10-13 晚（**v2.52 已上線；階段 1 甲（離線地基）完成。階段 2 訓練記錄：spec 與 DDL 草案已核可、設計樣張已出待核可。**樣張 14 畫面整版已核可（2026-10-13）**；[追加] **v2.53（週列＋月曆日期元件、分頁「日記」改名「飲食」）已實作完成**（不在原 spec，來自樣張回饋；`/code-review high` 八條處理六條、兩條記為取捨；本機 vitest 307／build／lint 綠、e2e 121/122——唯一的紅見未解失敗；mutation 全數轉紅；webkit 393×745 截圖看過；DESIGN.md 已回寫），push 前走全域 git-push gate（review→測試→「準備 push」）。之後接訓練頁；**DDL 定稿已於 2026-10-14 核可並執行**（7 張新表，RLS 全開各一條 `owner_all`，已用 `pg_class`／`pg_policies` 驗證；沒有 `note` 欄、`cardio_sessions.est_kcal` 在；回滾＝`drop table if exists workout_sets, workout_exercises, workouts, cardio_sessions, routine_exercises, routines, exercises;`）。**這台機器可用 `npx supabase@latest db query --linked --project-ref bpnucfejoiazmsnsuzdb -f 檔案` 直接對線上庫跑 SQL**（Supabase CLI 已登入；`--linked` 與 `--project-ref` 缺一不可；寫入在 auto mode 會被擋，要使用者切權限模式）。下一步：寫 `src/lib/` 純邏輯＋佇列「父列依賴」（續點 4 步驟 4）。v2.53 探索結論（已落地）：`goToDate` 本來就收任意日期（≤明天），週列／月曆直接呼叫；月曆標點重用 `listIntakeKcal`（只取日期集合）；e2e 約 60 處 `前一天／後一天` 要改（計畫：e2e 加 `gotoDate`／`prevDay`／`nextDay` helper，新元件沿用 `.datectl`、`h1.date-title`、`.date-today-btn` 的 class 名以減少改動）**；鍵盤箭頭仍等真機回報（續點 2 ③））
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -96,6 +96,7 @@
 - **拍照辨識**（需求／AC／選型／已否決路徑全文在 [spec.md](../spec.md)）：進度見續點 2。
 - **體重趨勢完整圖表仍是佔位卡**：要過 `dataviz` 定案，樣張在 `_design-sample/food-library.html` A3 frame；e2e 刻意只驗進出不鎖內容。
   資料門檻已過（2026-10-12 同步上線、Tally 94 列），可開工。**零碎（不擋上線）**：Notion 退場收尾未完成。
+- [想法 2026-10-14] **肌肉恢復度**（類似 Gymwork）：依各肌群最近的訓練量看恢復程度，用來安排下一個訓練日的日程與項目。資料來源是階段 2 的 `workout_sets`＋`exercises.muscle_group`（七類），算法與呈現尚未定；屬階段 4（分析）。
 
 ## 下次續點
 
