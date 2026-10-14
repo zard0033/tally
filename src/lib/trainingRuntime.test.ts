@@ -105,8 +105,11 @@ function setup(opts: { pageSize?: number } = {}) {
   const mem = memoryKv()
   /** 目前 session 的使用者。null＝沒有有效 session（token 過期且 refresh 失敗、登出途中）。
    *  sessionCalls 計數：「讀取途中掉 session」的測試靠它讓第 N 次以後才變 null。 */
-  const auth = { user: U1 as string | null, calls: 0, dropAfter: Number.POSITIVE_INFINITY }
-  const sessionUserId = async () => (++auth.calls > auth.dropAfter ? null : auth.user)
+  const auth = { user: U1 as string | null, calls: 0, dropAfter: Number.POSITIVE_INFINITY, error: null as Error | null }
+  const sessionUserId = async () => {
+    if (auth.error) throw auth.error // 查不到 session 是因為網路（refresh 連不上），不是沒登入
+    return ++auth.calls > auth.dropAfter ? null : auth.user
+  }
   const open = () => createTrainingRuntime({ kv: mem.kv, client: backend.client, sessionUserId, ...opts })
   return { backend, mem, auth, open, rt: open() }
 }
@@ -399,6 +402,31 @@ describe('沒有這個帳號的有效 session：不送、不讀（supabase-js �
     const v = await t.rt.load(U1)
     expect(v.source).toBe('cache')
     expect(v.db.exercises.map((r) => r.name)).toEqual(['舊名'])
+  })
+})
+
+describe('查 session 本身連不上（斷網＋token 過期）', () => {
+  it('flush：當成離線，不當成登入失效；條目留著', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1'))
+    await t.rt.load(U1)
+    await t.rt.write(U1, [{ op: 'insert', table: 'workouts', rowId: 'w1', payload: { performed_on: '2026-10-14' } }])
+    t.auth.error = new TypeError('Load failed')
+    const { report } = await t.rt.flush(U1)
+    expect(report.stoppedBy).toBe('offline')
+    expect(report.summary.failed.offline).toBe(1)
+    expect(report.summary.failed.auth).toBe(0)
+    expect(t.backend.store('workouts').size).toBe(0)
+  })
+
+  it('load：退回本機底', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1', '腿推舉'))
+    await t.rt.load(U1)
+    t.auth.error = new TypeError('Load failed')
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('cache')
+    expect(v.db.exercises.map((r) => r.name)).toEqual(['腿推舉'])
   })
 })
 
