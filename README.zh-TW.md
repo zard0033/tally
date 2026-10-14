@@ -91,7 +91,7 @@ e2e 會先 build 再跑靜態 preview，所有網路請求都是 stub，不需�
 | --- | --- |
 | [spec.md](spec.md) | 需求與分期 |
 | [DESIGN.md](DESIGN.md) | 設計系統，以及每個視覺決定和它的理由 |
-| [session-state/active.md](session-state/active.md) | 現況、待決問題、進行中的決策 |
+| [.omc/notepad.md](.omc/notepad.md) · [.omc/wiki/](.omc/wiki/) | 現況與下一步（OMC notepad）、待決問題（MANUAL）、已驗證事實與決策（wiki） |
 | [src/lib/](src/lib/) | 計算、日期、資料存取，不沾 DOM |
 | [src/screens/](src/screens/) | 一個畫面一個檔 |
 | [e2e/](e2e/) | Playwright 回歸測試 |

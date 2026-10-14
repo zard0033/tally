@@ -3,8 +3,8 @@
 個人營養追蹤 web app。手機為主。需求與分期見 [spec.md](spec.md)。
 
 - **動任何 UI 之前先讀 [DESIGN.md](DESIGN.md)。** 顏色、字級、間距一律用其中的 token，不硬編。
-- 開場先讀 [session-state/active.md](session-state/active.md)，session 末更新它。
-- 前端 Vite + React 19 + TypeScript + Tailwind 4 + shadcn/ui（Base UI）+ vaul + supabase-js（2026-07-29 自 vanilla 轉棧，脈絡見 active.md）。GitHub Pages 託管，Actions build 後部署，base `/tally/`。不載 CDN 資源——依賴一律打進 bundle 自託管。
+- **延續狀態走 OMC（2026-10-14 起，取代 session-state/active.md）**，`.omc/notepad.md` 與 `.omc/wiki/` 進 git 跨機接力：現況＋下一步在 notepad Priority Context（`notepad_write_priority`，≤500 字，開場自動注入）；待決／續點在 notepad MANUAL（`notepad_write_manual`）；已驗證事實、未解失敗、決策、蒸餾在 wiki（`wiki_add`／`wiki_query`）。開場讀 MANUAL、動某題前先 `wiki_query`；session 末更新 Priority Context。歷史快照在 `session-state/archive-*.md`，不再更新。
+- 前端 Vite + React 19 + TypeScript + Tailwind 4 + shadcn/ui（Base UI）+ vaul + supabase-js（2026-07-29 自 vanilla 轉棧，脈絡見 `session-state/archive-2026-07.md`）。GitHub Pages 託管，Actions build 後部署，base `/tally/`。不載 CDN 資源——依賴一律打進 bundle 自託管。
 - 純邏輯（公式、日期、資料存取）一律放 `src/lib/`，禁沾 DOM——這層未來要原樣帶去 React Native。UI 在 `src/screens/`，mutation 走 App.tsx 下發的 props。**跨畫面共用的 UI 片段放 `src/components/`**（目前只有 `FoodFormFields`）——判準是「同一組欄位/互動出現在兩個以上的 screen」，不是「看起來可以抽」；抽之前先確認兩邊真的該一致，否則只是把分岔搬進共用元件。
 - 本機開發跑 `npm run dev`（Vite，釘 5500 strictPort）。**port 不能換**——Supabase 的 OAuth redirect 白名單綁死 5500，換了登入就壞；playwright 也擋 `file://`，一定要走 http。
 - 測試：`npx vitest run`＝邏輯層（動公式、捨入、日期必跑）。**在 Git Bash 下跑會整批炸成「N files failed, 0 tests run」，而且會表現成 flaky（重跑就綠）——那是環境不是測試，用 PowerShell 跑**（全域 `windows-shell-ledger` 有全文；別再為它去查 vitest 設定）。`npm run e2e`＝UI 回歸，共 147 條（**實測計數，不要用「舊數字＋本輪新增」外推**——那正是它一路從 57 漂到 65 的原因），分十三個檔（`tally.spec.ts` 累積狀態的全份回歸、`interaction.spec.ts` 38 條可單獨跑的互動路徑（含離線開機、登出分流、網路回來自動恢復）、`vendor-autocomplete.spec.ts`、`meal-exit-animation.spec.ts`、`quota-warning.spec.ts`、`inline-edit.spec.ts`、`intake-detail.spec.ts`、`daily-goal.spec.ts`、`food-library.spec.ts`、`settings-nav.spec.ts`、`form-macros-align.spec.ts`、`training.spec.ts`（訓練分頁：從本機底讀資料、連不上伺服器時的說明、預填、開始／記組／完成、離線記錄回線上傳、補記、刪除確認、登出前確認、動作庫與編輯動作、離線改要點）、`service-worker.spec.ts`（SW 行為與離線冷啟動實測毫秒數，自己在 5502 起 preview 並真的關掉它，不吃 stub，用 `serviceWorkers: 'allow'`；其餘 spec 由 playwright.config 的 `'block'` 擋掉 SW）；改 UI 必跑全部，fetch 全 stub 不打真後端）。單跑一條：`npx playwright test interaction -g "關鍵字"`。**e2e 跑的是 build 後的靜態 preview（port 5501），不是 dev server**——所以它會自己先 build 一次，也不會跟你開著的 `npm run dev`（5500）搶 port，兩邊可以同時開。**`workers` 釘 2，不要拿掉**：那是這台機器在一般桌面負載下能同時開的 WebKit 數量，調高會偶發崩在 `Cannot find parent object page@…`（來龍去脈見 playwright.config.ts 註解）。
@@ -17,6 +17,6 @@
 - [ ] 改 UI → `npm run e2e` 綠（條數與檔案清單見上方，這裡不重寫第二份數字——它已經漂過一次）；webkit 393×745 截圖看過，token 無黑色 fallback。**本專案只有淺色一套**（DESIGN.md 明文不做暗色模式），所以沒有暗色那半邊要截
 - [ ] 改 UI → 設計決策已回寫 DESIGN.md（元件規則 ＋ 版本紀錄），不只改 code
 - [ ] 動 Supabase schema / 匯出格式 → 屬影響面升級，先給 spec＋plan、等我點頭再動實作碼（全域 CLAUDE.md「壓過 ECC」第 2 條）
-- [ ] spec 外追加？有 → session-state/active.md 標一行 `[追加]`
-- [ ] session-state/active.md 已更新（現況/待決/續點）並 stage 進同一 commit
-- [ ] 蒸餾一句：有通則寫進 active.md，沒有明講「無」
+- [ ] spec 外追加？有 → notepad MANUAL 加一行 `[追加]`
+- [ ] notepad Priority Context 已更新（現況／下一步）並 stage 進同一 commit；待決／續點有變就更新 MANUAL
+- [ ] 蒸餾一句：有通則 `wiki_add`，沒有明講「無」

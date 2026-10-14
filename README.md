@@ -91,7 +91,7 @@ The e2e suite builds the app and runs against the static preview with every netw
 | --- | --- |
 | [spec.md](spec.md) | Requirements and release phases (in Chinese) |
 | [DESIGN.md](DESIGN.md) | Design system and every visual decision with its reasoning (in Chinese) |
-| [session-state/active.md](session-state/active.md) | Current state, open questions, decisions in flight (in Chinese) |
+| [.omc/notepad.md](.omc/notepad.md) · [.omc/wiki/](.omc/wiki/) | Current state and next step (OMC notepad), open questions (MANUAL), verified facts and decisions (wiki) (in Chinese) |
 | [src/lib/](src/lib/) | Calculation, dates, data access, with no DOM |
 | [src/screens/](src/screens/) | One file per screen |
 | [e2e/](e2e/) | Playwright regression suite |

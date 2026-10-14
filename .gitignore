@@ -15,6 +15,13 @@ migrate-v2.sql
 # 本機 Claude Code agent 狀態，非專案內容
 .claude/
 
+# OMC（2026-10-14 起取代 session-state/active.md）：.omc/ 是本機執行期狀態，只追蹤跨機要接力的 notepad 與 wiki
+# （.omc/.gitignore 是為了壓住 OMC 自動補的 wiki/ 忽略）
+.omc/*
+!.omc/.gitignore
+!.omc/notepad.md
+!.omc/wiki/
+
 # Node / Vite
 node_modules
 dist

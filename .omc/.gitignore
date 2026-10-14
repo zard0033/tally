@@ -1,0 +1,2 @@
+# OMC 預設忽略 wiki/（它每次寫入會檢查這個字串）；本 repo 刻意追蹤 wiki 與 notepad，兩台機器接力用。真正的忽略規則在 repo 根 .gitignore。
+!wiki/
