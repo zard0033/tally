@@ -3,7 +3,7 @@
    **類型決定欄位**：走路＝分鐘＋速度＋坡度，拳擊＝分鐘＋預估熱量。沒有備註、沒有「新類型」入口。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。刪除不可逆，先問（DESIGN.md「確認對話框」條）。
    欄位狀態放在 CardioForm、以列 id 當 key：每次打開都是一份新的草稿。 */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Drawer } from 'vaul'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useSheetFocus } from '@/components/useSheetFocus'
@@ -29,6 +29,8 @@ interface CardioSheetProps {
   date: string
   /** 「週一 10/12」；選到的不是今天才顯示，告訴使用者這筆會記在哪天。 */
   dateNote: string | null
+  /** 每次打開加一：當表單的 key。用列 id 當 key 不夠——關閉動畫還沒跑完就再打開「新增」，會沿用上一份草稿。 */
+  session: number
   onClose: () => void
   onWrite: (ops: RowOp[]) => Promise<void>
 }
@@ -41,18 +43,27 @@ const FIELD_LABEL: Readonly<Record<'speed_kmh' | 'incline_pct' | 'est_kcal', str
   est_kcal: '預估熱量 kcal',
 }
 
-interface FormProps extends Omit<CardioSheetProps, 'open'> {
+interface FormProps extends Omit<CardioSheetProps, 'open' | 'session'> {
   /** 這張 sheet 的 content 節點：確認對話框要掛進來（見 ConfirmDialog 的註解）。 */
   sheetNode: HTMLDivElement | null
+  /** 寫入中：sheet 據此擋下滑關與 X（寫入失敗的說明要有地方出現，AC 20）。 */
+  onBusy: (busy: boolean) => void
 }
 
-function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite }: FormProps) {
+function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite, onBusy }: FormProps) {
   const [draft, setDraft] = useState<CardioDraft>(() => cardioDraft(row))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [askDelete, setAskDelete] = useState(false)
+  // 這份表單新增時用的 id 固定一個：就算連按兩次送出，第二次也只是同一列的 upsert，不會多一筆
+  const [newId] = useState(() => crypto.randomUUID())
 
-  const set = (k: keyof CardioDraft, v: string) => setDraft((d) => ({ ...d, [k]: v }))
+  useEffect(() => onBusy(busy), [busy, onBusy])
+
+  const set = (k: keyof CardioDraft, v: string) => {
+    setDraft((d) => ({ ...d, [k]: v }))
+    setError(null) // 改了欄位（或換了類型、那一欄已經不在）就不再講上一次的錯
+  }
   const kind = draft.kind as (typeof CARDIO_KINDS)[number]
   const optional = CARDIO_FIELDS[kind] ?? []
 
@@ -65,10 +76,10 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite }: FormPr
     setError(null)
     try {
       await onWrite(ops)
+      // 成功後 busy 不放回去：sheet 關閉動畫期間表單還在，放回去的話第二次 Enter 會再送一次（同 LogSheet）
       onClose()
     } catch (e) {
       setError(`這筆沒有存下來：${errText(e)}`)
-    } finally {
       setBusy(false)
     }
   }
@@ -83,7 +94,7 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite }: FormPr
     void run(
       row
         ? updateCardioOps({ current: row, value: check.value })
-        : createCardioOps({ id: crypto.randomUUID(), date, value: check.value }),
+        : createCardioOps({ id: newId, date, value: check.value }),
     )
   }
 
@@ -165,8 +176,15 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite }: FormPr
   )
 }
 
-export default function CardioSheet({ open, row, date, dateNote, onClose, onWrite }: CardioSheetProps) {
+export default function CardioSheet({ open, row, date, dateNote, session, onClose, onWrite }: CardioSheetProps) {
   const focus = useSheetFocus()
+  const busy = useRef(false)
+  const onBusy = useCallback((b: boolean) => {
+    busy.current = b
+  }, [])
+  const close = () => {
+    if (!busy.current) onClose()
+  }
   const [sheetNode, setSheetNode] = useState<HTMLDivElement | null>(null)
   const attach = useCallback(
     (node: HTMLDivElement | null) => {
@@ -181,7 +199,7 @@ export default function CardioSheet({ open, row, date, dateNote, onClose, onWrit
     <Drawer.Root
       open={open}
       onOpenChange={(v) => {
-        if (!v) onClose()
+        if (!v) close()
       }}
       direction="bottom"
       shouldScaleBackground={false}
@@ -192,28 +210,30 @@ export default function CardioSheet({ open, row, date, dateNote, onClose, onWrit
         <Drawer.Content ref={attach} tabIndex={-1} className="sheet"
           aria-label={title}
           data-screen="cardio-sheet"
-          // 確認對話框掛在這張 sheet 裡；vaul 在 document 的捕獲階段先聽到 Escape，不攔的話會連 sheet 一起關
+          // 確認對話框掛在這張 sheet 裡；vaul 在 document 的捕獲階段先聽到 Escape，不攔的話會連 sheet 一起關。
+          // 看「對話框開著沒」而不是事件目標：點過對話框的背景後焦點會落到 sheet 上，目標就不在對話框裡了
           onEscapeKeyDown={(e) => {
-            if ((e.target as Element | null)?.closest?.('[role="alertdialog"]')) e.preventDefault()
+            if (sheetNode?.querySelector('[role="alertdialog"]')) e.preventDefault()
           }}
         >
           <Drawer.Handle className="handle" />
           <div className="sheet-head">
             <h2 className="sheet-title">{title}</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
+            <button className="icon-btn" type="button" aria-label="關閉" onClick={close}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
           </div>
           <CardioForm
-            key={row?.id ?? 'new'}
+            key={session}
             row={row}
             date={date}
             dateNote={dateNote}
             sheetNode={sheetNode}
             onClose={onClose}
             onWrite={onWrite}
+            onBusy={onBusy}
           />
         </Drawer.Content>
       </Drawer.Portal>

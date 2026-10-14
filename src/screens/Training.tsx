@@ -101,8 +101,10 @@ export default function Training({
   // 開關與目標分開（同動作庫）：關閉動畫期間目標還在，標題不會從「編輯」閃成「記一筆」
   const [cardioTarget, setCardioTarget] = useState<Row | null>(null)
   const [cardioOpen, setCardioOpen] = useState(false)
+  const [cardioSession, setCardioSession] = useState(0)
   const openCardio = (row: Row | null) => {
     setCardioTarget(row)
+    setCardioSession((n) => n + 1)
     setCardioOpen(true)
   }
 
@@ -237,6 +239,7 @@ export default function Training({
       <CardioSheet
         open={cardioOpen}
         row={cardioTarget}
+        session={cardioSession}
         date={date}
         dateNote={date === localDate() ? null : weekdayDate(date)}
         onClose={() => setCardioOpen(false)}

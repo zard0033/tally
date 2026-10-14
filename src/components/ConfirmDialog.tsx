@@ -43,8 +43,9 @@ export default function ConfirmDialog({
       }}
     >
       <AlertDialog.Portal container={container ?? undefined}>
-        <AlertDialog.Backdrop className="scrim dialog-scrim" />
-        <AlertDialog.Popup className="tr-dialog" initialFocus={cancelRef}>
+        {/* data-vaul-no-drag：掛進 sheet 時，在對話框上往下滑會被 vaul 當成拖 sheet，連 sheet 一起關掉 */}
+        <AlertDialog.Backdrop className="scrim dialog-scrim" data-vaul-no-drag="" />
+        <AlertDialog.Popup className="tr-dialog" initialFocus={cancelRef} data-vaul-no-drag="">
           <AlertDialog.Title className="tr-dialog-title">{title}</AlertDialog.Title>
           <AlertDialog.Description className="tr-dialog-body" render={<div />}>
             {children}

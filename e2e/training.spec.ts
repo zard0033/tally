@@ -138,6 +138,8 @@ async function addExercise(page: Page, name: string) {
   await page.locator('.tr-bottom .tr-secondary').click()
   await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: name }).click()
   await expect(page.locator('.ex .set').first()).toBeVisible()
+  // 等選單收完再做下一步：收合動畫期間的點擊會落在正在收的 sheet 上（pointerdown 在按鈕、pointerup 在 sheet）
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
 }
 
 const stat = (page: Page, key: 'time' | 'volume' | 'sets') => page.locator(`[data-stat="${key}"]`)
@@ -273,10 +275,12 @@ test('補記過去的日子：不計時、完成時手填時長，記在那一�
 
   // 昨天那天的清單有一筆 45 分；今天的還是原本那一筆
   await expect(page.locator('.tr-row .sub', { hasText: '45 分' })).toHaveCount(1)
-  const rows = await trainRows(page, 'workouts')
-  const made = rows.find((x) => x.id !== 'w-1')
-  expect(made?.performed_on).toBe(yesterday)
-  expect(Date.parse(String(made?.ended_at)) - Date.parse(String(made?.started_at))).toBe(45 * 60_000)
+  // 畫面先更新（疊在佇列上），伺服器那筆「完成」的 update 稍後才送到——等它到，不能讀一次就斷言
+  const made = async () => (await trainRows(page, 'workouts')).find((x) => x.id !== 'w-1')
+  await expect.poll(async () => (await made())?.ended_at ?? null).not.toBeNull()
+  expect((await made())?.performed_on).toBe(yesterday)
+  const row = await made()
+  expect(Date.parse(String(row?.ended_at)) - Date.parse(String(row?.started_at))).toBe(45 * 60_000)
 })
 
 test('刪除整次訓練要確認，確認後從清單與伺服器都消失', async ({ page }) => {
@@ -567,6 +571,7 @@ test('加動作 sheet：選了肌群與搜尋字之後挑一個動作，下次�
   await picker.getByRole('button', { name: '背部', exact: true }).click()
   await picker.locator('.tr-row', { hasText: '坐姿划船' }).click()
   await expect(page.locator('.ex .set').first()).toBeVisible()
+  await expect(picker).toHaveCount(0) // 收合動畫期間的點擊會被正在收的 sheet 吃掉
 
   await page.locator('.tr-bottom .tr-secondary').click()
   await expect(picker.getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true')
@@ -631,7 +636,7 @@ test('記一筆有氧（走路）：類型決定欄位，存下後列在「已�
   expect(saved).toMatchObject({ performed_on: TODAY, kind: 'incline_walk', minutes: 30, speed_kmh: 5.5, incline_pct: 8, est_kcal: null })
 })
 
-test('有氧拳擊：切換類型換欄位；切過去再切回來，不屬於該類型的殘值不會寫進去', async ({ page }) => {
+test('有氧拳擊：切換類型換欄位；切到拳擊之前填的走路欄位不會寫進去', async ({ page }) => {
   await openApp(page)
   await openTraining(page)
   await openCardio(page)
@@ -701,7 +706,7 @@ test('編輯與刪除有氧：點列開同一張 sheet 帶入原值；改完落�
   // Escape 只收對話框，不連 sheet 一起關（vaul 與對話框都聽 Escape）
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
-  // sheet 被一起關的話，關閉動畫（--dur-sheet 280ms）期間它仍「可見」——等動畫跑完再斷言才有鑑別力
+  // sheet 被一起關的話，關閉動畫（app.css 收合用 --dur-mid 220ms）期間它仍「可見」——等動畫跑完再斷言才有鑑別力
   await page.waitForTimeout(500)
   await expect(cardioSheet(page)).toBeVisible()
   expect(await trainRows(page, 'cardio_sessions'), '取消不該刪').toHaveLength(1)
@@ -733,4 +738,65 @@ test('離線記一筆有氧（補記昨天）：畫面立刻有、記在那一�
   await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length, { timeout: 15_000 }).toBe(1)
   expect((await trainRows(page, 'cardio_sessions'))[0]?.performed_on).toBe(yesterday)
   await expect(page.locator('[data-screen="training"] .tr-status')).toHaveCount(0, { timeout: 15_000 })
+})
+
+test('有氧連按兩次送出：只存一筆（關閉動畫期間表單還在，第二次 Enter 不該再送）', async ({ page }) => {
+  await openApp(page)
+  await openTraining(page)
+  await openCardio(page)
+  await field(page, '分鐘').fill('30')
+  await field(page, '分鐘').press('Enter')
+  // 第一筆寫完（列出現）時 sheet 才開始收：這段關閉動畫裡表單還在。寫入中按 Enter 不算數——
+  // 送出鈕 disabled 時瀏覽器本來就不做隱式送出，所以要等寫完再按，才測得到「寫完之後 busy 有沒有放回去」
+  await expect(cardioRows(page)).toHaveCount(1)
+  await field(page, '分鐘').press('Enter', { timeout: 200 }).catch(() => undefined) // 已經收掉就按不到，也算過
+  await expect(cardioSheet(page)).toHaveCount(0)
+  await expect(cardioRows(page)).toHaveCount(1)
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length).toBe(1)
+  await page.waitForTimeout(500) // 第二次若有送出，是在這段時間內落地
+  expect(await trainRows(page, 'cardio_sessions')).toHaveLength(1)
+})
+
+test('sheet 裡的確認框：在對話框上往下拖不會拖走 sheet；點過背景再按 Escape 也只關對話框', async ({ page }) => {
+  await openApp(page, {}, WITH_CARDIO)
+  await openTraining(page)
+  await cardioRows(page).click()
+  await cardioSheet(page).getByRole('button', { name: '刪除這筆' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+
+  const box = (await dialog.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + 20)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2, box.y + 320, { steps: 12 })
+  await page.mouse.up()
+  await page.waitForTimeout(500)
+  await expect(cardioSheet(page), '往下拖不該把 sheet 拖走').toBeVisible()
+  await expect(dialog).toBeVisible()
+
+  // 點對話框外的背景（焦點會落到 sheet 上），再按 Escape
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height + 60)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await page.waitForTimeout(500)
+  await expect(cardioSheet(page)).toBeVisible()
+  expect(await trainRows(page, 'cardio_sessions')).toHaveLength(1)
+})
+
+test('不認得的有氧類型：列表原樣顯示；打開編輯直接儲存會擋下，不悄悄改成走路', async ({ page }) => {
+  await openApp(page, {}, {
+    ...FIX,
+    cardio_sessions: [
+      { id: 'c-x', performed_on: TODAY, kind: 'swim', minutes: 40, speed_kmh: null, incline_pct: null, est_kcal: 150 },
+    ],
+  })
+  await openTraining(page)
+  await expect(cardioRows(page).locator('.nm')).toHaveText('swim')
+  await cardioRows(page).click()
+  await expect(kindBtn(page, '跑步機坡度健走')).toHaveAttribute('aria-pressed', 'false')
+  await expect(kindBtn(page, '有氧拳擊')).toHaveAttribute('aria-pressed', 'false')
+  await cardioSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(cardioSheet(page).getByRole('alert')).toHaveText('請選有氧類型')
+  await page.waitForTimeout(300)
+  expect((await trainRows(page, 'cardio_sessions'))[0]).toMatchObject({ kind: 'swim', est_kcal: 150 })
 })

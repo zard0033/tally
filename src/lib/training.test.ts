@@ -811,7 +811,13 @@ describe('checkCardio', () => {
     expect(checkCardio(walkDraft({ minutes: 'abc' }))).toEqual({ ok: false, error: '分鐘要填數字' })
     expect(checkCardio(walkDraft({ minutes: '-5' }))).toEqual({ ok: false, error: '分鐘要填數字' })
     expect(checkCardio(walkDraft({ speed_kmh: '5.55' }))).toEqual({ ok: false, error: '速度最多一位小數' })
-    expect(checkCardio(walkDraft({ minutes: '30.' })).ok).toBe(false)
+    expect(checkCardio(walkDraft({ speed_kmh: '5.5.5' }))).toEqual({ ok: false, error: '速度要填數字' })
+  })
+
+  it('「30.」「.5」是數字；小數位數不算尾端的 0（5.50＝5.5）', () => {
+    const r = checkCardio(walkDraft({ minutes: '30.', speed_kmh: '.5', incline_pct: '8.50' }))
+    expect(r.ok && r.value).toMatchObject({ minutes: 30, speed_kmh: 0.5, incline_pct: 8.5 })
+    expect(checkCardio(walkDraft({ incline_pct: '8.05' })).ok, '真的有兩位就擋').toBe(false)
   })
 
   it('全形數字與全形小數點認得（中文鍵盤切出來的）', () => {
@@ -875,6 +881,12 @@ describe('有氧的寫入組裝', () => {
       kind: 'boxing', minutes: '36', speed_kmh: '', incline_pct: '', est_kcal: '121',
     })
     expect(cardioDraft(null)).toEqual({ kind: 'incline_walk', minutes: '', speed_kmh: '', incline_pct: '', est_kcal: '' })
+  })
+
+  it('cardioDraft：不認得的類型原樣保留，checkCardio 擋下（不悄悄改成走路、清掉欄位）', () => {
+    const d = cardioDraft(cardio('c1', 'x', { kind: 'swim', est_kcal: 150 }))
+    expect(d.kind).toBe('swim')
+    expect(checkCardio(d)).toEqual({ ok: false, error: '請選有氧類型' })
   })
 })
 

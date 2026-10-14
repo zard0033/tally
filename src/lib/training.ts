@@ -635,8 +635,9 @@ function parseCardioField(field: keyof typeof CARDIO_RULES, raw: string): number
   const s = raw.normalize('NFKC').trim()
   if (s === '') return null
   const rule = CARDIO_RULES[field]
-  if (!/^\d+(\.\d+)?$/.test(s)) return { error: `${rule.label}要填數字` }
-  if (/\.\d{2,}$/.test(s)) return { error: `${rule.label}最多一位小數` }
+  // 「30.」「.5」都是數字；小數位數不算尾端的 0（5.50 就是 5.5）
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(s)) return { error: `${rule.label}要填數字` }
+  if ((s.split('.')[1] ?? '').replace(/0+$/, '').length > 1) return { error: `${rule.label}最多一位小數` }
   const n = Number(s)
   const tooLow = rule.minExclusive ? n <= rule.min : n < rule.min
   if (tooLow || n > rule.max) return { error: `${rule.label}要${rule.range}` }
@@ -661,10 +662,12 @@ export function checkCardio(draft: CardioDraft): CardioCheck {
 /** 數字欄 → 表單字串（編輯既有那筆時的初始值）。 */
 const draftNum = (v: unknown): string => (v === null || v === undefined || v === '' ? '' : String(Number(v)))
 
-/** 一筆既有的有氧 → 編輯表單的草稿；null＝新增，預設跑步機坡度健走。 */
+/** 一筆既有的有氧 → 編輯表單的草稿；null＝新增，預設跑步機坡度健走。
+ *  不認得的類型原樣保留：退成「走路」的話，什麼都沒改按儲存也會把那筆改成走路、清掉它的欄位；
+ *  保留下來，checkCardio 會擋下來要使用者自己選。 */
 export function cardioDraft(row: Row | null): CardioDraft {
   return {
-    kind: row && isCardioKind(row.kind) ? row.kind : 'incline_walk',
+    kind: row ? String(row.kind) : 'incline_walk',
     minutes: draftNum(row?.minutes),
     speed_kmh: draftNum(row?.speed_kmh),
     incline_pct: draftNum(row?.incline_pct),
