@@ -21,6 +21,9 @@ migrate-v2.sql
 !.omc/.gitignore
 !.omc/notepad.md
 !.omc/wiki/
+# OMC 每個 session 自動擷取的雜訊頁（environment.md 內容是 [object Object]、session-log 只有 id），不跨機
+.omc/wiki/environment.md
+.omc/wiki/session-log-*.md
 
 # Node / Vite
 node_modules
