@@ -1,6 +1,6 @@
 # Tally — session state
 
-最後更新：2026-10-13 晚（**v2.52 已上線；階段 1 甲（離線地基）完成。階段 2 訓練記錄：spec 與 DDL 草案已核可、設計樣張已出待核可。**樣張 14 畫面整版已核可（2026-10-13）**；[追加] **v2.53（週列＋月曆日期元件、分頁「日記」改名「飲食」）已實作完成**（不在原 spec，來自樣張回饋；`/code-review high` 八條處理六條、兩條記為取捨；本機 vitest 307／build／lint 綠、e2e 121/122——唯一的紅見未解失敗；mutation 全數轉紅；webkit 393×745 截圖看過；DESIGN.md 已回寫），push 前走全域 git-push gate（review→測試→「準備 push」）。之後接訓練頁；**DDL 定稿已於 2026-10-14 核可並執行**（7 張新表，RLS 全開各一條 `owner_all`，已用 `pg_class`／`pg_policies` 驗證；沒有 `note` 欄、`cardio_sessions.est_kcal` 在；回滾＝`drop table if exists workout_sets, workout_exercises, workouts, cardio_sessions, routine_exercises, routines, exercises;`）。**這台機器可用 `npx supabase@latest db query --linked --project-ref bpnucfejoiazmsnsuzdb -f 檔案` 直接對線上庫跑 SQL**（Supabase CLI 已登入；`--linked` 與 `--project-ref` 缺一不可；寫入在 auto mode 會被擋，要使用者切權限模式）。下一步：寫 `src/lib/` 純邏輯＋佇列「父列依賴」（續點 4 步驟 4）。v2.53 探索結論（已落地）：`goToDate` 本來就收任意日期（≤明天），週列／月曆直接呼叫；月曆標點重用 `listIntakeKcal`（只取日期集合）；e2e 約 60 處 `前一天／後一天` 要改（計畫：e2e 加 `gotoDate`／`prevDay`／`nextDay` helper，新元件沿用 `.datectl`、`h1.date-title`、`.date-today-btn` 的 class 名以減少改動）**；鍵盤箭頭仍等真機回報（續點 2 ③））
+最後更新：2026-10-13 晚（**v2.52 已上線；階段 1 甲（離線地基）完成。階段 2 訓練記錄：spec 與 DDL 草案已核可、設計樣張已出待核可。**樣張 14 畫面整版已核可（2026-10-13）**；[追加] **v2.53（週列＋月曆日期元件、分頁「日記」改名「飲食」）已實作完成**（不在原 spec，來自樣張回饋；`/code-review high` 八條處理六條、兩條記為取捨；本機 vitest 307／build／lint 綠、e2e 121/122——唯一的紅見未解失敗；mutation 全數轉紅；webkit 393×745 截圖看過；DESIGN.md 已回寫），push 前走全域 git-push gate（review→測試→「準備 push」）。之後接訓練頁；**DDL 定稿已於 2026-10-14 核可並執行**（7 張新表，RLS 全開各一條 `owner_all`，已用 `pg_class`／`pg_policies` 驗證；沒有 `note` 欄、`cardio_sessions.est_kcal` 在；回滾＝`drop table if exists workout_sets, workout_exercises, workouts, cardio_sessions, routine_exercises, routines, exercises;`）。**這台機器可用 `npx supabase@latest db query --linked --project-ref bpnucfejoiazmsnsuzdb -f 檔案` 直接對線上庫跑 SQL**（Supabase CLI 已登入；`--linked` 與 `--project-ref` 缺一不可；寫入在 auto mode 會被擋，要使用者切權限模式）。**步驟 4 已完成**（佇列父列依賴＋`src/lib/training.ts`／`uuid.ts` 純邏輯；mutation 全數轉紅，已 commit 未 push）。下一步＝步驟 5：IndexedDB adapter、Supabase sender、`App.tsx` 佇列實例與登出接線。**sender 要留意：預填動作用 insert-ignore、不是一般 upsert**（離線時本機快取是空的就預填，回線後 upsert 會蓋掉伺服器上被改過的同 id 列，見 `presetsToSeed` 註解）。v2.53 探索結論（已落地）：`goToDate` 本來就收任意日期（≤明天），週列／月曆直接呼叫；月曆標點重用 `listIntakeKcal`（只取日期集合）；e2e 約 60 處 `前一天／後一天` 要改（計畫：e2e 加 `gotoDate`／`prevDay`／`nextDay` helper，新元件沿用 `.datectl`、`h1.date-title`、`.date-today-btn` 的 class 名以減少改動）**；鍵盤箭頭仍等真機回報（續點 2 ③））
 
 > **覆寫式快照**，不是流水帳。施工細節看 `git log`；2026-07-30 手術前的完整歷史在 [archive-2026-07.md](archive-2026-07.md)（570 行，不再更新）。
 
@@ -15,7 +15,7 @@
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
   仍在生效的兩條地基：走 vaul 的 sheet 一律 `repositionInputs={false}`、sheet 的 top 吃 `--vvtop`（iOS 鍵盤三題已真機驗過結案；`?debug` 讀數列已移除，要用從 git 撿）。
-- **測試**：`npx vitest run` 307/307（含 `dates` 31、 `queue` 70、`ingest-weight` 54、`baseline` 46、`session` 18）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
+- **測試**：`npx vitest run` 369/369（含 `dates` 31、`queue` 84、`training` 40、`uuid` 8、`ingest-weight` 54、`baseline` 46、`session` 18）；`npm run build`／`npm run lint` 乾淨；`npm run e2e`
   **121/122（唯一的紅是下面「慢態有出口」，HEAD 上也紅，與本版無關）**（約 2 分，十二個 spec 檔，涵蓋範圍見 CLAUDE.md）。**條數以實跑輸出為準**——
   2026-08-12 又漏算一條被 review 抓到；且條數（122／12／307）有四份文件在寫（CLAUDE.md、本檔、
   兩份 README），改要一次改到底。DESIGN.md 版號刻意不寫進 README——每輪 UI 都 bump，寫死必過期。
@@ -127,7 +127,6 @@
 
 6. **估算一個品項＋複製前一餐（spec.md 同名節已寫、★等點頭才動碼）**：痛點＝沒標示的餐要離開 App 問 AI、於是整餐不記。A 估算（描述或拍照，擴充 `read-label` 雙模式，結果必落一列 foods 並立即封存）先、B 複製後；**第 0 步先用 5–10 餐實際吃過的餐量準確度**，再決定值不值得做。
 7. **「用歷史推估該吃多少」的 user journey（使用者 2026-10-13 提出的差異化，別漏）**：多數 App 靠自訂運動係數推測；Tally 要用過往實際吃的熱量＋體重趨勢反推（類似股票回測）。**實測維持熱量卡（續點 5）已是它的一半**，缺的是從對帳卡片升格為「目標的依據」的流程與 UX；前提＝記錄完整度（續點 6 的估算一個品項）；升格前要做回測（切一段當未知、預測體重變化）。**順序：階段 2 先（產生資料）→ 累積 3–4 週 → 專門設計這條 journey**，使用者同意。
-
 
 **蒸餾（歷次教訓 ①–⑳、v2.53 四條）** 已於 2026-10-14 整段搬到 [archive-2026-10.md](archive-2026-10.md)；通則升格 DESIGN.md 的看其版號，新的蒸餾一句寫在這裡。
 
