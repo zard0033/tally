@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14）：本機領先 origin 4 個 commit，未 push：fbeec7c CLAUDE.md 指路、3d935d2 v2.55 有氧（A 段）、41bd5cd review #2#8 session 守門、ab27dc0 review #1#3–#7#9 佇列修正。vitest 505／e2e 152／lint／build 全綠，mutation 全轉紅。
-下一步：①push 前走全域 git-push gate（review 範圍 fbeec7c..ab27dc0）②第 2 輪 B 段（課表＋拖曳排序，開工先選拖曳函式庫）③真機試用離線記錄（重訓＋有氧）。
-視覺待辦：sheet 內確認框偏低、上緣露出被壓暗的儲存鈕。
+現況（2026-10-14）：本機領先 origin，未 push：fbeec7c CLAUDE.md 指路、3d935d2 v2.55 有氧（A 段，未經 review）、41bd5cd／ab27dc0／61fcdd6 佇列 review 修正（#1–#9＋斷網 refresh 失敗標離線）。vitest／e2e 152／lint／build 全綠，mutation 全轉紅。
+下一步：①push gate：原 reviewer 驗修正、新 reviewer 審 A 段 UI ②B 段（課表＋拖曳，先選函式庫）③真機試用離線記錄。D 段追加項與待決在 MANUAL。
+視覺待辦：sheet 內確認框偏低。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -58,4 +58,9 @@ review 修正清單（2026-10-14，code-reviewer 審 aa722c0/3dce105/2f8b4ae/a37
 - #5 MEDIUM：多條 op 寫入不是原子的（enqueueMany 一次 commit）。
 - LOW：#6 父列 update 失敗也擋子列 insert；#7 neverApplied 只看最後一次嘗試；#8 登出中途 sync 會在 clearAll 後回填；#9 useTraining request 在迴圈結束與 finally 之間被吞。
 - 另記：e2e 全跑一次「訓練中：要點只能看…」紅（toHaveValue），單跑 ×3 綠，失敗訊息被覆蓋；下次全跑 *> 檔案 存輸出。視覺待辦：sheet 內確認框偏低，上緣露出被壓暗的儲存鈕。
+### 2026-10-14 08:47
+review 修正後留給 D 段（同步指示完整版）與待決（2026-10-14）
+- D 範圍追加：①被拒絕父列底下的子列仍是 attempts 0／failure null，summarize 看起來跟「還沒送」一樣——D 要從條目推出「等父列」並顯示（AC 17 的另一半）②discardImpact 數的是條目不是列（同一列後來的 update 也算），確認文案用「N 筆變更」或改成數列，寫文案前先定③failure 'auth' 現在只代表「有網路但沒有有效 session」（網路類 refresh 失敗已改標 offline，61fcdd6），UI 可以直接說要重新登入。
+- 待決（review 的 open questions，未在核可範圍內）：①佇列格式認不得時每次操作都丟錯、沒有出路——要不要做「原樣備份到另一個 key、清空重來」的逃生口（產品決定）②queueStore 的 isEntry 沒交叉檢查 op 與 payload（insert 帶 null payload 會只 upsert {id}），低風險。
+- 環境：Web Locks 只在 secure context 有；localhost:5500 與 GitHub Pages https 都是，真機一律走部署網址，不會用到區網 http。
 
