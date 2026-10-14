@@ -602,6 +602,8 @@ const byCreatedAsc = (a: Row, b: Row) => {
 export interface RoutineCard {
   readonly routine: Row
   readonly exerciseCount: number
+  /** 最近一次照這份課表做的訓練日（YYYY-MM-DD）；沒做過是 null。 */
+  readonly lastUsed: string | null
 }
 
 /** 課表列表：使用中與已封存分開，各依建立順序。 */
@@ -611,9 +613,19 @@ export function routineList(db: TrainingDb): { active: RoutineCard[]; archived: 
     const key = String(re.routine_id)
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
-  const cards = [...db.routines]
-    .sort(byCreatedAsc)
-    .map((routine): RoutineCard => ({ routine, exerciseCount: counts.get(routine.id) ?? 0 }))
+  const lastUsed = new Map<string, string>()
+  for (const w of db.workouts) {
+    if (typeof w.routine_id !== 'string' || typeof w.performed_on !== 'string') continue
+    const seen = lastUsed.get(w.routine_id)
+    if (seen === undefined || w.performed_on > seen) lastUsed.set(w.routine_id, w.performed_on)
+  }
+  const cards = [...db.routines].sort(byCreatedAsc).map(
+    (routine): RoutineCard => ({
+      routine,
+      exerciseCount: counts.get(routine.id) ?? 0,
+      lastUsed: lastUsed.get(routine.id) ?? null,
+    }),
+  )
   return {
     active: cards.filter((c) => c.routine.archived !== true),
     archived: cards.filter((c) => c.routine.archived === true),
@@ -722,6 +734,12 @@ export function addRoutineExerciseOps(args: {
       },
     },
   ]
+}
+
+/** 課表動作列的副標：預設組次只在該動作從沒做過時才用，要講清楚免得誤會成「每次都這樣」。 */
+export function formatRoutineTarget(entry: Row): string {
+  const reps = optNum(entry.target_reps)
+  return `沒做過時預設 ${Number(entry.target_sets)} 組${reps === null ? '' : ` × ${reps}`}`
 }
 
 /** 只帶有變的欄位；全沒變回空陣列。 */

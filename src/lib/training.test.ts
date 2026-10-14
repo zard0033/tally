@@ -20,6 +20,7 @@ import {
   checkRoutineName,
   checkRoutineTarget,
   copyRoutineOps,
+  formatRoutineTarget,
   createRoutineOps,
   removeRoutineExerciseOps,
   renameRoutineOps,
@@ -977,6 +978,19 @@ describe('routineList', () => {
     })
     expect(routineList(d).active.map((c) => c.exerciseCount)).toEqual([2, 1])
   })
+
+  it('上次是最近一次照這份課表做的那天；沒做過、空白開始的不算', () => {
+    const d = db({
+      routines: [routine('a', 'A'), routine('b', 'B')],
+      workouts: [
+        { ...workout('w1', '2026-10-01'), routine_id: 'a' },
+        { ...workout('w3', '2026-10-11'), routine_id: 'a' },
+        { ...workout('w2', '2026-10-05'), routine_id: 'a' },
+        workout('blank', '2026-10-13'),
+      ],
+    })
+    expect(routineList(d).active.map((c) => c.lastUsed)).toEqual(['2026-10-11', null])
+  })
 })
 
 describe('routineDetail', () => {
@@ -1223,5 +1237,13 @@ describe('課表的寫入經 parentRefs 補父列依賴', () => {
       ['exercises', 'restrict'],
     ])
     expect(parentRefs('workouts', { routine_id: 'r' }).map((p) => [p.table, p.onDelete])).toEqual([['routines', 'setNull']])
+  })
+})
+
+describe('formatRoutineTarget', () => {
+  it('有次數寫「組 × 次」，沒設次數只寫組', () => {
+    expect(formatRoutineTarget(re('x', 'r', 'e', 0, 3, 12))).toBe('沒做過時預設 3 組 × 12')
+    expect(formatRoutineTarget(re('x', 'r', 'e', 0, 4, null))).toBe('沒做過時預設 4 組')
+    expect(formatRoutineTarget({ id: 'x', target_sets: 2 })).toBe('沒做過時預設 2 組')
   })
 })

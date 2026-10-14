@@ -800,3 +800,220 @@ test('不認得的有氧類型：列表原樣顯示；打開編輯直接儲存�
   await page.waitForTimeout(300)
   expect((await trainRows(page, 'cardio_sessions'))[0]).toMatchObject({ kind: 'swim', est_kcal: 150 })
 })
+
+/* ═══════════ 課表（第二輪 B 段） ═══════════ */
+
+const editor = (page: Page) => page.locator('[data-screen="routine-editor"]')
+const nameSheet = (page: Page) => page.locator('[data-screen="routine-name"]')
+const targetSheet = (page: Page) => page.locator('[data-screen="routine-target"]')
+
+const ROUTINE_FIX: typeof FIX = {
+  ...WITH_WORKOUT,
+  workouts: WITH_WORKOUT.workouts.map((w) => ({ ...w, routine_id: 'r-a' })), // 上次就是照菜單 A 做的
+  routines: [{ id: 'r-a', name: '菜單 A', archived: false, created_at: '2026-10-01T00:00:00.000Z' }],
+  routine_exercises: [
+    { id: 're-1', routine_id: 'r-a', exercise_id: EX_ID, position: 0, target_sets: 3, target_reps: 12, created_at: '2026-10-01T00:00:01.000Z' },
+  ],
+}
+
+async function newRoutine(page: Page, name: string) {
+  await page.locator('[data-action="new-routine"]').click()
+  await nameSheet(page).getByRole('textbox', { name: '課表名稱' }).fill(name)
+  await nameSheet(page).getByRole('button', { name: '建立' }).click()
+  await expect(editor(page)).toBeVisible()
+}
+
+test('新課表：先問名稱才建立（空名稱擋在 sheet 裡），建好直接進編輯頁、底部列收起', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await expect(page.locator('[data-screen="training"]')).toContainText('還沒有課表')
+
+  await page.locator('[data-action="new-routine"]').click()
+  await nameSheet(page).getByRole('button', { name: '建立' }).click()
+  await expect(nameSheet(page).getByRole('alert')).toHaveText('名稱不能是空的')
+  expect(await trainRows(page, 'routines'), '空名稱不該寫入').toHaveLength(0)
+
+  await nameSheet(page).getByRole('textbox', { name: '課表名稱' }).fill('  菜單 A  ')
+  await nameSheet(page).getByRole('button', { name: '建立' }).click()
+  await expect(editor(page)).toBeVisible()
+  await expect(editor(page).getByRole('heading', { name: '菜單 A' })).toBeVisible()
+  await expect(page.locator('.bottom-bar')).toHaveCount(0)
+  await expect
+    .poll(async () => (await trainRows(page, 'routines'))[0])
+    .toMatchObject({ name: '菜單 A', archived: false })
+})
+
+test('課表編輯：加動作、改預設組次、移除；每個修改都落到伺服器', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await newRoutine(page, '菜單 A')
+
+  for (const name of ['腿推舉', '坐姿划船']) {
+    await page.locator('[data-action="add-routine-exercise"]').click()
+    await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: name }).click()
+    await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  }
+  const rows = editor(page).locator('[data-section="routine-exercises"] li.tr-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText('腿推舉')
+  await expect(rows.nth(0).locator('.sub')).toHaveText('沒做過時預設 3 組')
+  await expect(rows.nth(1)).toContainText('坐姿划船')
+
+  await rows.nth(0).getByRole('button', { name: /改預設組次/ }).click()
+  await targetSheet(page).getByLabel('預設組數').fill('4')
+  await targetSheet(page).getByLabel('預設次數').fill('10')
+  await targetSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(targetSheet(page)).toHaveCount(0)
+  await expect(rows.nth(0).locator('.sub')).toHaveText('沒做過時預設 4 組 × 10')
+
+  await rows.nth(1).getByRole('button', { name: '移除坐姿划船' }).click()
+  await expect(rows).toHaveCount(1)
+
+  await expect
+    .poll(async () => (await trainRows(page, 'routine_exercises')).map((r) => [r.exercise_id, r.position, r.target_sets, r.target_reps]))
+    .toEqual([[LEG_ID, 0, 4, 10]])
+})
+
+test('預設組次的守門：範圍外擋在 sheet 裡說明，不寫入、不關', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await page.locator('.tr-row[data-routine-id="r-a"]').click()
+  await editor(page).getByRole('button', { name: /改預設組次/ }).click()
+
+  for (const [sets, reps, msg] of [
+    ['0', '', '組數要是 1–20'],
+    ['21', '', '組數要是 1–20'],
+    ['3', '1000', '次數要是 1–999'],
+    ['3', '8.5', '次數要是 1–999'],
+  ]) {
+    await targetSheet(page).getByLabel('預設組數').fill(sets)
+    await targetSheet(page).getByLabel('預設次數').fill(reps)
+    await targetSheet(page).getByRole('button', { name: '儲存' }).click()
+    await expect(targetSheet(page).getByRole('alert')).toContainText(msg)
+  }
+  const stored = (await trainRows(page, 'routine_exercises'))[0]
+  expect([stored.target_sets, stored.target_reps], '伺服器上的值不該被動到').toEqual([3, 12])
+})
+
+test('改名：失焦才寫；改成空白放回原值並說明', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await page.locator('.tr-row[data-routine-id="r-a"]').click()
+  const field = editor(page).getByRole('textbox', { name: '課表名稱' })
+
+  await field.fill('菜單 A（胸背）')
+  await field.press('Enter')
+  await expect(editor(page).getByRole('heading', { name: '菜單 A（胸背）' })).toBeVisible()
+  await expect
+    .poll(async () => (await trainRows(page, 'routines')).find((r) => r.id === 'r-a')?.name)
+    .toBe('菜單 A（胸背）')
+
+  await field.fill('   ')
+  await field.press('Enter')
+  await expect(editor(page)).toContainText('名稱不能是空的')
+  await expect(field).toHaveValue('菜單 A（胸背）')
+})
+
+test('複製課表：進到「原名稱 複本」，動作與預設組次照搬，原本那份不動', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await page.locator('.tr-row[data-routine-id="r-a"]').click()
+  await editor(page).getByRole('button', { name: '複製課表' }).click()
+
+  await expect(editor(page).getByRole('heading', { name: '菜單 A 複本' })).toBeVisible()
+  const rows = editor(page).locator('[data-section="routine-exercises"] li.tr-row')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('腿推舉')
+  await expect(rows.first().locator('.sub')).toHaveText('沒做過時預設 3 組 × 12')
+
+  await expect.poll(async () => (await trainRows(page, 'routines')).map((r) => r.name).sort()).toEqual(['菜單 A', '菜單 A 複本'])
+  // 父列先送、子列隨後：等子列到，不能在課表那筆到了的瞬間就讀一次
+  await expect
+    .poll(async () =>
+      (await trainRows(page, 'routine_exercises'))
+        .filter((r) => r.routine_id !== 'r-a')
+        .map((r) => [r.exercise_id, r.position, r.target_sets, r.target_reps]),
+    )
+    .toEqual([[EX_ID, 0, 3, 12]])
+})
+
+test('封存課表：回清單、從開始訓練選單消失、列在「已封存的課表」；可取消封存', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await page.locator('.tr-row[data-routine-id="r-a"]').click()
+  await editor(page).locator('[data-action="toggle-routine-archive"]').click()
+
+  const screen = page.locator('[data-screen="training"]')
+  await expect(screen).toBeVisible()
+  await expect(screen.locator('[data-section="routines"]')).toHaveCount(0)
+  await expect(screen.locator('[data-section="archived-routines"] .tr-row')).toContainText('菜單 A')
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  await expect(page.locator('[data-screen="start-sheet"] [data-routine-id]'), '封存的課表不進選單').toHaveCount(0)
+  await page.getByRole('button', { name: '關閉' }).click()
+  await expect(page.locator('[data-screen="start-sheet"]')).toHaveCount(0)
+
+  await screen.locator('[data-section="archived-routines"] .tr-row').click()
+  await editor(page).locator('[data-action="toggle-routine-archive"]').click()
+  await expect(editor(page), '取消封存留在原頁').toBeVisible()
+  await editor(page).getByRole('button', { name: '返回' }).click()
+  await expect(screen.locator('[data-section="routines"] .tr-row')).toContainText('菜單 A')
+  await expect
+    .poll(async () => (await trainRows(page, 'routines')).find((r) => r.id === 'r-a')?.archived)
+    .toBe(false)
+})
+
+test('開始訓練選課表：動作依序帶入、有歷史的取上次實際完成的值、訓練記下 routine_id', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await expect(page.locator('.tr-row[data-routine-id="r-a"]')).toContainText(/1 個動作 · 上次 \d+\/\d+/)
+
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  const pick = page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]')
+  await expect(pick).toContainText('菜單 A')
+  await pick.click()
+  await expect(page.locator('[data-screen="training-session"]')).toBeVisible()
+
+  // 課表預設是 3 組 × 12，但這個動作有歷史（2 組 60×12）——一律取歷史，不是課表預設
+  await expect(page.locator('.ex .set')).toHaveCount(2)
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveValue('60')
+  await expect(page.locator('.ex .set').first().locator('.r')).toHaveValue('12')
+
+  await expect
+    .poll(async () => (await trainRows(page, 'workouts')).find((w) => w.id !== 'w-1')?.routine_id)
+    .toBe('r-a')
+})
+
+test('沒做過的動作：用課表的預設組數與次數、重量 0', async ({ page }) => {
+  const fix: typeof FIX = {
+    ...ROUTINE_FIX,
+    workouts: [],
+    workout_exercises: [],
+    workout_sets: [],
+    routine_exercises: [
+      { id: 're-1', routine_id: 'r-a', exercise_id: EX_ID, position: 0, target_sets: 4, target_reps: 8, created_at: '2026-10-01T00:00:01.000Z' },
+    ],
+  }
+  await openApp(page, {}, fix)
+  await openTraining(page)
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  await page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]').click()
+  await expect(page.locator('.ex .set')).toHaveCount(4)
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveValue('0')
+  await expect(page.locator('.ex .set').first().locator('.r')).toHaveValue('8')
+})
+
+test('離線建課表、加動作：畫面立刻有，回線後上傳且父列先到', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await setOffline(page, true)
+
+  await newRoutine(page, '菜單 B')
+  await page.locator('[data-action="add-routine-exercise"]').click()
+  await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '腿推舉' }).click()
+  await expect(editor(page).locator('li.tr-row', { hasText: '腿推舉' })).toBeVisible()
+  expect(await trainRows(page, 'routines'), '離線時伺服器還沒收到').toHaveLength(0)
+
+  await setOffline(page, false)
+  await expect.poll(async () => (await trainRows(page, 'routines')).length, { timeout: 15_000 }).toBe(1)
+  await expect.poll(async () => (await trainRows(page, 'routine_exercises')).length, { timeout: 15_000 }).toBe(1)
+})

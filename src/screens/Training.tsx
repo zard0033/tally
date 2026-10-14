@@ -1,6 +1,7 @@
-/* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
+﻿/* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
  * 以及「開始訓練 sheet → 訓練中整頁」這條主流程；課表下方的「動作庫」入口進整頁的動作庫。
- * 有氧從開始訓練 sheet 進、記完回到這頁，列在「已完成」裡（點了編輯）。課表在第 2 輪 B 段接上。
+ * 有氧從開始訓練 sheet 進、記完回到這頁，列在「已完成」裡（點了編輯）。課表區在已完成之後、動作庫之前：
+ * 點一份進課表編輯整頁，「＋ 新課表」先問名稱；開始訓練 sheet 裡選課表會照它開一次訓練。
  *
  * 日期由 App 持有、經 props 傳進來：主 CTA 在 App 的底部列裡，要知道「選到哪天、能不能開始」。
  * 兩頁的日期軸「長得一致」（共用 DateStrip），但**不連動**——互相揭露是第 2 輪的明確動作。
@@ -9,22 +10,28 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
-import { localDate, weekdayDate } from '@/lib/dates'
+import { localDate, monthDay, weekdayDate } from '@/lib/dates'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import {
   cardioLabel,
   cardioOn,
   cardioSummary,
+  routineDetail,
+  routineList,
+  startWorkoutFromRoutineOps,
   startWorkoutOps,
   trainingDates,
   workoutDetail,
   workoutsOn,
   type Row,
+  type RoutineCard,
   type RowOp,
   type WorkoutCard,
 } from '@/lib/training'
 import CardioSheet from './CardioSheet'
 import ExerciseLibrary from './ExerciseLibrary'
+import RoutineEditor from './RoutineEditor'
+import RoutineNameSheet from './RoutineNameSheet'
 import StartSheet from './StartSheet'
 import TrainingSession from './TrainingSession'
 
@@ -84,6 +91,23 @@ function CardioRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
   )
 }
 
+function RoutineRow({ card, onOpen }: { card: RoutineCard; onOpen: () => void }) {
+  const { routine, exerciseCount, lastUsed } = card
+  return (
+    <button className="tr-row" type="button" data-routine-id={routine.id} onClick={onOpen}>
+      <span className="grow">
+        <span className="nm">{String(routine.name)}</span>
+        <span className="sub">
+          {exerciseCount} 個動作{lastUsed ? ` · 上次 ${monthDay(lastUsed)}` : ''}
+        </span>
+      </span>
+      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
+  )
+}
+
 export default function Training({
   view,
   error,
@@ -96,6 +120,8 @@ export default function Training({
 }: TrainingProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [library, setLibrary] = useState(false)
+  const [routineId, setRoutineId] = useState<string | null>(null)
+  const [nameOpen, setNameOpen] = useState(false)
   const [startBusy, setStartBusy] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   // 開關與目標分開（同動作庫）：關閉動畫期間目標還在，標題不會從「編輯」閃成「記一筆」
@@ -113,19 +139,20 @@ export default function Training({
   const cardios = useMemo(() => (view ? cardioOn(view.db, date) : []), [view, date])
   // 這次訓練被刪了（別的裝置、或自己在整頁裡刪掉）：detail 變 null，自然退回清單
   const detail = view && sessionId ? workoutDetail(view.db, sessionId) : null
-  const full = detail !== null || library
+  const routines = useMemo(() => (view ? routineList(view.db) : { active: [], archived: [] }), [view])
+  const editing = view && routineId ? routineDetail(view.db, routineId) : null
+  const full = detail !== null || library || editing !== null
 
   useEffect(() => {
     onFullPage(full)
     return () => onFullPage(false)
   }, [full, onFullPage])
 
-  const startBlank = async () => {
+  const start = async (id: string, ops: RowOp[]) => {
     setStartBusy(true)
     setStartError(null)
-    const id = crypto.randomUUID()
     try {
-      await onWrite(startWorkoutOps({ workoutId: id, date, now: new Date() }))
+      await onWrite(ops)
       onStartOpenChange(false)
       setSessionId(id)
     } catch (e) {
@@ -135,8 +162,42 @@ export default function Training({
     }
   }
 
+  const startBlank = () => {
+    const id = crypto.randomUUID()
+    return start(id, startWorkoutOps({ workoutId: id, date, now: new Date() }))
+  }
+
+  const startFromRoutine = (fromId: string) => {
+    if (!view) return
+    const id = crypto.randomUUID()
+    return start(
+      id,
+      startWorkoutFromRoutineOps({
+        db: view.db,
+        routineId: fromId,
+        workoutId: id,
+        date,
+        now: new Date(),
+        newId: () => crypto.randomUUID(),
+      }),
+    )
+  }
+
   if (detail && view) {
     return <TrainingSession detail={detail} db={view.db} onWrite={onWrite} onBack={() => setSessionId(null)} />
+  }
+
+  if (editing && view) {
+    return (
+      <RoutineEditor
+        key={editing.routine.id}
+        detail={editing}
+        db={view.db}
+        onWrite={onWrite}
+        onBack={() => setRoutineId(null)}
+        onOpen={setRoutineId}
+      />
+    )
   }
 
   if (library && view) {
@@ -198,6 +259,38 @@ export default function Training({
           </>
         )}
         {view && (
+          <>
+            <div className="tr-sec tr-sec-act">
+              課表
+              <button className="tr-text-btn" type="button" data-action="new-routine" onClick={() => setNameOpen(true)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                新課表
+              </button>
+            </div>
+            {routines.active.length === 0 ? (
+              <p className="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+            ) : (
+              <div className="tr-card" data-section="routines">
+                {routines.active.map((c) => (
+                  <RoutineRow key={c.routine.id} card={c} onOpen={() => setRoutineId(c.routine.id)} />
+                ))}
+              </div>
+            )}
+            {routines.archived.length > 0 && (
+              <>
+                <div className="tr-sec">已封存的課表</div>
+                <div className="tr-card" data-section="archived-routines">
+                  {routines.archived.map((c) => (
+                    <RoutineRow key={c.routine.id} card={c} onOpen={() => setRoutineId(c.routine.id)} />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {view && (
           <div className="tr-card tr-entry">
             <button className="tr-row" type="button" data-action="open-library" onClick={() => setLibrary(true)}>
               <svg className="lead" viewBox="0 0 24 24" aria-hidden="true">
@@ -224,15 +317,27 @@ export default function Training({
         backfill={date < localDate()}
         busy={startBusy}
         error={startError}
+        routines={routines.active}
         onClose={() => {
           setStartError(null)
           onStartOpenChange(false)
         }}
         onBlank={() => void startBlank()}
+        onRoutine={(id) => void startFromRoutine(id)}
         onCardio={() => {
           setStartError(null)
           onStartOpenChange(false)
           openCardio(null)
+        }}
+      />
+
+      <RoutineNameSheet
+        open={nameOpen}
+        onClose={() => setNameOpen(false)}
+        onWrite={onWrite}
+        onCreated={(id) => {
+          setNameOpen(false)
+          setRoutineId(id)
         }}
       />
 

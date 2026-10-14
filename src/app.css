@@ -1423,6 +1423,23 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-cardio-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .tr-cardio-grid .lb { white-space: nowrap; }
 
+/* 課表（樣張 ①②⑤）：訓練頁的課表區、課表編輯頁的動作列。
+   動作列是 li.tr-row：整塊文字是一顆按鈕（改預設組次），右端 × 是另一顆；× 無框，懸出內距好與右緣對齊。 */
+.tr-sec-act { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
+.tr-sec-act .tr-text-btn { padding: 0 var(--s-2); margin-right: calc(var(--s-2) * -1); }
+.tr-list { list-style: none; margin: 0; padding: 0; }
+.tr-card > li:first-child > .tr-row { border-top: none; }
+.tr-row.accent .nm, .tr-row.accent .lead { color: var(--accent); }
+.tr-row-main { flex: 1; min-width: 0; align-self: stretch; padding: 0; border: none; background: none;
+  text-align: left; font-family: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column;
+  justify-content: center; }
+.tr-row-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tr-row-end { margin-right: calc(var(--s-3) * -1); }
+.tr-field-first { margin-top: var(--s-2); }
+.tr-name-input { font-weight: 600; }
+.tr-note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-3) 0 0; }
+.tr-sheet-body .muted.tr-target-note { margin: 0 0 var(--s-2); font-size: var(--t-sm); line-height: 1.6; }
+
 /* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 vaul sheet（z 11）之上 */
 .dialog-scrim { z-index: 12; }
 .tr-dialog { position: fixed; left: var(--s-5); right: var(--s-5); top: 50%; transform: translateY(-50%);
