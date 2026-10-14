@@ -18,6 +18,7 @@ import {
   formatLastSets,
   isBackfilled,
   lastCompletedSets,
+  routineFromWorkoutOps,
   setsOfDetail,
   workoutSummary,
   type MuscleGroup,
@@ -255,6 +256,9 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     }
   }
 
+  const saveRoutine = (name: string) =>
+    run(routineFromWorkoutOps({ db, workoutId: workout.id, name, newId }))
+
   const removeExercise = async (entryId: string) => {
     setAskRemove(null)
     await run([{ op: 'delete', table: 'workout_exercises', rowId: entryId }])
@@ -443,10 +447,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         totalSets={summary.totalSets}
         lines={finishLines}
         backfill={backfilled}
+        canSaveRoutine={workout.routine_id == null && exercises.length > 0}
         busy={busy}
         error={error}
         onClose={() => setFinish(false)}
         onFinish={(m) => void finishNow(m)}
+        onSaveRoutine={saveRoutine}
       />
 
       <ConfirmDialog

@@ -1435,8 +1435,21 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   justify-content: center; }
 .tr-row-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tr-row-end { margin-right: calc(var(--s-3) * -1); }
+/* 拖曳握把（樣張 ⑤）：只有它能拖，touch-action: none 讓觸控按下握把時不會去捲頁面；
+   被拿起的列＝jade 外框＋微微抬高（--raised 底），不用陰影。 */
+.tr-grip { width: 44px; height: 44px; margin-left: calc(var(--s-3) * -1); display: flex; align-items: center;
+  justify-content: center; border: none; background: none; color: var(--ink-muted); cursor: grab;
+  touch-action: none; flex-shrink: 0; -webkit-appearance: none; appearance: none; }
+.tr-grip svg { width: 20px; height: 20px; stroke-width: 2.6; stroke-linecap: round; }
+.tr-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tr-row.is-dragging { background: var(--raised); box-shadow: inset 0 0 0 1.5px var(--accent); position: relative; z-index: 1; }
+.tr-row.is-dragging .tr-grip { color: var(--accent); cursor: grabbing; }
 .tr-field-first { margin-top: var(--s-2); }
 .tr-name-input { font-weight: 600; }
+.tr-save-routine { margin: var(--s-3) 0; }
+.tr-save-form { padding: 0 var(--s-4) var(--s-3); }
+.tr-save-form .tr-field { margin: var(--s-2) 0 var(--s-3); }
+.tr-save-go { width: 100%; justify-content: center; }
 .tr-note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-3) 0 0; }
 .tr-sheet-body .muted.tr-target-note { margin: 0 0 var(--s-2); font-size: var(--t-sm); line-height: 1.6; }
 

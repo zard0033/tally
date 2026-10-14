@@ -1017,3 +1017,166 @@ test('離線建課表、加動作：畫面立刻有，回線後上傳且父列�
   await expect.poll(async () => (await trainRows(page, 'routines')).length, { timeout: 15_000 }).toBe(1)
   await expect.poll(async () => (await trainRows(page, 'routine_exercises')).length, { timeout: 15_000 }).toBe(1)
 })
+
+/* ═══════════ 課表排序（第二輪 B 段，拖曳） ═══════════ */
+
+const SORT_FIX: typeof FIX = {
+  ...LIBRARY_FIX,
+  routines: [{ id: 'r-s', name: '菜單 S', archived: false, created_at: '2026-10-01T00:00:00.000Z' }],
+  routine_exercises: [
+    { id: 'rs-1', routine_id: 'r-s', exercise_id: LEG_ID, position: 0, target_sets: 3, target_reps: null, created_at: '2026-10-01T00:00:01.000Z' },
+    { id: 'rs-2', routine_id: 'r-s', exercise_id: ROW_ID, position: 1, target_sets: 3, target_reps: null, created_at: '2026-10-01T00:00:02.000Z' },
+    { id: 'rs-3', routine_id: 'r-s', exercise_id: OLD_ID, position: 2, target_sets: 3, target_reps: null, created_at: '2026-10-01T00:00:03.000Z' },
+  ],
+}
+
+const sortRows = (page: Page) => editor(page).locator('[data-section="routine-exercises"] li.tr-row[data-routine-exercise-id]')
+const storedOrder = async (page: Page) =>
+  (await trainRows(page, 'routine_exercises'))
+    .sort((a, b) => Number(a.position) - Number(b.position))
+    .map((r) => r.id)
+
+async function openSortRoutine(page: Page) {
+  await openApp(page, {}, SORT_FIX)
+  await openTraining(page)
+  await page.locator('.tr-row[data-routine-id="r-s"]').click()
+  await expect(sortRows(page)).toHaveCount(3)
+}
+
+test('課表排序（鍵盤）：握把聚焦後空白鍵拿起、方向鍵移動、空白鍵放下，位置落到伺服器', async ({ page }) => {
+  await openSortRoutine(page)
+  await expect(sortRows(page).locator('.nm')).toHaveText(['腿推舉', '坐姿划船', '舊的肩推'])
+
+  await page.getByRole('button', { name: '拖曳排序：腿推舉' }).focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Space')
+
+  await expect(sortRows(page).locator('.nm')).toHaveText(['坐姿划船', '舊的肩推', '腿推舉'])
+  await expect.poll(() => storedOrder(page)).toEqual(['rs-2', 'rs-3', 'rs-1'])
+  // 重新進來（讀的是資料不是畫面殘留）順序仍是新的
+  await editor(page).getByRole('button', { name: '返回' }).click()
+  await page.locator('.tr-row[data-routine-id="r-s"]').click()
+  await expect(sortRows(page).locator('.nm')).toHaveText(['坐姿划船', '舊的肩推', '腿推舉'])
+})
+
+test('課表排序（Esc 取消）：不寫入、順序不變', async ({ page }) => {
+  await openSortRoutine(page)
+  await page.getByRole('button', { name: '拖曳排序：腿推舉' }).focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Escape')
+
+  await expect(sortRows(page).locator('.nm')).toHaveText(['腿推舉', '坐姿划船', '舊的肩推'])
+  await page.waitForTimeout(500)
+  expect(await storedOrder(page)).toEqual(['rs-1', 'rs-2', 'rs-3'])
+})
+
+test('課表排序（指標拖曳）：抓握把往下拖到最後一列，只有握把能拖', async ({ page }) => {
+  await openSortRoutine(page)
+  const grip = page.getByRole('button', { name: '拖曳排序：腿推舉' })
+  const from = (await grip.boundingBox())!
+  const to = (await sortRows(page).nth(2).boundingBox())!
+
+  // 每一段之後停一下：dnd-kit 的碰撞偵測與位移都跟著 animation frame 走，滑鼠一口氣瞬移過去它來不及算
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2, from.y + 20, { steps: 5 })
+  await page.waitForTimeout(150)
+  await page.mouse.move(from.x + from.width / 2, to.y + to.height / 2 + 10, { steps: 15 })
+  await page.waitForTimeout(300)
+  await page.mouse.up()
+
+  await expect(sortRows(page).locator('.nm')).toHaveText(['坐姿划船', '舊的肩推', '腿推舉'])
+  await expect.poll(() => storedOrder(page)).toEqual(['rs-2', 'rs-3', 'rs-1'])
+})
+
+test('課表排序：只有握把是拖曳來源（每列一個拖曳控制；名稱區按下拖動不會排序）', async ({ page }) => {
+  await openSortRoutine(page)
+  // 沒登記握把時函式庫會把整列變成拖曳來源（再多出一顆同名的 button）——每列必須只有握把一個
+  for (const name of ['腿推舉', '坐姿划船', '舊的肩推']) {
+    await expect(page.getByRole('button', { name: `拖曳排序：${name}` })).toHaveCount(1)
+  }
+  const name = (await sortRows(page).nth(0).locator('.tr-row-main').boundingBox())!
+  const last = (await sortRows(page).nth(2).boundingBox())!
+
+  await page.mouse.move(name.x + 60, name.y + name.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(name.x + 60, name.y + name.height / 2 + 20, { steps: 5 })
+  await page.waitForTimeout(150)
+  await page.mouse.move(name.x + 60, last.y + last.height / 2 + 10, { steps: 15 })
+  await page.waitForTimeout(300)
+  await page.mouse.up()
+
+  await expect(sortRows(page).locator('.nm')).toHaveText(['腿推舉', '坐姿划船', '舊的肩推'])
+  expect(await storedOrder(page)).toEqual(['rs-1', 'rs-2', 'rs-3'])
+})
+
+test('課表排序：離線排好，回線後上傳', async ({ page }) => {
+  await openSortRoutine(page)
+  await setOffline(page, true)
+  await page.getByRole('button', { name: '拖曳排序：坐姿划船' }).focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Space')
+
+  await expect(sortRows(page).locator('.nm')).toHaveText(['坐姿划船', '腿推舉', '舊的肩推'])
+  expect(await storedOrder(page), '離線時伺服器還是舊順序').toEqual(['rs-1', 'rs-2', 'rs-3'])
+  await setOffline(page, false)
+  await expect.poll(() => storedOrder(page), { timeout: 15_000 }).toEqual(['rs-2', 'rs-1', 'rs-3'])
+})
+
+/* ═══════════ 存成課表（第二輪 B 段，完成訓練 sheet） ═══════════ */
+
+const finishSheet = (page: Page) => page.locator('[data-screen="finish-sheet"]')
+
+test('存成課表：空白開始的訓練完成時可存；空名稱擋住；存下後不再提供第二次，課表進清單與伺服器', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await page.getByRole('button', { name: '完成訓練' }).click()
+
+  const sheet = finishSheet(page)
+  await sheet.locator('[data-action="save-as-routine"]').click()
+  await sheet.getByRole('button', { name: '存成課表', exact: true }).click()
+  await expect(sheet.getByText('名稱不能是空的')).toBeVisible()
+  expect(await trainRows(page, 'routines'), '空名稱不該寫入').toHaveLength(0)
+
+  await sheet.getByRole('textbox', { name: '課表名稱' }).fill('菜單 C')
+  await sheet.getByRole('textbox', { name: '課表名稱' }).press('Enter')
+  await expect(sheet.locator('[data-section="save-routine"]')).toContainText('已存成課表「菜單 C」')
+  await expect(sheet.locator('[data-action="save-as-routine"]'), '存過就不再提供，免得連按存出兩份').toHaveCount(0)
+
+  // 組數＝當時的組數（預填上次的 2 組）、次數＝第一組的次數；不帶重量
+  await expect
+    .poll(async () => (await trainRows(page, 'routine_exercises')).map((r) => [r.exercise_id, r.position, r.target_sets, r.target_reps]))
+    .toEqual([[EX_ID, 0, 2, 12]])
+  expect((await trainRows(page, 'routines')).map((r) => r.name)).toEqual(['菜單 C'])
+
+  await sheet.getByRole('button', { name: '完成', exact: true }).click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await expect(page.locator('[data-section="routines"] .tr-row')).toContainText('菜單 C')
+})
+
+test('照課表開的訓練：完成時不提供「存成課表」（已經有課表了）', async ({ page }) => {
+  await openApp(page, {}, ROUTINE_FIX)
+  await openTraining(page)
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  await page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]').click()
+  await expect(page.locator('.ex .set').first()).toBeVisible()
+  await page.getByRole('button', { name: '完成訓練' }).click()
+  await expect(finishSheet(page)).toBeVisible()
+  await expect(finishSheet(page).locator('[data-section="save-routine"]')).toHaveCount(0)
+})
+
+test('空白開始、還沒加任何動作：完成時不提供「存成課表」', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await page.getByRole('button', { name: '完成訓練' }).click()
+  await expect(finishSheet(page)).toBeVisible()
+  await expect(finishSheet(page).locator('[data-section="save-routine"]')).toHaveCount(0)
+})
