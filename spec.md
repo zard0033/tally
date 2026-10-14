@@ -65,7 +65,7 @@
 
 **動機**：食品庫已蓋住重複品項，這功能的獨特價值只在「第一次吃的新品項」那一次——省下手打七個欄位。使用者接受這個範圍，並認為搭建過程本身有價值。
 
-**選定**：`qwen/qwen3.7-flash`，走使用者既有的 OpenRouter 帳號（另開的獨立 key）。$0.030／$0.130 per MTok ≒ **NT$0.07／月**（以 30 次計）。三輪實測依據見 session-state/active.md。
+**選定**：`qwen/qwen3.7-flash`，走使用者既有的 OpenRouter 帳號（另開的獨立 key）。$0.030／$0.130 per MTok ≒ **NT$0.07／月**（以 30 次計）。三輪實測依據已不在現存檔案裡（active.md 2026-10-14 退役前就已覆寫掉），要查走 git 歷史：`git log -S qwen -- session-state/active.md`。
 
 ### AC（＝將來的測試）
 
