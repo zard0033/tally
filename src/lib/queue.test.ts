@@ -810,6 +810,17 @@ describe('可能已落地是黏著的（review #7）', () => {
   })
 })
 
+describe('read', () => {
+  it('一次拿到同一份快照的 entries 與 summary', async () => {
+    const t = build()
+    await t.queue.enqueue({ op: 'insert', table: 'a', rowId: 'a', payload: { v: 1 }, userId: 'u1' })
+    await t.queue.enqueue({ op: 'insert', table: 'a', rowId: 'b', payload: { v: 1 }, userId: 'u2' })
+    const r = await t.queue.read('u1')
+    expect(r.entries).toEqual(await t.queue.entries())
+    expect(r.summary).toEqual(await t.queue.summary('u1'))
+  })
+})
+
 describe('enqueueMany（review #5）', () => {
   const one = (id: string): NewEntry => ({ op: 'insert', table: 'a', rowId: id, payload: { v: 1 }, userId: 'u1' })
 

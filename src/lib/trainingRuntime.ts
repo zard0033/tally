@@ -233,9 +233,9 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   const queue = createQueue({ store: createQueueStore(kv), send, now: deps.now, crossLock: deps.crossLock })
 
   async function composeView(userId: string): Promise<TrainingView> {
-    const entries = await queue.entries()
+    const { entries, summary } = await queue.read(userId)
     const db = applyQueue(base && base.userId === userId ? base.db : emptyTrainingDb(), entries, userId)
-    return { db, source, summary: await queue.summary(userId), cacheError }
+    return { db, source, summary, cacheError }
   }
 
   async function write(userId: string, ops: readonly WriteOp[]): Promise<TrainingView> {

@@ -308,6 +308,8 @@ export interface OfflineQueue {
   /** 目前佇列內全部條目（含其他帳號的），依 seq 排好。給「把未同步的變更疊在畫面上」用，唯讀。 */
   entries(): Promise<readonly QueueEntry[]>
   summary(userId: string): Promise<QueueSummary>
+  /** entries＋summary 同一次讀取（一次鎖、一次讀儲存）。畫面每次重組都要兩樣，分開拿就多一輪跨分頁鎖。 */
+  read(userId: string): Promise<{ entries: readonly QueueEntry[]; summary: QueueSummary }>
   /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。
    *  放棄的若是確定沒生效的 insert：cascade／restrict 掛在那一列底下的子孫條目連帶放棄（沒有父列存不了），
    *  setNull 的子列留下、那一欄改成 null。會帶走幾條先用 discardImpact 問。 */
@@ -535,6 +537,12 @@ export function createQueue({
     entries: () => locked(async () => (await current()).entries),
 
     summary: (userId) => locked(async () => summarize(await current(), userId)),
+
+    read: (userId) =>
+      locked(async () => {
+        const snap = await current()
+        return { entries: snap.entries, summary: summarize(snap, userId) }
+      }),
 
     discard: (seq) =>
       locked(async () => {
