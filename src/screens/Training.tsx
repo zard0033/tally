@@ -1,22 +1,41 @@
-/* 訓練分頁（階段 2，樣張 ①）。第一輪第 2a 段：日期元件、當天已記的訓練、同步狀態細條。
- * 開始訓練、訓練中、動作庫在後面的段落接上；這一頁先把「資料真的從本機底讀得到、離線也在」立起來。
+/* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
+ * 以及「開始訓練 sheet → 訓練中整頁」這條主流程。動作庫／課表／有氧在後面的段落與第 2 輪接上。
  *
- * 日期自己管、不跟飲食頁共用同一個 state：兩頁的日期軸「長得一致」（共用 DateStrip），
- * 但互相揭露（點了跳到飲食同一天）是第 2 輪的明確動作，不是兩頁偷偷連動。 */
+ * 日期由 App 持有、經 props 傳進來：主 CTA 在 App 的底部列裡，要知道「選到哪天、能不能開始」。
+ * 兩頁的日期軸「長得一致」（共用 DateStrip），但**不連動**——互相揭露是第 2 輪的明確動作。
+ * 進行中的整頁（TrainingSession）接管整個畫面，並通知 App 把底部列收起來（同設定的次級頁面）。 */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
-import { localDate } from '@/lib/dates'
+import { localDate, weekdayDate } from '@/lib/dates'
 import type { TrainingView } from '@/lib/trainingRuntime'
-import { trainingDates, workoutsOn, type WorkoutCard } from '@/lib/training'
+import {
+  startWorkoutOps,
+  trainingDates,
+  workoutDetail,
+  workoutsOn,
+  type RowOp,
+  type WorkoutCard,
+} from '@/lib/training'
+import StartSheet from './StartSheet'
+import TrainingSession from './TrainingSession'
 
 interface TrainingProps {
   view: TrainingView | null
   error: string | null
+  date: string
+  onDateChange: (iso: string) => void
+  startOpen: boolean
+  onStartOpenChange: (open: boolean) => void
+  /** 進入／離開訓練中整頁時回報，App 據此收起底部列。 */
+  onFullPage: (full: boolean) => void
+  onWrite: (ops: RowOp[]) => Promise<void>
 }
 
 /** 小點資料全在記憶體（整包載入），不需要按月抓。DateStrip 的 effect 依賴它，必須是穩定的參考。 */
 const noop = () => undefined
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** 同步狀態細條的文字。離線與未同步可以同時成立，兩句都講。沒事就不顯示（不是 toast，常駐但安靜）。 */
 function statusText(view: TrainingView): string | null {
@@ -27,23 +46,66 @@ function statusText(view: TrainingView): string | null {
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-function WorkoutRow({ card }: { card: WorkoutCard }) {
+function WorkoutRow({ card, onOpen }: { card: WorkoutCard; onOpen: () => void }) {
   const title = `${card.exerciseCount} 個動作`
   const detail = `${card.doneSets}/${card.totalSets} 組 · ${card.volume.toLocaleString('en-US')} kg · ${card.minutes} 分`
   return (
-    <div className="tr-row" data-workout-id={card.id}>
+    <button className="tr-row" type="button" data-workout-id={card.id} onClick={onOpen}>
       <span className="grow">
         <span className="nm">{title}</span>
         <span className="sub">{detail}</span>
       </span>
-    </div>
+      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
   )
 }
 
-export default function Training({ view, error }: TrainingProps) {
-  const [date, setDate] = useState(() => localDate())
+export default function Training({
+  view,
+  error,
+  date,
+  onDateChange,
+  startOpen,
+  onStartOpenChange,
+  onFullPage,
+  onWrite,
+}: TrainingProps) {
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [startBusy, setStartBusy] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+
   const marked = useMemo(() => (view ? trainingDates(view.db) : new Set<string>()), [view])
   const cards = useMemo(() => (view ? workoutsOn(view.db, date, new Date()) : []), [view, date])
+  // 這次訓練被刪了（別的裝置、或自己在整頁裡刪掉）：detail 變 null，自然退回清單
+  const detail = view && sessionId ? workoutDetail(view.db, sessionId) : null
+  const full = detail !== null
+
+  useEffect(() => {
+    onFullPage(full)
+    return () => onFullPage(false)
+  }, [full, onFullPage])
+
+  const startBlank = async () => {
+    setStartBusy(true)
+    setStartError(null)
+    const id = crypto.randomUUID()
+    try {
+      await onWrite(startWorkoutOps({ workoutId: id, date, now: new Date() }))
+      onStartOpenChange(false)
+      setSessionId(id)
+    } catch (e) {
+      setStartError(`這筆沒有存下來：${errText(e)}`)
+    } finally {
+      setStartBusy(false)
+    }
+  }
+
+  if (detail && view) {
+    return <TrainingSession detail={detail} db={view.db} onWrite={onWrite} onBack={() => setSessionId(null)} />
+  }
+
   const inProgress = cards.filter((c) => c.inProgress)
   const finished = cards.filter((c) => !c.inProgress)
   const status = view ? statusText(view) : null
@@ -51,7 +113,7 @@ export default function Training({ view, error }: TrainingProps) {
   return (
     <div className="main" data-screen="training">
       <header className="topbar">
-        <DateStrip date={date} marked={marked} onSelect={setDate} onViewMonth={noop} />
+        <DateStrip date={date} marked={marked} onSelect={onDateChange} onViewMonth={noop} />
       </header>
 
       {status && (
@@ -78,7 +140,7 @@ export default function Training({ view, error }: TrainingProps) {
                 <div className="tr-sec">進行中</div>
                 <div className="tr-card">
                   {inProgress.map((c) => (
-                    <WorkoutRow key={c.id} card={c} />
+                    <WorkoutRow key={c.id} card={c} onOpen={() => setSessionId(c.id)} />
                   ))}
                 </div>
               </>
@@ -88,7 +150,7 @@ export default function Training({ view, error }: TrainingProps) {
                 <div className="tr-sec">已完成</div>
                 <div className="tr-card">
                   {finished.map((c) => (
-                    <WorkoutRow key={c.id} card={c} />
+                    <WorkoutRow key={c.id} card={c} onOpen={() => setSessionId(c.id)} />
                   ))}
                 </div>
               </>
@@ -96,6 +158,19 @@ export default function Training({ view, error }: TrainingProps) {
           </>
         )}
       </div>
+
+      <StartSheet
+        open={startOpen}
+        dateLabel={weekdayDate(date)}
+        backfill={date < localDate()}
+        busy={startBusy}
+        error={startError}
+        onClose={() => {
+          setStartError(null)
+          onStartOpenChange(false)
+        }}
+        onBlank={() => void startBlank()}
+      />
     </div>
   )
 }

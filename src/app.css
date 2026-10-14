@@ -1276,3 +1276,132 @@ button { -webkit-user-select: none; user-select: none; }
   font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); flex-shrink: 0; }
 .tr-status .grow { flex: 1; min-width: 0; }
 .tr-status.is-error { color: var(--over); }
+button.tr-row { cursor: pointer; -webkit-appearance: none; appearance: none; }
+button.tr-row:active { opacity: .6; }
+button.tr-row:disabled { opacity: .45; cursor: default; }
+button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tr-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
+.tr-row-compact { min-height: 48px; }
+
+/* 訓練中整頁（樣張 ③）：頂欄、三格統計、動作卡、一組一列、調整列、底部列 */
+.tr-top { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) var(--s-1);
+  min-height: 52px; flex-shrink: 0; }
+.tr-top h1 { flex: 1; min-width: 0; margin: 0; font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-ib { width: 44px; height: 44px; border: none; background: none; color: var(--ink-muted); display: flex;
+  align-items: center; justify-content: center; border-radius: var(--r-pill); cursor: pointer;
+  -webkit-appearance: none; appearance: none; flex-shrink: 0; }
+.tr-ib:active { opacity: .6; }
+.tr-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tr-ib svg { width: 20px; height: 20px; }
+.tr-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 var(--s-5) var(--s-3);
+  background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-tab); flex-shrink: 0; }
+.tr-stat { padding: var(--s-3) var(--s-2); text-align: center; border-left: 1px solid var(--rule-subtle); }
+.tr-stat:first-child { border-left: none; }
+.tr-stat .v { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg);
+  font-weight: 600; letter-spacing: var(--track-lg); line-height: 1.1; }
+.tr-stat .l { display: block; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); margin-top: 2px; }
+.ex { margin-bottom: var(--s-3); }
+.ex-head { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 60px;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); border: none; background: none; text-align: left;
+  font-family: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.ex-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ex.collapsed .ex-head { min-height: 56px; }
+.ex-head .grow { flex: 1; min-width: 0; }
+.ex-head .nm { display: block; font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md); line-height: 1.2; }
+.ex-head .sub { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: 3px;
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-xs); }
+.ex-head .chev { width: 14px; height: 14px; color: var(--ink-muted); margin-right: var(--s-3);
+  transition: transform var(--dur-base) var(--ease); }
+.ex-head .chev.is-open { transform: rotate(90deg); }
+.ex-tips { margin: 0 var(--s-4) var(--s-3); padding: var(--s-3); border-radius: var(--r-tab); background: var(--raised);
+  font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; }
+.ex-tips .t { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); display: block; margin-bottom: 2px; }
+.set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;
+  padding: 0 var(--s-4); }
+.set-head { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); text-align: center; min-height: 24px; }
+.set { padding-top: var(--s-1); padding-bottom: var(--s-1); }
+.set .no { text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--t-sm); }
+.set.active .no { color: var(--accent); font-weight: 700; }
+.tr-in { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
+  background: var(--raised); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--t-md); font-weight: 600; text-align: center; color: var(--ink-muted);
+  -webkit-appearance: none; appearance: none; }
+.tr-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 預填（還沒做）＝淡；打勾（做完了）＝ink 加深底變卡片色——不加任何新元件就分得出「預填」與「實際」 */
+.set.done .tr-in { color: var(--ink); background: var(--card); }
+.tr-check { width: 48px; height: 48px; border-radius: var(--r-pill); border: 1.5px solid var(--rule-field);
+  background: none; color: var(--ink-faint); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-appearance: none; appearance: none; justify-self: center; }
+.tr-check svg { width: 22px; height: 22px; stroke-width: 2.2; }
+.set.done .tr-check { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tr-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tr-text-btn { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-4);
+  border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.tr-text-btn svg { width: 16px; height: 16px; }
+.tr-text-btn.is-quiet { color: var(--ink-muted); font-weight: 400; }
+.tr-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.adj { margin: 0 var(--s-4) var(--s-2); padding: var(--s-2); border-radius: var(--r-tab); background: var(--raised); }
+.adj-line { display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; gap: 6px; align-items: center; }
+.adj-line + .adj-line { margin-top: 6px; }
+.adj-b { min-height: 44px; border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--card);
+  color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
+  font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.adj-b:active { background: var(--accent-soft); }
+.adj-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.adj-v { text-align: center; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
+  color: var(--ink-muted); }
+.tr-bottom { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-5); flex-shrink: 0;
+  padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule-subtle);
+  background: var(--paper); }
+.tr-bottom .action-btn { flex: 1; }
+.tr-secondary { flex: 0 0 auto; min-height: 52px; padding: 0 var(--s-4); border: 1px solid var(--rule-field);
+  border-radius: var(--r-btn); background: none; color: var(--accent); font-family: inherit; font-size: var(--t-md);
+  font-weight: 700; letter-spacing: var(--track-md); cursor: pointer; -webkit-appearance: none; appearance: none;
+  display: flex; align-items: center; gap: var(--s-2); }
+.tr-secondary svg { width: 18px; height: 18px; }
+.tr-secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* 訓練的 sheet 內容：開始訓練、加動作、訓練完成 */
+.tr-sheet-body { padding: var(--s-3) var(--s-5) var(--s-6); }
+.tr-sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.tr-sheet-body .muted { color: var(--ink-muted); margin: var(--s-3) 0 0; }
+.tr-sheet-body .action-btn { margin-top: var(--s-4); }
+.tr-form-error { color: var(--over); font-size: var(--t-sm); margin: var(--s-2) 0; }
+.tr-search { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3);
+  margin: 0 0 var(--s-3); border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--raised); }
+.tr-search svg { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
+.tr-search input { flex: 1; min-width: 0; border: none; background: none; font-family: var(--font-body);
+  font-size: var(--t-md); color: var(--ink); outline: none; }
+.tr-summary { text-align: center; padding: var(--s-2) 0 var(--s-3); }
+.tr-summary .big { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero); line-height: .95; }
+.tr-summary .u { font-size: var(--t-sm); color: var(--ink-muted); margin-left: var(--s-1); }
+.tr-summary .l { display: block; font-size: var(--t-sm); color: var(--ink-muted); margin-top: var(--s-2); }
+.tr-field { display: block; margin: var(--s-3) 0; }
+.tr-field .lb { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
+  letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
+.tr-field .lb em { font-style: normal; font-weight: 400; color: var(--ink-faint); }
+.tr-field input { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
+  background: var(--raised); padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--t-md); color: var(--ink); -webkit-appearance: none; appearance: none; }
+.tr-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tr-field .hint { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-1); line-height: 1.5; }
+.tr-field .hint.is-error { color: var(--over); }
+
+/* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 vaul sheet（z 11）之上 */
+.dialog-scrim { z-index: 12; }
+.tr-dialog { position: fixed; left: var(--s-5); right: var(--s-5); top: 50%; transform: translateY(-50%);
+  z-index: 13; max-width: 420px; margin: 0 auto; background: var(--paper); border-radius: var(--r-btn);
+  padding: var(--s-5); }
+.tr-dialog-title { margin: 0 0 var(--s-2); font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md); }
+.tr-dialog-body { margin: 0 0 var(--s-4); font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; }
+.tr-dialog-body p { margin: 0; }
+.tr-dialog .acts { display: flex; gap: var(--s-2); }
+.tr-dialog .acts button { flex: 1; min-height: 48px; border-radius: var(--r-btn); font-family: inherit;
+  font-size: var(--t-base); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none;
+  border: 1px solid var(--rule-field); background: none; color: var(--ink-muted); }
+.tr-dialog .acts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tr-dialog .acts .danger { background: var(--over-fill); border-color: var(--over-fill); color: var(--on-accent); }

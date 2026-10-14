@@ -479,10 +479,13 @@ export function finishWorkoutOps(args: { workout: Row; now: Date; minutes: numbe
   return [{ op: 'update', table: 'workouts', rowId: workout.id, payload }]
 }
 
+/** 重量的顯示：最多兩位小數、不補零（60、62.5、22.25）。 */
+export const formatKg = (n: number): string => String(Number(n.toFixed(2)))
+
 /** 「上次 60 kg × 12 × 3」：各組一樣就合成一句，不一樣就逐組列。沒有歷史回空字串。 */
 export function formatLastSets(sets: readonly PrefillSet[]): string {
   if (sets.length === 0) return ''
-  const kg = (n: number) => String(Number(n.toFixed(2)))
+  const kg = formatKg
   const same = sets.every((s) => s.weight_kg === sets[0].weight_kg && s.reps === sets[0].reps)
   if (same) return `${kg(sets[0].weight_kg)} kg × ${sets[0].reps} × ${sets.length}`
   return sets.map((s) => `${kg(s.weight_kg)} × ${s.reps}`).join(' · ')

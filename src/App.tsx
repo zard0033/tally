@@ -46,6 +46,7 @@ import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
 import Settings from '@/screens/Settings'
 import Training from '@/screens/Training'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useTraining } from '@/useTraining'
 
 type Tab = 'today' | 'training' | 'settings'
@@ -113,6 +114,12 @@ export default function App() {
      訓練分頁不能跟著壞——它靠本機底與佇列照常用。所以下面的 render 把訓練分支放在飲食的
      failed／ready 判斷之前。 */
   const training = useTraining(session ? session.user.id : null)
+  // 訓練分頁的日期與「開始訓練」sheet 由這裡持有：主 CTA 在底部列裡，要知道選到哪天、能不能開始
+  const [trainingDate, setTrainingDate] = useState<string>(() => localDate())
+  const [trainingStartOpen, setTrainingStartOpen] = useState(false)
+  const [trainingFullPage, setTrainingFullPage] = useState(false)
+  /** 登出前佇列非空：這裡放條數，非 null 就顯示確認對話框（樣張 ⑨）。 */
+  const [signOutAsk, setSignOutAsk] = useState<number | null>(null)
 
   /* 離線開機（AC 2–4）。bootedFromLocalRef＝這次是靠本機 session 進來的、refresh 還沒成功：
      資料請求會被 supabase-js 擋在 refresh 退避裡，所以 load() 先把離線提示亮出來、請求留在背景，
@@ -700,16 +707,28 @@ export default function App() {
     [profile, load, currentDate],
   )
 
+  /** 真正登出。clearQueue＝使用者在確認對話框選了「仍要登出」：連未上傳的記錄一起清掉。
+   *  沒確認過（佇列本來就是空的）走 settleOnSignOut：空的才清本機底，有東西絕不默默丟。 */
+  const signOutNow = useCallback(
+    (clearQueue: boolean) => {
+      userSignOutRef.current = true
+      // 失敗（例如離線時伺服器端登出打不到）就把旗標放掉，免得之後一次真的被動掉線被當成主動
+      apiSignOut()
+        .then(() => (clearQueue ? training.discardAll() : training.settleOnSignOut()))
+        .catch(() => {
+          userSignOutRef.current = false
+        })
+    },
+    [training],
+  )
+
+  /** 佇列非空先問（AC 19）：那幾筆只存在這支手機，登出就找不回來。平常（空的）不多問一句。 */
   const handleSignOut = useCallback(() => {
-    userSignOutRef.current = true
-    // 失敗（例如離線時伺服器端登出打不到）就把旗標放掉，免得之後一次真的被動掉線被當成主動
-    apiSignOut()
-      // 登出成功才收尾訓練的本機資料；佇列有東西時原樣保留（確認對話框之後再做，現在寧可不清）
-      .then(() => training.settleOnSignOut())
-      .catch(() => {
-        userSignOutRef.current = false
-      })
-  }, [training])
+    void training.pendingCount().then(
+      (n) => (n > 0 ? setSignOutAsk(n) : signOutNow(false)),
+      () => signOutNow(false),
+    )
+  }, [training, signOutNow])
 
   /* 開機：問一次目前 session，並訂閱後續變化（token 自動 refresh、登出、跨分頁同步
    * 都由 supabase-js 處理，這裡只反應結果）。
@@ -865,7 +884,16 @@ export default function App() {
     <div className="screen" id="view-app">
       <main className="main">
         {tab === 'training' ? (
-          <Training view={training.view} error={training.error} />
+          <Training
+            view={training.view}
+            error={training.error}
+            date={trainingDate}
+            onDateChange={setTrainingDate}
+            startOpen={trainingStartOpen}
+            onStartOpenChange={setTrainingStartOpen}
+            onFullPage={setTrainingFullPage}
+            onWrite={training.write}
+          />
         ) : failed && notice ? (
           <div className="notice">
             <p className="headline">{notice.headline}</p>
@@ -949,7 +977,7 @@ export default function App() {
       {/* 底部列本身是純版面容器（div），<nav> 只包分頁——CTA 是「開記一筆表單」的動作，
           不是導覽項；把它放進 aria-label="主要導覽" 的 landmark 裡，讀屏使用者跳到導覽時
           會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
-      {!settingsSubView && (
+      {!settingsSubView && !trainingFullPage && (
       <div className="bottom-bar">
         <nav className="tabbar" aria-label="主要導覽">
           {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
@@ -1037,8 +1065,34 @@ export default function App() {
             </svg>
           </button>
         )}
+        {/* 訓練分頁的主 CTA：開「開始訓練」sheet。明天（含以後）不能開始——不能預排訓練（樣張 A2）。
+            不依賴飲食資料的 ready／failed：健身房沒網路時飲食那邊壞了，訓練照常能開始。 */}
+        {tab === 'training' && trainingDate <= localDate() && (
+          <button className="cta" type="button" aria-label="開始訓練" onClick={() => setTrainingStartOpen(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
       </div>
       )}
+
+      <ConfirmDialog
+        open={signOutAsk !== null}
+        title={`還有 ${signOutAsk ?? 0} 筆記錄沒上傳`}
+        cancelLabel="先不要"
+        confirmLabel="仍要登出"
+        danger
+        onCancel={() => setSignOutAsk(null)}
+        onConfirm={() => {
+          setSignOutAsk(null)
+          signOutNow(true)
+        }}
+      >
+        <p>
+          現在登出，這 {signOutAsk ?? 0} 筆（只存在這支手機）<b>會被清掉，找不回來</b>。建議先連上網路等它們傳完。
+        </p>
+      </ConfirmDialog>
 
       {ready && (
         <LogSheet

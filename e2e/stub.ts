@@ -109,6 +109,29 @@ export async function seedFetchStub(
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
+      /* 訓練七張表的假資料庫：由 fix 起頭，寫入真的落地、之後的 GET 讀得回來（不像 intake 的 stub
+         不落地）。離線記錄 → 回線同步 → 重新載入這條鏈，要寫入落地才驗得出「沒有重複、沒有消失」。
+         語意只做到這份 App 用到的：POST＝upsert（Prefer 帶 ignore-duplicates 時已存在就略過），
+         回傳實際動到的列（`.select('id')` 要靠它數筆數）；PATCH／DELETE 以 `id=eq.` 定位；
+         刪除 workouts／workout_exercises 會 cascade（跟 DDL 一樣）。 */
+      const trainStore: Record<string, Map<string, Record<string, unknown>>> = {}
+      for (const t of TRAINING_TABLES) {
+        const seed = ((fix as unknown as Record<string, unknown>)[t] ?? []) as Record<string, unknown>[]
+        trainStore[t] = new Map(seed.map((r) => [String(r.id), { ...r }]))
+      }
+      const removeCascade = (table: string, id: string) => {
+        trainStore[table].delete(id)
+        if (table === 'workouts') {
+          for (const [k, r] of [...trainStore.workout_exercises]) if (r.workout_id === id) removeCascade('workout_exercises', k)
+        }
+        if (table === 'workout_exercises') {
+          for (const [k, r] of [...trainStore.workout_sets]) if (r.workout_exercise_id === id) trainStore.workout_sets.delete(k)
+        }
+      }
+      ;(window as unknown as { __trainRows: (t: string) => Record<string, unknown>[] }).__trainRows = (t) => [
+        ...trainStore[t].values(),
+      ]
+
       // 昨天，只給「undo 跨日期」的 intake 查詢分流用（跟 e2e/fixtures.ts 的 YDAY 算法一致）
       const yday = (() => {
         const [y, mo, d] = today.split('-').map(Number)
@@ -195,6 +218,32 @@ export async function seedFetchStub(
             return json({ message: '模擬的寫入失敗' }, 500)
           }
 
+          if (TRAINING_TABLES.includes(table)) {
+            const prefer = new Headers((opts.headers ?? {}) as HeadersInit).get('prefer') ?? ''
+            const rows = (Array.isArray(body) ? body : body ? [body] : []) as Record<string, unknown>[]
+            const id = new URL(u).searchParams.get('id')?.replace(/^eq\./, '') ?? null
+            if (method === 'POST') {
+              const touched: { id: string }[] = []
+              for (const r of rows) {
+                const rid = String(r.id)
+                const cur = trainStore[table].get(rid)
+                if (cur && prefer.includes('ignore-duplicates')) continue
+                trainStore[table].set(rid, { ...cur, ...r })
+                touched.push({ id: rid })
+              }
+              return json(touched, 201)
+            }
+            if (method === 'PATCH' && id) {
+              const cur = trainStore[table].get(id)
+              if (!cur) return json([])
+              trainStore[table].set(id, { ...cur, ...(body as Record<string, unknown>) })
+              return json([{ id }])
+            }
+            if (method === 'DELETE' && id) {
+              removeCascade(table, id)
+              return new Response(null, { status: 204 })
+            }
+          }
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body
             return json([{ id: 999, ...(rec as Record<string, unknown>) }], 201)
@@ -212,10 +261,9 @@ export async function seedFetchStub(
         if (table === 'profile') return json(fix.profile)
         if (table === 'weight') return json(fix.weight)
         if (table === 'foods') return json(fix.foods)
-        // 訓練表（階段 2）：stub 不看 filter／range，七張表各回自己的 fixture（預設只有 exercises 非空）。
+        // 訓練表（階段 2）：stub 不看 filter／range，回該表目前的全部列（fixture ＋ 已落地的寫入）。
         // 單頁就回完（列數 < pageSize），執行期的分頁迴圈一頁就停。
-        // 注意：stub 的寫入不落地——寫進去的列下一次 GET 不會出現（intake 也是這樣）。
-        if (TRAINING_TABLES.includes(table)) return json((fix as Record<string, unknown>)[table] ?? [])
+        if (TRAINING_TABLES.includes(table)) return json([...trainStore[table].values()])
         if (table === 'intake') {
           /* 實測維持熱量卡的區間查詢：認的是「select 欄位含 eaten_on 且不含 meal」，不認欄位順序
              （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。

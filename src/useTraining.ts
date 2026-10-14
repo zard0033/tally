@@ -18,6 +18,10 @@ export interface TrainingState {
   write: (ops: WriteOp[]) => Promise<void>
   /** 主動登出收尾：佇列是空的就連本機底一起清（免得下一個登入的人讀到）；有東西就原樣保留。 */
   settleOnSignOut: () => Promise<void>
+  /** 佇列裡還沒上傳的總條數（含別的帳號的）。登出前要不要多問一句就看它。 */
+  pendingCount: () => Promise<number>
+  /** 使用者確認「仍要登出」之後：清掉佇列與本機底。 */
+  discardAll: () => Promise<void>
 }
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e))
@@ -26,56 +30,63 @@ export function useTraining(userId: string | null): TrainingState {
   const [view, setView] = useState<TrainingView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const running = useRef<Promise<void> | null>(null)
+  /** 一輪進行中又有人要求：記下來，這一輪結束後**補跑一次**（要求裡有 sync 就補 sync）。
+   *  只回傳進行中那一輪、不補跑是錯的：離線時最後一次寫入觸發的 flush 還在收尾，這時 `online`
+   *  事件到了，被當成「已經有人在跑」丟掉，佇列就一直卡到下一個觸發點（e2e 兩次抓到）。 */
+  const queued = useRef<'flush' | 'sync' | null>(null)
   const userRef = useRef(userId)
   userRef.current = userId
 
-  /** 同一時間只跑一輪；後來的呼叫共用那一輪。 */
-  const exclusive = useCallback((job: () => Promise<void>): Promise<void> => {
-    if (running.current) return running.current
-    const p = job().finally(() => {
+  /** 同一時間只跑一輪；進行中到達的要求合併成結束後的一次補跑。
+   *  - flush：只送（每記一組就重讀七張表太貴）
+   *  - sync：先送、再重讀、有新排的（預填）再送一次。送在前：讀回來的底才包含自己剛送出的。 */
+  const request = useCallback((kind: 'flush' | 'sync'): Promise<void> => {
+    if (running.current) {
+      queued.current = kind === 'sync' || queued.current === 'sync' ? 'sync' : 'flush'
+      return running.current
+    }
+    const perform = async (k: 'flush' | 'sync') => {
+      const id = userRef.current
+      if (!id) return
+      try {
+        if (k === 'flush') {
+          const { view: v } = await trainingRuntime.flush(id)
+          if (userRef.current === id) setView(v)
+          return
+        }
+        await trainingRuntime.flush(id)
+        let v = await trainingRuntime.load(id)
+        // 重數一次而不是看 v.summary：讀取途中（斷網時最久約 8 秒）使用者可能又記了東西
+        if ((await trainingRuntime.queue.summary(id)).mine > 0) v = (await trainingRuntime.flush(id)).view
+        if (userRef.current === id) {
+          setView(v)
+          setError(null)
+        }
+      } catch (e) {
+        if (userRef.current === id) setError(errorText(e))
+      }
+    }
+    const takeQueued = () => {
+      const q = queued.current
+      queued.current = null
+      return q
+    }
+    const p = (async () => {
+      queued.current = null
+      let next: 'flush' | 'sync' | null = kind
+      while (next) {
+        await perform(next)
+        next = takeQueued()
+      }
+    })().finally(() => {
       running.current = null
     })
     running.current = p
     return p
   }, [])
 
-  /** 先送、再重讀、有新排的（預填）再送一次。送在前：讀回來的底才包含自己剛送出的。 */
-  const sync = useCallback(
-    () =>
-      exclusive(async () => {
-        const id = userRef.current
-        if (!id) return
-        try {
-          await trainingRuntime.flush(id)
-          let v = await trainingRuntime.load(id)
-          // 重數一次而不是看 v.summary：讀取途中（斷網時最久約 8 秒）使用者可能又記了東西，
-          // 那些寫入的 flushOnly 被這一輪擋掉了（同時只跑一輪），要在收尾補送
-          if ((await trainingRuntime.queue.summary(id)).mine > 0) v = (await trainingRuntime.flush(id)).view
-          if (userRef.current === id) {
-            setView(v)
-            setError(null)
-          }
-        } catch (e) {
-          if (userRef.current === id) setError(errorText(e))
-        }
-      }),
-    [exclusive],
-  )
-
-  const flushOnly = useCallback(
-    () =>
-      exclusive(async () => {
-        const id = userRef.current
-        if (!id) return
-        try {
-          const { view: v } = await trainingRuntime.flush(id)
-          if (userRef.current === id) setView(v)
-        } catch (e) {
-          if (userRef.current === id) setError(errorText(e))
-        }
-      }),
-    [exclusive],
-  )
+  const sync = useCallback(() => request('sync'), [request])
+  const flushOnly = useCallback(() => request('flush'), [request])
 
   // 先拿本機的（不碰網路）讓畫面立刻有東西，再走一輪完整同步。
   useEffect(() => {
@@ -137,5 +148,8 @@ export function useTraining(userId: string | null): TrainingState {
     if ((await trainingRuntime.queue.entries()).length === 0) await trainingRuntime.clearAll()
   }, [])
 
-  return { view, error, write, settleOnSignOut }
+  const pendingCount = useCallback(async () => (await trainingRuntime.queue.entries()).length, [])
+  const discardAll = useCallback(() => trainingRuntime.clearAll(), [])
+
+  return { view, error, write, settleOnSignOut, pendingCount, discardAll }
 }
