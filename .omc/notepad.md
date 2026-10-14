@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14）：本機領先 origin 12 個 commit（fbeec7c..323b114），push gate 進行中：兩路 review 已完成並修掉 blocking（佇列複審 APPROVE；有氧 review 的 HIGH＋3 MEDIUM 已修），連續兩次全跑 e2e 155/155、vitest 512、lint、tsc 綠。待使用者確認「準備 push」。
-下一步：①push ②B 段（課表＋拖曳，先選函式庫）③真機試用離線記錄（重訓＋有氧）。
-未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口）。
+現況（2026-10-14）：v2.55 有氧＋佇列 review 修正已 push（e764628..f67e03b）並部署成功。vitest 512／e2e 155。
+下一步：①真機試用離線記錄（飛航記重訓＋有氧→回線對 Supabase）②B 段（課表＋拖曳排序，開工先選拖曳函式庫）③C 歷史、D 同步指示完整版（D 追加項在 MANUAL）、E 飲食↔訓練互揭。
+未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口）。push 前走全域 git-push gate。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
