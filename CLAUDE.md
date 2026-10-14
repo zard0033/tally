@@ -16,7 +16,7 @@
 - [ ] `npm run build` 過（tsc -b 含在內）＋ `npm run lint` 0 error
 - [ ] 改 UI → `npm run e2e` 綠（條數與檔案清單見上方，這裡不重寫第二份數字——它已經漂過一次）；webkit 393×745 截圖看過，token 無黑色 fallback。**本專案只有淺色一套**（DESIGN.md 明文不做暗色模式），所以沒有暗色那半邊要截
 - [ ] 改 UI → 設計決策已回寫 DESIGN.md（元件規則 ＋ 版本紀錄），不只改 code
-- [ ] 動 Supabase schema / 匯出格式 → 屬影響面升級，先給 spec＋plan、等我點頭再動實作碼（全域 CLAUDE.md「壓過 ECC」第 2 條）
+- [ ] 動 Supabase schema / 匯出格式 → 屬影響面升級，先給 spec＋plan、等我點頭再動實作碼（全域 CLAUDE.md「工作流程」：跨檔或不可逆的先給 spec＋plan）
 - [ ] spec 外追加？有 → notepad MANUAL 加一行 `[追加]`
 - [ ] notepad Priority Context 已更新（現況／下一步）並 stage 進同一 commit；待決／續點有變就更新 MANUAL
 - [ ] 蒸餾一句：有通則 `wiki_add`，沒有明講「無」
