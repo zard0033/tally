@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14）：v2.52 上線；階段 2 訓練記錄第一輪（runtime／接線／訓練中／動作庫，v2.53–v2.54）已完成並 push（f1c42ac..4e92384，全範圍 review 未跑，使用者裁決直接推）。
-下一步：①真機試用離線記錄（飛航整套記錄→回線上傳）②補跑 review 看佇列／sender 那幾個 commit ③第 2 輪（課表、有氧、每動作歷史、同步指示完整版、飲食↔訓練互揭）。鍵盤箭頭仍等真機回報（續點 2 ③）。
-push 前走全域 git-push gate。待決／續點全文在 notepad MANUAL；事實、坑、未解失敗在 wiki（`wiki_query`）。
+現況（2026-10-14）：本機領先 origin 4 個 commit，未 push：fbeec7c CLAUDE.md 指路、3d935d2 v2.55 有氧（A 段）、41bd5cd review #2#8 session 守門、ab27dc0 review #1#3–#7#9 佇列修正。vitest 505／e2e 152／lint／build 全綠，mutation 全轉紅。
+下一步：①push 前走全域 git-push gate（review 範圍 fbeec7c..ab27dc0）②第 2 輪 B 段（課表＋拖曳排序，開工先選拖曳函式庫）③真機試用離線記錄（重訓＋有氧）。
+視覺待辦：sheet 內確認框偏低、上緣露出被壓暗的儲存鈕。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -49,4 +49,13 @@ push 前走全域 git-push gate。待決／續點全文在 notepad MANUAL；事�
 
 6. **估算一個品項＋複製前一餐（spec.md 同名節已寫、★等點頭才動碼）**：痛點＝沒標示的餐要離開 App 問 AI、於是整餐不記。A 估算（描述或拍照，擴充 `read-label` 雙模式，結果必落一列 foods 並立即封存）先、B 複製後；**第 0 步先用 5–10 餐實際吃過的餐量準確度**，再決定值不值得做。
 7. **「用歷史推估該吃多少」的 user journey（使用者 2026-10-13 提出的差異化，別漏）**：多數 App 靠自訂運動係數推測；Tally 要用過往實際吃的熱量＋體重趨勢反推（類似股票回測）。**實測維持熱量卡（續點 5）已是它的一半**，缺的是從對帳卡片升格為「目標的依據」的流程與 UX；前提＝記錄完整度（續點 6 的估算一個品項）；升格前要做回測（切一段當未知、預測體重變化）。**順序：階段 2 先（產生資料）→ 累積 3–4 週 → 專門設計這條 journey**，使用者同意。
+### 2026-10-14 08:27
+review 修正清單（2026-10-14，code-reviewer 審 aa722c0/3dce105/2f8b4ae/a37ec6c；使用者核可全修）
+- #1 CRITICAL：parentRefs/descendantKeys 不分外鍵種類。set null（workouts.routine_id）：父列被放棄→子列改 routine_id=null 保留；restrict（exercise_id）：放棄前列出連帶會消失的筆數確認；flush 時非 cascade 父列被拒不該讓子列永遠卡 pending。
+- #2 HIGH：沒有 live session 時 supabase-js 改送 anon key → delete 被當成功、load 回空把本機底蓋空並重新預填。修：send/fetchAll 前要求 session.user.id === entry.userId，否則當 auth。也涵蓋 #8。
+- #3 HIGH：多分頁互蓋佇列 → queueStore 讀改寫包 navigator.locks（使用者選此案）。
+- #4 MEDIUM：applyQueue 與 send 後合併沒認 ignoreDuplicates，預填蓋掉改過名／封存的動作。
+- #5 MEDIUM：多條 op 寫入不是原子的（enqueueMany 一次 commit）。
+- LOW：#6 父列 update 失敗也擋子列 insert；#7 neverApplied 只看最後一次嘗試；#8 登出中途 sync 會在 clearAll 後回填；#9 useTraining request 在迴圈結束與 finally 之間被吞。
+- 另記：e2e 全跑一次「訓練中：要點只能看…」紅（toHaveValue），單跑 ×3 綠，失敗訊息被覆蓋；下次全跑 *> 檔案 存輸出。視覺待辦：sheet 內確認框偏低，上緣露出被壓暗的儲存鈕。
 

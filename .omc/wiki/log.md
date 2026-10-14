@@ -24,3 +24,11 @@
 - **Pages:** lesson-pointers.md
 - **Summary:** Created new page "lesson-pointers 教訓指標與蒸餾（本體已升格，這裡只留指標）"
 
+## [2026-10-14T07:49:41.883Z] ingest
+- **Pages:** session-log-2026-10-14-66cbedf6.md
+- **Summary:** Auto-captured session log for f290d574-5255-4649-b106-fe62f7e88f03 (omc-wiki-capture:28b7e7846fc6fdf287f39b04ada28453791e36e1c7a7f98c1a66c75ac9bc6492)
+
+## [2026-10-14T08:42:00.062Z] ingest
+- **Pages:** lesson-overlay-and-mutation-mutation-2026-10-14.md
+- **Summary:** Created new page "lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）"
+
