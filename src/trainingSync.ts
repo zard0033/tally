@@ -20,4 +20,6 @@ export const trainingRuntime = createTrainingRuntime({
     set: (key, value) => set(key, value, getStore()),
   },
   client: supabase as unknown as TrainingClient,
+  // getSession 在 access token 過期時會先試 refresh，失敗就回 null session（不丟錯）
+  sessionUserId: async () => (await supabase.auth.getSession()).data.session?.user.id ?? null,
 })

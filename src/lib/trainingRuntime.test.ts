@@ -103,8 +103,12 @@ const exercise = (id: string, name = id): Row => ({ id, name, muscle_group: 'leg
 function setup(opts: { pageSize?: number } = {}) {
   const backend = fakeBackend()
   const mem = memoryKv()
-  const open = () => createTrainingRuntime({ kv: mem.kv, client: backend.client, ...opts })
-  return { backend, mem, open, rt: open() }
+  /** 目前 session 的使用者。null＝沒有有效 session（token 過期且 refresh 失敗、登出途中）。
+   *  sessionCalls 計數：「讀取途中掉 session」的測試靠它讓第 N 次以後才變 null。 */
+  const auth = { user: U1 as string | null, calls: 0, dropAfter: Number.POSITIVE_INFINITY }
+  const sessionUserId = async () => (++auth.calls > auth.dropAfter ? null : auth.user)
+  const open = () => createTrainingRuntime({ kv: mem.kv, client: backend.client, sessionUserId, ...opts })
+  return { backend, mem, auth, open, rt: open() }
 }
 
 /* ═══════════ 讀取與本機底 ═══════════ */
@@ -340,5 +344,71 @@ describe('clearAll', () => {
     expect(v.source).toBe('empty')
     expect(v.db.exercises).toEqual([])
     expect(v.summary.total).toBe(0)
+  })
+})
+
+/* ═══════════ session 守門（review #2、#8） ═══════════ */
+
+describe('沒有這個帳號的有效 session：不送、不讀（supabase-js 會改用 anon key）', () => {
+  it('flush：佇列裡的 delete 不送出、條目保留，這一輪以 auth 停下', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1'))
+    await t.rt.load(U1)
+    await t.rt.write(U1, [{ op: 'delete', table: 'exercises', rowId: 'e1' }])
+    t.auth.user = null
+    const { report } = await t.rt.flush(U1)
+    expect(report.stoppedBy).toBe('auth')
+    expect(t.backend.state.writes.filter((w) => w.startsWith('delete'))).toEqual([])
+    expect(report.summary.mine, 'tombstone 留在佇列').toBe(1)
+    expect(t.backend.store('exercises').has('e1')).toBe(true)
+
+    t.auth.user = U1 // 重新登入後照送
+    await t.rt.flush(U1)
+    expect(t.backend.store('exercises').has('e1')).toBe(false)
+  })
+
+  it('flush：session 是別的帳號，這個帳號的條目一筆都不送', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1'))
+    await t.rt.load(U1)
+    await t.rt.write(U1, [{ op: 'insert', table: 'workouts', rowId: 'w1', payload: { performed_on: '2026-10-14' } }])
+    t.auth.user = 'user-2'
+    const { report } = await t.rt.flush(U1)
+    expect(report.stoppedBy).toBe('auth')
+    expect(t.backend.store('workouts').size).toBe(0)
+  })
+
+  it('load：不拿 anon 讀到的空表當真相，退回本機底、不預填', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1', '腿推舉'))
+    await t.rt.load(U1)
+    t.auth.user = null
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('cache')
+    expect(v.db.exercises.map((r) => r.name)).toEqual(['腿推舉'])
+    expect(v.summary.total, '不該排預填').toBe(0)
+  })
+
+  it('load：讀到一半掉 session（讀完那次核對失敗），不採用這次讀到的', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1', '舊名'))
+    await t.rt.load(U1)
+    t.backend.store('exercises').set('e1', exercise('e1', '新名'))
+    t.auth.calls = 0
+    t.auth.dropAfter = 1 // 讀之前那次還是 U1，讀完那次變 null
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('cache')
+    expect(v.db.exercises.map((r) => r.name)).toEqual(['舊名'])
+  })
+})
+
+describe('主動登出時還有一輪載入在路上（review #8）', () => {
+  it('讀回來時已經 clearAll：不寫回本機底、不排預填', async () => {
+    const t = setup() // 伺服器上沒有任何動作：沒擋住的話會預填 16 筆
+    const loading = t.rt.load(U1)
+    await t.rt.clearAll()
+    await loading
+    expect(await t.rt.queue.entries(), '登出後的裝置上不該冒出舊帳號的預填').toEqual([])
+    expect(t.mem.data.get(BASE_STORAGE_KEY) ?? null).toBeNull()
   })
 })

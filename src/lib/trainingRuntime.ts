@@ -77,6 +77,10 @@ export interface TrainingRuntime {
 export interface TrainingRuntimeDeps {
   kv: KeyValueStore
   client: TrainingClient
+  /** 目前 session 的使用者；沒有有效 session 回 null。**送出與讀取前都要對**：supabase-js 在沒有 session 時
+   *  （token 過期且 refresh 失敗、登出途中）會改用 anon key 送出——RLS 下 delete 0 列被當成功、讀取回空表，
+   *  佇列的刪除就這樣丟了、本機底被空表蓋掉。對不上一律當登入失效，條目留在佇列。 */
+  sessionUserId: () => Promise<string | null>
   /** 單一請求的逾時。 */
   fetchTimeoutMs?: number
   /** 一頁拉幾列。PostgREST 預設單次最多 1000，不能超過。 */
@@ -110,11 +114,14 @@ function parseBase(raw: unknown): StoredBase | null {
 /* ═══════════ 實作 ═══════════ */
 
 export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntime {
-  const { kv, client, fetchTimeoutMs = 8000, pageSize = 1000 } = deps
+  const { kv, client, sessionUserId, fetchTimeoutMs = 8000, pageSize = 1000 } = deps
 
   let base: { userId: string; db: TrainingDb } | null = null
   let source: TrainingView['source'] = 'empty'
   let cacheError = false
+  /** 主動登出（clearAll）就加一。進行中的 load 讀回來時世代變了＝那是登出前的帳號，不採用、不預填——
+   *  否則登出後還在路上的讀取會把底與 16 筆預填寫回裝置。 */
+  let generation = 0
   // 對本機底的讀改寫排成一條鏈：flush 途中每送成功一條就會併一次，不能彼此交錯
   let chain: Promise<unknown> = Promise.resolve()
   const serial = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -147,7 +154,20 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     }
   }
 
-  async function fetchAll(): Promise<TrainingDb> {
+  /** session 不是這個帳號就丟錯：呼叫端（load）會退回本機底，不會拿 anon 讀到的空表當真相。 */
+  async function assertSession(userId: string): Promise<void> {
+    if ((await sessionUserId()) !== userId) throw new Error('登入已失效（沒有這個帳號的有效 session）')
+  }
+
+  /** 讀之前、讀完都對一次 session：讀取途中被登出，最後幾頁可能已經是 anon 讀的。 */
+  async function fetchAll(userId: string): Promise<TrainingDb> {
+    await assertSession(userId)
+    const db = await fetchTables()
+    await assertSession(userId)
+    return db
+  }
+
+  async function fetchTables(): Promise<TrainingDb> {
     const entries = await Promise.all(
       TRAINING_TABLES.map(async (table) => {
         const rows: Row[] = []
@@ -170,8 +190,9 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   }
 
   /** 用剛從伺服器讀到的整包取代底，並寫回本機。 */
-  const adoptFresh = (userId: string, fresh: TrainingDb): Promise<void> =>
+  const adoptFresh = (userId: string, fresh: TrainingDb, gen: number): Promise<void> =>
     serial(async () => {
+      if (gen !== generation) return
       base = { userId, db: fresh }
       source = 'server'
       await persistBase()
@@ -180,6 +201,14 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   const rawSender = createSender(client)
   /** 送成功的條目就地併進底，並寫回本機。 */
   const send: Sender = async (entry, signal) => {
+    let who: string | null
+    try {
+      who = await sessionUserId()
+    } catch (e) {
+      return { ok: false, status: 0, message: e instanceof Error ? e.message : String(e) }
+    }
+    // 沒有 session 或換了人：不送（見 sessionUserId 的說明），401＝這一輪停下、條目原樣保留
+    if (who !== entry.userId) return { ok: false, status: 401, message: '登入已失效（沒有這個帳號的有效 session）' }
     const result = await rawSender(entry, signal)
     if (result.ok) {
       await serial(async () => {
@@ -234,9 +263,11 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     queue,
 
     async load(userId) {
+      const gen = generation
       try {
-        await adoptFresh(userId, await fetchAll())
+        await adoptFresh(userId, await fetchAll(userId), gen)
       } catch {
+        if (gen !== generation) return composeView(userId)
         // 讀不到伺服器：退回本機底；本機也沒有就是 empty
         await readCachedBase(userId)
         if (base && base.userId === userId) source = 'cache'
@@ -245,6 +276,8 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
           source = 'empty'
         }
       }
+      // 讀取途中被主動登出：不預填（預填會在已清空的裝置上排 16 筆屬於舊帳號的條目）
+      if (gen !== generation) return composeView(userId)
       return seedIfEmpty(userId)
     },
 
@@ -256,11 +289,12 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     write,
 
     async flush(userId) {
+      const gen = generation
       const report = await queue.flush(userId)
       if (report.sent > 0 && !(base && base.userId === userId)) {
         // 底不存在（第一次就離線記錄）：已送出的條目沒地方併，重拉一次；拉不到下次 load 會補
         try {
-          await adoptFresh(userId, await fetchAll())
+          await adoptFresh(userId, await fetchAll(userId), gen)
         } catch {
           // 留給下一次 load
         }
@@ -269,6 +303,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     },
 
     async clearAll() {
+      generation++
       await queue.clear()
       await serial(async () => {
         base = null
