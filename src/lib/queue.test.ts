@@ -658,6 +658,30 @@ describe('父列依賴（AC 16）', () => {
   })
 })
 
+describe('ignoreDuplicates（預填用的 insert-ignore）', () => {
+  const preset = (rowId: string): NewEntry => ({ ...ins(rowId), ignoreDuplicates: true })
+
+  it('只記在 insert 條目上，且經過序列化還在', () => {
+    const s = appendEntry(emptySnapshot(), preset('a'), 1)
+    expect(s.entries[0].ignoreDuplicates).toBe(true)
+    const back = JSON.parse(JSON.stringify(s)) as QueueSnapshot
+    expect(back.entries[0].ignoreDuplicates).toBe(true)
+  })
+
+  it('沒要求就不出現這個欄位；update／delete 帶了也不採用', () => {
+    expect('ignoreDuplicates' in appendEntry(emptySnapshot(), ins('a'), 1).entries[0]).toBe(false)
+    expect('ignoreDuplicates' in appendEntry(emptySnapshot(), { ...upd('a', { v: 2 }), ignoreDuplicates: true }, 1).entries[0]).toBe(false)
+    expect('ignoreDuplicates' in appendEntry(emptySnapshot(), { ...del('a'), ignoreDuplicates: true }, 1).entries[0]).toBe(false)
+  })
+
+  it('sender 收到的條目帶著這個旗標', async () => {
+    const t = build()
+    await t.queue.enqueue(preset('a'))
+    await t.queue.flush('u1')
+    expect(t.sender.sent[0].ignoreDuplicates).toBe(true)
+  })
+})
+
 describe('卡住的分類與出路（AC 11、12）', () => {
   it('離線：整輪中止，後面的不送，全部留著；回線後依序送完', async () => {
     let online = false

@@ -39,6 +39,9 @@ export interface QueueEntry {
   /** 外鍵指向的父列（AC 16）。父列這一輪沒送成，這一條就不送——送了只會撞外鍵 409，
    *  被標成 rejected，把「父列還沒到」誤報成「這條被拒絕」。沒有父列（或父列早已在伺服器）就省略。 */
   readonly parents?: readonly RowRef[]
+  /** 只對 insert 有意義：該列已存在就不動它（on conflict do nothing），而不是以這一條覆蓋。
+   *  給「預填」用——離線時本機快取還是空的就預填，回線後不能蓋掉伺服器上已被使用者改過的同 id 列。 */
+  readonly ignoreDuplicates?: true
   readonly userId: string
   readonly createdAt: number
   /** 已開始送出的次數。**送出前**就寫進儲存：送到一半被殺掉，重開後看得出「可能已生效」。 */
@@ -63,6 +66,8 @@ export interface NewEntry {
   payload?: Readonly<Record<string, unknown>>
   /** 見 QueueEntry.parents。delete 不需要（刪除靠伺服器端 cascade）。 */
   parents?: readonly RowRef[]
+  /** 見 QueueEntry.ignoreDuplicates。只在 insert 時採用。 */
+  ignoreDuplicates?: boolean
   userId: string
 }
 
@@ -78,6 +83,7 @@ export type SendResult = { ok: true } | { ok: false; status: number; message: st
  *    RLS 擋下的 delete 與「列不在」在 PostgREST 看起來一樣、分不出來——接受這個缺口，
  *    否則「離線新增又刪掉」這種最普通的流程會留下永遠卡住的 delete。
  *  - insert 必須是 upsert（以 rowId 為鍵）：回應遺失後重送若撞到 409，該列會被標 rejected 卡住。
+ *    **例外**：條目帶 `ignoreDuplicates` 時改成 on conflict do nothing，且「已存在、0 列」算成功。
  *  - update／delete 不要用 `.single()`：0 列會得 406，永遠重試不成功。
  *  - `signal` 在逾時時會被 abort，**必須傳給底層 fetch**（supabase 的 `.abortSignal(signal)`）。
  *    否則逾時只是佇列不再等，請求仍可能稍後落地——佇列對這種「晚到的落地」只能防到一半（見 appendEntry）。
@@ -188,6 +194,7 @@ export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): 
     payload: input.op === 'delete' ? null : { ...input.payload },
     // delete 不帶：刪除靠伺服器端 cascade，沒有「等父列」的問題（而且帶了會被自己的父列擋住）
     ...(input.op !== 'delete' && input.parents?.length ? { parents: input.parents.map((p) => ({ ...p })) } : {}),
+    ...(input.op === 'insert' && input.ignoreDuplicates ? { ignoreDuplicates: true as const } : {}),
     userId: input.userId,
     createdAt: now,
     attempts: 0,
