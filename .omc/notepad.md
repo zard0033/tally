@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14）：v2.55 有氧＋佇列 review 修正已 push（e764628..f67e03b）並部署成功。vitest 512／e2e 155。
-下一步：①真機試用離線記錄（飛航記重訓＋有氧→回線對 Supabase）②B 段（課表＋拖曳排序，開工先選拖曳函式庫）③C 歷史、D 同步指示完整版（D 追加項在 MANUAL）、E 飲食↔訓練互揭。
+現況（2026-10-14 晚）：v2.55 已 push 上線；B 段（課表）v2.56–v2.58 已本機 commit、**未 review 未 push**（eacc12f..4d7c3a4）。vitest 547／e2e 171 綠＋1 條 interaction「格式認不得…慢態有出口」紅（stash 回基線也紅，非本段造成，原因未查）。
+下一步：①B 段 push 前 review＋真機驗拖曳（只用滑鼠測過，iOS 觸控握把拖曳沒測）②真機試用離線記錄 ③C 歷史、D 同步指示完整版（D 追加項在 MANUAL）、E 飲食↔訓練互揭。
 未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口）。push 前走全域 git-push gate。
 
 ## Working Memory
