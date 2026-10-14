@@ -1413,6 +1413,16 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field .hint { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-1); line-height: 1.5; }
 .tr-field .hint.is-error { color: var(--over); }
 
+/* 有氧 sheet（樣張 ④）：類型分段控制器＋依類型兩欄或三欄的數字欄。
+   .seg 本身是 flex:1（為了與兄弟元素並排），這裡獨佔一行，給它整寬。 */
+.tr-start-cardio { margin-top: var(--s-3); }
+.tr-sheet-body .muted.tr-cardio-date { margin: 0 0 var(--s-3); font-size: var(--t-sm); }
+.tr-cardio-kind { flex: none; width: 100%; }
+.tr-cardio-grid { display: grid; gap: var(--s-3); margin-top: var(--s-1); }
+.tr-cardio-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tr-cardio-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tr-cardio-grid .lb { white-space: nowrap; }
+
 /* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 vaul sheet（z 11）之上 */
 .dialog-scrim { z-index: 12; }
 .tr-dialog { position: fixed; left: var(--s-5); right: var(--s-5); top: 50%; transform: translateY(-50%);

@@ -4,6 +4,15 @@ import { localDate } from './dates'
 import {
   MUSCLE_GROUPS,
   PRESET_EXERCISES,
+  cardioDraft,
+  cardioLabel,
+  cardioOn,
+  cardioSummary,
+  checkCardio,
+  createCardioOps,
+  deleteCardioOps,
+  updateCardioOps,
+  type CardioDraft,
   addExerciseOps,
   addSetOps,
   applyQueue,
@@ -744,5 +753,150 @@ describe('filterExercises', () => {
     expect(filterExercises(odd, { q: '', group: 'all' })).toHaveLength(1)
     expect(filterExercises(odd, { q: '', group: 'other' })).toHaveLength(1)
     expect(filterExercises(odd, { q: '', group: 'chest' })).toHaveLength(0)
+  })
+})
+
+/* ═══════════ 有氧（AC 10–12） ═══════════ */
+
+const walkDraft = (p: Partial<CardioDraft> = {}): CardioDraft => ({
+  kind: 'incline_walk', minutes: '30', speed_kmh: '5.5', incline_pct: '8', est_kcal: '', ...p,
+})
+const boxDraft = (p: Partial<CardioDraft> = {}): CardioDraft => ({
+  kind: 'boxing', minutes: '36', speed_kmh: '', incline_pct: '', est_kcal: '121', ...p,
+})
+const cardio = (id: string, performed_on: string, p: Record<string, unknown> = {}): Row => ({
+  id, performed_on, kind: 'incline_walk', minutes: 30, speed_kmh: null, incline_pct: null, est_kcal: null, ...p,
+})
+
+describe('checkCardio', () => {
+  it('走路：分鐘＋速度＋坡度；預估熱量不屬於走路，就算表單有殘值也存 null', () => {
+    expect(checkCardio(walkDraft({ est_kcal: '200' }))).toEqual({
+      ok: true,
+      value: { kind: 'incline_walk', minutes: 30, speed_kmh: 5.5, incline_pct: 8, est_kcal: null },
+    })
+  })
+
+  it('拳擊：分鐘＋預估熱量；速度、坡度存 null', () => {
+    expect(checkCardio(boxDraft({ speed_kmh: '6', incline_pct: '3' }))).toEqual({
+      ok: true,
+      value: { kind: 'boxing', minutes: 36, speed_kmh: null, incline_pct: null, est_kcal: 121 },
+    })
+  })
+
+  it('選填欄位留空＝null；分鐘必填', () => {
+    const r = checkCardio(walkDraft({ speed_kmh: '', incline_pct: '  ' }))
+    expect(r.ok && r.value).toMatchObject({ speed_kmh: null, incline_pct: null })
+    expect(checkCardio(walkDraft({ minutes: '' }))).toEqual({ ok: false, error: '分鐘要填' })
+  })
+
+  it('邊界：分鐘 >0 且 ≤1440；速度 >0 且 ≤40；坡度 0–40；預估熱量 0–10000（範圍外擋下並說明）', () => {
+    expect(checkCardio(walkDraft({ minutes: '0' })).ok).toBe(false)
+    expect(checkCardio(walkDraft({ minutes: '0.1' })).ok).toBe(true)
+    expect(checkCardio(walkDraft({ minutes: '1440' })).ok).toBe(true)
+    expect(checkCardio(walkDraft({ minutes: '1440.1' }))).toEqual({ ok: false, error: '分鐘要大於 0、最多 1440' })
+    expect(checkCardio(walkDraft({ speed_kmh: '0' }))).toEqual({ ok: false, error: '速度要大於 0、最多 40 km/h' })
+    expect(checkCardio(walkDraft({ speed_kmh: '40' })).ok).toBe(true)
+    expect(checkCardio(walkDraft({ speed_kmh: '40.1' })).ok).toBe(false)
+    expect(checkCardio(walkDraft({ incline_pct: '0' })).ok).toBe(true)
+    expect(checkCardio(walkDraft({ incline_pct: '40' })).ok).toBe(true)
+    expect(checkCardio(walkDraft({ incline_pct: '40.5' }))).toEqual({ ok: false, error: '坡度要在 0–40% 之間' })
+    expect(checkCardio(boxDraft({ est_kcal: '0' })).ok).toBe(true)
+    expect(checkCardio(boxDraft({ est_kcal: '10000' })).ok).toBe(true)
+    expect(checkCardio(boxDraft({ est_kcal: '10000.5' })).ok).toBe(false)
+  })
+
+  it('看不懂的字、負數、超過一位小數都擋（numeric(_,1) 會默默四捨五入，不能放過去）', () => {
+    expect(checkCardio(walkDraft({ minutes: 'abc' }))).toEqual({ ok: false, error: '分鐘要填數字' })
+    expect(checkCardio(walkDraft({ minutes: '-5' }))).toEqual({ ok: false, error: '分鐘要填數字' })
+    expect(checkCardio(walkDraft({ speed_kmh: '5.55' }))).toEqual({ ok: false, error: '速度最多一位小數' })
+    expect(checkCardio(walkDraft({ minutes: '30.' })).ok).toBe(false)
+  })
+
+  it('全形數字與全形小數點認得（中文鍵盤切出來的）', () => {
+    const r = checkCardio(walkDraft({ minutes: '３０', speed_kmh: '５．５' }))
+    expect(r.ok && r.value).toMatchObject({ minutes: 30, speed_kmh: 5.5 })
+  })
+
+  it('不認得的類型擋下', () => {
+    expect(checkCardio(walkDraft({ kind: 'swim' }))).toEqual({ ok: false, error: '請選有氧類型' })
+  })
+})
+
+describe('有氧的寫入組裝', () => {
+  it('新增：記在選的那天，帶全部欄位（不屬於該類型的是 null）', () => {
+    const check = checkCardio(boxDraft())
+    if (!check.ok) throw new Error('fixture')
+    expect(createCardioOps({ id: 'c1', date: '2026-10-13', value: check.value })).toEqual([
+      {
+        op: 'insert',
+        table: 'cardio_sessions',
+        rowId: 'c1',
+        payload: { performed_on: '2026-10-13', kind: 'boxing', minutes: 36, speed_kmh: null, incline_pct: null, est_kcal: 121 },
+      },
+    ])
+  })
+
+  it('更新只帶有變的欄位；全沒變回空陣列', () => {
+    const current = cardio('c1', '2026-10-13', { minutes: '30.0', speed_kmh: '5.5', incline_pct: 8 })
+    const same = checkCardio(walkDraft())
+    if (!same.ok) throw new Error('fixture')
+    expect(updateCardioOps({ current, value: same.value }), '伺服器回字串型數字也算沒變').toEqual([])
+    const changed = checkCardio(walkDraft({ minutes: '45' }))
+    if (!changed.ok) throw new Error('fixture')
+    expect(updateCardioOps({ current, value: changed.value })).toEqual([
+      { op: 'update', table: 'cardio_sessions', rowId: 'c1', payload: { minutes: 45 } },
+    ])
+  })
+
+  it('沒填 → 填 0 是變更（Number(null) 是 0，不能拿來比）', () => {
+    const current = cardio('c1', '2026-10-13', { kind: 'boxing', minutes: 36, est_kcal: null })
+    const v = checkCardio(boxDraft({ est_kcal: '0' }))
+    if (!v.ok) throw new Error('fixture')
+    expect(updateCardioOps({ current, value: v.value })[0].payload).toEqual({ est_kcal: 0 })
+  })
+
+  it('換類型：舊類型的欄位清成 null、新類型的欄位帶上', () => {
+    const current = cardio('c1', '2026-10-13', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 })
+    const v = checkCardio(boxDraft({ minutes: '30', est_kcal: '100' }))
+    if (!v.ok) throw new Error('fixture')
+    expect(updateCardioOps({ current, value: v.value })[0].payload).toEqual({
+      kind: 'boxing', speed_kmh: null, incline_pct: null, est_kcal: 100,
+    })
+  })
+
+  it('刪除是一條 delete', () => {
+    expect(deleteCardioOps('c1')).toEqual([{ op: 'delete', table: 'cardio_sessions', rowId: 'c1' }])
+  })
+
+  it('cardioDraft：既有那筆轉回表單字串；null 欄位是空字串；新增預設走路', () => {
+    expect(cardioDraft(cardio('c1', 'x', { kind: 'boxing', minutes: '36.0', est_kcal: 121 }))).toEqual({
+      kind: 'boxing', minutes: '36', speed_kmh: '', incline_pct: '', est_kcal: '121',
+    })
+    expect(cardioDraft(null)).toEqual({ kind: 'incline_walk', minutes: '', speed_kmh: '', incline_pct: '', est_kcal: '' })
+  })
+})
+
+describe('有氧的顯示', () => {
+  it('cardioSummary 只列有填的欄位；預估熱量不稱「消耗」', () => {
+    expect(cardioSummary(cardio('c', 'x', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }))).toBe('30 分 · 5.5 km/h · 坡度 8%')
+    expect(cardioSummary(cardio('c', 'x', { kind: 'boxing', minutes: 36, est_kcal: 1210 }))).toBe('36 分 · 預估 1,210 kcal')
+    expect(cardioSummary(cardio('c', 'x', { minutes: '30.0' }))).toBe('30 分')
+    expect(cardioSummary(cardio('c', 'x', { incline_pct: 0 })), '坡度 0 是有填').toBe('30 分 · 坡度 0%')
+  })
+
+  it('cardioLabel：認得的顯示中文，不認得的原樣顯示', () => {
+    expect(cardioLabel(cardio('c', 'x', { kind: 'boxing' }))).toBe('有氧拳擊')
+    expect(cardioLabel(cardio('c', 'x', { kind: 'swim' }))).toBe('swim')
+  })
+
+  it('cardioOn：只取那天；依 created_at 排，還在佇列裡（沒有 created_at）的排最後、彼此維持順序', () => {
+    const rows = [
+      cardio('q1', '2026-10-13'),
+      cardio('late', '2026-10-13', { created_at: '2026-10-13T12:00:00Z' }),
+      cardio('other', '2026-10-12', { created_at: '2026-10-12T08:00:00Z' }),
+      cardio('q2', '2026-10-13'),
+      cardio('early', '2026-10-13', { created_at: '2026-10-13T08:00:00Z' }),
+    ]
+    expect(cardioOn(db({ cardio_sessions: rows }), '2026-10-13').map((r) => r.id)).toEqual(['early', 'late', 'q1', 'q2'])
   })
 })

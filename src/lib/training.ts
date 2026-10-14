@@ -577,6 +577,152 @@ export function setExerciseArchivedOps(args: { id: string; archived: boolean }):
   return [{ op: 'update', table: 'exercises', rowId: args.id, payload: { archived: args.archived } }]
 }
 
+/* ═══════════ 有氧（AC 10–12） ═══════════ */
+
+/** 現在只有兩種，不做「新類型」入口（使用者裁決）。存的是代碼、畫面顯示名稱；要加一種＝在這裡加一行。 */
+export const CARDIO_KINDS = ['incline_walk', 'boxing'] as const
+export type CardioKind = (typeof CARDIO_KINDS)[number]
+
+export const CARDIO_KIND_LABEL: Readonly<Record<CardioKind, string>> = {
+  incline_walk: '跑步機坡度健走',
+  boxing: '有氧拳擊',
+}
+
+type CardioOptional = 'speed_kmh' | 'incline_pct' | 'est_kcal'
+
+/** 類型決定欄位：分鐘兩種都有（必填），其餘依類型。不屬於該類型的欄位一律存 null。 */
+export const CARDIO_FIELDS: Readonly<Record<CardioKind, readonly CardioOptional[]>> = {
+  incline_walk: ['speed_kmh', 'incline_pct'],
+  boxing: ['est_kcal'],
+}
+
+/** 範圍與 DDL 的 check 一致（速度 DDL 是 >0，比 AC 12 的「0–40」嚴；照 DDL，不然伺服器會拒）。
+ *  欄位都是 numeric(_,1)：超過一位小數 Postgres 會默默四捨五入，所以在這裡擋下來說清楚。 */
+const CARDIO_RULES: Readonly<
+  Record<'minutes' | CardioOptional, { label: string; min: number; minExclusive: boolean; max: number; range: string }>
+> = {
+  minutes: { label: '分鐘', min: 0, minExclusive: true, max: 1440, range: '大於 0、最多 1440' },
+  speed_kmh: { label: '速度', min: 0, minExclusive: true, max: 40, range: '大於 0、最多 40 km/h' },
+  incline_pct: { label: '坡度', min: 0, minExclusive: false, max: 40, range: '在 0–40% 之間' },
+  est_kcal: { label: '預估熱量', min: 0, minExclusive: false, max: 10000, range: '在 0–10000 kcal 之間' },
+}
+
+export interface CardioDraft {
+  kind: string
+  minutes: string
+  speed_kmh: string
+  incline_pct: string
+  est_kcal: string
+}
+
+export interface CardioValue {
+  kind: CardioKind
+  minutes: number
+  speed_kmh: number | null
+  incline_pct: number | null
+  est_kcal: number | null
+}
+
+export type CardioCheck = { ok: true; value: CardioValue } | { ok: false; error: string }
+
+const isCardioKind = (k: unknown): k is CardioKind => (CARDIO_KINDS as readonly string[]).includes(String(k))
+
+/** 一個欄位的字串 → 數字。空白回 null（選填的「沒填」）；看不懂、超出範圍、超過一位小數回錯誤訊息。
+ *  NFKC 讓全形數字與全形小數點也認得（手機中文鍵盤切出來的常是全形）。 */
+function parseCardioField(field: keyof typeof CARDIO_RULES, raw: string): number | null | { error: string } {
+  const s = raw.normalize('NFKC').trim()
+  if (s === '') return null
+  const rule = CARDIO_RULES[field]
+  if (!/^\d+(\.\d+)?$/.test(s)) return { error: `${rule.label}要填數字` }
+  if (/\.\d{2,}$/.test(s)) return { error: `${rule.label}最多一位小數` }
+  const n = Number(s)
+  const tooLow = rule.minExclusive ? n <= rule.min : n < rule.min
+  if (tooLow || n > rule.max) return { error: `${rule.label}要${rule.range}` }
+  return n
+}
+
+/** 表單送出前的檢查（AC 12：範圍外要擋並說明，不靜默截斷）。 */
+export function checkCardio(draft: CardioDraft): CardioCheck {
+  if (!isCardioKind(draft.kind)) return { ok: false, error: '請選有氧類型' }
+  const minutes = parseCardioField('minutes', draft.minutes)
+  if (minutes === null) return { ok: false, error: '分鐘要填' }
+  if (typeof minutes === 'object') return { ok: false, error: minutes.error }
+  const value: CardioValue = { kind: draft.kind, minutes, speed_kmh: null, incline_pct: null, est_kcal: null }
+  for (const f of CARDIO_FIELDS[draft.kind]) {
+    const v = parseCardioField(f, draft[f])
+    if (v !== null && typeof v === 'object') return { ok: false, error: v.error }
+    value[f] = v
+  }
+  return { ok: true, value }
+}
+
+/** 數字欄 → 表單字串（編輯既有那筆時的初始值）。 */
+const draftNum = (v: unknown): string => (v === null || v === undefined || v === '' ? '' : String(Number(v)))
+
+/** 一筆既有的有氧 → 編輯表單的草稿；null＝新增，預設跑步機坡度健走。 */
+export function cardioDraft(row: Row | null): CardioDraft {
+  return {
+    kind: row && isCardioKind(row.kind) ? row.kind : 'incline_walk',
+    minutes: draftNum(row?.minutes),
+    speed_kmh: draftNum(row?.speed_kmh),
+    incline_pct: draftNum(row?.incline_pct),
+    est_kcal: draftNum(row?.est_kcal),
+  }
+}
+
+/** 新增一筆有氧，記在畫面選的那一天。不帶 user_id（伺服器 default auth.uid()）。 */
+export function createCardioOps(args: { id: string; date: string; value: CardioValue }): RowOp[] {
+  const { id, date, value } = args
+  return [{ op: 'insert', table: 'cardio_sessions', rowId: id, payload: { performed_on: date, ...value } }]
+}
+
+/** 只帶有變的欄位；全沒變回空陣列。換類型時舊類型的欄位會一起變成 null（checkCardio 已經清掉）。 */
+export function updateCardioOps(args: { current: Row; value: CardioValue }): RowOp[] {
+  const { current, value } = args
+  const payload: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value)) {
+    const cur = current[k] === undefined || current[k] === '' ? null : current[k]
+    // 不能直接 Number(cur)：Number(null) 是 0，「沒填 → 填 0」會被當成沒變
+    const same = v === null || cur === null ? v === cur : k === 'kind' ? cur === v : Number(cur) === v
+    if (!same) payload[k] = v
+  }
+  return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'cardio_sessions', rowId: current.id, payload }]
+}
+
+export function deleteCardioOps(id: string): RowOp[] {
+  return [{ op: 'delete', table: 'cardio_sessions', rowId: id }]
+}
+
+/** 列表上那一筆的名稱：認得的類型顯示中文；不認得（未來的類型、資料異常）原樣顯示，不藏起來。 */
+export const cardioLabel = (row: Row): string => (isCardioKind(row.kind) ? CARDIO_KIND_LABEL[row.kind] : String(row.kind))
+
+/** 「30 分 · 5.5 km/h · 坡度 8%」／「36 分 · 預估 121 kcal」。只列有填的欄位；預估熱量不稱「消耗」（AC 11）。 */
+export function cardioSummary(row: Row): string {
+  const has = (v: unknown) => v !== null && v !== undefined && v !== ''
+  const parts = [`${Number(row.minutes)} 分`]
+  if (has(row.speed_kmh)) parts.push(`${Number(row.speed_kmh)} km/h`)
+  if (has(row.incline_pct)) parts.push(`坡度 ${Number(row.incline_pct)}%`)
+  if (has(row.est_kcal)) parts.push(`預估 ${Number(row.est_kcal).toLocaleString('en-US')} kcal`)
+  return parts.join(' · ')
+}
+
+/** 某一天的有氧，依建立時間排。剛記、還在佇列裡的那筆沒有 created_at（伺服器才給），排在最後——
+ *  它就是最新的。同樣沒有的維持原順序（佇列重放的順序＝記的順序）。 */
+export function cardioOn(db: TrainingDb, date: string): Row[] {
+  const at = (r: Row) => (typeof r.created_at === 'string' ? r.created_at : null)
+  return db.cardio_sessions
+    .filter((c) => c.performed_on === date)
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => {
+      const x = at(a.row)
+      const y = at(b.row)
+      if (x !== null && y !== null) return x.localeCompare(y) || a.i - b.i
+      if (x === null && y === null) return a.i - b.i
+      return x === null ? 1 : -1
+    })
+    .map(({ row }) => row)
+}
+
 export interface ExerciseFilter {
   q: string
   group: MuscleGroup | 'all'

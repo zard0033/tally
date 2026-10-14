@@ -1,4 +1,5 @@
-/* 開始訓練 sheet（樣張 ②）。第一輪只有「空白開始」；課表與有氧入口在第 2 輪加進同一張。
+/* 開始訓練 sheet（樣張 ②）：空白開始＋「記一筆有氧」入口（有氧不屬於「一次訓練」，所以不開訓練、
+   另開有氧 sheet）。課表在第 2 輪 B 段加進同一張。
    走 vaul Drawer，與 LogSheet 同一套：`repositionInputs={false}`（vaul 自己的鍵盤補償會把 `--kb`
    蓋掉）、top 吃 `--vvtop`——這張 sheet 目前沒有輸入欄，但第 2 輪加課表搜尋時會有，先守同一份規則。 */
 import { Drawer } from 'vaul'
@@ -14,9 +15,10 @@ interface StartSheetProps {
   error: string | null
   onClose: () => void
   onBlank: () => void
+  onCardio: () => void
 }
 
-export default function StartSheet({ open, dateLabel, backfill, busy, error, onClose, onBlank }: StartSheetProps) {
+export default function StartSheet({ open, dateLabel, backfill, busy, error, onClose, onBlank, onCardio }: StartSheetProps) {
   const attach = useSheetFocus()
   return (
     <Drawer.Root
@@ -48,6 +50,17 @@ export default function StartSheet({ open, dateLabel, backfill, busy, error, onC
                   <span className="sub">
                     {backfill ? `補記 ${dateLabel}，不計時，完成時填時長` : '一個一個加動作'}
                   </span>
+                </span>
+                <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+            </div>
+            <div className="tr-card tr-start-cardio">
+              <button className="tr-row" type="button" disabled={busy} onClick={onCardio} data-action="start-cardio">
+                <span className="grow">
+                  <span className="nm">記一筆有氧</span>
+                  <span className="sub">跑步機、拳擊…不用開始訓練</span>
                 </span>
                 <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M9 6l6 6-6 6" />

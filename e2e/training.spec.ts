@@ -572,3 +572,165 @@ test('加動作 sheet：選了肌群與搜尋字之後挑一個動作，下次�
   await expect(picker.getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(picker.locator('.tr-row', { hasText: '腿推舉' })).toBeVisible()
 })
+
+/* ═══════════ 有氧（第 2 輪 A 段，AC 10–12、15） ═══════════ */
+
+const cardioSheet = (page: Page) => page.locator('[data-screen="cardio-sheet"]')
+const field = (page: Page, name: string) => cardioSheet(page).getByRole('textbox', { name, exact: true })
+const kindBtn = (page: Page, name: string) =>
+  cardioSheet(page).getByRole('group', { name: '有氧類型' }).getByRole('button', { name, exact: true })
+const cardioRows = (page: Page) => page.locator('[data-screen="training"] .tr-row[data-cardio-id]')
+
+/** 主 CTA → 開始訓練 sheet →「記一筆有氧」。 */
+async function openCardio(page: Page) {
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  await page.locator('[data-action="start-cardio"]').click()
+  await expect(cardioSheet(page)).toBeVisible()
+  await expect(page.locator('[data-screen="start-sheet"]'), '開始訓練 sheet 要先收起來').toHaveCount(0)
+}
+
+/** 今天已有一筆有氧拳擊。 */
+const WITH_CARDIO: typeof FIX = {
+  ...FIX,
+  cardio_sessions: [
+    {
+      id: 'c-1',
+      performed_on: TODAY,
+      kind: 'boxing',
+      minutes: 36,
+      speed_kmh: null,
+      incline_pct: null,
+      est_kcal: 121,
+      created_at: `${TODAY}T07:00:00.000Z`,
+    },
+  ],
+}
+
+test('記一筆有氧（走路）：類型決定欄位，存下後列在「已完成」並落到伺服器，日期有小點', async ({ page }) => {
+  await openApp(page)
+  await openTraining(page)
+  await openCardio(page)
+
+  await expect(kindBtn(page, '跑步機坡度健走'), '預設走路').toHaveAttribute('aria-pressed', 'true')
+  await expect(field(page, '預估熱量 kcal'), '走路沒有預估熱量欄').toHaveCount(0)
+  await field(page, '分鐘').fill('30')
+  await field(page, '速度 km/h').fill('5.5')
+  await field(page, '坡度 %').fill('8')
+  await cardioSheet(page).getByRole('button', { name: '存下這筆' }).click()
+  await expect(cardioSheet(page)).toHaveCount(0)
+
+  const row = cardioRows(page)
+  await expect(row).toHaveCount(1)
+  await expect(row.locator('.nm')).toHaveText('跑步機坡度健走')
+  await expect(row.locator('.sub')).toHaveText('30 分 · 5.5 km/h · 坡度 8%')
+  await expect(page.locator('.tr-sec', { hasText: '已完成' })).toHaveCount(1)
+  await expect(page.locator('[data-screen="training"] .datectl-day.is-today')).toHaveClass(/is-marked/)
+
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length).toBe(1)
+  const [saved] = await trainRows(page, 'cardio_sessions')
+  expect(saved).toMatchObject({ performed_on: TODAY, kind: 'incline_walk', minutes: 30, speed_kmh: 5.5, incline_pct: 8, est_kcal: null })
+})
+
+test('有氧拳擊：切換類型換欄位；切過去再切回來，不屬於該類型的殘值不會寫進去', async ({ page }) => {
+  await openApp(page)
+  await openTraining(page)
+  await openCardio(page)
+
+  await field(page, '速度 km/h').fill('6')
+  await kindBtn(page, '有氧拳擊').click()
+  await expect(kindBtn(page, '有氧拳擊')).toHaveAttribute('aria-pressed', 'true')
+  await expect(field(page, '速度 km/h')).toHaveCount(0)
+  await expect(field(page, '坡度 %')).toHaveCount(0)
+  await field(page, '分鐘').fill('36')
+  await field(page, '預估熱量 kcal').fill('121')
+  await cardioSheet(page).getByRole('button', { name: '存下這筆' }).click()
+
+  await expect(cardioRows(page).locator('.sub')).toHaveText('36 分 · 預估 121 kcal')
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length).toBe(1)
+  const [saved] = await trainRows(page, 'cardio_sessions')
+  expect(saved, '走路欄位的殘值（速度 6）不該寫進拳擊').toMatchObject({ kind: 'boxing', minutes: 36, speed_kmh: null, est_kcal: 121 })
+})
+
+test('有氧的數值守門：範圍外與超過一位小數擋在 sheet 裡說明，不寫入、不關', async ({ page }) => {
+  await openApp(page)
+  await openTraining(page)
+  await openCardio(page)
+  const save = cardioSheet(page).getByRole('button', { name: '存下這筆' })
+
+  await save.click()
+  await expect(cardioSheet(page).getByRole('alert')).toHaveText('分鐘要填')
+  await field(page, '分鐘').fill('0')
+  await save.click()
+  await expect(cardioSheet(page).getByRole('alert')).toHaveText('分鐘要大於 0、最多 1440')
+  await field(page, '分鐘').fill('30')
+  await field(page, '速度 km/h').fill('5.55')
+  await save.click()
+  await expect(cardioSheet(page).getByRole('alert')).toHaveText('速度最多一位小數')
+  await field(page, '速度 km/h').fill('41')
+  await save.click()
+  await expect(cardioSheet(page).getByRole('alert')).toHaveText('速度要大於 0、最多 40 km/h')
+
+  await expect(cardioSheet(page)).toBeVisible()
+  expect(await trainRows(page, 'cardio_sessions'), '被擋下的都不該寫入').toHaveLength(0)
+})
+
+test('編輯與刪除有氧：點列開同一張 sheet 帶入原值；改完落到伺服器；刪除要確認', async ({ page }) => {
+  await openApp(page, {}, WITH_CARDIO)
+  await openTraining(page)
+  await expect(cardioRows(page).locator('.sub')).toHaveText('36 分 · 預估 121 kcal')
+
+  await cardioRows(page).click()
+  await expect(cardioSheet(page)).toHaveAttribute('aria-label', '編輯有氧')
+  await expect(kindBtn(page, '有氧拳擊')).toHaveAttribute('aria-pressed', 'true')
+  await expect(field(page, '分鐘')).toHaveValue('36')
+  await expect(field(page, '預估熱量 kcal')).toHaveValue('121')
+  await field(page, '分鐘').fill('40')
+  await cardioSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(cardioSheet(page)).toHaveCount(0)
+  await expect(cardioRows(page).locator('.sub')).toHaveText('40 分 · 預估 121 kcal')
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions'))[0]?.minutes).toBe(40)
+
+  // 再打開：是剛存的值，不是上一次的草稿
+  await cardioRows(page).click()
+  await expect(field(page, '分鐘')).toHaveValue('40')
+
+  await cardioSheet(page).getByRole('button', { name: '刪除這筆' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '先不要' }), '預設焦點在取消').toBeFocused()
+  // Escape 只收對話框，不連 sheet 一起關（vaul 與對話框都聽 Escape）
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  // sheet 被一起關的話，關閉動畫（--dur-sheet 280ms）期間它仍「可見」——等動畫跑完再斷言才有鑑別力
+  await page.waitForTimeout(500)
+  await expect(cardioSheet(page)).toBeVisible()
+  expect(await trainRows(page, 'cardio_sessions'), '取消不該刪').toHaveLength(1)
+
+  await cardioSheet(page).getByRole('button', { name: '刪除這筆' }).click()
+  await dialog.getByRole('button', { name: '刪除' }).click()
+  await expect(cardioSheet(page)).toHaveCount(0)
+  await expect(cardioRows(page)).toHaveCount(0)
+  await expect(page.getByText('這天沒有訓練紀錄')).toBeVisible()
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length).toBe(0)
+})
+
+test('離線記一筆有氧（補記昨天）：畫面立刻有、記在那一天，回線後上傳', async ({ page }) => {
+  await openApp(page)
+  await openTraining(page)
+  const yesterday = shiftIso(TODAY, -1)
+  await gotoDate(page, yesterday)
+  await setOffline(page, true)
+
+  await openCardio(page)
+  await expect(cardioSheet(page), '不是今天要講記在哪天').toContainText('記在')
+  await field(page, '分鐘').fill('25')
+  await cardioSheet(page).getByRole('button', { name: '存下這筆' }).click()
+  await expect(cardioRows(page).locator('.sub')).toHaveText('25 分')
+  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('筆尚未同步')
+  expect(await trainRows(page, 'cardio_sessions'), '離線時伺服器還沒有').toHaveLength(0)
+
+  await setOffline(page, false)
+  await expect.poll(async () => (await trainRows(page, 'cardio_sessions')).length, { timeout: 15_000 }).toBe(1)
+  expect((await trainRows(page, 'cardio_sessions'))[0]?.performed_on).toBe(yesterday)
+  await expect(page.locator('[data-screen="training"] .tr-status')).toHaveCount(0, { timeout: 15_000 })
+})
