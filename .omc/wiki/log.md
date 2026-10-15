@@ -32,3 +32,7 @@
 - **Pages:** lesson-overlay-and-mutation-mutation-2026-10-14.md
 - **Summary:** Created new page "lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）"
 
+## [2026-10-15T09:17:45.265Z] ingest
+- **Pages:** lesson-sync-sheet-review-sheet-2026-10-15.md
+- **Summary:** Created new page "lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）"
+

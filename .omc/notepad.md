@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-15）：B 段課表已 push（origin/main=31916db）。D 段（同步指示完整版：細條可點＋未同步 sheet，DESIGN v2.59）本機 commit、未 push；review 兩輪，vitest 589／e2e 186 綠＋1 條基線紅「格式認不得…慢態有出口」（原因未查）。
+現況（2026-10-15）：B 段課表已 push（origin/main=31916db）。D 段（同步指示完整版：細條可點＋未同步 sheet，DESIGN v2.59）本機 commit、未 push；review 兩輪，vitest 589／e2e 187（push 前全跑 187 綠）；「格式認不得…慢態有出口」時紅時綠（5 次全跑 4 紅 1 綠，原因未查）。
 下一步：①D 段 push gate（CLAUDE.md e2e 檔案清單加 sync-sheet.spec.ts、條數照實測）②iOS 觸控握把拖曳真機驗、離線記錄真機試用 ③C 歷史、E 飲食↔訓練互揭。
 未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口、transient 條目無放棄出口）。push 前走全域 git-push gate。
 
@@ -74,3 +74,11 @@ A 段（有氧）push 前 review 沒修的 LOW（2026-10-14，之後再說）
 ### 2026-10-14 10:59
 sheet 收合動畫期間的點擊會落空（2026-10-14 e2e 診斷，既有問題）：vaul sheet 關閉的約 0.5 秒內點下面的按鈕，pointerdown 在按鈕、pointerup 落在正在收的 sheet 上，click 跑到 body。訓練中「挑完動作馬上點加動作／打勾」會吃掉那一下。跨分頁鎖讓寫入時主執行緒較忙、動畫拉長，機率變高（e2e 已改成等 sheet 收完）。要修的話：收合中讓 sheet 不吃 pointer（pointer-events: none on closing），或縮短收合時間；先看真機有沒有感覺。同類：vaul 收合中再打開會被延遲的 close 再關一次（advisor 指出，未驗證）。
 
+### 2026-10-15 15:40
+D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking，不修的理由＝不動剛驗完的程式、等真機一起看（2026-10-15）
+- **[MEDIUM] 外層固定 role=status 後，線上每記一筆「1 筆尚未同步」閃現可能被讀屏播報**（Training.tsx:232）。真機開 VoiceOver 驗吵不吵；吵就只在 source≠server 或有失敗條目時讓內容進 live region，或細條延遲約 1 秒才顯示。
+- [LOW] sheet 開著時佇列清空（立即重試成功），觸發的細條按鈕被卸載，sheet 關閉後焦點落到 body。修法：SyncSheet 的 Drawer.Content 加 onCloseAutoFocus，觸發鈕不在時改放 `.tr-status-wrap`（tabIndex=-1）。
+- [LOW] busy 期間下滑放手，vaul 只 setIsOpen(false) 不重設 transform，sheet 卡在半拖位置（busy 只有本機 IndexedDB 數毫秒）。照 LogSheet／FoodLibrary 補 `dismissible={!busy}`。
+- [LOW] 確認框「另有 N 筆」開框當下算一次；背景 sync 讓被拒絕的 insert 變 5xx（maybeApplied）後，放棄實際不帶走子孫，與框上寫的不符（保守方向，不丟資料）。可在 confirmDiscard 前重算，或 failure 變了就收框。
+- [LOW] useTraining.discard 成功後刷新 view 失敗，會顯示成「沒辦法放棄這筆」但其實已放棄；把刷新分開 try、失敗只 setError 不 rethrow。
+- 可簡化：SyncSheet labelOf 的 O(n²) filter、trainingRuntime.ts:356 多餘的 sort、SyncSheet:172 與 :128 重複的標籤取得。

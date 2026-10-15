@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 7 pages | Last updated: 2026-10-14T15:54:18.913Z
+> 8 pages | Last updated: 2026-10-15T09:17:45.447Z
 
 ## debugging
 
@@ -14,6 +14,7 @@
 ## pattern
 
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
+- [lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）](lesson-sync-sheet-review-sheet-2026-10-15.md) — # lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）
 - [verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA](verified-platform-rls-a11y-supabase-pwa.md) — # verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA
 
 ## reference
