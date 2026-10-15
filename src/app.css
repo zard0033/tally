@@ -81,6 +81,16 @@
      sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
   --dur-sheet: 280ms; --dur-mid: 220ms; --dur-base: 160ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  /* 全站基礎（spec.md「全站基礎：精緻度改版」，2026-10-16 核可）。暖棕色陰影、三級為限——
+     取代 DESIGN.md 原本的「不用陰影」：卡片貼地、浮層浮起、sheet 最上層。 */
+  --shadow-1: 0 1px 2px rgba(61, 34, 16, .07), 0 0 0 1px rgba(61, 34, 16, .04);
+  --shadow-2: 0 4px 14px rgba(61, 34, 16, .12), 0 1px 3px rgba(61, 34, 16, .08);
+  --shadow-3: 0 -8px 32px rgba(61, 34, 16, .16), inset 0 1px 0 rgba(255, 255, 255, .6);
+  /* 欄位：填色（對 cream 只有 1.18:1）＋ 2px 底線（--rule-field 對 cream 3.53:1、對填色 3.00:1，兩邊都過 3:1） */
+  --fill: #F1E6D2;
+  --field-line: 2px solid var(--rule-field);
+  /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
+  --fog-h: 168px; --fog-blur: 9px;
 }
 * { box-sizing: border-box; }
 
@@ -818,6 +828,14 @@ button { -webkit-user-select: none; user-select: none; }
    closeDurationMs()）與 scrim-out（--dur-fast，scrimFadeMs()——暗幕先清，理由見 Settings.tsx），
    LogSheet 由 vaul data-state 驅動，vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
 .sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
+/* SpringSheet（自製，取代 vaul；spec 全站基礎）：transform 由 motion 驅動，所以不掛 CSS 動畫。
+   貼合內容的版本：top 放掉、只留最大高度，頂部仍守 --kb／--vvtop 那套（v2.34–v2.46）。
+   含大量輸入欄位的 sheet（記一筆、新增食物、身體數據）不加 .sheet-fit，維持近全高。 */
+.sheet.spring-sheet { border-top: none; box-shadow: var(--shadow-3); will-change: transform; }
+.sheet.sheet-fit { top: auto;
+  max-height: calc(100% - max(env(safe-area-inset-top, 0px), 96px - var(--kb, 0px)) - var(--vvtop, 0px) - var(--kb, 0px)); }
+.sheet-grab { touch-action: none; cursor: grab; flex-shrink: 0; }
+.sheet-grab:active { cursor: grabbing; }
 
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }

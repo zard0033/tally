@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-15）：B 段課表已 push（origin/main=31916db）。D 段（同步指示完整版：細條可點＋未同步 sheet，DESIGN v2.59）本機 commit、未 push；review 兩輪，vitest 589／e2e 187（push 前全跑 187 綠）；「格式認不得…慢態有出口」時紅時綠（5 次全跑 4 紅 1 綠，原因未查）。
-下一步：①D 段 push gate（CLAUDE.md e2e 檔案清單加 sync-sheet.spec.ts、條數照實測）②iOS 觸控握把拖曳真機驗、離線記錄真機試用 ③C 歷史、E 飲食↔訓練互揭。
-未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口、transient 條目無放棄出口）。push 前走全域 git-push gate。
+現況（2026-10-16）：全站精緻度 B0 已 commit（待 push 確認）：SpringSheet＋sheetPhysics＋新 token＋兩張試點 sheet（開始訓練、新課表）、DESIGN v2.60。vitest 600／e2e 204；「慢態有出口」時紅時綠，原因未查。
+下一步：push 後 iPhone 驗新課表 sheet 的鍵盤（--kb／--vvtop 沒有 vaul 後的行為、開啟即聚焦名稱欄），通過才進 B1（飲食頁＋記一筆，含 #root 縮放實驗）；B2 合併訓練中改版。
+未動：訓練中畫面改版 spec（待核可）、有氧改動作（要 schema，另開 spec）。待決在 MANUAL。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -82,3 +82,33 @@ D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking
 - [LOW] 確認框「另有 N 筆」開框當下算一次；背景 sync 讓被拒絕的 insert 變 5xx（maybeApplied）後，放棄實際不帶走子孫，與框上寫的不符（保守方向，不丟資料）。可在 confirmDiscard 前重算，或 failure 變了就收框。
 - [LOW] useTraining.discard 成功後刷新 view 失敗，會顯示成「沒辦法放棄這筆」但其實已放棄；把刷新分開 try、失敗只 setError 不 rethrow。
 - 可簡化：SyncSheet labelOf 的 O(n²) filter、trainingRuntime.ts:356 多餘的 sort、SyncSheet:172 與 :128 重複的標籤取得。
+### 2026-10-15 17:30
+[使用後回報 2026-10-15] 訓練中的操作模式（使用者實際用過後的六點，尚未動工）
+1. 有氧應作為「動作」跟其他動作放一起（肌群＝其他），不是獨立入口。**推翻 2026-10-13 的有氧獨立模型**（cardio_sessions 表＋開始訓練 sheet 進入）；牽涉 schema，先 spec＋plan。
+2. 設定次數／重量時要有 Gymwork 那種「同步」：第一組設 15／12，按一個鈕後面的組都同成一樣。
+3. 每個動作要有「完成該動作全部組數」的按鈕。
+4. 「要點」那個區塊占空間，要調整排版（待確認是不是指動作的要點區塊）。
+5. 訓練中要能調整動作順序（課表編輯頁已有 @dnd-kit 握把拖曳可沿用）。
+6. 設定組數用原地展開會讓整頁變很長，改 sheet。**推翻 2026-10-13 樣張回饋「點輸入框在該組下方展開」**；2 的同步鈕自然放進這張 sheet。
+7. [使用後回報 2026-10-15] 整體質感：Gymwork 的動效很 iOS，Tally 像 prototype、太簡陋。實查：motion 只用在 App.tsx 與 Today.tsx（飲食頁滑動刪除有 spring）；訓練相關 CSS（.tr-row／.tr-card／.tr-check／.adj／.ex-head／.set）transition 數為 0，沒有任何動效。可沿用的現成基礎：四級時長階梯（durations.ts／--dur-*）與 SETTLE_SPRING。具體想要哪些時刻的動效待使用者給（建議錄 Gymwork 幾段：打勾、sheet 開合、拖曳排序、組間計時）。
+### 2026-10-15 18:40
+[訓練中改版] 第 2、3、5、6 點＋動效（第 7 點）的 spec 已寫進 spec.md「訓練中畫面改版」節（★待核可，核可前不動碼）；樣張 `training-session-v2.html`（2026-10-16 已刪，從未進 git；決定都在 spec）。第 1 點（有氧併入動作）牽涉 schema，另案。待使用者回答：①「要點」是不是指動作卡上那塊要點文字 ②點數字進 sheet 後是否要保留「直接叫鍵盤」快速路徑 ③「全部完成」只在展開時出現 OK 嗎 ④排序時收合其他卡 vs 維持展開。重要取捨：sheet 下滑沿用 vaul（非樣張的手寫 spring）；觸覺回饋不做（iOS 無標準 API）。
+[訓練中改版] 待決①已答（2026-10-15）：第 4 點「要點區塊」＝動作卡上的要點文字，收成一行、點了展開——定案。②③④仍待使用者回答（預設都採我的建議：不保留直接叫鍵盤／全部完成只在展開時出現／排序時收合其他卡）。
+### 2026-10-15 19:30
+[訓練中改版 第二輪回饋已納入 spec 與樣張] 已定：點大數字才叫鍵盤／全部完成只在展開時出現／排序時收合其他卡。新增納入：①收合列改看進度（圓點＋d/n 組＋下一組重量次數），「上次」收進組編輯 sheet ②勾的邏輯統一：圈裡一直有勾（淡→綠實心），全部完成＝欄頭雙勾、狀態由各組推出 ③新增一組改成最後一組下方整列、刪組放 sheet 內（已完成的要確認，單筆 delete 不重排 set_no）④要點放卡片頭名稱正下方（展開時，我的解讀，待確認）。待使用者回答：要點位置解讀對不對、圓點進度夠不夠、刪組只放 sheet 可否、雙勾放欄頭可否。第 1 點（有氧併入動作）仍另案。
+### 2026-10-15 21:10
+[訓練中改版 第三輪回饋已納入 spec 與樣張（44 項 WebKit 檢查全過）] 否決：要點放名稱下方（字一多就怪）→改卡片頭 ⓘ 彈出卡（有要點才有 ⓘ，待確認）。已定：收合列只留圓點＋下一組（拿掉分數）；上次＝最近一次各組的可點籤，點了整組（重量＋次數）套到目前這組；sheet 底部一列左右並排：🗑刪除（最左）｜同步剩餘 N 組｜完成；用詞統一「剩餘組數」。拖曳排序的動效使用者說有 iOS 感，但可拖進統計區後面→**實作必須限制在清單範圍內＋橡皮筋（AC 8，用 context7 查 @dnd-kit modifiers）**。使用者：只有拖曳有 iOS 感，sheet 開關／卡片展開收合／新增一組「還好」→樣張加了 curve／spring 對照開關，等使用者試完回報；若採 spring，sheet 要脫離 vaul 的 CSS 過渡（與「sheet 下滑沿用 vaul」互相牽動，要重議）。
+8. [使用後回報 2026-10-15] **「像 prototype、不精緻」不只訓練頁，是全 Tally 的感覺**（推翻我先前「只是訓練頁沒補質感」的判斷：那是只查了動效程式碼，沒查整體視覺）。待做：全站精緻度盤點（逐畫面截圖＋impeccable critique／audit＋apple-design 檢查表）→排優先序→先抓全局性的（字級層次、陰影／層次、密度、圖示、動效）再逐畫面鋪。需要使用者提供 2–3 張 Gymwork 截圖（不用錄影）當對照。
+### 2026-10-15 22:00
+[訓練中改版 第四輪] 使用者選定 **spring**（sheet 開關、卡片展開收合、要點面板）→組編輯 sheet 要**自製 spring sheet（不用 vaul）**，iOS 鍵盤處理要自己接 visualViewport（先例：Settings 手刻 sheet 的 `--kb`／`--vvtop`），是本改版最大實作風險，排最先做、真機驗。ⓘ 彈出卡被否決（醜）→改**點 ⓘ 在卡片內展開要點面板**（待確認）；**強迫症：ⓘ 每張卡都要有（沒要點＝淡色），不能隱藏，否則箭頭／ⓘ／⋯ 上下對不齊**。樣張 53 項 WebKit 檢查全過。
+[全站精緻度盤點] 使用者核可要做、要我安排：計畫 `.omc/plans/polish-audit.md`（步驟 0 清點已做；1 截圖→2 診斷→3 Gymwork 對照→4 全局基礎提案→5 逐畫面推廣）。關鍵發現：**DESIGN.md 兩處「不用陰影」**可能是平淡感成因之一，要逐條檢驗、不預設推翻，推翻須使用者點頭。使用者挑剔點：對齊一致性、按鈕左右並排、文字不可選取、用詞統一。
+### 2026-10-15 23:30
+[全站精緻度盤點] 步驟 1–2 已做完：40 張截圖在 scratchpad/audit/，發現清單與綜合根因在 `.omc/plans/polish-audit-findings.md`（本機、不進 git）。臨時截圖腳本 e2e/_audit.spec.ts 已刪。最大的全局根因：控件語言不統一且偏重（兩套欄位）、沒有層次／材質（「不用陰影」待使用者裁決）、固定底列無 scroll-edge、sheet 全是近全高、動效只有手勢類有質感、prototype 殘留（體重趨勢頁顯示開發備註）。下一步＝步驟 3（要使用者的 2–3 張 Gymwork 截圖）與步驟 4（全局基礎提案）。
+### 2026-10-15 23:55
+[全站精緻度盤點 步驟 4 草案] 樣張 `foundations-v1.html`（2026-10-16 已刪，從未進 git；五個對照：①控件語言 ②層次 ③導覽＋scroll-edge ④sheet 高度 ⑤大標題；WebKit 15 項檢查全過）。**待使用者裁決 5 項**：①欄位邊界：A 填色無邊（最 iOS，邊界對比約 1.1:1，不符 DESIGN 的 3:1）／B 填色＋1px 細邊（約 2:1，我建議）／維持現況 ②「不用陰影」要不要鬆綁（我建議鬆綁，暖棕、三級、卡片用最輕一級）③分頁列加文字標籤（多 24px 高，84px vs 60px）④含鍵盤的 sheet 維持近全高、其餘貼合內容 ⑤large title 只用在分頁根頁。步驟 3（Gymwork 截圖）使用者尚未提供；提案是依 iOS 慣例與盤點證據做的，沒有對照 Gymwork 校準。
+### 2026-10-16 00:10
+[全局基礎提案 裁決] ①欄位偏好 A（填色無邊，覺得和諧），問 3:1 解法→我算過：填色對 cream 只有 1.18:1，要靠填色達 3:1 得用 #9A8069 這種中棕，不可行；`--rule-field` 線對 card 3.53:1、對填色 3.00:1。建議 A＋2px 底線（Material 填色欄位做法）；W3C 原文讀不到（Cloudflare），只有二手資料與 2018 郵件列表對 Material 底線 3.28:1 的評論，**底線是否完全滿足 1.4.11 沒有正式裁決**。待使用者選：A＋底線／A 純無邊。②鬆綁「不用陰影」（暖棕、三級）③分頁列「保持原樣」（我的解讀：維持圖示膠囊形式、不加文字標籤；scroll-edge 與陰影仍可加，待確認）④含鍵盤 sheet 近全高、其餘貼合內容 ⑤large title 只用分頁根頁。下一步：寫全局基礎 spec（token＋規則）→逐畫面推廣（每批獨立核可）。
+
+[全站基礎 spec 已寫] spec.md「全站基礎：精緻度改版」節（2026-10-16；★待使用者核可 spec 本身）：已定 1 欄位=A＋2px 底線、2 鬆綁陰影（三級暖棕）、3 分頁列維持圖示膠囊＋霧化邊緣＋浮起陰影、4 含鍵盤 sheet 近全高其餘貼合內容、5 large title 只設定頁（我的解讀，待確認）。推廣 B0 基礎元件→B1 飲食＋記一筆→B2 訓練（併訓練中改版）→B3 設定／食物庫→B4 狀態與登入。最大風險=自製 spring sheet 的 iOS 鍵盤處理，B0 先做、真機驗。
+### 2026-10-16 01:30
+[全站基礎 B0 完成，未 commit／未 push] 新增 `src/components/SpringSheet.tsx`（Base UI Dialog＋motion spring，取代 vaul）、`src/lib/sheetPhysics.ts`（11 條 vitest，5 個 mutation 全抓）、spring 預設值（durations.ts）、新 token（app.css）；試點遷移 StartSheet、RoutineNameSheet；`e2e/spring-sheet.spec.ts` 14 條（3×42 次無 flaky，4 個元件 mutation 全抓）。全量：vitest 600／build／lint／e2e 201 全過。DESIGN.md 已回寫 v2.60，CLAUDE.md e2e 清單已更新（15 檔、201 條）。**最大風險未驗：iOS 真機鍵盤升起時含輸入欄的 sheet 位置（新課表）**——沒有 vaul 後 `--kb`／`--vvtop` 的行為只能真機看；B1 前必驗。背景縮小 95.5% 沒做（會讓 #root 內 position:fixed 改以 #root 定位，B1 先實驗）。下一步：使用者決定 commit＋push 讓 B0 上線真機驗（push gate：review→測試→確認訊息），驗過再開 B1（飲食頁＋記一筆）。

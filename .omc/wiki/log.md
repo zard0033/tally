@@ -36,3 +36,7 @@
 - **Pages:** lesson-sync-sheet-review-sheet-2026-10-15.md
 - **Summary:** Created new page "lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）"
 
+## [2026-10-15T13:05:02.035Z] ingest
+- **Pages:** lesson-spring-sheet-spring-sheet-2026-10-16.md
+- **Summary:** Created new page "lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）"
+

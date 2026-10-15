@@ -28,3 +28,13 @@ export const sec = (ms: number) => ms / 1000
    落在臨界阻尼（2√500 ≈ 44.7）之下一點，所以會有小幅過衝——demo 實測過衝約 6px，
    看得出來但不誇張；damping 調到 45 以上就完全不過衝，也就失去「接住手勁」的訊號。 */
 export const SETTLE_SPRING = { type: 'spring', stiffness: 500, damping: 42 } as const
+
+/* sheet 與動作卡的 spring（全站精緻度改版，spec.md「全站基礎」；訓練中改版樣張實測選定）。
+   手勢與開關類用 spring、不用固定時長曲線——使用者試過對照後的裁決：只有 spring 有 iOS 手感。
+   Apple 的 damping ratio ζ／response 換成 stiffness／damping：ω = 2π/response，k = ω²，c = 2·ζ·ω。
+   - 開：ζ .8、response .3（Apple 的 drawer 值，有一點點回彈）
+   - 關：ζ 1.0（臨界阻尼）——收掉不需要彈
+   - 卡片展開收合：ζ .9、response ≈ .35 */
+export const SPRING_SHEET_OPEN = { type: 'spring', stiffness: 439, damping: 33.5 } as const
+export const SPRING_SHEET_CLOSE = { type: 'spring', stiffness: 300, damping: 34.6 } as const
+export const SPRING_CARD = { type: 'spring', stiffness: 322, damping: 32.3 } as const
