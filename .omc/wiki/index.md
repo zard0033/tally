@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 8 pages | Last updated: 2026-10-14T08:42:00.134Z
+> 7 pages | Last updated: 2026-10-14T15:54:18.913Z
 
 ## debugging
 
@@ -23,4 +23,3 @@
 ## session-log
 
 - [phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）](phase2-round1-log-2-2026-10-13-14.md) — # phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）
-- [Session Log 2026-10-14](session-log-2026-10-14-66cbedf6.md) — # Session Log 2026-10-14
