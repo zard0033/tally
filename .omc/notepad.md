@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-14 晚）：v2.55 已 push 上線；B 段（課表）v2.56–v2.58 已本機 commit、**未 review 未 push**（eacc12f..4d7c3a4）。vitest 547／e2e 171 綠＋1 條 interaction「格式認不得…慢態有出口」紅（stash 回基線也紅，非本段造成，原因未查）。
-下一步：①B 段 push 前 review＋真機驗拖曳（只用滑鼠測過，iOS 觸控握把拖曳沒測）②真機試用離線記錄 ③C 歷史、D 同步指示完整版（D 追加項在 MANUAL）、E 飲食↔訓練互揭。
-未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口）。push 前走全域 git-push gate。
+現況（2026-10-15）：B 段課表已 push（origin/main=31916db）。D 段（同步指示完整版：細條可點＋未同步 sheet，DESIGN v2.59）本機 commit、未 push；review 兩輪，vitest 589／e2e 186 綠＋1 條基線紅「格式認不得…慢態有出口」（原因未查）。
+下一步：①D 段 push gate（CLAUDE.md e2e 檔案清單加 sync-sheet.spec.ts、條數照實測）②iOS 觸控握把拖曳真機驗、離線記錄真機試用 ③C 歷史、E 飲食↔訓練互揭。
+未修 LOW／待決在 MANUAL（有氧 a11y、sheet 收合動畫點擊落空、佇列逃生口、transient 條目無放棄出口）。push 前走全域 git-push gate。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

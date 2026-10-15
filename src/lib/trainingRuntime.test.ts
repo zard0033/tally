@@ -253,12 +253,25 @@ describe('write／flush', () => {
     expect(v.db.workouts.map((r) => r.id)).toEqual(['w1'])
     expect(v.db.workout_sets).toHaveLength(1)
     expect(v.summary.mine).toBe(3)
+    expect(v.entries.map((e) => [e.table, e.rowId]), 'view.entries＝自己的條目，依 seq').toEqual([
+      ['workouts', 'w1'],
+      ['workout_exercises', 'we1'],
+      ['workout_sets', 's1'],
+    ])
     const entries = await t.rt.queue.entries()
     expect(entries[1].parents?.map((p) => [p.table, p.rowId])).toEqual([
       ['workouts', 'w1'],
       ['exercises', 'e1'],
     ])
     expect(entries[2].parents?.map((p) => [p.table, p.rowId])).toEqual([['workout_exercises', 'we1']])
+  })
+
+  it('別的帳號的條目不進 view.entries，只算在 summary.foreign', async () => {
+    const t = await withExercise()
+    await t.rt.write('user-2', [tree('e1')[0]])
+    const v = await t.rt.view(U1)
+    expect(v.entries).toEqual([])
+    expect(v.summary.foreign).toBe(1)
   })
 
   it('flush 依父→子順序送出，伺服器上三列都在，佇列清空', async () => {

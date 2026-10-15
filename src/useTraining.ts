@@ -16,6 +16,12 @@ export interface TrainingState {
   error: string | null
   /** 排進佇列並立刻更新畫面；本機寫入失敗會 reject，呼叫端要接住並告知「這筆沒有存下來」。 */
   write: (ops: WriteOp[]) => Promise<void>
+  /** 放棄佇列裡的一條（連帶的子孫一起走），之後以佇列現況刷新畫面。 */
+  discard: (seq: number) => Promise<void>
+  /** 放棄這一條會連帶消失幾列（不含它自己），給確認框用。 */
+  discardImpact: (seq: number) => Promise<number>
+  /** 立刻跑一輪完整同步（送、重讀、再送）；進行中就等那一輪，結束後補跑一次。 */
+  retry: () => Promise<void>
   /** 主動登出收尾：佇列是空的就連本機底一起清（免得下一個登入的人讀到）；有東西就原樣保留。 */
   settleOnSignOut: () => Promise<void>
   /** 佇列裡還沒上傳的總條數（含別的帳號的）。登出前要不要多問一句就看它。 */
@@ -147,6 +153,21 @@ export function useTraining(userId: string | null): TrainingState {
     [flushOnly],
   )
 
+  const discard = useCallback(async (seq: number) => {
+    const id = userRef.current
+    if (!id) return
+    await trainingRuntime.queue.discard(seq, id)
+    const v = await trainingRuntime.view(id)
+    if (userRef.current === id) setView(v)
+    // 放棄解開了擋路的條目（例如被拒絕的 insert 後面還有別列的等待者）：不等下個觸發點，馬上送
+    void flushOnly()
+  }, [flushOnly])
+
+  const discardImpact = useCallback(async (seq: number) => {
+    const id = userRef.current
+    return id ? trainingRuntime.queue.discardImpact(seq, id) : 0
+  }, [])
+
   const settleOnSignOut = useCallback(async () => {
     if ((await trainingRuntime.queue.entries()).length === 0) await trainingRuntime.clearAll()
   }, [])
@@ -154,5 +175,5 @@ export function useTraining(userId: string | null): TrainingState {
   const pendingCount = useCallback(async () => (await trainingRuntime.queue.entries()).length, [])
   const discardAll = useCallback(() => trainingRuntime.clearAll(), [])
 
-  return { view, error, write, settleOnSignOut, pendingCount, discardAll }
+  return { view, error, write, discard, discardImpact, retry: sync, settleOnSignOut, pendingCount, discardAll }
 }

@@ -80,6 +80,22 @@ export function parentRefs(table: TrainingTable, payload: Readonly<Record<string
   })
 }
 
+/** 未同步清單裡一條的白話標籤。只講「做了什麼」，不帶 rowId（使用者認不得 UUID）；
+ *  表不在清單內（佇列格式是別版寫的）回保底「變更」。 */
+const ENTRY_LABEL: Readonly<Record<TrainingTable, Readonly<Record<QueueEntry['op'], string>>>> = {
+  exercises: { insert: '新增動作', update: '改動作', delete: '刪動作' },
+  routines: { insert: '新增課表', update: '改課表', delete: '刪課表' },
+  workouts: { insert: '新增訓練', update: '改訓練', delete: '刪訓練' },
+  routine_exercises: { insert: '課表加動作', update: '改課表的動作', delete: '課表移除動作' },
+  workout_exercises: { insert: '訓練加動作', update: '改訓練的動作', delete: '訓練移除動作' },
+  workout_sets: { insert: '記一組', update: '改一組', delete: '刪一組' },
+  cardio_sessions: { insert: '新增有氧', update: '改有氧', delete: '刪有氧' },
+}
+
+export function describeEntry(entry: Pick<QueueEntry, 'op' | 'table'>): string {
+  return isTrainingTable(entry.table) ? ENTRY_LABEL[entry.table][entry.op] : '變更'
+}
+
 /* ═══════════ 預填動作（AC 1） ═══════════ */
 
 const EXERCISE_NAMESPACE = '3f2b8a52-6c1e-4d0a-9b7e-5a1c2d4e6f80'

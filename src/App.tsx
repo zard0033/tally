@@ -893,6 +893,9 @@ export default function App() {
             onStartOpenChange={setTrainingStartOpen}
             onFullPage={setTrainingFullPage}
             onWrite={training.write}
+            onDiscard={training.discard}
+            discardImpact={training.discardImpact}
+            onRetry={training.retry}
           />
         ) : failed && notice ? (
           <div className="notice">

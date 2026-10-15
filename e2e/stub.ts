@@ -75,6 +75,10 @@ export async function seedFetchStub(
          * 並自動清空——用來驗「失敗訊息怎麼呈現／有沒有殘留」這類只有失敗路徑才走得到的
          * 分支。page.route() 在這個環境完全不攔截（見檔頭），所以只能從 stub 內部注入。 */
         __failNext: { table: string; method: string } | null
+        /* 持久的寫入拒絕：table → HTTP 狀態碼，該表的**每一個**非 GET 請求都回這個碼（不自動清空）。
+         * 跟 __failNext 的差別：那個是一次性 500（transient），這個用來造 4xx（409／403＝rejected、
+         * 401＝auth）——佇列對 4xx 不會自己好，要持續拒絕才驗得到「卡住了怎麼辦」那條路徑。 */
+        __rejectWrite: Record<string, number> | null
         /* 拍照辨識（read-label Edge Function）的回應控制。**預設 null＝比照其他非 rest/v1 的
          * 請求擋下來並記進 __blocked**，測試要用才明確打開——不讓「忘了設」變成靜默放行。
          * delayMs 是讓測試有時間在辨識途中操作畫面（例如打字），那正是 stale closure 那類
@@ -95,6 +99,7 @@ export async function seedFetchStub(
       w.__blocked = []
       w.__intakeCalls = []
       w.__failNext = null
+      w.__rejectWrite = null
       w.__scan = null
 
       const TRAINING_TABLES = [
@@ -217,6 +222,9 @@ export async function seedFetchStub(
             w.__failNext = null
             return json({ message: '模擬的寫入失敗' }, 500)
           }
+
+          const rejected = w.__rejectWrite?.[table]
+          if (rejected) return json({ code: rejected === 409 ? '23503' : 'PGRST000', message: '模擬的拒絕' }, rejected)
 
           if (TRAINING_TABLES.includes(table)) {
             const prefer = new Headers((opts.headers ?? {}) as HeadersInit).get('prefer') ?? ''

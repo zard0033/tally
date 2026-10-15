@@ -11,6 +11,7 @@ import {
   checkCardio,
   createCardioOps,
   deleteCardioOps,
+  describeEntry,
   updateCardioOps,
   type CardioDraft,
   addExerciseOps,
@@ -146,6 +147,43 @@ describe('parentRefs', () => {
   it('沒有外鍵的表回空陣列', () => {
     expect(parentRefs('exercises', { name: 'x' })).toEqual([])
     expect(parentRefs('cardio_sessions', { minutes: 30 })).toEqual([])
+  })
+})
+
+/* ═══════════ 條目白話標籤 ═══════════ */
+
+describe('describeEntry', () => {
+  it.each([
+    ['insert', 'exercises', '新增動作'],
+    ['update', 'exercises', '改動作'],
+    ['delete', 'exercises', '刪動作'],
+    ['insert', 'routines', '新增課表'],
+    ['update', 'routines', '改課表'],
+    ['delete', 'routines', '刪課表'],
+    ['insert', 'workouts', '新增訓練'],
+    ['update', 'workouts', '改訓練'],
+    ['delete', 'workouts', '刪訓練'],
+    ['insert', 'routine_exercises', '課表加動作'],
+    ['update', 'routine_exercises', '改課表的動作'],
+    ['delete', 'routine_exercises', '課表移除動作'],
+    ['insert', 'workout_exercises', '訓練加動作'],
+    ['update', 'workout_exercises', '改訓練的動作'],
+    ['delete', 'workout_exercises', '訓練移除動作'],
+    ['insert', 'workout_sets', '記一組'],
+    ['update', 'workout_sets', '改一組'],
+    ['delete', 'workout_sets', '刪一組'],
+    ['insert', 'cardio_sessions', '新增有氧'],
+    ['update', 'cardio_sessions', '改有氧'],
+    ['delete', 'cardio_sessions', '刪有氧'],
+  ] as const)('%s %s → %s', (op, table, label) => {
+    expect(describeEntry(entry(1, op, table, 'a-uuid'))).toBe(label)
+  })
+
+  it('不認得的表回保底「變更」；標籤不出現 rowId', () => {
+    expect(describeEntry(entry(1, 'insert', 'mystery', 'row-123'))).toBe('變更')
+    for (const t of ['exercises', 'workout_sets']) {
+      expect(describeEntry(entry(1, 'update', t, 'row-123'))).not.toContain('row-123')
+    }
   })
 })
 

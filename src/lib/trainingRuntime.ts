@@ -10,7 +10,14 @@
  *
  * 底的新鮮度：送成功的條目會就地併進底（不必重拉），所以 flush 之後離線也不會看到剛送出的列消失。 */
 
-import { createQueue, type FlushReport, type OfflineQueue, type QueueSummary, type Sender } from './queue'
+import {
+  createQueue,
+  type FlushReport,
+  type OfflineQueue,
+  type QueueEntry,
+  type QueueSummary,
+  type Sender,
+} from './queue'
 import { createQueueStore, type KeyValueStore } from './queueStore'
 import { createSender, type SenderClient } from './sender'
 import {
@@ -57,6 +64,8 @@ export interface TrainingView {
   /** server＝這次剛從伺服器讀到；cache＝讀不到伺服器、用本機底；empty＝連底都沒有。 */
   readonly source: 'server' | 'cache' | 'empty'
   readonly summary: QueueSummary
+  /** 目前帳號的未同步條目（依 seq 排好），未同步清單逐條列用。別的帳號的只在 summary.foreign 算數。 */
+  readonly entries: readonly QueueEntry[]
   /** 本機底寫不進去（容量、隱私模式）。資料仍在記憶體，但離線重開會讀不到。 */
   readonly cacheError: boolean
 }
@@ -235,7 +244,8 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   async function composeView(userId: string): Promise<TrainingView> {
     const { entries, summary } = await queue.read(userId)
     const db = applyQueue(base && base.userId === userId ? base.db : emptyTrainingDb(), entries, userId)
-    return { db, source, summary, cacheError }
+    const mine = entries.filter((e) => e.userId === userId).sort((a, b) => a.seq - b.seq)
+    return { db, source, summary, entries: mine, cacheError }
   }
 
   async function write(userId: string, ops: readonly WriteOp[]): Promise<TrainingView> {

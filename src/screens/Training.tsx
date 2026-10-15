@@ -33,6 +33,7 @@ import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import RoutineNameSheet from './RoutineNameSheet'
 import StartSheet from './StartSheet'
+import SyncSheet from './SyncSheet'
 import TrainingSession from './TrainingSession'
 
 interface TrainingProps {
@@ -45,6 +46,10 @@ interface TrainingProps {
   /** 進入／離開訓練中整頁時回報，App 據此收起底部列。 */
   onFullPage: (full: boolean) => void
   onWrite: (ops: RowOp[]) => Promise<void>
+  /** 未同步 sheet 用：放棄一條、問連帶消失幾列、立即重試。 */
+  onDiscard: (seq: number) => Promise<void>
+  discardImpact: (seq: number) => Promise<number>
+  onRetry: () => Promise<void>
 }
 
 /** 小點資料全在記憶體（整包載入），不需要按月抓。DateStrip 的 effect 依賴它，必須是穩定的參考。 */
@@ -57,6 +62,7 @@ function statusText(view: TrainingView): string | null {
   const parts: string[] = []
   if (view.source !== 'server') parts.push('連不上伺服器，顯示的是本機資料')
   if (view.summary.mine > 0) parts.push(`${view.summary.mine} 筆尚未同步`)
+  if (view.summary.foreign > 0) parts.push(`另有 ${view.summary.foreign} 筆屬於別的帳號`)
   if (view.cacheError) parts.push('本機儲存寫不進去，離線時可能讀不到')
   return parts.length > 0 ? parts.join(' · ') : null
 }
@@ -117,8 +123,12 @@ export default function Training({
   onStartOpenChange,
   onFullPage,
   onWrite,
+  onDiscard,
+  discardImpact,
+  onRetry,
 }: TrainingProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [syncOpen, setSyncOpen] = useState(false)
   const [library, setLibrary] = useState(false)
   const [routineId, setRoutineId] = useState<string | null>(null)
   const [nameOpen, setNameOpen] = useState(false)
@@ -217,11 +227,33 @@ export default function Training({
         <DateStrip date={date} marked={marked} onSelect={onDateChange} onViewMonth={noop} />
       </header>
 
-      {status && (
-        <div className="tr-status" role="status">
-          <span className="grow">{status}</span>
-        </div>
-      )}
+      {/* role=status 在固定的外層：掛在 button 上會取代按鈕的 role，讀屏就找不到入口（同封存提示的前例）。
+          外層一直在、內層才依狀態換，狀態出現／消失時才會被播報。名稱是按鈕可見的文字，「查看詳情」走 aria-describedby */}
+      <div className="tr-status-wrap" role="status" aria-live="polite">
+        {status &&
+          (view && (view.summary.mine > 0 || view.summary.foreign > 0) ? (
+            <>
+              <button
+                className="tr-status is-action"
+                type="button"
+                aria-describedby="tr-status-hint"
+                onClick={() => setSyncOpen(true)}
+              >
+                <span className="grow">{status}</span>
+                <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+              <span id="tr-status-hint" hidden>
+                查看詳情
+              </span>
+            </>
+          ) : (
+            <div className="tr-status">
+              <span className="grow">{status}</span>
+            </div>
+          ))}
+      </div>
       {error && (
         <div className="tr-status is-error" role="alert">
           <span className="grow">{error}</span>
@@ -343,6 +375,18 @@ export default function Training({
           setRoutineId(id)
         }}
       />
+
+      {view && (
+        <SyncSheet
+          open={syncOpen}
+          onClose={() => setSyncOpen(false)}
+          summary={view.summary}
+          entries={view.entries}
+          onDiscard={onDiscard}
+          discardImpact={discardImpact}
+          onRetry={onRetry}
+        />
+      )}
 
       <CardioSheet
         open={cardioOpen}

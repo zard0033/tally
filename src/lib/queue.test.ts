@@ -249,8 +249,122 @@ describe('summarize／signOutPlan', () => {
       'u1',
     )
     expect(sum).toEqual({
-      total: 4, mine: 3, foreign: 1, pending: 1,
+      total: 4, mine: 3, foreign: 1, pending: 1, waiting: 0,
       failed: { offline: 1, auth: 0, rejected: 1, transient: 0 },
+    })
+  })
+
+  describe('waiting：在等前面那筆（父列沒送成）', () => {
+    const e = (seq: number, table: string, rowId: string, patch: Partial<QueueEntry> = {}): QueueEntry => ({
+      seq, op: 'insert', table, rowId, payload: { v: 1 }, userId: 'u1',
+      createdAt: 1, attempts: 0, lastError: null, failure: null, ...patch,
+    })
+    const under = (table: string, rowId: string) => ({ parents: [{ table, rowId }] })
+    const snap = (...entries: QueueEntry[]): QueueSnapshot => ({ nextSeq: 99, entries })
+    const parts = (s: ReturnType<typeof summarize>) =>
+      s.pending + s.waiting + s.failed.offline + s.failed.auth + s.failed.rejected + s.failed.transient
+
+    it('父列被拒絕：子列算 waiting，不算 pending，也不算 failed', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+      ), 'u1')
+      expect(sum).toMatchObject({ mine: 2, pending: 0, waiting: 1, failed: { rejected: 1 } })
+    })
+
+    it('一路傳下去：孫列（父列自己也在等）一樣是 waiting', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { failure: 'transient', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+        e(3, 'workout_sets', 's1', under('workout_exercises', 'we1')),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 0, waiting: 2, failed: { transient: 1 } })
+    })
+
+    it('傳遞與條目順序無關', () => {
+      const sum = summarize(snap(
+        e(3, 'workout_sets', 's1', under('workout_exercises', 'we1')),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+        e(1, 'workouts', 'w1', { failure: 'transient', attempts: 1 }),
+      ), 'u1')
+      expect(sum.waiting).toBe(2)
+    })
+
+    it('父列不在佇列（早已在伺服器）：不 waiting', () => {
+      const sum = summarize(snap(e(1, 'workout_exercises', 'we1', under('workouts', 'w1'))), 'u1')
+      expect(sum).toMatchObject({ pending: 1, waiting: 0 })
+    })
+
+    it('父列還沒失敗（從未送出或正在送）：不 waiting', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1'),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 2, waiting: 0 })
+    })
+
+    it('同一列前面的條目失敗：後面的 update 越不過去，算 waiting（不是「會自動送出」）', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { failure: 'rejected', attempts: 1 }),
+        e(2, 'workouts', 'w1', { op: 'update' }),
+        e(3, 'workouts', 'w2', { op: 'update' }),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 1, waiting: 1, failed: { rejected: 1 } })
+    })
+
+    it('同一列擋路的是後面的條目時，前面的不受影響', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { op: 'update' }),
+        e(2, 'workouts', 'w1', { op: 'update', failure: 'transient', attempts: 1 }),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 1, waiting: 0 })
+    })
+
+    it('父列的 update 失敗不擋子列的 insert（flush 照送），所以不算 waiting', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { op: 'update', failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 1, waiting: 0 })
+    })
+
+    it('子列自己失敗就算 failed，不重複算 waiting', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', { ...under('workouts', 'w1'), failure: 'transient', attempts: 1 }),
+      ), 'u1')
+      expect(sum).toMatchObject({ pending: 0, waiting: 0, failed: { rejected: 1, transient: 1 } })
+    })
+
+    it('別的帳號的失敗列不讓我的子列 waiting（同 table＋rowId 也一樣）', () => {
+      const sum = summarize(snap(
+        e(1, 'workouts', 'w1', { userId: 'u2', failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+      ), 'u1')
+      expect(sum).toMatchObject({ mine: 1, foreign: 1, pending: 1, waiting: 0 })
+    })
+
+    it('table 不同、rowId 相同不算同一列', () => {
+      const sum = summarize(snap(
+        e(1, 'routines', 'x', { failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'x')),
+      ), 'u1')
+      expect(sum.waiting).toBe(0)
+    })
+
+    it('恆等式：pending＋waiting＋各 failed 加總＝mine', () => {
+      const s = snap(
+        e(1, 'workouts', 'w1', { failure: 'rejected', attempts: 1 }),
+        e(2, 'workout_exercises', 'we1', under('workouts', 'w1')),
+        e(3, 'workout_sets', 's1', under('workout_exercises', 'we1')),
+        e(4, 'workouts', 'w2', { failure: 'offline', attempts: 1 }),
+        e(5, 'workouts', 'w3'),
+        e(6, 'workouts', 'w4', { userId: 'u2' }),
+        e(7, 'exercises', 'x1', { failure: 'auth', attempts: 1 }),
+      )
+      const sum = summarize(s, 'u1')
+      expect(sum.mine).toBe(6)
+      expect(parts(sum)).toBe(sum.mine)
     })
   })
 
@@ -541,7 +655,8 @@ describe('父列依賴（AC 16）', () => {
       const r1 = await t.queue.flush('u1')
       expect(t.sender.sent.map((e) => e.rowId)).toEqual(['w1']) // 子列根本沒被送
       expect(r1.summary.failed).toEqual({ offline: 0, auth: 0, rejected: 0, transient: 1 })
-      expect(r1.summary.pending).toBe(1) // 子列仍是「從未失敗」
+      expect(r1.summary.pending).toBe(0)
+      expect(r1.summary.waiting).toBe(1) // 子列仍是「從未失敗」，但在等父列
       failing.clear()
       const r2 = await t.queue.flush('u1')
       expect([...t.server.rows.keys()].sort()).toEqual(['workout_exercises/we1', 'workouts/w1'])
@@ -556,7 +671,8 @@ describe('父列依賴（AC 16）', () => {
       await t.queue.enqueue(WS('s1', 'we1'))
       const r1 = await t.queue.flush('u1')
       expect(t.sender.sent.map((e) => e.rowId)).toEqual(['w1'])
-      expect(r1.summary.pending).toBe(2)
+      expect(r1.summary.pending).toBe(0)
+      expect(r1.summary.waiting).toBe(2)
       expect(r1.summary.failed.rejected).toBe(0)
       failing.clear()
       await t.queue.flush('u1')
@@ -569,7 +685,8 @@ describe('父列依賴（AC 16）', () => {
       await t.queue.enqueue(WE('we1', 'w1'))
       const r = await t.queue.flush('u1')
       expect(r.summary.failed).toEqual({ offline: 0, auth: 0, rejected: 1, transient: 0 })
-      expect(r.summary.pending).toBe(1)
+      expect(r.summary.pending).toBe(0)
+      expect(r.summary.waiting).toBe(1)
     })
 
     it('只擋有依賴的那一棵，別棵照送', async () => {
@@ -656,6 +773,86 @@ describe('父列依賴（AC 16）', () => {
       expect(await t.queue.discard(1)).toBe(true)
       expect(t.mem.saved?.entries.map((e) => e.rowId)).toEqual(['we1'])
     })
+
+    const updW = (rowId: string, payload: Record<string, unknown>): NewEntry => ({
+      op: 'update', table: 'workouts', rowId, payload, userId: 'u1',
+    })
+    const stored = (seq: number, over: Partial<QueueEntry> = {}): QueueEntry => ({
+      seq, op: 'update', table: 'workouts', rowId: 'w1', payload: { v: 2 }, userId: 'u1',
+      createdAt: 1, attempts: 0, lastError: null, failure: null, ...over,
+    })
+
+    it('放棄被拒絕的 insert：同一列後面確定沒生效的 update 一起走（否則留下來變成新的被拒絕）；discardImpact 只數 we1 一列', async () => {
+      const t = strict(new Map([['workouts/w1', 409]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(WE('we1', 'w1'))
+      await t.queue.enqueue(updW('w1', { ended_at: 'x' }))
+      await t.queue.enqueue(updW('w1', { ended_at: 'y' }))
+      await t.queue.flush('u1')
+      expect(await t.queue.discardImpact(1), '同一列後面的 update 不重複算、被點的那一列不算').toBe(1)
+      expect(await t.queue.discard(1)).toBe(true)
+      expect(await t.queue.entries(), '連 update 都不剩，下一輪沒有東西會再被拒絕').toEqual([])
+    })
+
+    it('同一列後面已嘗試過、結果曖昧的條目不走（請求可能已落地）；確定沒生效的照走', async () => {
+      const snap: QueueSnapshot = {
+        nextSeq: 5,
+        entries: [
+          stored(1, { op: 'insert', attempts: 1, failure: 'rejected', lastError: 'HTTP 409' }),
+          stored(2, { attempts: 1, failure: 'offline', maybeApplied: true }),
+          stored(3, { attempts: 1, failure: null }), // 送到一半被殺掉
+          stored(4),
+        ],
+      }
+      const t = build(snap)
+      expect(await t.queue.discardImpact(1), '同一列，不算連帶').toBe(0)
+      await t.queue.discard(1)
+      expect((await t.queue.entries()).map((e) => e.seq)).toEqual([2, 3])
+    })
+
+    it('可能已落地的 insert（先 503 再 401）被放棄：只動被點的那一條，同一列後面的 update 留著', async () => {
+      const snap: QueueSnapshot = {
+        nextSeq: 3,
+        entries: [
+          stored(1, { op: 'insert', attempts: 2, failure: 'auth', lastError: 'HTTP 401', maybeApplied: true }),
+          stored(2),
+        ],
+      }
+      const t = build(snap)
+      await t.queue.discard(1)
+      expect((await t.queue.entries()).map((e) => e.seq)).toEqual([2])
+    })
+
+    it('別的帳號的同 table＋rowId 條目不受影響', async () => {
+      const snap: QueueSnapshot = {
+        nextSeq: 4,
+        entries: [
+          stored(1, { op: 'insert', attempts: 1, failure: 'rejected' }),
+          stored(2),
+          stored(3, { userId: 'u2' }),
+        ],
+      }
+      const t = build(snap)
+      await t.queue.discard(1)
+      expect((await t.queue.entries()).map((e) => e.seq)).toEqual([3])
+    })
+
+    it('帶 userId：對不上目標條目的帳號就不放棄、影響數 0；對得上才動', async () => {
+      const snap: QueueSnapshot = {
+        nextSeq: 4,
+        entries: [
+          stored(1, { op: 'insert', attempts: 1, failure: 'rejected' }),
+          stored(2, { op: 'insert', rowId: 'w2', userId: 'u2', attempts: 1, failure: 'rejected' }),
+          stored(3, { op: 'insert', table: 'workout_exercises', rowId: 'we2', userId: 'u2', parents: [{ table: 'workouts', rowId: 'w2' }] }),
+        ],
+      }
+      const t = build(snap)
+      expect(await t.queue.discard(2, 'u1'), '別人的條目').toBe(false)
+      expect(await t.queue.discardImpact(2, 'u1')).toBe(0)
+      expect((await t.queue.entries()).map((e) => e.seq)).toEqual([1, 2, 3])
+      expect(await t.queue.discard(1, 'u1')).toBe(true)
+      expect((await t.queue.entries()).map((e) => e.seq)).toEqual([2, 3])
+    })
   })
 
   describe('外鍵種類（review #1）', () => {
@@ -711,6 +908,25 @@ describe('父列依賴（AC 16）', () => {
       await t.queue.discard(seq)
       expect(await t.queue.entries()).toEqual([])
       expect(t.server.rows.has('workouts/w1'), '訓練不受影響').toBe(true)
+    })
+
+    it('discardImpact 數「列」不數條目：同一列後來的 update 不重複算，被點的那一列自己也不算', async () => {
+      const t = strict(new Map([['exercises/x1', 422]]))
+      await t.queue.enqueue(W('w1'))
+      await t.queue.enqueue(EX('x1'))
+      await t.queue.enqueue(WEX('we1', 'w1', 'x1'))
+      await t.queue.enqueue({ op: 'update', table: 'workout_exercises', rowId: 'we1', payload: { position: 1 }, userId: 'u1' })
+      await t.queue.enqueue({ op: 'update', table: 'workout_exercises', rowId: 'we1', payload: { position: 2 }, userId: 'u1' })
+      await t.queue.enqueue(SET('s1', 'we1'))
+      await t.queue.enqueue({ op: 'update', table: 'workout_sets', rowId: 's1', payload: { reps: 5 }, userId: 'u1' })
+      await t.queue.flush('u1')
+      const entries = await t.queue.entries()
+      const x1 = entries.find((e) => e.rowId === 'x1')!
+      // 條目：we1 的 insert＋兩條 update、s1 的 insert＋update 共 5 條，但只有 we1、s1 兩列
+      expect(entries.filter((e) => e.rowId !== 'x1')).toHaveLength(5)
+      expect(await t.queue.discardImpact(x1.seq)).toBe(2)
+      await t.queue.discard(x1.seq)
+      expect(await t.queue.entries()).toEqual([])
     })
 
     it('離線新增課表又刪掉：用它的訓練留下、課表欄位改 null（照伺服器的 on delete set null）', () => {
@@ -985,16 +1201,28 @@ describe('卡住的分類與出路（AC 11、12）', () => {
     expect(t.server.rows.has('t/b')).toBe(true)
   })
 
-  it('discard 放棄被卡住的一條，解開同一列後面的條目', async () => {
-    const t = build(null, (e) => (e.op === 'insert' ? 422 : 'ok'))
-    await t.queue.enqueue(ins('a'))
+  it('discard 放棄被卡住的 update，解開同一列後面的條目', async () => {
+    const t = build(null, (e) => (e.payload?.v === 2 ? 422 : 'ok'))
     await t.queue.enqueue(upd('a', { v: 2 }))
+    await t.queue.enqueue(upd('a', { v: 3 }))
     await t.queue.flush('u1')
     expect(await t.queue.discard(1)).toBe(true)
     expect(await t.queue.discard(1)).toBe(false)
     const r = await t.queue.flush('u1')
     expect(r.sent).toBe(1)
-    expect(t.sender.sent[t.sender.sent.length - 1].op).toBe('update')
+    expect(t.sender.sent[t.sender.sent.length - 1].payload).toEqual({ v: 3 })
+  })
+
+  it('discard 放棄被拒絕的 insert，同一列後面的 update 一起走：下一輪什麼都不送', async () => {
+    const t = build(null, (e) => (e.op === 'insert' ? 422 : 'ok'))
+    await t.queue.enqueue(ins('a'))
+    await t.queue.enqueue(upd('a', { v: 2 }))
+    await t.queue.flush('u1')
+    expect(await t.queue.discard(1)).toBe(true)
+    expect(await t.queue.entries()).toEqual([])
+    const r = await t.queue.flush('u1')
+    expect(r.sent).toBe(0)
+    expect(t.sender.sent.map((e) => e.op)).toEqual(['insert'])
   })
 })
 

@@ -114,8 +114,12 @@ export interface QueueSummary {
   readonly mine: number
   /** 屬於其他 user_id、這次登入下不會上傳也不會被動到的條數（AC 13）。 */
   readonly foreign: number
-  /** mine 之中從未失敗的。 */
+  /** mine 之中從未失敗、也不在等父列的（真的還沒送，或正在送）。 */
   readonly pending: number
+  /** mine 之中從未失敗、但在等前面那筆：某個父列在佇列裡送不出去（insert 失敗，或它自己也在等）。
+   *  與 failed 分開數：這些條目沒被送過、沒有自己的錯誤，畫面上要說「在等前面那筆」而不是「卡住了」。
+   *  pending＋waiting＋failed 各項加總＝mine。 */
+  readonly waiting: number
   /** mine 之中最後一次失敗的分類計數（AC 11：讓人看得出卡在哪一種）。 */
   readonly failed: Readonly<Record<FailureKind, number>>
 }
@@ -193,8 +197,11 @@ function detachSetNull(entries: readonly QueueEntry[], userId: string, gone: Rea
 }
 
 /** 放棄 seq 這一條之後的佇列。放棄的是確定沒生效的 insert 時，這一列不會存在：
- *  cascade／restrict 掛在它底下、同樣沒生效的子孫一併放棄（留著只會撞外鍵、永遠卡成 rejected），
- *  setNull 的子列改指向 null 留下。同一列後面的條目不動：放棄只動被點名的那一條（既有契約）。 */
+ *  - cascade／restrict 掛在它底下、同樣沒生效的子孫一併放棄（留著只會撞外鍵、永遠卡成 rejected），
+ *    setNull 的子列改指向 null 留下。
+ *  - 同一列、同一帳號、seq 較大且同樣確定沒生效的條目（例如被拒絕的訓練後來的「完成訓練」update）也一併放棄：
+ *    列不存在了，留著只會打到不存在的列、變成新的被拒絕。結果曖昧的後續條目不動（請求可能已落地）。
+ *  放棄的若是 update／delete，或可能已落地的 insert，只動被點名的那一條。 */
 function withoutDiscarded(snap: QueueSnapshot, target: QueueEntry): QueueSnapshot {
   const next = removeEntry(snap, target.seq)
   if (target.op !== 'insert') return next
@@ -206,7 +213,14 @@ function withoutDiscarded(snap: QueueSnapshot, target: QueueEntry): QueueSnapsho
   }
   const doomed = orphanRows(next.entries, target.userId, root, true)
   doomed.delete(root)
-  const kept = next.entries.filter((e) => !(e.userId === target.userId && doomed.has(keyOf(e)) && neverApplied(e)))
+  const kept = next.entries.filter(
+    (e) =>
+      !(
+        e.userId === target.userId &&
+        neverApplied(e) &&
+        (doomed.has(keyOf(e)) || (keyOf(e) === root && e.seq > target.seq))
+      ),
+  )
   return { ...next, entries: detachSetNull(kept, target.userId, new Set([...doomed, root])) }
 }
 
@@ -257,15 +271,39 @@ export function appendEntry(snap: QueueSnapshot, input: NewEntry, now: number): 
 
 export function summarize(snap: QueueSnapshot, userId: string): QueueSummary {
   const failed: Record<FailureKind, number> = { offline: 0, auth: 0, rejected: 0, transient: 0 }
-  let mine = 0
-  let pending = 0
-  for (const e of snap.entries) {
-    if (e.userId !== userId) continue
-    mine++
-    if (e.failure) failed[e.failure]++
-    else pending++
+  const own = snap.entries.filter((e) => e.userId === userId)
+  // 照 flush 的 missing 判斷「父列沒到」：這一列有 insert 失敗了，或它自己（insert）也在等。
+  // 只認 insert：父列的 update 失敗時列是存在的，子列的 insert 照送（見 runFlushRound）。
+  // 不看條目順序，掃到不再增加為止；只看自己的帳號——別人的同名列不會擋到我。
+  const missing = new Set(own.filter((e) => e.failure && e.op === 'insert').map(keyOf))
+  // 同一列：前面的條目失敗（或自己在等），後面的不能越過它（flush 的 blocked）。記每一列最早的擋路者 seq，
+  // 否則「被拒的訓練底下打勾某組」那條 update 會被算成 pending、顯示「會自動送出」，其實送不出去。
+  const blockedFrom = new Map<string, number>()
+  const blockRow = (e: QueueEntry) => blockedFrom.set(keyOf(e), Math.min(blockedFrom.get(keyOf(e)) ?? Infinity, e.seq))
+  for (const e of own) if (e.failure) blockRow(e)
+  const waitingSeqs = new Set<number>()
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const e of own) {
+      if (e.failure || waitingSeqs.has(e.seq)) continue
+      const behindParent = e.parents?.some((p) => missing.has(keyOf(p)))
+      const behindSameRow = (blockedFrom.get(keyOf(e)) ?? Infinity) < e.seq
+      if (!behindParent && !behindSameRow) continue
+      waitingSeqs.add(e.seq)
+      grew = true
+      blockRow(e)
+      if (e.op === 'insert') missing.add(keyOf(e))
+    }
   }
-  return { total: snap.entries.length, mine, foreign: snap.entries.length - mine, pending, failed }
+  for (const e of own) if (e.failure) failed[e.failure]++
+  return {
+    total: snap.entries.length,
+    mine: own.length,
+    foreign: snap.entries.length - own.length,
+    pending: own.filter((e) => !e.failure).length - waitingSeqs.size,
+    waiting: waitingSeqs.size,
+    failed,
+  }
 }
 
 /** 主動登出前要不要先確認（Q1）：佇列是那幾筆資料唯一的一份，非空就不能默默清掉。
@@ -312,10 +350,15 @@ export interface OfflineQueue {
   read(userId: string): Promise<{ entries: readonly QueueEntry[]; summary: QueueSummary }>
   /** 放棄一條（例如被 rejected 卡住、使用者決定不要了）。回傳有沒有這一條。
    *  放棄的若是確定沒生效的 insert：cascade／restrict 掛在那一列底下的子孫條目連帶放棄（沒有父列存不了），
-   *  setNull 的子列留下、那一欄改成 null。會帶走幾條先用 discardImpact 問。 */
-  discard(seq: number): Promise<boolean>
-  /** 放棄這一條會連帶清掉幾條（不含它自己）。UI 在「放棄這筆」前據此告知會一起消失多少。 */
-  discardImpact(seq: number): Promise<number>
+   *  同一列後面同樣確定沒生效的條目（update 等）也一起走，setNull 的子列留下、那一欄改成 null。
+   *  結果曖昧（可能已落地）的條目不連帶。會帶走幾列先用 discardImpact 問。
+   *  `userId` 給了就必須與目標條目的帳號一致，否則當作沒有這一條（回 false、不動）：畫面上的 seq 是舊的、
+   *  帳號已換時，不能放棄到別人的條目。 */
+  discard(seq: number, userId?: string): Promise<boolean>
+  /** 放棄這一條會連帶消失幾「列」（不含被點的那一列本身）。數列不數條目：同一列後來的 update
+   *  跟著 insert 一起走，使用者看到的是「一個動作」不是「三筆變更」。UI 在「放棄這筆」前據此告知。
+   *  `userId` 規則同 discard，對不上回 0。 */
+  discardImpact(seq: number, userId?: string): Promise<number>
   /** 清空全部。主動登出才呼叫；被動掉線（SIGNED_OUT 非使用者按的）一律不呼叫（AC 13）。 */
   clear(): Promise<void>
 }
@@ -544,21 +587,24 @@ export function createQueue({
         return { entries: snap.entries, summary: summarize(snap, userId) }
       }),
 
-    discard: (seq) =>
+    discard: (seq, userId) =>
       locked(async () => {
         const snap = await current()
         const target = snap.entries.find((e) => e.seq === seq)
-        if (!target) return false
+        if (!target || (userId !== undefined && target.userId !== userId)) return false
         await commit(withoutDiscarded(snap, target))
         return true
       }),
 
-    discardImpact: (seq) =>
+    discardImpact: (seq, userId) =>
       locked(async () => {
         const snap = await current()
         const target = snap.entries.find((e) => e.seq === seq)
-        if (!target) return 0
-        return snap.entries.length - 1 - withoutDiscarded(snap, target).entries.length
+        if (!target || (userId !== undefined && target.userId !== userId)) return 0
+        const left = new Set(withoutDiscarded(snap, target).entries.map((e) => e.seq))
+        const rows = new Set(snap.entries.filter((e) => e.seq !== target.seq && !left.has(e.seq)).map(keyOf))
+        rows.delete(keyOf(target))
+        return rows.size
       }),
 
     clear: () =>
