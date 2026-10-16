@@ -822,3 +822,53 @@ test('本機 session 格式認不得、後端連上了卻永不回應：慢態�
   check((await page.locator('.notice .headline').count()) === 0, '永不回應的情境不該出現「連不上後端」headline')
   await must(page, '.notice .action-btn', '慢態的重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
 })
+
+/* 全站精緻度 B1a：飲食頁底部列脫離版面流、浮在時間軸上，霧化帶蓋在它底下。三個會靜默壞掉的地方：
+   ①容器或霧化帶攔截了點擊／捲動 ②兩顆鈕自己反而點不到（容器 none、子元素忘了 auto）
+   ③時間軸沒替底部列留位置，捲到底最後一列被蓋住。視覺（blur 有沒有糊）headless 看不出，只能真機。 */
+test('飲食頁底部列浮起：霧化帶與空白不攔截，兩顆鈕點得到，捲到底不被蓋住', async ({ page }) => {
+  await openApp(page)
+  const r = await page.evaluate(() => {
+    const hit = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y)
+      return { inBar: !!el?.closest('.bottom-bar'), inFog: !!el?.closest('.fog'), tab: !!el?.closest('.tab'), cta: !!el?.closest('.cta') }
+    }
+    const center = (sel: string) => {
+      const b = document.querySelector(sel)!.getBoundingClientRect()
+      return [b.x + b.width / 2, b.y + b.height / 2] as const
+    }
+    const bar = document.querySelector('.bottom-bar')!.getBoundingClientRect()
+    const tabbar = document.querySelector('.tabbar')!.getBoundingClientRect()
+    const cta = document.querySelector('.cta')!.getBoundingClientRect()
+    // 時間軸塞一段高內容並捲到底：最後一個孩子的下緣必須在底部列上緣之上
+    const tl = document.querySelector('.timeline') as HTMLElement
+    const spacer = document.createElement('div')
+    spacer.style.height = '900px'
+    tl.appendChild(spacer)
+    tl.scrollTop = tl.scrollHeight
+    return {
+      isFloating: getComputedStyle(document.querySelector('.bottom-bar')!).position === 'absolute',
+      gap: hit((tabbar.right + cta.left) / 2, bar.top + bar.height / 2),
+      inFog: hit(196, bar.top - 40),
+      tab: hit(...center('.tab[aria-label="設定"]')),
+      cta: hit(...center('.cta')),
+      spacerBottom: spacer.getBoundingClientRect().bottom,
+      barTop: bar.top,
+    }
+  })
+  check(r.isFloating, '飲食頁的底部列應該是浮起（absolute）的')
+  check(!r.gap.inBar && !r.gap.inFog, `兩顆鈕之間的空白攔截了點擊：${JSON.stringify(r.gap)}`)
+  check(!r.inFog.inBar && !r.inFog.inFog, `霧化帶攔截了點擊：${JSON.stringify(r.inFog)}`)
+  check(r.tab.tab, `設定分頁的中心點不是分頁鈕（被別的東西蓋住）：${JSON.stringify(r.tab)}`)
+  check(r.cta.cta, `記一筆 CTA 的中心點不是 CTA（被別的東西蓋住）：${JSON.stringify(r.cta)}`)
+  check(r.spacerBottom <= r.barTop + 1, `捲到底後內容下緣 ${r.spacerBottom} 超過底部列上緣 ${r.barTop}，最後一列會被蓋住`)
+
+  // 訓練分頁各自批次再改，底部列仍在版面流裡
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await page.waitForSelector('[data-screen="training"]')
+  const training = await page.evaluate(() => ({
+    position: getComputedStyle(document.querySelector('.bottom-bar')!).position,
+    fog: document.querySelectorAll('.fog').length,
+  }))
+  check(training.position !== 'absolute' && training.fog === 0, `訓練分頁不該套浮起與霧化：${JSON.stringify(training)}`)
+})

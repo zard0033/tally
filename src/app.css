@@ -91,6 +91,7 @@
   --field-line: 2px solid var(--rule-field);
   /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
   --fog-h: 168px; --fog-blur: 9px;
+  --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
 }
 * { box-sizing: border-box; }
 
@@ -107,7 +108,7 @@ body {
      （user-scalable=no 違反 WCAG 1.4.4，且 iOS 10 起直接忽略，不走那條） */
   touch-action: manipulation;
 }
-.screen { height: 100dvh; display: flex; flex-direction: column; }
+.screen { height: 100dvh; display: flex; flex-direction: column; position: relative; }
 .screen svg { stroke: currentColor; fill: none; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 
@@ -388,7 +389,7 @@ button { -webkit-user-select: none; user-select: none; }
 .cta { display: flex; align-items: center; justify-content: center;
   width: 56px; height: 56px; min-height: 0; padding: 0; flex-shrink: 0;
   border: none; border-radius: var(--r-pill); cursor: pointer;
-  background: var(--accent); color: var(--on-accent);
+  background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-2);
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease); }
 @media (hover: hover) { .cta:hover { background: var(--accent-dark); } }
@@ -442,8 +443,21 @@ button { -webkit-user-select: none; user-select: none; }
 .bottom-bar { display: flex; align-items: center; justify-content: space-between;
   gap: var(--s-3); padding: var(--s-2) var(--s-5);
   padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); }
+/* 浮起：shadow-2 取代 1px 邊框（全站基礎 B1a） */
 .tabbar { display: flex; gap: var(--s-1); padding: var(--s-1);
-  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-pill); }
+  background: var(--card); border-radius: var(--r-pill); box-shadow: var(--shadow-2); }
+/* 飲食分頁：底部列脫離版面流、浮在內容上，內容從底下捲過時由 .fog 霧化。
+   容器 pointer-events: none、直系子元素 auto——同 .undo-bar：兩顆鈕之間的空白不該攔截時間軸的捲動與左滑。
+   --bar-h ＝ 底部列實高（8＋56＋8，再加安全區），時間軸底部留出這麼多＋一點呼吸，最後一列捲到底才不被蓋住。 */
+.bottom-bar.is-floating { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; pointer-events: none; }
+.bottom-bar.is-floating > * { pointer-events: auto; }
+.main.has-floating-bar .timeline { padding-bottom: calc(var(--bar-h) + var(--s-4)); }
+.main.has-floating-bar .undo-bar { bottom: calc(var(--bar-h) + var(--s-2)); }
+.fog { position: absolute; left: 0; right: 0; bottom: 0; height: var(--fog-h); z-index: 1; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--paper) 88%);
+  -webkit-backdrop-filter: blur(var(--fog-blur)); backdrop-filter: blur(var(--fog-blur));
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 60%); }
 /* 分頁改純圖示（v2.3）：同列已有主 CTA，帶字分頁塞不下，aria-label 補無障礙名稱。
    v2.5：44→56px 寬（真機回報「稍嫌小」），position:relative 給 .tab-indicator 當定位基準 */
 .tab { position: relative; display: flex; align-items: center; justify-content: center;

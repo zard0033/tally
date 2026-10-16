@@ -879,10 +879,13 @@ export default function App() {
   if (!session) return <Login error={loginError} />
 
   const ready = profile !== null && targets !== null && weight !== null
+  // 全站精緻度 B1a：飲食分頁的底部列浮在內容上、內容經過時霧化；訓練與設定等各自批次再接
+  const barShown = !settingsSubView && !trainingFullPage
+  const floatingBar = barShown && tab === 'today'
 
   return (
     <div className="screen" id="view-app">
-      <main className="main">
+      <main className={floatingBar ? 'main has-floating-bar' : 'main'}>
         {tab === 'training' ? (
           <Training
             view={training.view}
@@ -980,8 +983,9 @@ export default function App() {
       {/* 底部列本身是純版面容器（div），<nav> 只包分頁——CTA 是「開記一筆表單」的動作，
           不是導覽項；把它放進 aria-label="主要導覽" 的 landmark 裡，讀屏使用者跳到導覽時
           會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
-      {!settingsSubView && !trainingFullPage && (
-      <div className="bottom-bar">
+      {floatingBar && <div className="fog" aria-hidden="true" />}
+      {barShown && (
+      <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
         <nav className="tabbar" aria-label="主要導覽">
           {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
               兩顆分頁共用同一個 layoutId——切換時上一顆卸載、下一顆掛載發生在同一次
