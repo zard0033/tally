@@ -137,7 +137,8 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="scrim" render={<motion.div style={{ opacity: backdrop }} />} />
+        {/* 關閉 spring 要約 1 秒才卸載，期間 scrim 與 popup 不吃點擊：按「加入」後馬上點別的東西不該被擋 */}
+        <Dialog.Backdrop className="scrim" render={<motion.div style={{ opacity: backdrop, pointerEvents: open ? undefined : 'none' }} />} />
         <Dialog.Popup
           ref={attach}
           className={`sheet spring-sheet${fit ? ' sheet-fit' : ''}`}
@@ -146,7 +147,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
           initialFocus={initialFocus}
           render={
             <motion.div
-              style={{ y }}
+              style={{ y, pointerEvents: open ? undefined : 'none' }}
               drag="y"
               dragControls={controls}
               dragListener={false}

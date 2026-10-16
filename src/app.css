@@ -451,7 +451,9 @@ button { -webkit-user-select: none; user-select: none; }
    --bar-h ＝ 底部列實高（8＋56＋8，再加安全區），時間軸底部留出這麼多＋一點呼吸，最後一列捲到底才不被蓋住。 */
 .bottom-bar.is-floating { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; pointer-events: none; }
 .bottom-bar.is-floating > * { pointer-events: auto; }
-.main.has-floating-bar .timeline { padding-bottom: calc(var(--bar-h) + var(--s-4)); }
+.main.has-floating-bar .timeline { padding-bottom: calc(var(--bar-h) + var(--s-4));
+  /* scrollIntoView（展開最後一列、換餐別）對齊的是捲動區邊緣，padding 不算——scroll-padding 才算 */
+  scroll-padding-bottom: calc(var(--bar-h) + var(--s-4)); }
 .main.has-floating-bar .undo-bar { bottom: calc(var(--bar-h) + var(--s-2)); }
 .fog { position: absolute; left: 0; right: 0; bottom: 0; height: var(--fog-h); z-index: 1; pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--paper) 88%);
@@ -783,9 +785,9 @@ button { -webkit-user-select: none; user-select: none; }
   background: color-mix(in srgb, var(--ink) 55%, transparent);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   -webkit-appearance: none; appearance: none; }
-/* 進場動畫只給 Settings 的手刻 sheet——LogSheet 的 scrim 是 vaul Overlay，動畫由
-   vaul 的 [data-state] 單軌驅動（LogSheet.tsx 的覆寫塊）。base class 掛動畫會跟
-   vaul 打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
+/* 進場動畫只給 Settings 的手刻 sheet——其餘 sheet 的 scrim 由 vaul 的 [data-state]
+   單軌驅動（食品庫新增、訓練各 sheet），或由 SpringSheet 的 opacity 跟著 y 驅動（記一筆、開始訓練、新課表）。
+   base class 掛動畫會跟它們打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
 #settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
 /* top 96px：讓今日頁的頂欄與主數字露在遮罩上方，記錄時還看得到「還能吃多少」。
    低於這個值會蓋掉主數字，高於則吃掉清單可視列數 */
@@ -840,7 +842,7 @@ button { -webkit-user-select: none; user-select: none; }
    否則每次重畫都會重播一次進場 */
 /* 進場只給 .opening 那一次；退場：Settings 用 inline style 套 sheet-out（--dur-mid，
    closeDurationMs()）與 scrim-out（--dur-fast，scrimFadeMs()——暗幕先清，理由見 Settings.tsx），
-   LogSheet 由 vaul data-state 驅動，vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
+   vaul 的 sheet 由 data-state 驅動、SpringSheet 由 motion 驅動（記一筆 v2.62 起是 SpringSheet），vanilla 時代的 #sheet-root.closing 選擇器已無對應 DOM，勿加回 */
 .sheet.opening { animation: sheet-in var(--dur-sheet) var(--ease-sheet) both; }
 /* SpringSheet（自製，取代 vaul；spec 全站基礎）：transform 由 motion 驅動，所以不掛 CSS 動畫。
    貼合內容的版本：top 放掉、只留最大高度，頂部仍守 --kb／--vvtop 那套（v2.34–v2.46）。
@@ -1192,7 +1194,7 @@ button { -webkit-user-select: none; user-select: none; }
 .field-float .req { color: var(--over); margin-left: .15em; }
 
 /* 店家 Autocomplete 下拉。LogSheet.tsx 把 Autocomplete.Portal 的 container 指到
-   Drawer.Content（sheetRef），刻意不用 Base UI 預設的 document.body：vaul 的 Drawer
+   sheet 本身（sheetRef；v2.62 起是 SpringSheet 的 popup，原為 vaul 的 Drawer.Content），刻意不用 Base UI 預設的 document.body：vaul 的 Drawer
    底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行 Dialog Content
    自己的子樹——選單若掛在 body 下會落在被擋的那層，看得到但點不到（真機／e2e 都撞過，
    見 DESIGN.md「店家欄位」條）。指到 sheetRef 之後，選單變成 .sheet 的子孫，跟表單其他

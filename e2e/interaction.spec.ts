@@ -872,3 +872,43 @@ test('飲食頁底部列浮起：霧化帶與空白不攔截，兩顆鈕點得�
   }))
   check(training.position !== 'absolute' && training.fog === 0, `訓練分頁不該套浮起與霧化：${JSON.stringify(training)}`)
 })
+
+/* review 抓到（B1a）：展開最後一列時，`scrollIntoView({ block: 'nearest' })` 對齊的是捲動區的邊緣，
+   `padding-bottom` 不算進去——編輯區下緣會落在底部列底下，右側的刪除鈕剛好在 CTA 底下。
+   修法是時間軸的 `scroll-padding-bottom`。不縮視窗：編輯區約 322px，393×745 的時間軸扣掉底部列還剩約 360px 放得下；
+   視窗再矮，編輯區本身就大過可見範圍，量出來的是別的事。展開後內容才溢出，所以 scrollIntoView 會被觸發。 */
+test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，不被蓋住', async ({ page }) => {
+  await openApp(page)
+  const last = page.locator('.timeline .item-row').last()
+  await last.locator('.item-content').click()
+  await expect(last.locator('.item-editor')).toBeVisible()
+  // 展開動畫跑完才捲（smooth），所以輪詢到捲動落定；沒修好的話這個值會一直停在正數
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const rows = document.querySelectorAll('.timeline .item-row')
+          const editor = rows[rows.length - 1].querySelector('.item-editor')!.getBoundingClientRect()
+          return Math.round(editor.bottom - document.querySelector('.bottom-bar')!.getBoundingClientRect().top)
+        }),
+      { timeout: 3000, message: '編輯區下緣一直落在底部列上緣之下（被蓋住）' },
+    )
+    .toBeLessThanOrEqual(1)
+})
+
+/* review 抓到（B1b）：SpringSheet 的關閉是 spring、約 1.1 秒才卸載，這段時間 scrim 還鋪滿全螢幕，
+   按「加入」之後馬上點別的東西會被它吃掉（vaul 是 280ms）。用 mouse.click 的座標點，不用 locator.click——
+   後者會等「點得到」才出手，剛好把這個問題遮住。 */
+test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會被 scrim 吃掉', async ({ page }) => {
+  await openApp(page)
+  await page.click('button.cta')
+  await page.waitForSelector('.food-row')
+  await page.waitForTimeout(800)
+  await page.locator('.food-row').first().click()
+  await page.waitForSelector('.pick-bar')
+  const tab = (await page.locator('.tab[aria-label="設定"]').boundingBox())!
+  await page.click('.pick-bar-btn')
+  await page.waitForTimeout(300) // sheet 才收到一半，DOM 還在
+  await page.mouse.click(tab.x + tab.width / 2, tab.y + tab.height / 2)
+  await expect(page.locator('[data-screen="settings"]'), '收合中的點擊被 scrim 吃掉了').toBeVisible({ timeout: 1500 })
+})

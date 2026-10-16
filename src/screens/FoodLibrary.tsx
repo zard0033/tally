@@ -99,9 +99,9 @@ export default function FoodLibrary(props: FoodLibraryProps) {
      同一個終態——因為 `vendorAutoFocus` 那邊是無條件 `focus()`。**哪天它也加上條件，這個
      收斂性就要重新檢查。**
 
-     **`LogSheet.tsx` 有一份逐字相同的**（precommit review 兩位 reviewer 都提議抽成共用 hook）。
+     **`LogSheet.tsx` 原本有一份逐字相同的**（precommit review 兩位 reviewer 都提議抽成共用 hook；v2.62 起 LogSheet 換成 SpringSheet，那份已不存在）。
      **刻意不抽**：本專案的判準是「兩份長得像不構成理由，本來就該一致且已經開始不一致才是」
-     （CLAUDE.md／DESIGN v2.29）。這兩份同一輪寫成、還沒分岔過，第三次重複再談。 */
+     （CLAUDE.md／DESIGN v2.29）。兩份從沒分岔過；現在只剩這一份，更沒有抽的理由。 */
   const attachAddSheet = useCallback((node: HTMLDivElement | null) => {
     addSheetRef.current = node
     if (node) requestAnimationFrame(() => {
