@@ -20,6 +20,7 @@ import {
   type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
+import SegmentedControl from '@/components/SegmentedControl'
 import MaintenanceCard from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
@@ -287,20 +288,18 @@ export default function DailyGoal(props: DailyGoalProps) {
       </div>
 
       <div className="goal-seg-wrap">
-        <div className="seg" role="group" aria-label="目標計算方式">
-          <button type="button" aria-pressed={!draft.useCustom} onClick={() => patch('useCustom', false)}>
-            公式估算
-          </button>
-          <button type="button" aria-pressed={draft.useCustom} onClick={() => patch('useCustom', true)}>
-            自訂目標
-          </button>
-        </div>
+        <SegmentedControl
+          label="目標計算方式"
+          items={[{ key: 'formula', label: '公式估算' }, { key: 'custom', label: '自訂目標' }]}
+          value={draft.useCustom ? 'custom' : 'formula'}
+          onPick={(k) => patch('useCustom', k === 'custom')}
+        />
       </div>
 
       <div className="form-wrap" style={{ paddingTop: 0 }}>
         {draft.useCustom ? (
           <>
-            <div className="goal-group-title" style={{ paddingLeft: 0 }}>今日目標（自己填）</div>
+            <div className="goal-group-title" style={{ paddingLeft: 0, paddingBottom: 'var(--s-2)' }}>今日目標（自己填）</div>
             {field({ id: 'g-custom-kcal', label: '熱量（卡）', required: true, value: draft.customKcal, onChange: (v) => patch('customKcal', v) })}
             <div style={{ marginTop: 'var(--s-3)' }}>
               {field({ id: 'g-custom-protein', label: '蛋白質 g', value: draft.customProtein, onChange: (v) => patch('customProtein', v) })}

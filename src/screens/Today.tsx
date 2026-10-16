@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import DateStrip from '@/components/DateStrip'
+import SegmentedControl from '@/components/SegmentedControl'
 import { isPlannable, weekdayDate } from '@/lib/dates'
 import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
@@ -738,18 +739,7 @@ function ItemEditor({
             另配字重 600 當非顏色訊號——--accent-soft 對 --card 只有 1.22:1。
             **不用原生 disabled 擋重入**：那會讓正被按下、正持有焦點的那顆瞬間失焦，
             失敗時焦點就掉到 body 再也回不來（a11y 稽核抓到）；改用 busy 邏輯守衛。 */}
-        <div className="seg" role="group" aria-label="餐別">
-          {MEALS.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              aria-pressed={m.key === localMeal}
-              onClick={() => void pickMeal(m.key)}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="餐別" items={MEALS} value={localMeal} onPick={(k) => void pickMeal(k)} />
       </div>
       {/* 品名與營養值。欄位版型照新增食物表單（DESIGN.md「新增食物表單欄位」）：品名整行、
           熱量整行、三大營養素三欄並排——同一組數字在兩個地方長得一樣，使用者不必重學。

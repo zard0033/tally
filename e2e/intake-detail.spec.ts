@@ -197,26 +197,37 @@ test('改完切到別天再切回來（走快取）：新值還在，不會被�
   await expect(page.locator(`${ROW} .kc`)).toHaveText('500')
 })
 
-/* 使用者真機回報「新加的營養素欄框線顏色跟份量／餐別不一樣」。量下來不只是不搭：
-   --rule 對編輯區底色 --raised 只有 1.24:1、舊的 --rule-field 也只有 2.90:1，兩邊
-   都沒過 WCAG 1.4.11 的 3:1。統一成調深後的 --rule-field（raised 3.11:1）。
-   顏色回歸肉眼難察，用 getComputedStyle 釘住——斷言「看得到框線」在顏色跑掉時照樣綠。 */
-test('編輯區四排控件的框線同色，且不是舊的淺色 --rule', async ({ page }) => {
+/* 控件語言（全站基礎 B1b）：填色＋2px 底線，不再是一圈框線。顏色回歸肉眼難察，用 getComputedStyle 釘住。
+   **編輯區的底是 --card、不是 --raised**——填色 --fill 對 --raised 只有 1.04:1，欄位會整個隱形；
+   所以先斷言底色，再斷言四排控件吃同一個 --fill，欄位底線同一條 --rule-field（對填色 3.00:1）。 */
+test('編輯區四排控件同一個填色，欄位底線是 --rule-field，編輯區底是 --card', async ({ page }) => {
   await openApp(page)
   await expand(page)
 
-  const borderOf = (sel: string) =>
-    page.locator(`${ROW} ${sel}`).first().evaluate((el) => getComputedStyle(el).borderTopColor)
+  const styleOf = (sel: string, prop: 'backgroundColor' | 'backgroundImage') =>
+    page.locator(`${ROW} ${sel}`).first().evaluate((el, p) => getComputedStyle(el)[p as 'backgroundColor'], prop)
 
-  const [stepper, seg, nameField, macroField] = await Promise.all([
-    borderOf('.qty-value'),
-    borderOf('.seg'),
-    borderOf('.ed-detail .field-float input'),
-    borderOf('.ed-detail .field-row input'),
+  const FILL = 'rgb(241, 230, 210)'
+  const [editor, stepper, seg, nameField, macroField] = await Promise.all([
+    styleOf('.item-editor', 'backgroundColor'),
+    styleOf('.qty-stepper', 'backgroundColor'),
+    styleOf('.seg', 'backgroundColor'),
+    styleOf('.ed-detail .field-float input', 'backgroundColor'),
+    styleOf('.ed-detail .field-row input', 'backgroundColor'),
   ])
+  expect(editor, '編輯區底不是 --card（填色對 --raised 會隱形）').toBe('rgb(252, 249, 243)')
+  expect([stepper, seg, nameField, macroField], '四排控件該是 --fill #F1E6D2').toEqual([FILL, FILL, FILL, FILL])
 
-  expect(new Set([stepper, seg, nameField, macroField]).size, `四排框線不同色：${[stepper, seg, nameField, macroField].join(' / ')}`).toBe(1)
-  expect(stepper, '不該退回 --rule #E0D3BD').not.toBe('rgb(224, 211, 189)')
-  expect(stepper, '該是調深後的 --rule-field #9A8069').toBe('rgb(154, 128, 105)')
+  const [lineName, lineMacro] = await Promise.all([
+    styleOf('.ed-detail .field-float input', 'backgroundImage'),
+    styleOf('.ed-detail .field-row input', 'backgroundImage'),
+  ])
+  for (const line of [lineName, lineMacro]) {
+    expect(line, '欄位底線該是 2px --rule-field #9A8069').toContain('rgb(154, 128, 105)')
+  }
+
+  // 分段控制的白塊只有一塊、掛在選中的那顆鈕裡（午餐，fixture 的 id 102 是午餐）
+  await expect(page.locator(`${ROW} .seg .seg-thumb`)).toHaveCount(1)
+  await expect(page.locator(`${ROW} .seg button[aria-pressed="true"] .seg-thumb`)).toHaveCount(1)
 })
 

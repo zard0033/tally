@@ -303,13 +303,14 @@ button { -webkit-user-select: none; user-select: none; }
 /* ── 就地編輯區（v2.20，取代 v2.14 的長按 sheet） ──
    展開時品名列與編輯區連成一張卡：同 --raised 底、同寬，圓角只留在整組外緣，
    讀起來是「這一列長高了」而不是「上面一條、下面疊一塊」。 */
-.item-row.is-edit .item-content { background-color: var(--raised);
+.item-row.is-edit { overflow: visible; box-shadow: var(--shadow-1); }
+.item-row.is-edit .item-content { background-color: var(--card);
   border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* 行距用 flex gap 宣告，不靠 .ed-line 的 min-height 擠出殘量——原本 48px 是硬編值
    （既不在 4pt token 尺上、也不是 44px 觸控常數），兩排之間的實際間隙是「48 減內容高」
    剩下的約 3px，比外圍內距窄 3-4 倍，兩塊控件因此糊成一整塊；而且改動 stepper 高度或
    分段器邊框，這個節奏會無聲跑掉（hallmark 抓到）。 */
-.item-editor { background: var(--raised); border-radius: 0 0 var(--r-tab) var(--r-tab);
+.item-editor { background: var(--card); border-radius: 0 0 var(--r-tab) var(--r-tab);
   padding: var(--s-2) var(--s-3) var(--s-3);
   display: flex; flex-direction: column; gap: var(--s-2); }
 .ed-line { display: flex; align-items: center; gap: var(--s-3); }
@@ -349,20 +350,20 @@ button { -webkit-user-select: none; user-select: none; }
    輸入框之後，深淺兩種框線並排的差異才變得明顯——但真正的問題不是不一致，是這條
    本來就不合格（使用者回報「顏色不符」時量出來的）。內部分隔線同步，否則外框深、
    內線淺會讀成兩個元件疊在一起。 */
-.seg { display: flex; flex: 1; min-width: 0; background: var(--card);
-  border: 1px solid var(--rule-field); border-radius: var(--r-tab); overflow: hidden; }
-.seg button { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s-1);
-  border: none; background: none; font-family: inherit; font-size: var(--t-sm);
+.seg { display: flex; flex: 1; min-width: 0; background: var(--fill); padding: 2px;
+  border-radius: var(--r-tab); }
+.seg button { position: relative; flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s-1);
+  border: none; border-radius: 10px; background: none; font-family: inherit; font-size: var(--t-sm);
   color: var(--ink-muted); white-space: nowrap; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
-.seg button + button { border-left: 1px solid var(--rule-field); }
-/* 選中態：--accent-soft 對 --card 只有 1.22:1，跟分頁列同一筆帳——顏色只買到色相差，
-   所以另配字重 600 當非顏色訊號（分頁列用的是描邊加粗，同一個原則的不同手段）。 */
-.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
-  font-weight: 600; }
+/* 選中態＝會滑動的白塊（.seg-thumb，spring 驅動，見 SegThumb）＋字重 600 與墨色字。
+   白塊 --card 對填色軌道只有 1.18:1，所以字重 600 仍是非顏色訊號（沿用原本分頁列的同一筆帳）。 */
+.seg button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+.seg-thumb { position: absolute; inset: 0; border-radius: 10px; background: var(--card);
+  box-shadow: var(--shadow-1); }
+.seg-label { position: relative; }
 .seg button:active { opacity: .6; }
-/* offset 內縮：.seg 是 overflow:hidden，往外長的外框會被裁掉 */
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* 與 .sheet-error 共用色與字級，只有外距分岔——兩份幾乎相同的規則是樣式漂移的起點
@@ -617,7 +618,7 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-src li + li { margin-top: var(--s-1); }
 .goal-src li::marker { color: var(--ink-faint); }
 
-.goal-seg-wrap { padding: 0 var(--s-3) var(--s-3); flex-shrink: 0; }
+.goal-seg-wrap { padding: 0 var(--s-5) var(--s-3); flex-shrink: 0; }
 .goal-link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
   width: 100%; min-height: 44px; padding: 0 var(--s-4); border: none; border-top: 1px solid var(--rule-subtle);
   background: none; font-family: inherit; color: var(--accent); font-size: var(--t-sm); font-weight: 600;
@@ -657,7 +658,8 @@ button { -webkit-user-select: none; user-select: none; }
 .lib-row-main .icon-btn svg { width: 17px; height: 17px; }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
-.lib-edit { padding: var(--s-3); background: var(--raised); }
+/* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.04:1 會隱形（與就地編輯區同一筆帳） */
+.lib-edit { padding: var(--s-3); background: var(--card); }
 .lib-edit .field-float { margin-bottom: var(--s-3); }
 .lib-edit .field-row { display: flex; gap: var(--s-2); }
 .lib-edit-actions { display: flex; gap: var(--s-2); padding-top: var(--s-1); }
@@ -903,15 +905,13 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* 搜尋框是模式切換器：一有輸入，搜尋結果取代整段清單，同時只存在一段 */
 .search-wrap { padding: var(--s-3) var(--s-5); flex-shrink: 0; }
-.search-box { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
-  padding: 0 var(--s-3); border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background: var(--paper); }
+.search-box { display: flex; align-items: center; gap: var(--s-2); min-height: 48px;
+  padding: 0 var(--s-3); }
 .search-box svg { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
 .search-box input { border: none; background: none; font-family: inherit;
   font-size: var(--t-md); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
 /* placeholder 也是文字，要過 4.5:1。--ink-faint 只有 2.92:1 */
 .search-box input::placeholder { color: var(--ink-muted); }
-.search-box:focus-within { box-shadow: inset 0 0 0 1px var(--accent); border-color: var(--accent); }
 
 /* 唯一捲動區 */
 .food-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none;
@@ -965,50 +965,26 @@ button { -webkit-user-select: none; user-select: none; }
 .food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
   padding: var(--s-1) 0; }
 .food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
-.qty-stepper { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
-/* 邊框用 --rule-field（控件邊界，WCAG 1.4.11 要 3:1）——理由與 .seg 那條同一筆帳。
-   stepper 兩處都在用（記一筆的食物列在 --card 上、今日頁編輯區在 --raised 上），
-   換成同一個 token 之後兩種底色都過門檻，不必分別開色。 */
-.qty-btn { width: 44px; height: 44px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background: var(--card); color: var(--ink); display: flex; align-items: center;
-  justify-content: center; cursor: pointer; flex-shrink: 0;
+.qty-stepper { display: flex; align-items: center; gap: 0; flex-shrink: 0; padding: 2px;
+  background: var(--fill); border-radius: var(--r-pill); }
+/* 填色膠囊＋兩顆浮起的圓鈕（--shadow-1），沒有分隔線（全站基礎 spec 規則 1）。
+   整組 44＋38＋44＋內距 4 ＝ 130px，維持原本的上限；觸控區仍是 44px。
+   disabled 只淡化圖示、不淡整顆鈕（v2.20 的老帳：opacity 相對於底色，換底就換意思）。 */
+.qty-btn { width: 44px; height: 44px; border: none; border-radius: var(--r-pill);
+  background: var(--card); box-shadow: var(--shadow-1); color: var(--ink); display: flex;
+  align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
 .qty-btn svg { width: 16px; height: 16px; }
 .qty-btn:active { opacity: .6; }
-/* 份量下限是 1，減到底時把減號停用。原本按下去完全沒反應——「按了什麼都沒發生」
-   永遠會被讀成壞掉。
-   **v2.20：只淡化圖示，不淡整顆鈕**。原本 `opacity: .35` 蓋掉整個元素（含 --card 底與
-   --rule 邊框），在記一筆 sheet 的 --card/--paper 底上讀起來是「這顆按不得」，但就地
-   編輯區的底是更深的 --raised，半透明的底與邊框一起被洗掉，三格 stepper 看起來像缺了
-   一格、左端圓角憑空消失，像元件沒渲染完——而 qty=1 是絕大多數品項的常態，等於「點開
-   品項」的預設畫面永遠帶著這個破圖感（hallmark 抓到）。
-   通則：`opacity` 是相對於背景的，同一個值在不同 surface token 上是兩件事。 */
 .qty-btn:disabled { cursor: default; }
 .qty-btn:disabled svg { opacity: .35; }
-/* offset 內縮：三顆 gap:0 緊貼，正 offset 的外框會蓋到左右鄰居的邊框上。v2.13 已為
-   .qty-value 修過同一個幾何問題，但同組的 .qty-btn 當時漏掉（impeccable 抓到，
-   證物 r3 可見焦點框橫跨減號與數字框的接縫）。 */
-.qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* 42px：把加減鈕之間的間距收成 0，44＋42＋44 剛好 130px 上限，數字框從 34 長到 42。
-   「觸控區 ≥44」與「整組上限 130px」兩條規則原本互不相容，程式默默選了後者；
-   拿掉間距之後兩條同時成立（鈕與鈕之間有邊框分界，不靠留白區隔） */
-.qty-value { width: 42px; min-height: 44px; border: 1px solid var(--rule-field);
-  border-radius: var(--r-tab); background: var(--paper); font-family: var(--font-num);
-  font-size: var(--t-md); color: var(--ink); text-align: center;
+.qty-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qty-value { width: 38px; min-height: 44px; border: none; border-radius: 10px; background: none;
+  font-family: var(--font-num); font-size: var(--t-md); color: var(--ink); text-align: center;
   font-variant-numeric: tabular-nums; padding: 0;
   -webkit-appearance: none; appearance: none; }
-/* offset 內縮：三顆 gap:0 緊貼，正 offset 的外框會蓋到左右鄰居的邊框上，
-   讀起來像邊框疊在一起（真機回報，2026-08-02；同手法見 .item-delete:focus-visible） */
-.qty-value:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* 三顆緊貼（gap:0）但各自四角都套 --r-tab，接縫處兩邊的圓角各自往內側探——真機
-   實測量出鈕與鈕交界處的邊框線會在轉角附近交叉，讀起來像「疊在一起」（使用者回報）。
-   根因不是觸控區跟視覺尺寸對不齊（bounding box 量過，44/42/44 三顆邊界精準相接、
-   零重疊，跟刪除鈕紅圓那種「44px 觸控區包小圖形」是不同成因），單純是分段群組只有
-   最外側兩角該圓、朝內的角要收成直角，接縫才是一條乾淨直線。 */
-.qty-stepper .qty-btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.qty-stepper .qty-value { border-radius: 0; }
-.qty-stepper .qty-btn:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.qty-value:focus { outline: none; background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); }
 
 /* 新增食物入口：只要搜尋框有輸入就常駐清單末尾，不是只在零結果時出現 */
 .search-empty-msg { padding: var(--s-4) var(--s-5) var(--s-1); text-align: center;
@@ -1106,16 +1082,11 @@ button { -webkit-user-select: none; user-select: none; }
    否則使用者會看到自己剛打的內容在辨識期間憑空消失。WebKit 15.4+ 才有 `:has()`，
    舊環境就只是沒有骨架（欄位照樣鎖住），退化是安全的。
    位置對齊輸入文字的位置（input 的 padding-top 是 26px），不是欄位正中央。 */
-.form-lock[disabled] .field-float input { border-color: var(--rule); }
+.form-lock[disabled] .field-float input { --line: var(--rule); }
 .form-lock[disabled] .field-float label { opacity: .45; }
-/* **標籤要一起浮起來**：空欄位的標籤停在垂直置中的位置，正好是骨架條要放的地方，
-   不浮起來就會被蓋掉一半（第一次實作就是這樣，截圖才看出來）。浮起後版面讀起來
-   剛好是「小標籤在上、灰條在下」——那正是載入中欄位該有的樣子。
-   複製上方 `input:not(:placeholder-shown) + label` 那條的位移值，兩處要一起改。 */
-.form-lock[disabled] .field-float:has(input:placeholder-shown) label {
-  transform: translateY(var(--s-2)) scale(.82); letter-spacing: var(--track-xs); }
+/* 標籤固定在框上方，空欄位的骨架條就畫在框內正中（標籤區 22px ＋ 欄位高度 48px 的一半，扣掉條高一半 6px）。 */
 .form-lock[disabled] .field-float:has(input:placeholder-shown)::after {
-  content: ''; position: absolute; left: var(--s-3); right: var(--s-3); top: 32px; height: 12px;
+  content: ''; position: absolute; left: var(--s-3); right: var(--s-3); top: 40px; height: 12px;
   border-radius: 6px; background: var(--raised); pointer-events: none;
   animation: skeleton-breathe 1.1s ease-in-out infinite; }
 @keyframes skeleton-breathe { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
@@ -1153,24 +1124,31 @@ button { -webkit-user-select: none; user-select: none; }
   padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; gap: var(--s-2); }
 
-/* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移。
-   禁止用 placeholder 冒充 label（WCAG 3.3.2）——placeholder=" " 只是給
-   :placeholder-shown 當開關用的空白值。
-   ponytail: iOS AutoFill 灌值時 :placeholder-shown 會不會正確翻轉未經真機驗證，
-   真機發現標籤壓字時改用 input 事件加 class 判斷。 */
+/* 欄位（全站基礎 spec 規則 1）：填色、無外框、圓角 12，底部 2px 底線維持邊界辨識；
+   標籤固定在框上方，不再浮動（消除「標籤在框內／框上」兩套並存）。
+   label 仍是真的 label 元素、排在 input 後面（DOM 順序沒動，Autocomplete 的 `input + label` 照舊命中），
+   只是用定位放到框上方。placeholder=" " 保留給 `:placeholder-shown`（骨架與其他判斷用），
+   不是拿 placeholder 冒充 label（WCAG 3.3.2）。
+   邊界：填色對 cream 只有 1.18:1，靠 2px `--rule-field` 底線（對 cream 3.53:1、對填色 3.00:1）。
+   底線用背景漸層畫成一條兩端各縮進 12px 的直線（`--line` 換色），不用 border-bottom 也不用 inset box-shadow：
+   兩者在圓角 12 下都會沿轉角彎成一道月牙，讀起來像按鈕的立體邊而不是底線（截圖才看出來）。 */
 .field-row { display: flex; gap: var(--s-3); }
 .field-row > * { flex: 1; min-width: 0; }
-.field-float { position: relative; margin-bottom: var(--s-4); }
-/* 高度與上內距是一組的：label 浮起後佔 8–19.5px，輸入文字從 26px 起，中間留 6.5px。
-   樣張的 52/18/13 這組會讓兩者重疊，字擠在一起 */
+.field-float { position: relative; margin-bottom: var(--s-4); padding-top: 22px; }
 /* 表單控件一律 --t-md（16px）：iOS Safari 對 <16px 的輸入框聚焦會自動 zoom，
    heuristic 關不掉，唯一乾淨解法就是別低於 16（真機實測撞到，2026-07-29） */
-.field-float input, .field-float select { width: 100%; min-height: 60px;
-  border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--paper);
+.field-float input, .field-float select, .search-box { --line: var(--rule-field);
+  background: linear-gradient(var(--line), var(--line)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--fill);
+  border: none; border-radius: var(--r-tab); }
+.field-float input, .field-float select { width: 100%; min-height: 48px;
   font-family: inherit; font-size: var(--t-md); color: var(--ink);
-  padding: 26px var(--s-3) 6px; -webkit-appearance: none; appearance: none; }
-.field-float input:focus, .field-float select:focus { outline: none;
-  border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  padding: 0 var(--s-3); -webkit-appearance: none; appearance: none;
+  transition: box-shadow var(--dur-base) var(--ease); }
+/* 聚焦：底線變 jade、整欄換 --card 底並加 3px jade 光暈 */
+.field-float input:focus, .field-float select:focus, .search-box:focus-within { outline: none;
+  --line: var(--accent);
+  background: linear-gradient(var(--line), var(--line)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--card);
+  box-shadow: 0 0 0 3px rgba(28, 112, 89, .18); }
 
 /* select 要看得出是 select。`-webkit-appearance: none`（上面那條，為了讓外觀跟輸入框同一套
    而必須關掉）連原生的下拉箭頭一起關掉了，於是全站的選單跟純文字輸入框長得一模一樣，
@@ -1178,26 +1156,16 @@ button { -webkit-user-select: none; user-select: none; }
    用 `:has(select)` 掛在外層而不是給每個 select 加 class：一條 CSS 就覆蓋全站所有選單，
    不必回頭改每一份 JSX，之後新增的選單也自動有。`:has()` 需要 Safari 15.4，低於本檔
    已經在用的 `overflow: clip`（16.0），沒有拉高相容性門檻（precommit-review 提的）。
-   箭頭用 border 旋轉畫，不用 data URI 的 SVG——後者要把顏色寫死在字串裡，繞過 token。 */
+   箭頭用 border 旋轉畫，不用 data URI 的 SVG——後者要把顏色寫死在字串裡，繞過 token。
+   垂直位置＝標籤區 22px ＋ 欄位高度一半（24px）。 */
 .field-float:has(select) select { padding-right: 36px; }
 .field-float:has(select)::after {
-  content: ''; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px;
+  content: ''; position: absolute; right: 16px; top: 46px; width: 7px; height: 7px;
   margin-top: -6px; border-right: 1.5px solid var(--ink-muted);
   border-bottom: 1.5px solid var(--ink-muted); transform: rotate(45deg);
   pointer-events: none; }
-/* 過場只動 transform 與 color，不動 top／font-size——後兩者是 layout 屬性，
-   DESIGN.md 明訂只准動 opacity 與 transform。縮放用 scale 達成：
-   .82 × 14px（--t-base）＝ 11.5px，正好是 --t-xs，字級階梯沒有被繞過。
-   起點 translateY(19px) 是 60px 高度的垂直置中位置（(60-14×1.55)/2 ≈ 19），
-   終點 8px 與 26px 的上內距搭成一組（見上方 input 的註解） */
-.field-float label { position: absolute; left: var(--s-3); top: 0; line-height: 1;
-  transform: translateY(19px); transform-origin: left top;
-  font-size: var(--t-md); color: var(--ink-muted); pointer-events: none;
-  transition: transform var(--dur-base) var(--ease), color var(--dur-base) var(--ease); }
-.field-float input:focus + label,
-.field-float input:not(:placeholder-shown) + label,
-.field-float select + label {
-  transform: translateY(var(--s-2)) scale(.82); letter-spacing: var(--track-xs); }
+.field-float label { position: absolute; left: var(--s-1); top: 0; line-height: 1.2;
+  font-size: var(--t-sm); letter-spacing: var(--track-xs); color: var(--ink-muted); pointer-events: none; }
 .field-float .req { color: var(--over); margin-left: .15em; }
 
 /* 店家 Autocomplete 下拉。LogSheet.tsx 把 Autocomplete.Portal 的 container 指到
