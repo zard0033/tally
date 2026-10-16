@@ -1,4 +1,4 @@
-/* 記一筆 sheet：vaul Drawer 承載，清單多選／搜尋／份量 stepper／新增食物／確認列。
+/* 記一筆 sheet：SpringSheet 承載（全站精緻度 B1b，原為 vaul Drawer），清單多選／搜尋／份量 stepper／新增食物／確認列。
    行為與視覺依 DESIGN.md 元件規則表（2026-07-31 起是唯一真相來源，原本對齊的
    sample-log-entry.html 樣張已隨該日的樣張退場一併移除），程式邏輯照 legacy/app.js
    的「記一筆 sheet」整段（openSheet／sheetListHtml／onSheetClick／onSheetInput／
@@ -8,9 +8,9 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要 legacy 那套
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
-import { Drawer } from 'vaul'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import FoodFormFields from '@/components/FoodFormFields'
+import SpringSheet from '@/components/SpringSheet'
 import {
   listRecentIntake,
   scanLabel,
@@ -176,24 +176,11 @@ export default function LogSheet(props: LogSheetProps) {
   const [foodForm, setFoodForm] = useState<FoodForm>(BLANK_FOOD_FORM)
   /** 辨識中鎖住關閉（關閉鈕 ＋ 下滑）——誤關的代價是那張照片白拍。 */
   const [scanBusy, setScanBusy] = useState(false)
-  /* 店家 Autocomplete 的 Portal 要指到這裡，不能用預設的 document.body——vaul 的
-     Drawer 底層是 Radix Dialog，開啟時會把 body 設成 pointer-events:none、只放行
-     Dialog Content 自己的子樹。預設 Portal 掛在 body 下等於掛在被擋的那層，選單看得到
-     但點不到（真機／e2e 都撞到這個，見 DESIGN.md「店家欄位」條）。指到 Drawer.Content
-     這個 ref 之後，選單變成 Dialog Content 的子孫，繼承同一份 pointer-events 豁免。 */
+  /* 店家 Autocomplete 的 Portal 指到 sheet 自己（SpringSheet 交出的 popup 節點）。vaul 時代這是必須的
+     （Radix Dialog 把 body 設成 pointer-events:none，掛在 body 的選單點不到，見 DESIGN.md「店家欄位」
+     條）；Base UI 的 Dialog 不做那件事，但留著也無害——選單仍是 sheet 的子孫，stacking 跟著 sheet。
+     同時當 `initialFocus`：開啟時焦點落在 sheet 容器上（與 vaul 版「聚焦容器」一致，不是第一顆 chip）。 */
   const sheetRef = useRef<HTMLDivElement | null>(null)
-
-  /* sheet 掛上時把焦點移進來——理由與做法同 `FoodLibrary.tsx` 的 `attachAddSheet`（vaul 不自己
-     做，焦點會留在觸發的那顆鈕上，而 `#root` 已被標成 `aria-hidden`）。**兩處要一起改**：
-     兩個都是 vaul 的 Drawer，缺一個就有一條路徑仍然把焦點丟在被隱藏的區域裡。
-     **必須是 callback ref**：掛在 `[open]` 的 effect 上不會生效，那時 Portal 還沒掛好節點。
-     與 `FoodLibrary` 那份逐字相同是**刻意的**，不抽共用 hook 的理由寫在那一份的註解裡。 */
-  const attachSheet = useCallback((node: HTMLDivElement | null) => {
-    sheetRef.current = node
-    if (node) requestAnimationFrame(() => {
-      if (node.isConnected && !node.contains(document.activeElement)) node.focus()
-    })
-  }, [])
 
   /* 「常吃」＝該餐別歷史出現次數，順便記住每樣最近一次的份量——LogSheetProps 只給當天
      dayData，這份跨日期的歷史不在 props 契約裡（見回報「共用檔缺口清單」），這裡直接讀
@@ -498,17 +485,9 @@ export default function LogSheet(props: LogSheetProps) {
 
   return (
     <>
-      {/* repositionInputs={false}：vaul 自己那套鍵盤補償會直接往 Drawer.Content 寫 inline
-          `height`／`bottom`，把 app.css 的 `--kb` 蓋掉（inline 永遠贏）。原委與取捨寫在
-          app.css `.sheet` 那段，改這裡之前先讀那段。 */}
-      {/* dismissible={!scanBusy}：辨識中鎖住下滑關閉。只擋關閉鈕沒用——vaul 的抽屜手指往下
-          一滑就關了，而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */}
-      <Drawer.Root open={open} onOpenChange={(v) => { if (!v) onClose() }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
-        <Drawer.Portal>
-          <Drawer.Overlay className="scrim" />
-          <Drawer.Content ref={attachSheet} tabIndex={-1} className="sheet" aria-label={contentAriaLabel} data-screen="log-sheet">
-            <Drawer.Handle className="handle" />
-
+      {/* locked={scanBusy}：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
+          而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */}
+      <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy}>
             {view === 'list' ? (
               <>
                 <div className="chip-bar">
@@ -637,9 +616,8 @@ export default function LogSheet(props: LogSheetProps) {
                 </div>
 
                 <div className="form-wrap">
-                  {/* portalContainer 一定要傳 sheetRef：vaul 的 Drawer 開啟時會把 body 設成
-                      pointer-events:none，店家下拉的 Portal 掛在預設的 body 下就會看得到、
-                      點不到（見元件檔頭與 DESIGN.md「店家欄位」條）。
+                  {/* portalContainer 傳 sheetRef：選單掛在 sheet 裡、stacking 跟著 sheet（vaul 時代是
+                      必須的——body 被設成 pointer-events:none，見元件檔頭與 DESIGN.md「店家欄位」條）。
                       vendorAutoFocus：品名已經是搜尋字串帶進來的，下一個該落焦的是店家。 */}
                   <FoodFormFields
                     form={foodForm}
@@ -665,9 +643,7 @@ export default function LogSheet(props: LogSheetProps) {
                 </div>
               </>
             )}
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer.Root>
+      </SpringSheet>
     </>
   )
 }

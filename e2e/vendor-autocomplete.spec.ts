@@ -54,8 +54,9 @@ test('店家 Autocomplete — 打新店家送出，POST body vendor 等於該新
   const vendorInput = page.locator('#f-vendor')
   await vendorInput.click()
   await vendorInput.pressSequentially('巷口早餐店', { delay: 40 })
-  // 點別的欄位讓 Autocomplete 失焦收起下拉——不用 Escape：那個鍵會被 vaul Drawer
-  // 自己的預設關閉行為接住，整張 sheet 跟著關掉（實測撞到，見回報）。
+  // 點別的欄位讓 Autocomplete 失焦收起下拉——不用 Escape：vaul 時代那個鍵會被 Drawer 自己的預設
+  // 關閉行為接住、整張 sheet 跟著關掉（實測撞到）。記一筆 sheet 換成 SpringSheet（Base UI Dialog）後
+  // 沒有重測 Escape 的行為，所以這條路徑維持失焦收起。
   await page.locator('#f-kcal').click()
   await page.waitForTimeout(150)
   expect(await vendorInput.inputValue()).toBe('巷口早餐店')

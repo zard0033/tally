@@ -245,3 +245,75 @@ test('減少動態：進場與關閉改為幾乎瞬間（不跑 spring 位移）
   await page.keyboard.press('Escape')
   await expect(sheet(page)).toHaveCount(0, { timeout: 1500 })
 })
+
+/* ── 記一筆 sheet（B1b 第一步：vaul → SpringSheet）用到的兩個新屬性 ──
+   `locked`：AI 辨識中鎖住關閉。vaul 時代是 `dismissible={!scanBusy}`，那一條從來沒有 e2e，
+   這裡補上；只擋關閉鈕沒用，Escape、點 scrim、下滑都會關，而誤關的代價是那張照片白拍。
+   `initialFocus`＋`popupRef`：開啟時焦點落在 sheet 容器本身（與 vaul 版一致），不是第一顆餐別 chip。 */
+const logSheet = (page: Page) => page.locator('[data-screen="log-sheet"]')
+
+const SCAN_BODY = { name: '測試奶茶', basis: 'per_serving', serving_g: 17, kcal: 82, protein_g: 0.4, fat_g: 3.6, carb_g: 12.1 }
+const PNG = {
+  name: 'label.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+}
+
+async function openLogSheet(page: Page) {
+  await openApp(page)
+  await page.click('button.cta')
+  await expect(logSheet(page)).toBeVisible()
+  await settled(logSheet(page))
+}
+
+test('記一筆 sheet 開啟：焦點落在 sheet 容器本身，不是第一顆餐別 chip', async ({ page }) => {
+  await openLogSheet(page)
+  const focused = await page.evaluate(() => {
+    const el = document.activeElement
+    return { isSheet: el?.getAttribute('data-screen') === 'log-sheet', tag: `${el?.tagName.toLowerCase()}.${[...(el?.classList ?? [])].join('.')}` }
+  })
+  expect(focused.isSheet, `焦點應落在 [data-screen="log-sheet"] 本身，實際在 ${focused.tag}`).toBe(true)
+})
+
+test('AI 辨識中：Escape、點 scrim、下滑都收不掉記一筆 sheet；辨識結束後 Escape 收得掉', async ({ page }) => {
+  await openLogSheet(page)
+  const q = page.locator('input[aria-label="搜尋食物"]')
+  await q.click()
+  await q.pressSequentially('測試奶茶', { delay: 30 })
+  await page.locator('.add-food-row').click()
+  await page.waitForSelector('#f-kcal')
+  await page.evaluate((body) => {
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 1800 }
+  }, SCAN_BODY)
+  await page.locator('[data-testid="f-scan-input"]').setInputFiles(PNG)
+  await expect(page.locator('#f-vendor'), '辨識沒開始（欄位沒鎖住）').toBeDisabled()
+
+  // 辨識中欄位全 disabled、焦點會掉到 body，Escape 到不了 Dialog；先把焦點放回 sheet，測的才是「鎖住」而不是「沒收到按鍵」
+  await logSheet(page).focus()
+  // 關閉是 spring（約 1 秒才卸載），所以「還在畫面上」不夠——要看它還停在 y=0，沒有開始往下收
+  const stillOpen = async (msg: string) => {
+    await page.waitForTimeout(400)
+    expect(await ty(logSheet(page)), msg).toBeLessThan(2)
+  }
+  await page.keyboard.press('Escape')
+  await stillOpen('辨識中 Escape 把 sheet 關了（開始往下收）')
+
+  await page.mouse.click(200, 40) // sheet 上方露出的 scrim
+  await stillOpen('辨識中點 scrim 把 sheet 關了（開始往下收）')
+
+  const b = (await logSheet(page).locator('.sheet-grab').boundingBox())!
+  await page.mouse.move(b.x + b.width / 2, b.y + 8)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(b.x + b.width / 2, b.y + 8 + 40 * i)
+    await page.waitForTimeout(25)
+  }
+  expect(await ty(logSheet(page)), '辨識中拖把手，sheet 不該跟著手指走').toBeLessThan(2)
+  await page.mouse.up()
+  await stillOpen('辨識中下滑把 sheet 關了（開始往下收）')
+
+  await expect(page.locator('#f-kcal')).toHaveValue('82') // 辨識結束
+  await expect(page.locator('#f-vendor'), '辨識結束後欄位該解鎖').toBeEnabled()
+  await page.keyboard.press('Escape')
+  await expect(logSheet(page), '辨識結束後 Escape 應該收得掉').toHaveCount(0)
+})

@@ -200,6 +200,9 @@ test('Tally UI 回歸', async ({ page }) => {
       body?.[0]?.qty === 3,
       `送出的份量：預期 3，實際 ${JSON.stringify(body?.[0]?.qty)}（打字途中不正規化、失焦才做——值錯表示 normalizeQty 時機跑掉了）`,
     )
+    // SpringSheet 的關閉是 spring，量得約 1.1 秒才卸載（vaul 的 CSS 過渡是 280ms，原本固定等 600ms 夠用）。
+    // 所以等它卸完再斷言，上限 3 秒——斷言不變：送出成功後 sheet 必須關閉，只是不再假設它多快。
+    await page.waitForFunction(() => document.querySelectorAll('.sheet').length === 0, null, { timeout: 3000 }).catch(() => undefined)
     check((await page.locator('.sheet').count()) === 0, '送出成功後 sheet 應該關閉')
   })
 

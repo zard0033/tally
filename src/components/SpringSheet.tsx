@@ -27,12 +27,16 @@ interface SpringSheetProps {
   fit?: boolean
   /** 開啟時焦點落在哪；不給＝第一個可聚焦元素（標題列的關閉鈕）。 */
   initialFocus?: RefObject<HTMLElement | null>
+  /** 鎖住關閉：Escape、點 scrim、下滑手勢都不收（辨識中這類「誤關代價高」的時段）。關閉鈕由呼叫端自己 disable。 */
+  locked?: boolean
+  /** 把 popup 節點交出去（店家 Autocomplete 的 Portal 要指到這裡）。 */
+  popupRef?: RefObject<HTMLDivElement | null>
   children: ReactNode
 }
 
 const screenH = () => (typeof window === 'undefined' ? 800 : window.innerHeight)
 
-export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, children }: SpringSheetProps) {
+export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
   const reduced = useReducedMotion()
   const [present, setPresent] = useState(open)
   // 起點放在畫面下方：第一次畫出來就在外面，不會在 0 的位置閃一幀
@@ -46,6 +50,8 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
   const motionRef = useRef<{ stop: () => void } | null>(null)
   const openRef = useRef(open)
   openRef.current = open
+  const lockedRef = useRef(locked)
+  lockedRef.current = locked
   const dragged = useRef(false)
 
   const run = useCallback(
@@ -87,18 +93,19 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
   const attach = useCallback(
     (node: HTMLDivElement | null) => {
       popupRef.current = node
+      if (outerRef) outerRef.current = node
       if (node) {
         heightRef.current = node.offsetHeight
         y.set(node.offsetHeight)
         run(0, SPRING_SHEET_OPEN)
       }
     },
-    [run, y],
+    [run, y, outerRef],
   )
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     const h = popupRef.current?.offsetHeight ?? 0
-    if (shouldDismiss({ offset: info.offset.y, velocity: info.velocity.y, height: h })) {
+    if (!lockedRef.current && shouldDismiss({ offset: info.offset.y, velocity: info.velocity.y, height: h })) {
       releaseVelocity.current = info.velocity.y
       onClose()
     } else run(0, SPRING_SHEET_OPEN, info.velocity.y)
@@ -108,7 +115,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
   // 動畫會停在半路。所以放手後若沒拖過，自己把 sheet 接回 0。關閉中（open 已是 false）整個不接手，
   // 否則 sheet 卡在半路、Dialog 還開著，就是一個關不掉的 modal。
   const onGrabPointerDown = (e: ReactPointerEvent) => {
-    if (!openRef.current) return
+    if (!openRef.current || lockedRef.current) return
     dragged.current = false
     controls.start(e)
     const settle = () => {
@@ -126,7 +133,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
     <Dialog.Root
       open={present}
       onOpenChange={(next) => {
-        if (!next) onClose() // Escape、點 scrim、關閉鈕：交給呼叫端，之後 open 變 false 才跑關閉 spring
+        if (!next && !locked) onClose() // Escape、點 scrim、關閉鈕：交給呼叫端，之後 open 變 false 才跑關閉 spring
       }}
     >
       <Dialog.Portal>
