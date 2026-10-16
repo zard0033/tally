@@ -38,11 +38,11 @@ interface SpringSheetProps {
    `SheetGrabZone` 讓 sheet 內任何一列（餐別列、新增食物的標題列）也能起手下滑。放在 SpringSheet 底下用。 */
 const GrabContext = createContext<((e: ReactPointerEvent) => void) | null>(null)
 
-/** 把這一列變成下滑起手區。`touch-action: pan-x`：垂直方向不交給瀏覽器捲動，才收得到往下拖；橫向（餐別 chip 的捲動）照舊歸瀏覽器。 */
+/** 把這一列變成下滑起手區。`.sheet-grab-zone` 的 `touch-action: pan-x`（app.css）：垂直方向不交給瀏覽器捲動，才收得到往下拖；橫向（餐別 chip 的捲動）照舊歸瀏覽器。 */
 export function SheetGrabZone({ className, children }: { className?: string; children: ReactNode }) {
   const grab = useContext(GrabContext)
   return (
-    <div className={className} style={{ touchAction: 'pan-x' }} onPointerDown={grab ?? undefined}>
+    <div className={className ? `${className} sheet-grab-zone` : 'sheet-grab-zone'} onPointerDown={grab ?? undefined}>
       {children}
     </div>
   )

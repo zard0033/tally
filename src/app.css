@@ -855,6 +855,9 @@ button { -webkit-user-select: none; user-select: none; }
 .sheet.sheet-fit { top: auto;
   max-height: calc(100% - max(env(safe-area-inset-top, 0px) + var(--sheet-top-gap), 96px - var(--kb, 0px)) - var(--vvtop, 0px) - var(--kb, 0px)); }
 .sheet-grab { touch-action: none; cursor: grab; flex-shrink: 0; }
+/* 下滑起手區的其他列（SheetGrabZone）。**.chiprow 要自己寫一份**：touch-action 只在「被按的元素」到「最近的捲動容器」
+   之間取交集，.chiprow 是 overflow-x:auto 的捲動容器，從 chip 起手時算不到外層 .chip-bar 的值（review 抓到）。 */
+.sheet-grab-zone, .chip-bar .chiprow { touch-action: pan-x; }
 .sheet-grab:active { cursor: grabbing; }
 
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }

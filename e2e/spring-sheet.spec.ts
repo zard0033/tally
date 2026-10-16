@@ -350,7 +350,11 @@ test('記一筆 sheet：從餐別列往下拖也能關閉', async ({ page }) => 
 
 test('記一筆 sheet：點餐別 chip 仍是切換餐別，sheet 不動、不關', async ({ page }) => {
   await openLogSheet(page)
-  const chip = logSheet(page).locator('.chiprow .chip').nth(2)
+  // 挑「目前沒被選中」的 chip：15–21 點預選的是晚餐，固定點第 3 顆的話那段時間 aria-pressed 斷言是空的
+  // locator 是惰性的：點下去後 aria-pressed 變 true，`[aria-pressed="false"]` 的 first() 會換成別顆——先固定 index
+  const chips = logSheet(page).locator('.chiprow .chip')
+  const idx = await chips.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-pressed') === 'false'))
+  const chip = chips.nth(idx)
   await chip.click()
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
   await page.waitForTimeout(300)
@@ -384,4 +388,15 @@ test('鍵盤升起時貼合內容 sheet 的最大高度也扣掉那 12px', async
   expect(Math.round(await maxH()), '沒有鍵盤時最大高度＝視窗高扣 96px').toBe(vh - 96)
   await sheet(page).evaluate((el) => el.style.setProperty('--kb', '400px'))
   expect(Math.round(await maxH()), '鍵盤升起時最大高度＝視窗高扣 12px 扣鍵盤高').toBe(vh - 12 - 400)
+})
+
+/* 滑鼠不走 touch-action，桌面測不出實際手勢仲裁（只能真機）；這條守的是「線有接上」：
+   `.chiprow` 是 overflow-x 捲動容器，touch-action 到它為止、算不到外層，所以它自己也要是 pan-x，
+   否則從 chip 起手的垂直拖曳會被瀏覽器接走（pointercancel）。 */
+test('下滑起手區的 touch-action 接線：起手列與 .chiprow 都是 pan-x', async ({ page }) => {
+  await openLogSheet(page)
+  const ta = (sel: string) => logSheet(page).locator(sel).first().evaluate((el) => getComputedStyle(el).touchAction)
+  expect(await ta('.chip-bar'), '.chip-bar（SheetGrabZone）應為 pan-x').toBe('pan-x')
+  expect(await ta('.chiprow'), '.chiprow 是捲動容器，要自己是 pan-x，否則從 chip 起手的下滑會被瀏覽器接走').toBe('pan-x')
+  expect(await ta('.sheet-grab'), '頂端把手維持 none').toBe('none')
 })
