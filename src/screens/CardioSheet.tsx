@@ -1,11 +1,12 @@
 /* 有氧 sheet（樣張 ④a／④b，AC 10–12）：新增與編輯同一張；row 為 null＝新增，記在畫面選的那天。
-   類型二選一用 `.seg` 分段控制器（會改資料值的互斥選擇，DESIGN.md「餐別分段控制器」條），
+   類型二選一用 `SegmentedControl`（會改資料值的互斥選擇，DESIGN.md「餐別分段控制器」條），
    **類型決定欄位**：走路＝分鐘＋速度＋坡度，拳擊＝分鐘＋預估熱量。沒有備註、沒有「新類型」入口。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。刪除不可逆，先問（DESIGN.md「確認對話框」條）。
    欄位狀態放在 CardioForm、以列 id 當 key：每次打開都是一份新的草稿。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Drawer } from 'vaul'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import SegmentedControl from '@/components/SegmentedControl'
 import { useSheetFocus } from '@/components/useSheetFocus'
 import {
   CARDIO_FIELDS,
@@ -101,13 +102,13 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite, onBusy }
   return (
     <form className="tr-sheet-body tr-sheet-scroll" onSubmit={save} noValidate>
       {dateNote && <p className="muted tr-cardio-date">記在 {dateNote}</p>}
-      <div className="seg tr-cardio-kind" role="group" aria-label="有氧類型">
-        {CARDIO_KINDS.map((k) => (
-          <button key={k} type="button" aria-pressed={draft.kind === k} onClick={() => set('kind', k)}>
-            {CARDIO_KIND_LABEL[k]}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="tr-cardio-kind"
+        label="有氧類型"
+        items={CARDIO_KINDS.map((k) => ({ key: k, label: CARDIO_KIND_LABEL[k] }))}
+        value={kind}
+        onPick={(k) => set('kind', k)}
+      />
       <div className={`tr-cardio-grid cols-${1 + optional.length}`}>
         <label className="tr-field">
           <span className="lb">分鐘</span>

@@ -89,6 +89,8 @@
   /* 欄位：填色（對 cream 只有 1.18:1）＋ 2px 底線（--rule-field 對 cream 3.53:1、對填色 3.00:1，兩邊都過 3:1） */
   --fill: #F1E6D2;
   --field-line: 2px solid var(--rule-field);
+  /* 欄位聚焦的 jade 光暈（3px） */
+  --accent-ring: rgba(28, 112, 89, .18);
   /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
   --fog-h: 168px; --fog-blur: 9px;
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
@@ -303,7 +305,7 @@ button { -webkit-user-select: none; user-select: none; }
 /* ── 就地編輯區（v2.20，取代 v2.14 的長按 sheet） ──
    展開時品名列與編輯區連成一張卡：同 --raised 底、同寬，圓角只留在整組外緣，
    讀起來是「這一列長高了」而不是「上面一條、下面疊一塊」。 */
-.item-row.is-edit { overflow: visible; box-shadow: var(--shadow-1); }
+.item-row.is-edit { box-shadow: var(--shadow-1); }
 .item-row.is-edit .item-content { background-color: var(--card);
   border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* 行距用 flex gap 宣告，不靠 .ed-line 的 min-height 擠出殘量——原本 48px 是硬編值
@@ -357,12 +359,12 @@ button { -webkit-user-select: none; user-select: none; }
   color: var(--ink-muted); white-space: nowrap; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
-/* 選中態＝會滑動的白塊（.seg-thumb，spring 驅動，見 SegThumb）＋字重 600 與墨色字。
+/* 選中態＝會滑動的白塊（.seg-thumb，spring 驅動，見 SegmentedControl）＋字重 600 與墨色字。
    白塊 --card 對填色軌道只有 1.18:1，所以字重 600 仍是非顏色訊號（沿用原本分頁列的同一筆帳）。 */
 .seg button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
 .seg-thumb { position: absolute; inset: 0; border-radius: 10px; background: var(--card);
   box-shadow: var(--shadow-1); }
-.seg-label { position: relative; }
+.seg-label { position: relative; z-index: 1; }
 .seg button:active { opacity: .6; }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -1084,10 +1086,11 @@ button { -webkit-user-select: none; user-select: none; }
    位置對齊輸入文字的位置（input 的 padding-top 是 26px），不是欄位正中央。 */
 .form-lock[disabled] .field-float input { --line: var(--rule); }
 .form-lock[disabled] .field-float label { opacity: .45; }
-/* 標籤固定在框上方，空欄位的骨架條就畫在框內正中（標籤區 22px ＋ 欄位高度 48px 的一半，扣掉條高一半 6px）。 */
+/* 標籤固定在框上方，空欄位的骨架條就畫在框內正中（標籤區 22px ＋ 欄位高度 48px 的一半，扣掉條高一半 6px）。
+   條色用 --rule：欄位底是 --fill，--raised 對它只有約 1.03:1、而且是較淺的那個，條會整個隱形。 */
 .form-lock[disabled] .field-float:has(input:placeholder-shown)::after {
   content: ''; position: absolute; left: var(--s-3); right: var(--s-3); top: 40px; height: 12px;
-  border-radius: 6px; background: var(--raised); pointer-events: none;
+  border-radius: 6px; background: var(--rule); pointer-events: none;
   animation: skeleton-breathe 1.1s ease-in-out infinite; }
 @keyframes skeleton-breathe { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
 
@@ -1126,7 +1129,7 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* 欄位（全站基礎 spec 規則 1）：填色、無外框、圓角 12，底部 2px 底線維持邊界辨識；
    標籤固定在框上方，不再浮動（消除「標籤在框內／框上」兩套並存）。
-   label 仍是真的 label 元素、排在 input 後面（DOM 順序沒動，Autocomplete 的 `input + label` 照舊命中），
+   label 仍是真的 label 元素、排在 input 後面（DOM 順序沒動，只是用定位放到框上方），
    只是用定位放到框上方。placeholder=" " 保留給 `:placeholder-shown`（骨架與其他判斷用），
    不是拿 placeholder 冒充 label（WCAG 3.3.2）。
    邊界：填色對 cream 只有 1.18:1，靠 2px `--rule-field` 底線（對 cream 3.53:1、對填色 3.00:1）。
@@ -1148,7 +1151,7 @@ button { -webkit-user-select: none; user-select: none; }
 .field-float input:focus, .field-float select:focus, .search-box:focus-within { outline: none;
   --line: var(--accent);
   background: linear-gradient(var(--line), var(--line)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--card);
-  box-shadow: 0 0 0 3px rgba(28, 112, 89, .18); }
+  box-shadow: 0 0 0 3px var(--accent-ring); }
 
 /* select 要看得出是 select。`-webkit-appearance: none`（上面那條，為了讓外觀跟輸入框同一套
    而必須關掉）連原生的下拉箭頭一起關掉了，於是全站的選單跟純文字輸入框長得一模一樣，
@@ -1205,7 +1208,7 @@ button { -webkit-user-select: none; user-select: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout, .settings .link-btn,
-  .chip, .icon-btn, .datectl-title svg, .date-today-btn, .pick-bar-btn, .field-float label,
+  .chip, .icon-btn, .datectl-title svg, .date-today-btn, .pick-bar-btn,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
   .qty-btn, .ed-del, .seg button { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
@@ -1216,7 +1219,7 @@ button { -webkit-user-select: none; user-select: none; }
   .cta:active, .action-btn:active, .pick-bar-btn:active { transform: none; }
   .item-content.just-added::before,
   .sheet.opening, .pick-bar, .undo-pill,
-  /* 填入動效：一次性、影響小，但這份清單連 label 的 transition 都收了，漏它不一致 */
+  /* 填入動效：一次性、影響小，但這份清單連 transition 都收了，漏它不一致 */
   .form-lock.scan-filled .field-float input,
   /* scrim 進場規則帶 id，這裡的覆寫也要同權重才壓得過 */
   #settings-sheet-root .scrim { animation-duration: .01ms; }
@@ -1259,7 +1262,7 @@ button { -webkit-user-select: none; user-select: none; }
   }
 }
 /* 2026-08-05 從 LogSheet 的內嵌 <style> 搬來這裡：選擇器本來就是全域的，而食品庫的
-   新增 sheet（同樣走 vaul）在設定分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
+   訓練的幾張 sheet（仍走 vaul）在別的分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
    會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
 
 /* ═══ 訓練分頁（階段 2；樣式來自已核可的 _design-sample/training.html，token 一律引用） ═══ */

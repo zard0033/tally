@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-16）：全站精緻度 B0／B1a／B1b 第一步（v2.60–v2.63）已 push 上線，iPhone 驗過：新課表與記一筆 sheet 鍵盤沒擋、飲食頁浮起＋淡出到位。開啟只聚焦不叫鍵盤＝iOS 限制，不做 hack。v2.64–v2.66（SheetGrabZone、頂緣 12px、review 修正）已 commit，隨本次 push 上線。e2e 214/214、vitest 600。
-下一步：真機驗餐別列橫滑／下滑手感、背景橡皮筋；v2.65 的 12px 在瀏海機型實際效果；控件換新卡在 --fill 對 --raised 僅 1.04:1，併 B1b 與 FoodFormFields。「慢態有出口」時紅時綠。
+現況（2026-10-16）：全站精緻度 B0／B1a／B1b（v2.60–v2.68）已 push 上線。v2.67＝食品庫新增食物 sheet 換 SpringSheet；v2.68＝欄位／搜尋框／步進器／分段控制改填色＋2px 底線、白塊滑動、編輯區底換 --card、有氧 sheet 一併換 SegmentedControl。push 前 review 的 blocking 已修，e2e 215/215、vitest 600。真機未驗：聚焦光暈、白塊 spring 手感、食品庫新增的鍵盤位置。
+下一步：真機看 v2.67／v2.68；B2（訓練＋訓練中改版，六張 vaul sheet 與舊外框控件一併換）要使用者另行核可；食品庫膠囊列、.scan-btn 仍是舊樣式（B3）。「慢態有出口」時紅時綠。
 未動：訓練中改版 spec（待核可）、有氧改動作（要 schema）。待決在 MANUAL。
 
 ## Working Memory

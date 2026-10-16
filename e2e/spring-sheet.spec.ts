@@ -164,8 +164,11 @@ test('開啟中點一下把手：sheet 接回去落定在 0（不會停在半路
   await openStartSheet(page)
   await page.waitForTimeout(50) // 開啟 spring 還在跑
   await tapGrab(page)
-  await settled(sheet(page))
-  expect(Math.abs(await ty(sheet(page))), '點一下之後應落定回 0').toBeLessThan(0.5)
+  /* 輪詢到收斂，不是「兩次讀數差很小就算停」：spring 尾巴很長，全套件負載下 `settled()` 會在 y≈0.5 就判停
+     （讀到過 0.52）。卡在半路的 sheet 永遠到不了 0，所以輪詢同樣會紅。 */
+  await expect
+    .poll(async () => Math.abs(await ty(sheet(page))), { message: '點一下之後應落定回 0', timeout: 3000 })
+    .toBeLessThan(0.5)
 })
 
 test('貼合內容的 sheet：scrim 是跟著 sheet 自己的高度淡出，落定時全亮、關到底時是 0', async ({ page }) => {

@@ -736,7 +736,7 @@ function ItemEditor({
             抓到；LogSheet 既有的同款 chip 也有一樣的問題，範圍外，記進待決）。
             沒有升級成 radiogroup 是刻意的取捨：APG 的 radiogroup 契約要 roving tabindex
             ＋方向鍵導航，半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟。
-            另配字重 600 當非顏色訊號——--accent-soft 對 --card 只有 1.22:1。
+            另配字重 600 當非顏色訊號——選中的白塊對軌道只有 1.18:1（v2.68 改版後；原為 --accent-soft 對 --card 1.22:1）。
             **不用原生 disabled 擋重入**：那會讓正被按下、正持有焦點的那顆瞬間失焦，
             失敗時焦點就掉到 body 再也回不來（a11y 稽核抓到）；改用 busy 邏輯守衛。 */}
         <SegmentedControl label="餐別" items={MEALS} value={localMeal} onPick={(k) => void pickMeal(k)} />

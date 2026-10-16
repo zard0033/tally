@@ -597,7 +597,7 @@ test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({
   // delayMs 給我們一段「辨識中」的時間可以操作畫面——bug 只在那個窗口現形
   await settled(sheet)
   await page.evaluate((body) => {
-    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 2500 }
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 4500 }
   }, SCAN_READING)
 
   await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
@@ -616,6 +616,8 @@ test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({
   const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
   const stillOpen = async (msg: string) => {
     await page.waitForTimeout(300)
+    // 辨識得還在跑，否則 sheet 已解鎖、關掉是對的，測試會為錯的原因紅
+    await expect(sheet.locator('.scan-btn'), '辨識已經結束，這條量不到鎖').toContainText('辨識中')
     expect(await ty(), msg).toBeLessThan(2)
   }
   await sheet.focus()

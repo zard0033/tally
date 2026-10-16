@@ -617,6 +617,13 @@ test('記一筆有氧（走路）：類型決定欄位，存下後列在「已�
   await openCardio(page)
 
   await expect(kindBtn(page, '跑步機坡度健走'), '預設走路').toHaveAttribute('aria-pressed', 'true')
+  // 選中態的視覺只靠白塊（v2.68 起）：整組恰一塊、掛在選中的鈕上，切過去後跟著換
+  const thumbs = cardioSheet(page).getByRole('group', { name: '有氧類型' }).locator('.seg-thumb')
+  await expect(thumbs, '有氧類型少了選中白塊').toHaveCount(1)
+  await expect(kindBtn(page, '跑步機坡度健走').locator('.seg-thumb')).toHaveCount(1)
+  await kindBtn(page, '有氧拳擊').click()
+  await expect(kindBtn(page, '有氧拳擊').locator('.seg-thumb'), '切類型後白塊沒跟過去').toHaveCount(1)
+  await kindBtn(page, '跑步機坡度健走').click()
   await expect(field(page, '預估熱量 kcal'), '走路沒有預估熱量欄').toHaveCount(0)
   await field(page, '分鐘').fill('30')
   await field(page, '速度 km/h').fill('5.5')

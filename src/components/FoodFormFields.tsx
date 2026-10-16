@@ -26,7 +26,7 @@ interface FieldOpts {
   onChange: (v: string) => void
 }
 
-/* floating label：label 是真的 label 元素、永遠在 DOM 裡，只是視覺上位移（app.css
+/* 標籤固定在框上方：label 是真的 label 元素、永遠在 DOM 裡（app.css
    .field-float 那組規則）。placeholder=" " 只是給 :placeholder-shown 當開關用的空白值，
    不是拿 placeholder 冒充 label（WCAG 3.3.2）。
    `numeric` 沒帶時不掛 inputMode——品名是純文字欄位，硬套 decimal 鍵盤在手機上打不出中文。 */
@@ -68,7 +68,7 @@ export interface FoodFormFieldsProps {
   onScan?: (imageDataUri: string) => Promise<LabelReading>
   /**
    * 辨識期間的忙碌狀態。外層拿它**鎖住關閉**（關閉鈕停用 ＋ sheet 的下滑關閉停用）——
-   * 只擋關閉鈕沒用，vaul 的抽屜手指往下一滑就關了。
+   * 只擋關閉鈕沒用，sheet 手指往下一滑就關了。
    * 代價是辨識卡住時會被關在畫面裡，最壞約 50 秒（函式那端 45 秒先放棄，再加上傳）——所以按鈕上要有
    * 秒數，讓被關住的那段時間看得出它還活著。
    */
@@ -273,8 +273,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         <div className="field-float">
           {/* 可自由輸入的 Autocomplete，不是受限 Combobox——使用者常打錯店家名，這裡讓既有
               店家可選，但打一個清單外的新名字一樣送得出去。Autocomplete.Root 不渲染自己的
-              元素，input 緊接 label 是直接子節點，floating label 的 `input + label` 選擇器
-              因此照樣命中。IME 組字：底層共用 combobox 的 AriaCombobox，composition 期間
+              元素，input 與 label 是 `.field-float` 的直接子節點，版面與一般欄位一致。IME 組字：底層共用 combobox 的 AriaCombobox，composition 期間
               本來就不會把中間態送進 onValueChange，不需要另做 query/filterQuery 雙 state。 */}
           <Autocomplete.Root
             items={vendorOptions}
