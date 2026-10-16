@@ -19,6 +19,19 @@ async function openLibrary(page: Page) {
   await expect(page.locator('.lib-row').first()).toBeVisible()
 }
 
+/* 等新增食物 sheet 的開啟 spring 落定：translateY 連續兩次讀到同一個值。
+   SpringSheet 是 JS 動畫，`getAnimations()` 看不到它，固定睡眠也不保證（量過約 1 秒才完全靜止）。 */
+async function settled(sheet: ReturnType<Page['locator']>) {
+  const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
+  await expect
+    .poll(async () => {
+      const a = await ty()
+      await sheet.page().waitForTimeout(80)
+      return Math.abs((await ty()) - a) < 0.1 ? a : NaN
+    })
+    .not.toBeNaN()
+}
+
 const foodWrites = (page: Page) =>
   page.evaluate(() =>
     (window as unknown as { __writes: { table: string; method: string; path: string; body: Record<string, unknown> }[] }).__writes.filter(
@@ -337,10 +350,9 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
   await expect(sheet).toBeVisible()
 
   const box = async (l: ReturnType<Page['locator']>) => (await l.boundingBox())!
-  /* 等 vaul 的進場動畫（translateY(100%)→0）跑完再量。原本沒有這行也對，因為當時只比
-     **高度**——translateY 不改變高度。改成比**位置**之後基準線就浮動了，動畫途中量到的
-     y 是半路值（同檔的 --vvtop 那條早註記過這件事，我還是重踩了一次）。 */
-  await page.waitForTimeout(500)
+  /* 等進場 spring 落定再量。原本沒有這行也對，因為當時只比**高度**——translateY 不改變高度。
+     改成比**位置**之後基準線就浮動了，動畫途中量到的 y 是半路值。 */
+  await settled(sheet)
   const before = await box(sheet)
   const formBefore = await box(sheet.locator('.form-wrap'))
 
@@ -383,10 +395,10 @@ test('鍵盤佔掉空間時，焦點切到底部欄位會自動捲進可視區',
   const sheet = page.locator('[data-screen="food-add-sheet"]')
   await expect(sheet).toBeVisible()
 
-  /* **先等抽屜的開啟動畫停**，不然量到的是半路上的位置（實測 kb 每加 20 框底掉 120，
+  /* **先等開啟動畫停**，不然量到的是半路上的位置（實測 kb 每加 20 框底掉 120，
      那不是版面在動是動畫還沒停）。380 是量出來的：門檻在 355 附近（框底 385／碳水頂 390），
      取再高一階留餘裕；可捲餘裕 181px，捲得回來。 */
-  await page.waitForTimeout(500)
+  await settled(sheet)
   /* 380 是 v2.45 量的（當時門檻約 355）。v2.46 把頂部空隙收回來之後 sheet 高了 96px，
      同樣重量一次門檻：碳水欄在 kb=455 附近才離開框內，取 480 留一樣的餘裕。
      **不是把數字調大到綠為止**——門檻是量出來的，餘裕是照上一輪的取法。 */
@@ -422,7 +434,7 @@ test('版面在焦點移動之後才改變時，焦點欄位仍會被捲回可�
 
   const sheet = page.locator('[data-screen="food-add-sheet"]')
   await expect(sheet).toBeVisible()
-  await page.waitForTimeout(500)
+  await settled(sheet)
   await sheet.evaluate((el) => el.style.setProperty('--kb', '480px'))
 
   const carb = page.locator('#lf-carb')
@@ -457,10 +469,8 @@ test('sheet 的 top 吃 --vvtop（visual viewport 位移）：整條跟著往下
   const sheet = page.locator('[data-screen="food-add-sheet"]')
   await expect(sheet).toBeVisible()
 
-  /* 要等 vaul 的進場動畫跑完再量——它是 translateY(100%)→0，量在途中的話基準線是浮動的
-     （第一次寫這條就撞到：位移 +120 量出來是 -154）。上面那條 `--kb` 測試不受影響，因為
-     它比的是 height，而 translateY 不改變 height。 */
-  await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)).then(() => undefined))
+  /* 要等進場 spring 落定再量——量在途中的話基準線是浮動的（第一次寫這條就撞到：位移 +120 量出來是 -154）。 */
+  await settled(sheet)
   const before = (await sheet.boundingBox())!
 
   const OFFSET = 120
@@ -473,9 +483,10 @@ test('sheet 的 top 吃 --vvtop（visual viewport 位移）：整條跟著往下
 /* v2.29：食品庫的店家欄位補上 Autocomplete。在這之前它是純 text input——同一件事從
    「記一筆」進去能搜既有店家、從食品庫進去不能，是能力差異不是風格差異。
 
-   **這條真正在守的是 portal**：vaul 的 Drawer 會把 body 設成 pointer-events:none，
+   **這條真正在守的是 portal**：vaul 時代 Drawer 會把 body 設成 pointer-events:none，
    店家下拉若掛在預設的 document.body 就會**看得到、點不到**（DESIGN.md「店家欄位」條，
-   LogSheet 撞過一次）。所以這裡一定要真的 click 選項並驗值，不能只驗選單出現。 */
+   LogSheet 撞過一次）。換成 SpringSheet 後 Base UI 不再那樣，但選單仍該在 sheet 裡；
+   所以這裡一定要真的 click 選項並驗值，不能只驗選單出現。 */
 test('新增 sheet 的店家是 Autocomplete，且下拉選項在 sheet 裡點得到', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)
@@ -584,8 +595,9 @@ test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({
   await expect(sheet).toBeVisible()
 
   // delayMs 給我們一段「辨識中」的時間可以操作畫面——bug 只在那個窗口現形
+  await settled(sheet)
   await page.evaluate((body) => {
-    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 600 }
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 2500 }
   }, SCAN_READING)
 
   await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
@@ -598,10 +610,56 @@ test('辨識中整組鎖住（欄位＋關閉鈕），結束後解鎖', async ({
   await expect(page.locator('#lf-vendor'), '辨識中欄位沒鎖住').toBeDisabled()
   await expect(page.locator('#lf-name')).toBeDisabled()
 
+  /* 關閉鈕之外的三條路也要鎖：Escape、點 scrim、拖標題列。關閉是 spring（約 1 秒才卸載），
+     所以「還看得到」不夠，要看 sheet 仍停在 y≈0、沒開始往下收。欄位全 disabled、焦點會掉到 body，
+     先把焦點放回 sheet，測的才是「鎖住」而不是「沒收到按鍵」。 */
+  const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
+  const stillOpen = async (msg: string) => {
+    await page.waitForTimeout(300)
+    expect(await ty(), msg).toBeLessThan(2)
+  }
+  await sheet.focus()
+  await page.keyboard.press('Escape')
+  await stillOpen('辨識中 Escape 把新增食物 sheet 關了')
+  await page.mouse.click(200, 20) // sheet 上方露出的 scrim
+  await stillOpen('辨識中點 scrim 把新增食物 sheet 關了')
+  const head = (await sheet.locator('.sheet-head').boundingBox())!
+  await page.mouse.move(head.x + head.width / 2, head.y + head.height / 2)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(head.x + head.width / 2, head.y + head.height / 2 + 40 * i)
+    await page.waitForTimeout(25)
+  }
+  expect(await ty(), '辨識中拖標題列，sheet 不該跟著手指走').toBeLessThan(2)
+  await page.mouse.up()
+  await stillOpen('辨識中下滑把新增食物 sheet 關了')
+
   await expect(page.locator('#lf-kcal')).toHaveValue('82')
   await expect(page.locator('#lf-vendor'), '辨識結束後欄位該解鎖').toBeEnabled()
   await expect(page.locator('#lf-name')).toHaveValue('伯朗奶茶-減糖香濃原味(三合一)（每份 17g）')
   await expect(sheet.locator('.sheet-head .icon-btn'), '辨識結束後關閉鈕該解鎖').toBeEnabled()
+})
+
+/* 上一條鎖住時「拖標題列不動」，換成沒鎖的狀態要真的收得掉——不然把標題列的起手區拿掉，鎖住那條照樣綠（空轉）。 */
+test('沒在辨識時，拖標題列往下可以關掉新增食物 sheet', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await settled(sheet)
+
+  const head = (await sheet.locator('.sheet-head').boundingBox())!
+  const x = head.x + head.width / 3
+  const y0 = head.y + head.height / 2
+  await page.mouse.move(x, y0)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(x, y0 + 40 * i)
+    await page.waitForTimeout(25)
+  }
+  await page.mouse.up()
+  await expect(sheet, '拖標題列沒有關掉 sheet').toHaveCount(0, { timeout: 4000 })
 })
 
 /* 秒數只回答「它還活著嗎」，不是進度（真實進度拿不到，理由在元件註解）。這裡驗它**真的在走**
@@ -623,7 +681,7 @@ test('辨識中的秒數會往上跳，結束後消失', async ({ page }) => {
   await expect(sheet.locator('.scan-btn'), '辨識結束後該回到原文案、不留秒數').toHaveText('AI 辨識輸入')
 })
 
-/* sheet 開啟時焦點必須進到 sheet 裡。**這條擋的是一個真的發生過的缺陷**：vaul 不會自己搬焦點，
+/* sheet 開啟時焦點必須進到 sheet 裡。**這條擋的是一個真的發生過的缺陷**（vaul 時代）：vaul 不會自己搬焦點，
    焦點留在觸發的那顆 FAB 上，而 `#root` 此時已被標成 `aria-hidden`——瀏覽器會直接在 console
    警告，而且 `aria-hidden` 擋不住聚焦，鍵盤 Tab 會走進一個對讀屏不存在的區域。
    驗的是「焦點在 sheet 裡」而不是「焦點在某個特定元素上」：容器或第一個輸入框都算通過，

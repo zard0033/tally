@@ -8,9 +8,9 @@
    但不必重建 pendingDelete／計時器／pagehide flush 那整套只有「不可逆」才需要的機制。
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Drawer } from 'vaul'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import FoodFormFields from '@/components/FoodFormFields'
+import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
 import { BLANK_FOOD_FORM, foodToForm, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
@@ -83,31 +83,6 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const [addSourceName, setAddSourceName] = useState<string | null>(null)
   const [addBusy, setAddBusy] = useState(false)
   const [addErr, setAddErr] = useState<string | null>(null)
-
-  /* sheet 掛上時把焦點移進來。**vaul 不會自己做**（實測：開啟後 600ms 焦點仍停在 `<body>`／
-     真人點擊時停在觸發的那顆鈕上，Chrome 會直接警告「aria-hidden 蓋住了持有焦點的元素」）。
-     後果不只是警告：`#root` 被標成 `aria-hidden` 之後裡面仍然可以聚焦，鍵盤 Tab 會走進一個
-     對讀屏不存在的區域。**聚焦容器（`tabIndex={-1}`）而不是聚焦第一個輸入框**——後者在 iOS
-     會直接叫出鍵盤，那是本專案打過三輪的仗（DESIGN v2.33／v2.35）。
-
-     **掛在 callback ref 上，不掛在 `[addOpen]` 的 effect 上**：第一版那樣寫沒有生效，因為
-     effect 跑的時候 vaul 的 Portal 還沒把節點掛上、`ref.current` 是 null，而 deps 不變就
-     再也不會重試。callback ref 由節點自己觸發，不必猜時序。
-     `contains` 那個判斷不可省：`FoodFormFields` 的 `vendorAutoFocus` 可能已經接手了，
-     那是刻意的行為，容器只在沒人接手時墊底。**兩者的先後不受規格保證**（callback ref 在
-     commit 階段、rAF 在下次繪製前、passive effect 的排程時機各家不同），目前兩種順序都收斂到
-     同一個終態——因為 `vendorAutoFocus` 那邊是無條件 `focus()`。**哪天它也加上條件，這個
-     收斂性就要重新檢查。**
-
-     **`LogSheet.tsx` 原本有一份逐字相同的**（precommit review 兩位 reviewer 都提議抽成共用 hook；v2.62 起 LogSheet 換成 SpringSheet，那份已不存在）。
-     **刻意不抽**：本專案的判準是「兩份長得像不構成理由，本來就該一致且已經開始不一致才是」
-     （CLAUDE.md／DESIGN v2.29）。兩份從沒分岔過；現在只剩這一份，更沒有抽的理由。 */
-  const attachAddSheet = useCallback((node: HTMLDivElement | null) => {
-    addSheetRef.current = node
-    if (node) requestAnimationFrame(() => {
-      if (node.isConnected && !node.contains(document.activeElement)) node.focus()
-    })
-  }, [])
 
   const [undo, setUndo] = useState<{ food: Food } | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
@@ -217,52 +192,41 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
   const addTitle = addSourceName ? `以「${addSourceName}」為範本新增` : '新增食物'
 
-  /* 新增／範本新增的 sheet。走 vaul 跟 LogSheet 同一套，不複製 Settings 那份手刻的
-     scrim/animation 樣板——手刻那份的存在理由是 legacy 的 `#sheet-root` id 衝突，
-     在 vaul 下不成立，而 vaul 順帶給了拖曳關閉與 Drawer.Content 這個 portal 容器。
+  /* 新增／範本新增的 sheet，與 LogSheet 同為 SpringSheet（B1b；原為 vaul）。位置與鍵盤處理沿用
+     app.css `.sheet` 那段（`--kb`／`--vvtop`）。
 
-     `repositionInputs={false}`：理由同 LogSheet，全文在 app.css `.sheet` 那段。
-
-     `dismissible={!scanBusy}`：辨識中鎖住下滑關閉。只擋關閉鈕沒用——vaul 的抽屜手指往下
-     一滑就關了，而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */
+     `locked={scanBusy}`：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
+     而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */
   const addSheet = (
-    <Drawer.Root open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false) }} direction="bottom" shouldScaleBackground={false} repositionInputs={false} dismissible={!scanBusy}>
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={attachAddSheet} tabIndex={-1} className="sheet" aria-label={addTitle} data-screen="food-add-sheet">
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <span className="sheet-title">{addTitle}</span>
-            <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={() => setAddOpen(false)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-            </button>
-          </div>
-          <div className="form-wrap">
-            {addSourceName && <p className="note" style={{ marginBottom: 'var(--s-4)' }}>存成一筆新的食物，原先的「{addSourceName}」不會異動。</p>}
-            {/* portalContainer 必傳：vaul 的 Drawer 會把 body 設成 pointer-events:none，
-                店家下拉掛在預設的 body 下就會看得到、點不到（見元件檔頭）。 */}
-            <FoodFormFields
-              form={addForm}
-              onChange={setAddForm}
-              idPrefix="lf-"
-              vendorOptions={vendorOptions}
-              portalContainer={addSheetRef}
-              vendorAutoFocus={!!addSourceName}
-              onScan={scanLabel}
-              onBusyChange={setScanBusy}
-            />
-          </div>
-          <div className="confirm-wrap">
-            {addErr && <p className="sheet-error" role="alert">{addErr}</p>}
-            {/* scanBusy：確認鈕在 fieldset 之外（confirm-wrap 是 form-wrap 的兄弟節點），鎖不到。
-                辨識中送出會建立一筆用舊值組出來的食物。 */}
-            <button className="pick-bar-btn" type="button" disabled={addBusy || scanBusy} onClick={() => void submitAdd()}>
-              {addBusy ? '加入中…' : '加入食品庫'}
-            </button>
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+    <SpringSheet open={addOpen} onClose={() => setAddOpen(false)} label={addTitle} screen="food-add-sheet" initialFocus={addSheetRef} popupRef={addSheetRef} locked={scanBusy}>
+      <SheetGrabZone className="sheet-head">
+        <span className="sheet-title">{addTitle}</span>
+        <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={() => setAddOpen(false)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </SheetGrabZone>
+      <div className="form-wrap">
+        {addSourceName && <p className="note" style={{ marginBottom: 'var(--s-4)' }}>存成一筆新的食物，原先的「{addSourceName}」不會異動。</p>}
+        <FoodFormFields
+          form={addForm}
+          onChange={setAddForm}
+          idPrefix="lf-"
+          vendorOptions={vendorOptions}
+          portalContainer={addSheetRef}
+          vendorAutoFocus={!!addSourceName}
+          onScan={scanLabel}
+          onBusyChange={setScanBusy}
+        />
+      </div>
+      <div className="confirm-wrap">
+        {addErr && <p className="sheet-error" role="alert">{addErr}</p>}
+        {/* scanBusy：確認鈕在 fieldset 之外（confirm-wrap 是 form-wrap 的兄弟節點），鎖不到。
+            辨識中送出會建立一筆用舊值組出來的食物。 */}
+        <button className="pick-bar-btn" type="button" disabled={addBusy || scanBusy} onClick={() => void submitAdd()}>
+          {addBusy ? '加入中…' : '加入食品庫'}
+        </button>
+      </div>
+    </SpringSheet>
   )
 
   const sourceList = tab === 'active' ? foods : archived
