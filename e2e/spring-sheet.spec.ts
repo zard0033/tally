@@ -357,3 +357,31 @@ test('記一筆 sheet：點餐別 chip 仍是切換餐別，sheet 不動、不�
   expect(Math.abs(await ty(logSheet(page))), '點 chip 後 sheet 應停在 y=0').toBeLessThan(2)
   await expect(logSheet(page)).toBeVisible()
 })
+
+/* v2.65：鍵盤升起時 sheet 頂緣收到狀態列（safe-area）下方，原本剛好貼著，使用者回報不好看，改留 12px
+   （`--sheet-top-gap`，`.sheet` 的 top 與 `.sheet-fit` 的 max-height 共用）。桌面產生不出鍵盤、
+   env(safe-area-inset-top) 也回 0，所以直接把 `--kb` 設在 sheet 元素身上（理由見 food-library.spec 那條）。
+   沒有鍵盤時仍是 96px——只有鍵盤升起那一刻才多這 12px。 */
+test('鍵盤升起時近全高 sheet 的頂緣留 12px；沒有鍵盤時仍是 96px', async ({ page }) => {
+  await openLogSheet(page)
+  const top = async () => Math.round((await logSheet(page).boundingBox())!.y)
+  expect(await top(), '沒有鍵盤時頂緣應為 96px（今日頁主數字露在上方）').toBe(96)
+  await logSheet(page).evaluate((el) => el.style.setProperty('--kb', '400px'))
+  expect(await top(), '鍵盤升起時頂緣應收到 safe-area（桌面 0）＋12px，不是貼著狀態列的 0').toBe(12)
+})
+
+test('鍵盤升起時貼合內容 sheet 的最大高度也扣掉那 12px', async ({ page }) => {
+  await openStartSheet(page)
+  await settled(sheet(page))
+  const vh = await page.evaluate(() => window.innerHeight)
+  // computed 的 max-height 是 calc() 字串、讀不到數字；塞一段很高的內容讓 sheet 長到它的上限，再量實際高度
+  await sheet(page).evaluate((el) => {
+    const filler = document.createElement('div')
+    filler.style.cssText = 'height:3000px;flex-shrink:0'
+    el.appendChild(filler)
+  })
+  const maxH = () => sheet(page).evaluate((el) => el.getBoundingClientRect().height)
+  expect(Math.round(await maxH()), '沒有鍵盤時最大高度＝視窗高扣 96px').toBe(vh - 96)
+  await sheet(page).evaluate((el) => el.style.setProperty('--kb', '400px'))
+  expect(Math.round(await maxH()), '鍵盤升起時最大高度＝視窗高扣 12px 扣鍵盤高').toBe(vh - 12 - 400)
+})

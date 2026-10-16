@@ -92,6 +92,8 @@
   /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
   --fog-h: 168px; --fog-blur: 9px;
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
+  /* 鍵盤升起時 sheet 頂緣與狀態列（safe-area）之間留的空隙（v2.65）；.sheet 與 .sheet-fit 共用 */
+  --sheet-top-gap: 12px;
 }
 * { box-sizing: border-box; }
 
@@ -825,6 +827,8 @@ button { -webkit-user-select: none; user-select: none; }
    下限用 `env(safe-area-inset-top)` 而不是寫死的數字：`viewport-fit=cover` 讓頁面鑽到瀏海
    底下，收到 0 會把標題塞進狀態列。**用裝置自己報的值，不要用我在某台機器上量到的 59。**
    桌面與沒有瀏海的裝置 env() 回 0，而它們也沒有鍵盤（--kb 恆為 0）⇒ `max()` 取 96px，行為不變。
+   **v2.65：下限再加 `--sheet-top-gap`（12px）**——收到剛好貼著狀態列下緣，使用者回報「貼在一起」不好看；
+   沒有鍵盤時 96px 仍勝出，所以只有鍵盤升起那一刻頂緣多 12px 空隙（表單高度少 12px，自動捲進可視區那條照舊兜底）。
 
    實測收回多少有用（440×956、WebKit，量 `.form-wrap` 的 scrollHeight − clientHeight）：
      鍵盤 380（英數）  現行溢出 0   → 提案 0
@@ -834,7 +838,7 @@ button { -webkit-user-select: none; user-select: none; }
    候選列就破。收回這 37px 把門檻推到 420，但 460 仍會溢出，**所以自動捲進可視區那條
    （FoodFormFields 的 visualViewport listener）不能省，兩條各管一半。** */
 .sheet { position: fixed; left: 0; right: 0; bottom: var(--kb, 0px);
-  top: calc(max(env(safe-area-inset-top, 0px), 96px - var(--kb, 0px)) + var(--vvtop, 0px)); z-index: 11;
+  top: calc(max(env(safe-area-inset-top, 0px) + var(--sheet-top-gap), 96px - var(--kb, 0px)) + var(--vvtop, 0px)); z-index: 11;
   background: var(--card); border-top: 1px solid var(--rule);
   border-radius: var(--r-btn) var(--r-btn) 0 0;
   display: flex; flex-direction: column; min-height: 0; }
@@ -849,7 +853,7 @@ button { -webkit-user-select: none; user-select: none; }
    含大量輸入欄位的 sheet（記一筆、新增食物、身體數據）不加 .sheet-fit，維持近全高。 */
 .sheet.spring-sheet { border-top: none; box-shadow: var(--shadow-3); will-change: transform; }
 .sheet.sheet-fit { top: auto;
-  max-height: calc(100% - max(env(safe-area-inset-top, 0px), 96px - var(--kb, 0px)) - var(--vvtop, 0px) - var(--kb, 0px)); }
+  max-height: calc(100% - max(env(safe-area-inset-top, 0px) + var(--sheet-top-gap), 96px - var(--kb, 0px)) - var(--vvtop, 0px) - var(--kb, 0px)); }
 .sheet-grab { touch-action: none; cursor: grab; flex-shrink: 0; }
 .sheet-grab:active { cursor: grabbing; }
 

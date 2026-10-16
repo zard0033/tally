@@ -356,8 +356,8 @@ test('sheet 的底緣吃 --kb（鍵盤高度）：縮上來之後可捲區變矮
     Math.round(before.y + before.height - (after.y + after.height)),
     'sheet 底緣沒有吃到 --kb，接線斷了',
   ).toBe(KB)
-  // 桌面 env(safe-area-inset-top) 回 0，KB > 96 ⇒ 頂緣應該一路收到 0
-  expect(Math.round(after.y), '鍵盤升起時頂部空隙沒有收回（v2.46）').toBe(0)
+  // 桌面 env(safe-area-inset-top) 回 0，KB > 96 ⇒ 頂緣收到 0＋--sheet-top-gap（v2.65 起 12px，原本貼著狀態列是 0）
+  expect(Math.round(after.y), '鍵盤升起時頂緣沒有收到 safe-area 下方並留 12px（v2.46／v2.65）').toBe(12)
 
   /* 可捲區吸收**整段**淨變化（確認列是 flex-shrink:0，不該被壓）。寫成「等於 sheet 的
      淨高度變化」而不是寫死 KB：這樣頂緣那條規則以後再調，這個不變量仍然成立。 */

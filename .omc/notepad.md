@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-16）：全站精緻度 B0／B1a／B1b 第一步（v2.60–v2.63）已 push 上線，iPhone 驗過：新課表與記一筆 sheet 鍵盤沒擋、飲食頁浮起＋淡出到位。開啟只聚焦不叫鍵盤＝iOS 限制，不做 hack。v2.64 SheetGrabZone（餐別列可下滑）已 commit、未 push。e2e 211/211、vitest 600。
-下一步：真機驗餐別列橫滑／下滑手感、背景橡皮筋；鍵盤升起時 sheet 貼狀態列（v2.46 設計）要不要留空隙待決；控件換新卡在 --fill 對 --raised 僅 1.04:1，併 B1b 與 FoodFormFields。「慢態有出口」時紅時綠。
+現況（2026-10-16）：全站精緻度 B0／B1a／B1b 第一步（v2.60–v2.63）已 push 上線，iPhone 驗過：新課表與記一筆 sheet 鍵盤沒擋、飲食頁浮起＋淡出到位。開啟只聚焦不叫鍵盤＝iOS 限制，不做 hack。v2.64 SheetGrabZone 已 commit 未 push；v2.65 鍵盤升起頂緣留 12px 未 commit。e2e 213/213、vitest 600。
+下一步：真機驗餐別列橫滑／下滑手感、背景橡皮筋；v2.65 的 12px 在瀏海機型實際效果；控件換新卡在 --fill 對 --raised 僅 1.04:1，併 B1b 與 FoodFormFields。「慢態有出口」時紅時綠。
 未動：訓練中改版 spec（待核可）、有氧改動作（要 schema）。待決在 MANUAL。
 
 ## Working Memory
