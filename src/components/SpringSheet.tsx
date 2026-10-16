@@ -8,7 +8,7 @@
    生命週期：`open` 由呼叫端控制；元件自己多一個 `present`（還在畫面上）。open 變 false 時先跑關閉 spring，
    跑完才讓 Dialog 卸載——這是 Base UI 偵測不到 JS 動畫的情況，所以不靠它的 CSS 動畫偵測，自己決定何時卸。
    `y`＝距離完全展開的下移量（px）：0 完全展開、頂高＝完全在畫面下方。 */
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type PanInfo } from 'motion/react'
 import { SPRING_SHEET_CLOSE, SPRING_SHEET_OPEN } from '@/lib/durations'
@@ -32,6 +32,20 @@ interface SpringSheetProps {
   /** 把 popup 節點交出去（店家 Autocomplete 的 Portal 要指到這裡）。 */
   popupRef?: RefObject<HTMLDivElement | null>
   children: ReactNode
+}
+
+/* 下滑起手區：預設只有頂端的把手（與標題列）。沒有標題列的 sheet（記一筆）把手只有約 12px 高，難拉；
+   `SheetGrabZone` 讓 sheet 內任何一列（餐別列、新增食物的標題列）也能起手下滑。放在 SpringSheet 底下用。 */
+const GrabContext = createContext<((e: ReactPointerEvent) => void) | null>(null)
+
+/** 把這一列變成下滑起手區。`touch-action: pan-x`：垂直方向不交給瀏覽器捲動，才收得到往下拖；橫向（餐別 chip 的捲動）照舊歸瀏覽器。 */
+export function SheetGrabZone({ className, children }: { className?: string; children: ReactNode }) {
+  const grab = useContext(GrabContext)
+  return (
+    <div className={className} style={{ touchAction: 'pan-x' }} onPointerDown={grab ?? undefined}>
+      {children}
+    </div>
+  )
 }
 
 const screenH = () => (typeof window === 'undefined' ? 800 : window.innerHeight)
@@ -178,7 +192,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
               </div>
             )}
           </div>
-          {children}
+          <GrabContext.Provider value={onGrabPointerDown}>{children}</GrabContext.Provider>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

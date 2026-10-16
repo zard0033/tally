@@ -10,7 +10,7 @@
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import FoodFormFields from '@/components/FoodFormFields'
-import SpringSheet from '@/components/SpringSheet'
+import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import {
   listRecentIntake,
   scanLabel,
@@ -490,7 +490,7 @@ export default function LogSheet(props: LogSheetProps) {
       <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy}>
         {view === 'list' ? (
           <>
-            <div className="chip-bar">
+            <SheetGrabZone className="chip-bar">
               {/* 選中態用 aria-pressed，不是 aria-current，容器也不是 tablist
                   （2026-08-05 補；Today.tsx 的餐別分段控制器早一輪就是這樣，那裡的註解
                   已標記這排 chip 有同樣的問題）。這排 chip 選的是「這筆要記到哪一餐」，
@@ -518,7 +518,7 @@ export default function LogSheet(props: LogSheetProps) {
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>
               </button>
-            </div>
+            </SheetGrabZone>
 
             <div className="search-wrap">
               <div className="search-box">
@@ -596,14 +596,14 @@ export default function LogSheet(props: LogSheetProps) {
           </>
         ) : (
           <>
-            <div className="sheet-head">
+            <SheetGrabZone className="sheet-head">
               <span className="sheet-title">新增食物</span>
               <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={onClose}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>
               </button>
-            </div>
+            </SheetGrabZone>
             <div className="back-row">
               {/* scanBusy 也要吃：按下去會把 FoodFormFields 整層卸載，而辨識還在跑（元件內另有卸載守衛把
                   晚到的結果丟掉，但讓使用者按得到一顆「按了等於白拍」的鈕本身就是壞體驗）。 */}

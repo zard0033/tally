@@ -3,9 +3,9 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-16）：全站精緻度 B0 已上線（72176e0，DESIGN v2.60）。iPhone 驗過新課表 sheet：鍵盤升起位置正常；開啟只聚焦、不叫鍵盤＝iOS 限制，裁決不做 hack（已寫進 DESIGN）。仍未驗：下滑只從把手起手、背景橡皮筋。B1 拆 B1a／B1b（飲食頁不出樣張）。已做：#root 縮放實驗＝不需解法；B1a 底部列浮起＋霧化（v2.61，commit 633f374，未 push，待真機看霧化）；B1b 記一筆 sheet 換 SpringSheet（v2.62，commit 482ec39）；push 前 review 兩軸修正（v2.63）。e2e 209/209、vitest 600。
-下一步：真機驗記一筆 sheet 鍵盤（--kb／--vvtop）與下滑起手範圍；控件換新卡在 --fill 對 --raised 僅 1.04:1，併 B1b 與 FoodFormFields 同批。「慢態有出口」時紅時綠。
-未動：訓練中畫面改版 spec（待核可）、有氧改動作（要 schema，另開 spec）。待決在 MANUAL。
+現況（2026-10-16）：全站精緻度 B0／B1a／B1b 第一步（v2.60–v2.63）已 push 上線，iPhone 驗過：新課表與記一筆 sheet 鍵盤沒擋、飲食頁浮起＋淡出到位。開啟只聚焦不叫鍵盤＝iOS 限制，不做 hack。v2.64 SheetGrabZone（餐別列可下滑）已 commit、未 push。e2e 211/211、vitest 600。
+下一步：真機驗餐別列橫滑／下滑手感、背景橡皮筋；鍵盤升起時 sheet 貼狀態列（v2.46 設計）要不要留空隙待決；控件換新卡在 --fill 對 --raised 僅 1.04:1，併 B1b 與 FoodFormFields。「慢態有出口」時紅時綠。
+未動：訓練中改版 spec（待核可）、有氧改動作（要 schema）。待決在 MANUAL。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

@@ -283,7 +283,7 @@ test('AI 辨識中：Escape、點 scrim、下滑都收不掉記一筆 sheet；�
   await page.locator('.add-food-row').click()
   await page.waitForSelector('#f-kcal')
   await page.evaluate((body) => {
-    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 1800 }
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body, delayMs: 4500 }
   }, SCAN_BODY)
   await page.locator('[data-testid="f-scan-input"]').setInputFiles(PNG)
   await expect(page.locator('#f-vendor'), '辨識沒開始（欄位沒鎖住）').toBeDisabled()
@@ -312,8 +312,48 @@ test('AI 辨識中：Escape、點 scrim、下滑都收不掉記一筆 sheet；�
   await page.mouse.up()
   await stillOpen('辨識中下滑把 sheet 關了（開始往下收）')
 
+  // 新增食物那頁的標題列也是下滑起手區（B1b 加的 SheetGrabZone），辨識中同樣要鎖住
+  const head = (await logSheet(page).locator('.sheet-head').boundingBox())!
+  await page.mouse.move(head.x + head.width / 2, head.y + head.height / 2)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(head.x + head.width / 2, head.y + head.height / 2 + 40 * i)
+    await page.waitForTimeout(25)
+  }
+  expect(await ty(logSheet(page)), '辨識中拖標題列，sheet 不該跟著手指走').toBeLessThan(2)
+  await page.mouse.up()
+  await stillOpen('辨識中拖標題列把 sheet 關了（開始往下收）')
+
   await expect(page.locator('#f-kcal')).toHaveValue('82') // 辨識結束
   await expect(page.locator('#f-vendor'), '辨識結束後欄位該解鎖').toBeEnabled()
   await page.keyboard.press('Escape')
   await expect(logSheet(page), '辨識結束後 Escape 應該收得掉').toHaveCount(0)
+})
+
+/* 記一筆 sheet 沒有標題列，頂端把手只有約 12px 高、很難拉（真機回報）。餐別列（以及新增食物頁的標題列）
+   也當下滑起手區；點 chip 仍然是切餐別，不能被當成拖曳。 */
+test('記一筆 sheet：從餐別列往下拖也能關閉', async ({ page }) => {
+  await openLogSheet(page)
+  const bar = (await logSheet(page).locator('.chip-bar').boundingBox())!
+  const x = bar.x + 60 // 落在 chip 上
+  const y0 = bar.y + bar.height / 2
+  await page.mouse.move(x, y0)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(x, y0 + 40 * i)
+    await page.waitForTimeout(25)
+  }
+  expect(await ty(logSheet(page)), '從餐別列起手，sheet 應該跟著手指走').toBeGreaterThan(100)
+  await page.mouse.up()
+  await expect(logSheet(page)).toHaveCount(0)
+})
+
+test('記一筆 sheet：點餐別 chip 仍是切換餐別，sheet 不動、不關', async ({ page }) => {
+  await openLogSheet(page)
+  const chip = logSheet(page).locator('.chiprow .chip').nth(2)
+  await chip.click()
+  await expect(chip).toHaveAttribute('aria-pressed', 'true')
+  await page.waitForTimeout(300)
+  expect(Math.abs(await ty(logSheet(page))), '點 chip 後 sheet 應停在 y=0').toBeLessThan(2)
+  await expect(logSheet(page)).toBeVisible()
 })
