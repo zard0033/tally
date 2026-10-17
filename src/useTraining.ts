@@ -62,6 +62,9 @@ export function useTraining(userId: string | null): TrainingState {
         }
         await trainingRuntime.flush(id)
         let v = await trainingRuntime.load(id)
+        // 先把載到的畫面顯示出來：load 可能剛排進上百筆預設動作（自動補），畫面已經疊上了，
+        // 不該等它們一筆一筆上傳完才看得到
+        if (userRef.current === id) setView(v)
         // 重數一次而不是看 v.summary：讀取途中（斷網時最久約 8 秒）使用者可能又記了東西
         if ((await trainingRuntime.queue.summary(id)).mine > 0) v = (await trainingRuntime.flush(id)).view
         if (userRef.current === id) {

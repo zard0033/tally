@@ -51,7 +51,6 @@ import {
   parentRefs,
   prefillSets,
   presetExerciseId,
-  presetsToSeed,
   setExerciseArchivedOps,
   setsOfDetail,
   startWorkoutOps,
@@ -107,22 +106,13 @@ describe('預填動作', () => {
   })
 
   it('確定性 id：同一個使用者永遠同一組 id（兩個容器各自預填不重複），不同使用者不撞', () => {
-    const a = presetsToSeed('user-a', []).map((r) => r.id)
-    expect(presetsToSeed('user-a', []).map((r) => r.id)).toEqual(a)
+    const ids = (u: string) => PRESET_EXERCISES.map((p) => presetExerciseId(u, p.key))
+    const a = ids('user-a')
+    expect(ids('user-a')).toEqual(a)
     expect(new Set(a).size).toBe(16)
     for (const id of a) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-    const b = presetsToSeed('user-b', []).map((r) => r.id)
-    expect(b.filter((id) => a.includes(id))).toEqual([])
+    expect(ids('user-b').filter((id) => a.includes(id))).toEqual([])
     expect(presetExerciseId('user-a', 'leg-press')).toBe(a[0])
-  })
-
-  it('列的內容：要點留空、未封存、帶 user_id', () => {
-    const [first] = presetsToSeed('u1', [])
-    expect(first).toMatchObject({ name: '腿推舉', muscle_group: 'legs', tips: null, archived: false, user_id: 'u1' })
-  })
-
-  it('只在一個動作都沒有時預填：有了就不補，免得把使用者改過的蓋回預設', () => {
-    expect(presetsToSeed('u1', [{ id: 'x', name: '自訂動作' }])).toEqual([])
   })
 })
 

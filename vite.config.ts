@@ -43,8 +43,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     /* service worker（階段 1 甲；設計與實測見 spec.md「SW 工具」）。
-       - registerType 'prompt'＋skipWaiting／clientsClaim 皆 false：新版裝好後等舊頁面都關了才接手，
-         不在使用中途換掉——舊雜湊檔已被部署蓋掉，換了 SW 之後的 lazy chunk 會斷。
+       - registerType 'autoUpdate'＋skipWaiting／clientsClaim 皆 true（2026-10-17 推翻原本的 prompt／false）：
+         新版裝好就接手，接手時 registerSW 會把頁面重新載入一次。原設計是「等舊頁面都關了才接手」，
+         但 iOS 的 Safari 與主畫面 App 不會真的把頁面關掉，「全部舊頁面關閉」等於永遠不發生——
+         使用者的手機兩邊都停在好幾版之前（spec AC 6 當初把這個代價列為「已知、接受」，實測不能接受）。
+         原本怕的「舊頁面活著時 SW 換手、它要的舊雜湊 lazy chunk 404」由接手即重載縮到最小。
        - injectRegister false：註冊由 src/registerSW.ts 自己呼叫，dev 與 e2e 不註冊。
        - manifest false：沿用 public/manifest.webmanifest。
        - 只 precache 同源外殼，沒有 runtime route，Supabase 請求不被攔。
@@ -60,7 +63,7 @@ export default defineConfig({
     process.env.SW_SELF_DESTROY === '1'
       ? selfDestroyingSw()
       : VitePWA({
-          registerType: 'prompt',
+          registerType: 'autoUpdate',
           injectRegister: false,
           manifest: false,
           workbox: {
@@ -70,8 +73,8 @@ export default defineConfig({
             navigateFallbackDenylist: [/\/_probe\//, /\/reset(\.html)?(\?|$)/],
             ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^v$/],
             cleanupOutdatedCaches: true,
-            skipWaiting: false,
-            clientsClaim: false,
+            skipWaiting: true,
+            clientsClaim: true,
           },
         }),
   ],

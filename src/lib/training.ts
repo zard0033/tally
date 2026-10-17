@@ -125,22 +125,6 @@ export function presetExerciseId(userId: string, key: string): string {
   return uuidV5(EXERCISE_NAMESPACE, `${userId}:exercise:${key}`)
 }
 
-/** 該帳號一個動作都沒有時回傳 16 列要預填的動作，否則回空陣列。
- *  **只在「一個都沒有」時預填**：有了就不再補——使用者改名、封存、寫要點之後再補一次，
- *  會把他改的東西蓋回預設。**enqueue 時要帶 `ignoreDuplicates: true`**：離線時本機快取還是空的就預填，
- *  回線後若用一般 upsert 會蓋掉伺服器上已被改過的同 id 列。 */
-export function presetsToSeed(userId: string, existing: readonly Row[]): Row[] {
-  if (existing.length > 0) return []
-  return PRESET_EXERCISES.map((p) => ({
-    id: presetExerciseId(userId, p.key),
-    user_id: userId,
-    name: p.name,
-    muscle_group: p.muscle_group,
-    tips: null,
-    archived: false,
-  }))
-}
-
 /* ═══════════ 疊加未同步變更（AC 18） ═══════════ */
 
 /** 把佇列裡尚未同步的條目疊在伺服器資料上：剛記的馬上看得到、重開也不消失。

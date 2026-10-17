@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-17）：B2＋動效補完＋動作示意圖（150 個預設動作，各一張 webp）本機做完，**尚未 push／尚有未 commit 改動**；使用者今天下午要去健身房用。vitest 643、e2e 237（236 過、1 紅＝既有「慢態有出口」）、三位審查已處理。細節與真機待驗清單在 DESIGN.md v2.69–v2.71。
-下一步：commit → push 閘門（已 review、測試已跑）→「準備 push」確認 → 真機：App 全關重開兩次讓新 SW 接手，動作庫頁首按「補齊預設動作」。待決：既有帳號是否自動補（現為按鈕版）、中文名待確認清單（DESIGN v2.71）、照片上游來源不明。
+現況（2026-10-17）：動作示意圖 150 個＋自動補預設動作（不用按鈕）＋SW 改為新版裝好就接手（推翻 spec AC 6）已 push。使用者手機原本停在好幾版之前（iOS 不關頁面，舊 SW 永遠不讓位）；這版 push 後會自己更新並重載一次。vitest 651；e2e 這輪只跑 service-worker／training／sync-sheet 93 條全過，全量沒重跑、沒 review（使用者要求）。
+下一步：確認手機已更新到新版（看到縮圖、全部完成雙勾、新增一組整列）；補跑全量 e2e；動效未做項（全部完成逐組 60ms、統計格翻動、排序收合動畫）；待決：中文名待確認清單、照片上游來源。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

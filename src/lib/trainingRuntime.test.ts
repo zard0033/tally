@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { KeyValueStore } from './queueStore'
 import type { SenderChain } from './sender'
 import { BASE_STORAGE_KEY, createTrainingRuntime, type ReaderBuilder, type TrainingClient } from './trainingRuntime'
-import { presetExerciseId, type Row } from './training'
+import { PRESET_EXERCISES, presetExerciseId, type Row } from './training'
 
 /* ═══════════ 測試替身 ═══════════ */
 
@@ -190,44 +190,89 @@ describe('load', () => {
 /* ═══════════ 預填（AC 1） ═══════════ */
 
 describe('預填動作', () => {
-  it('第一次就離線、連底都沒有：預填 16 個排進佇列（insert-ignore、無父列），畫面立刻看得到', async () => {
+  /** App 自己預填過的帳號長的樣子：16 個原始預設動作（帶 user_id）。 */
+  const coreRows = (): Row[] =>
+    PRESET_EXERCISES.map((p) => ({ id: presetExerciseId(U1, p.key), user_id: U1, name: p.name, muscle_group: p.muscle_group, tips: null, archived: false }))
+
+  it('第一次就離線、連底都沒有：預填整份目錄 150 個排進佇列（insert-ignore、無父列），畫面立刻看得到', async () => {
     const t = setup()
     t.backend.state.online = false
     const v = await t.rt.load(U1)
     expect(v.source).toBe('empty')
-    expect(v.db.exercises).toHaveLength(16)
-    expect(v.summary.mine).toBe(16)
+    expect(v.db.exercises).toHaveLength(150)
+    expect(v.summary.mine).toBe(150)
     const entries = await t.rt.queue.entries()
     expect(entries.every((e) => e.ignoreDuplicates === true && e.parents === undefined)).toBe(true)
   })
 
-  it('伺服器上已經有動作：不預填', async () => {
+  it('伺服器上只有自建的動作、沒有任何預設動作：不補（那是他刻意建的庫）', async () => {
     const t = setup()
     t.backend.seed('exercises', exercise('mine'))
     await t.rt.load(U1)
     expect(await t.rt.queue.entries()).toHaveLength(0)
   })
 
-  it('連線時伺服器一個都沒有：預填後 flush，伺服器上有 16 列；重複載入不會再預填', async () => {
+  it('連線時伺服器一個都沒有：預填後 flush，伺服器上有 150 列；重複載入不會再預填', async () => {
     const t = setup()
     await t.rt.load(U1)
     const { report } = await t.rt.flush(U1)
-    expect(report.sent).toBe(16)
-    expect(t.backend.store('exercises').size).toBe(16)
+    expect(report.sent).toBe(150)
+    expect(t.backend.store('exercises').size).toBe(150)
     await t.rt.load(U1)
     expect(await t.rt.queue.entries()).toHaveLength(0)
+  })
+
+  it('已經有 16 個原始預設動作的帳號（使用者現在的樣子）：載入後自動補其餘 134 個，不用按任何鈕；補完再載入不再補', async () => {
+    const t = setup()
+    t.backend.seed('exercises', ...coreRows())
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('server')
+    expect(v.db.exercises).toHaveLength(150) // 畫面立刻疊上
+    expect(v.summary.mine).toBe(134)
+    await t.rt.flush(U1)
+    expect(t.backend.store('exercises').size).toBe(150)
+    await t.rt.load(U1)
+    expect(await t.rt.queue.entries()).toHaveLength(0)
+  })
+
+  it('自動補不動使用者改過的預設動作，也不補與既有動作重名的', async () => {
+    const t = setup()
+    const rows = coreRows()
+    rows[0] = { ...rows[0], name: '我的腿推', archived: true, tips: '背貼緊' }
+    t.backend.seed('exercises', ...rows, { id: 'c1', user_id: U1, name: '槓鈴臥推', muscle_group: 'chest', tips: null, archived: false })
+    await t.rt.load(U1)
+    await t.rt.flush(U1)
+    const all = [...t.backend.store('exercises').values()]
+    expect(all).toHaveLength(150) // 16＋自建 1＋補 133（「槓鈴臥推」撞名不補）
+    expect(all.find((r) => r.id === rows[0].id)).toMatchObject({ name: '我的腿推', archived: true, tips: '背貼緊' })
+    expect(all.filter((r) => r.name === '槓鈴臥推')).toHaveLength(1)
+    expect(new Set(all.map((r) => r.name)).size).toBe(150)
   })
 
   it('預填不蓋掉伺服器上已被改過的同 id 列（離線預填、回線才上傳的情形）', async () => {
     const t = setup()
     t.backend.state.online = false
-    await t.rt.load(U1) // 離線：本機以為是空的，預填 16 個
+    await t.rt.load(U1) // 離線：本機以為是空的，預填 150 個
     const legPress = presetExerciseId(U1, 'leg-press')
     t.backend.seed('exercises', { ...exercise(legPress, '我改過的名字'), muscle_group: 'legs' })
     t.backend.state.online = true
     await t.rt.flush(U1)
     expect(t.backend.store('exercises').get(legPress)?.name).toBe('我改過的名字')
-    expect(t.backend.store('exercises').size).toBe(16)
+    expect(t.backend.store('exercises').size).toBe(150)
+  })
+
+  it('離線載入、本機快取是有東西的舊底：不自動補（拿舊清單算缺什麼不可靠）', async () => {
+    const t = setup()
+    t.backend.seed('exercises', ...coreRows())
+    await t.rt.load(U1) // 線上：補 134 個排進佇列
+    await t.rt.flush(U1) // 送出
+    // 換一個「只剩快取、而且快取裡只有 16 個」的情形：清掉伺服器補的、再離線載入
+    for (const id of [...t.backend.store('exercises').keys()]) if (!coreRows().some((r) => r.id === id)) t.backend.store('exercises').delete(id)
+    t.backend.state.online = false
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('cache')
+    // 快取是上一次線上載到的版本（含補好的 150 個），所以這裡沒有缺的；重點是離線不會因為「看起來缺」而亂寫
+    expect(await t.rt.queue.entries()).toHaveLength(0)
   })
 })
 
@@ -320,13 +365,13 @@ describe('write／flush', () => {
   it('第一次就離線記錄、底不存在：回線 flush 後重拉，送出的列不消失', async () => {
     const t = setup()
     t.backend.state.online = false
-    await t.rt.load(U1) // 預填 16 個，沒有底
+    await t.rt.load(U1) // 預填整份目錄 150 個，沒有底
     await t.rt.write(U1, tree(presetExerciseId(U1, 'leg-press')))
     t.backend.state.online = true
     const { view } = await t.rt.flush(U1)
     expect(view.source).toBe('server')
     expect(view.db.workouts.map((r) => r.id)).toEqual(['w1'])
-    expect(view.db.exercises).toHaveLength(16)
+    expect(view.db.exercises).toHaveLength(150)
     expect(view.summary.mine).toBe(0)
   })
 
@@ -453,7 +498,7 @@ describe('查 session 本身連不上（斷網＋token 過期）', () => {
 
 describe('主動登出時還有一輪載入在路上（review #8）', () => {
   it('讀回來時已經 clearAll：不寫回本機底、不排預填', async () => {
-    const t = setup() // 伺服器上沒有任何動作：沒擋住的話會預填 16 筆
+    const t = setup() // 伺服器上沒有任何動作：沒擋住的話會預填 150 筆
     const loading = t.rt.load(U1)
     await t.rt.clearAll()
     await loading

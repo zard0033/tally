@@ -5,7 +5,7 @@
    **id 與圖的對應不靠 schema**：預設動作的列 id 是確定性的（`presetExerciseId`：userId＋key 的 uuid v5），
    所以拿列上的 `user_id` 與 `id` 重算一次就知道它是哪個預設動作、該用哪張圖——使用者改名、封存、寫要點都不影響。
    使用者自己新增的動作 id 不在表裡，沒有圖。
-   **新帳號首次預填仍只有原本的 16 個**（spec 階段 2 AC 1）；其餘 134 個由動作庫的「補齊預設動作」入口寫入（`catalogInsertOps`）：
+   **開 App 載入完自動補**（`autoSeedOps`，不用按按鈕）：空庫補整份、已有 16 個原始預設動作的帳號補其餘缺的、從零自建的不補；
    insert-ignore，不動使用者改過或封存的列；**名稱與既有動作重複的不補**（`checkExercise` 的規則：名稱不能重複，含已封存的）。 */
 import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type MuscleGroup, type Row, type RowOp } from './training'
 
@@ -179,12 +179,6 @@ export function catalogKey(row: Row): string | null {
   return typeof row.user_id === 'string' ? (indexOf(row.user_id).idToKey.get(row.id) ?? null) : null
 }
 
-/** 這批動作列屬於哪個帳號：取第一個帶 `user_id` 的。RLS 保證整批同一人；一列都沒有（或都沒 `user_id`）回 null。 */
-export function ownerOf(exercises: readonly Row[]): string | null {
-  for (const e of exercises) if (typeof e.user_id === 'string') return e.user_id
-  return null
-}
-
 /** 動作庫「補齊預設動作」要寫的列：目錄裡、這個帳號還沒有的。「已有」有兩種：
  *  ① 確定性 id 已在（含已封存的、改過名的預設動作）；
  *  ② **名稱與既有任何動作重複**（`foldName`：全形半形、大小寫、空白都視為同名；含已封存的）——
@@ -202,7 +196,7 @@ export function catalogToAdd(userId: string, existing: readonly Row[]): Row[] {
   )
 }
 
-/** 「補齊預設動作」要排進佇列的寫入：每個缺的一筆 insert，**一律 `ignoreDuplicates`**。
+/** 預設動作要排進佇列的寫入：每個缺的一筆 insert，**一律 `ignoreDuplicates`**。
  *  離線時本機底可能還沒載到、或比伺服器舊，這時缺的清單會多算；回線後 insert-ignore 讓伺服器上已存在的列（含改過名、封存過的）原封不動。 */
 export function catalogInsertOps(userId: string, existing: readonly Row[]): RowOp[] {
   return catalogToAdd(userId, existing).map((r) => ({
@@ -212,6 +206,20 @@ export function catalogInsertOps(userId: string, existing: readonly Row[]): RowO
     payload: { ...r },
     ignoreDuplicates: true,
   }))
+}
+
+/** 開 App 載入完之後要自動補的預設動作（使用者 2026-10-17：「自動補動作，不用按按鈕」）。三種情形：
+ *  ① **動作庫是空的**（新帳號）：補整份目錄 150 個。離線也補（排進佇列、insert-ignore，回線才上傳）。
+ *  ② **已有全部 16 個原始預設動作**（App 自己預填過的帳號）且**這份動作是從伺服器載到的**：補其餘缺的。
+ *     只認伺服器載到的：本機快取可能比伺服器舊，拿舊清單算「缺什麼」會把同名判斷也算歪。
+ *  ③ 其他（使用者從零自建、沒有預設動作）：**不補**——那是他刻意建的庫，不該突然多 150 個。
+ *  補的內容由 `catalogToAdd` 決定：id 已在、名稱重複的都不補，所以補完再載入一次不會再寫（冪等）。 */
+export function autoSeedOps(userId: string, existing: readonly Row[], loadedFromServer: boolean): RowOp[] {
+  if (existing.length === 0) return catalogInsertOps(userId, existing)
+  if (!loadedFromServer) return []
+  const have = new Set(existing.map((r) => r.id))
+  const core = indexOf(userId).ids.slice(0, PRESET_EXERCISES.length)
+  return core.every((id) => have.has(id)) ? catalogInsertOps(userId, existing) : []
 }
 
 /** 肌群的單字（沒有圖的動作用它當縮圖）。 */

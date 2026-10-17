@@ -20,12 +20,12 @@ import {
 } from './queue'
 import { createQueueStore, type KeyValueStore } from './queueStore'
 import { createSender, type SenderClient } from './sender'
+import { autoSeedOps } from './exerciseCatalog'
 import {
   TRAINING_TABLES,
   applyQueue,
   emptyTrainingDb,
   parentRefs,
-  presetsToSeed,
   type Row,
   type TrainingDb,
   type TrainingTable,
@@ -263,19 +263,19 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     return composeView(userId)
   }
 
-  /** 一個動作都沒有就預填。看的是疊上佇列後的畫面：預填排進佇列之後就不會再預填第二次。 */
-  async function seedIfEmpty(userId: string, gen: number): Promise<TrainingView> {
+  /** 載入完自動補預設動作（規則見 `autoSeedOps`）。看的是疊上佇列後的畫面：補進佇列之後就不會再補第二次。 */
+  async function seedCatalog(userId: string, gen: number): Promise<TrainingView> {
     const view = await composeView(userId)
-    const rows = presetsToSeed(userId, view.db.exercises) // 已有動作就是空陣列，write 不排任何東西
+    const ops = autoSeedOps(userId, view.db.exercises, view.source === 'server') // 不需要補就是空陣列，write 不排任何東西
     // 這個檢查與下面 write 呼叫 enqueueMany 之間不能有 await：中間若插進 clearAll，預填會排在 clear 之後落地
     if (gen !== generation) return view
     return write(
       userId,
-      rows.map((r) => ({
+      ops.map((o) => ({
         op: 'insert' as const,
         table: 'exercises' as const,
-        rowId: r.id,
-        payload: { ...r },
+        rowId: o.rowId,
+        payload: { ...o.payload },
         ignoreDuplicates: true,
       })),
     )
@@ -304,8 +304,8 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
           source = 'empty'
         }
       }
-      // 讀取途中被主動登出：不預填（預填會在已清空的裝置上排 16 筆屬於舊帳號的條目）
-      return seedIfEmpty(userId, gen)
+      // 讀取途中被主動登出：不預填（預填會在已清空的裝置上排上百筆屬於舊帳號的條目）
+      return seedCatalog(userId, gen)
     },
 
     async view(userId) {

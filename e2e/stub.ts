@@ -136,11 +136,6 @@ export async function seedFetchStub(
       ;(window as unknown as { __trainRows: (t: string) => Record<string, unknown>[] }).__trainRows = (t) => [
         ...trainStore[t].values(),
       ]
-      /* 直接在「伺服器」放一列，不經過 app：模擬「這列在伺服器上已存在、但這台裝置的本機底不知道」
-         （離線期間別台裝置改過、或本機底過期）——insert-ignore 能不能保護它，只有這樣才測得到。 */
-      ;(window as unknown as { __trainPut: (t: string, row: Record<string, unknown>) => void }).__trainPut = (t, row) => {
-        trainStore[t].set(String(row.id), { ...row })
-      }
 
       // 昨天，只給「undo 跨日期」的 intake 查詢分流用（跟 e2e/fixtures.ts 的 YDAY 算法一致）
       const yday = (() => {

@@ -219,31 +219,53 @@ test('離線冷啟動、token 仍有效：12 秒內亮失敗提示（注入失�
   await expect(page.locator('.notice'), '失敗原因不是離線的 TypeError').toContainText('連不上網路')
 })
 
-/* 這條驗的是「新版裝好後不自動接手」（skipWaiting: false）。它**沒有**覆蓋 spec 說的另一個風險——
-   新 SW 啟用時清掉舊 precache、舊頁面要的舊雜湊檔就沒了：這裡新舊版的 precache 清單相同，
-   清理不會動到任何條目。那一半由 workbox 的 cleanupOutdatedCaches 語意保證（舊快取留到新版啟用才清），
-   因此守住「不自動接手」就是守住那個風險的前提。 */
-test('新版 SW 裝好後等待，不自動接手（AC 6）', async ({ page }) => {
+/* AC 6（2026-10-17 改）：新版 SW 裝好就接手，**接手時頁面自己重新載入一次**。
+   原本是「等舊頁面都關了才接手」，但 iOS 的 Safari 與主畫面 App 不會真的關掉頁面，等於永遠停在舊版
+   （使用者的手機兩邊都停在好幾版之前）。原本怕的風險——舊頁面活著時 SW 換手、它要的舊雜湊 lazy chunk 404——
+   由「接手即重載」縮到最小。`window.__marker` 是舊頁面記憶體裡的東西，頁面重載後就沒了，用它判斷有沒有重載。 */
+test('新版 SW 裝好就接手，並把頁面重新載入成新版（AC 6）', async ({ page }) => {
   await installAndControl(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { __marker: number }).__marker = 1
+  })
 
   // 模擬發佈新版：sw.js 位元組變了，瀏覽器就會當成新版本去安裝
   fs.appendFileSync(path.join(servedDir, 'sw.js'), '\n// v2\n')
-  const state = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.getRegistration('/tally/')
-    if (!reg) return { waiting: null, active: null }
-    await reg.update()
-    for (let i = 0; i < 50 && !reg.waiting; i++) await new Promise((r) => setTimeout(r, 100))
-    return { waiting: reg.waiting?.state ?? null, active: reg.active?.state ?? null }
+    await reg?.update()
   })
-  expect(state).toEqual({ waiting: 'installed', active: 'activated' })
 
-  // 重新導覽（舊頁面仍開著）新版仍在等，沒有被偷偷換上
+  // 接手時頁面重新載入：舊頁面的 marker 消失（重載當下 evaluate 會丟「執行環境已毀」，也算重載了）
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __marker?: number }).__marker ?? null).catch(() => null), { timeout: 20_000 })
+    .toBeNull()
+
+  // 重載後：新版是 active、沒有 waiting 卡著、只剩一個 precache
+  await expect
+    .poll(
+      () =>
+        page
+          .evaluate(async () => {
+            const reg = await navigator.serviceWorker.getRegistration('/tally/')
+            return { waiting: reg?.waiting?.state ?? null, active: reg?.active?.state ?? null, caches: (await caches.keys()).length }
+          })
+          .catch(() => null),
+      { timeout: 15_000 },
+    )
+    .toEqual({ waiting: null, active: 'activated', caches: 1 })
+})
+
+test('第一次安裝時 SW 接手不會把頁面重載（沒有舊版可換）', async ({ page }) => {
   await page.goto(`${ORIGIN}/tally/`)
-  const after = await page.evaluate(async () => {
-    const reg = await navigator.serviceWorker.getRegistration('/tally/')
-    return { waiting: reg?.waiting?.state ?? null, active: reg?.active?.state ?? null }
+  await page.evaluate(() => {
+    ;(window as unknown as { __marker: number }).__marker = 1
   })
-  expect(after).toEqual({ waiting: 'installed', active: 'activated' })
+  await expect
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/tally/'))?.active?.state ?? null), { timeout: 20_000 })
+    .toBe('activated')
+  await page.waitForTimeout(1500) // 給 controllerchange 足夠的時間（若誤重載，marker 會不見）
+  expect(await page.evaluate(() => (window as unknown as { __marker?: number }).__marker)).toBe(1)
 })
 
 test('救援頁不被 SW 吞掉；按「重置」只清 Tally 的 SW 與快取（AC 7 ②）', async ({ page }) => {

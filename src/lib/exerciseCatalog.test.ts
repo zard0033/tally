@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { EXERCISE_CATALOG, EXTRA_EXERCISES, catalogInsertOps, catalogKey, catalogToAdd, glyphOf, ownerOf } from './exerciseCatalog'
-import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, presetsToSeed, type Row } from './training'
+import { EXERCISE_CATALOG, EXTRA_EXERCISES, autoSeedOps, catalogInsertOps, catalogKey, catalogToAdd, glyphOf } from './exerciseCatalog'
+import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
 const images = import.meta.glob<string>('../assets/exercises/*.webp', { eager: true, query: '?inline', import: 'default' })
 const imageMap = Object.values(
   import.meta.glob<Record<string, string>>('../../scripts/exercise-images.json', { eager: true, import: 'default' }),
 )[0]
+/** 該帳號原始的 16 個預設動作（App 自己預填過的樣子）。 */
+const coreRows = (u: string): Row[] =>
+  PRESET_EXERCISES.map((p) => ({ id: presetExerciseId(u, p.key), user_id: u, name: p.name, muscle_group: p.muscle_group, tips: null, archived: false }))
 const fileKey = (path: string) => path.replace(/^.*\//, '').replace(/\.webp$/, '')
 /** data URI → 位元組數與前 12 個位元組（latin1 字串） */
 function inspect(dataUri: string) {
@@ -121,7 +124,7 @@ describe('catalogToAdd（補齊預設動作）', () => {
   })
 
   it('已經預填過 16 個：只補其餘 134 個', () => {
-    const have = presetsToSeed('u1', [])
+    const have = coreRows('u1')
     const rows = catalogToAdd('u1', have)
     expect(rows).toHaveLength(134)
     expect(rows.map((r) => r.id)).toEqual(EXTRA_EXERCISES.map((p) => presetExerciseId('u1', p.key)))
@@ -169,7 +172,7 @@ describe('catalogToAdd（補齊預設動作）', () => {
 
 describe('catalogInsertOps', () => {
   it('每個缺的一筆 insert 進 exercises，一律 ignoreDuplicates（本機底過期時不能蓋掉伺服器上改過的列）', () => {
-    const ops = catalogInsertOps('u1', presetsToSeed('u1', []))
+    const ops = catalogInsertOps('u1', coreRows('u1'))
     expect(ops).toHaveLength(134)
     for (const o of ops) {
       expect(o.op).toBe('insert')
@@ -185,13 +188,55 @@ describe('catalogInsertOps', () => {
   })
 })
 
-describe('ownerOf／glyphOf', () => {
-  it('取第一個帶 user_id 的列；沒有就 null', () => {
-    expect(ownerOf([{ id: 'a' }, { id: 'b', user_id: 'u9' }])).toBe('u9')
-    expect(ownerOf([])).toBeNull()
-    expect(ownerOf([{ id: 'a', user_id: 5 }])).toBeNull()
+describe('autoSeedOps（開 App 載入完自動補）', () => {
+  const U = 'u1'
+
+  it('空庫（新帳號）：補整份 150 個，離線也補（沒有從伺服器載到也一樣）', () => {
+    expect(autoSeedOps(U, [], true)).toHaveLength(150)
+    expect(autoSeedOps(U, [], false)).toHaveLength(150)
   })
 
+  it('已有全部 16 個原始預設動作、且是從伺服器載到的：補其餘 134 個', () => {
+    const ops = autoSeedOps(U, coreRows(U), true)
+    expect(ops).toHaveLength(134)
+    expect(ops.map((o) => o.rowId)).toEqual(EXTRA_EXERCISES.map((p) => presetExerciseId(U, p.key)))
+    for (const o of ops) expect(o.ignoreDuplicates).toBe(true)
+  })
+
+  it('不是從伺服器載到的（本機快取可能比伺服器舊）：非空庫不補', () => {
+    expect(autoSeedOps(U, coreRows(U), false)).toEqual([])
+  })
+
+  it('只缺 1 個原始預設動作（不是 App 預填出來的庫）：不補', () => {
+    expect(autoSeedOps(U, coreRows(U).slice(1), true)).toEqual([])
+  })
+
+  it('從零自建、沒有任何預設動作：不補（那是他刻意建的庫，不該突然多 150 個）', () => {
+    expect(autoSeedOps(U, [{ id: 'c1', user_id: U, name: '我的動作' }], true)).toEqual([])
+  })
+
+  it('別的帳號的預設動作 id 不算：id 含 userId', () => {
+    expect(autoSeedOps(U, coreRows('u2'), true)).toEqual([])
+  })
+
+  it('預設動作被改名、封存過仍算「有」，不會被補回預設值；撞名的目錄項目不補', () => {
+    const rows = coreRows(U)
+    rows[0] = { ...rows[0], name: '我的腿推', archived: true }
+    rows.push({ id: 'c1', user_id: U, name: '槓鈴臥推' })
+    const ops = autoSeedOps(U, rows, true)
+    expect(ops.map((o) => o.rowId)).not.toContain(rows[0].id)
+    expect(ops).toHaveLength(133) // 134 個裡「槓鈴臥推」撞名
+  })
+
+  it('補完再載入一次是空的（冪等）：不會每次開 App 都寫', () => {
+    const first = autoSeedOps(U, coreRows(U), true)
+    const after = [...coreRows(U), ...first.map((o) => ({ ...o.payload, id: o.rowId }) as Row)]
+    expect(autoSeedOps(U, after, true)).toEqual([])
+    expect(autoSeedOps(U, [...autoSeedOps(U, [], true).map((o) => ({ ...o.payload, id: o.rowId }) as Row)], true)).toEqual([])
+  })
+})
+
+describe('glyphOf', () => {
   it('肌群單字：七類各一字，資料異常落在「他」', () => {
     expect(MUSCLE_GROUPS.map((g) => glyphOf(g))).toEqual(['胸', '背', '腿', '肩', '臂', '腹', '他'])
     expect(glyphOf('legs')).toBe('腿')
