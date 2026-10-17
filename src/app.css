@@ -272,22 +272,22 @@ button { -webkit-user-select: none; user-select: none; }
    與 44px 的列上下緣相切，而門檻預告的 scale(1.18) 會長成 51.9px、被 .item-row 的
    overflow:clip 切掉上下各 4px——真機回報「圓角變得很大、上下被截斷」（2026-07-30 量到）。
    40px 打底後預告改 scale(1.1)＝44px，剛好貼齊列高不外溢，觸控區與 transform-only 都不動。 */
-.item-delete { width: 44px; height: 44px; border-radius: var(--r-pill); border: none;
+.item-delete, .swipe-delete { width: 44px; height: 44px; border-radius: var(--r-pill); border: none;
   background: none; color: var(--on-accent); display: flex; align-items: center;
   justify-content: center; cursor: pointer; flex-shrink: 0;
   -webkit-appearance: none; appearance: none;
   position: absolute; top: 0; bottom: 0; right: var(--s-2); margin: auto 0; }
-.item-delete::before { content: ''; position: absolute; inset: 2px; border-radius: var(--r-pill);
+.item-delete::before, .swipe-delete::before { content: ''; position: absolute; inset: 2px; border-radius: var(--r-pill);
   background: var(--over-fill); transition: transform var(--dur-base) var(--ease); }
 /* position:relative 讓圖示疊在 ::before 之上（絕對定位的 pseudo 會蓋掉靜態子元素） */
-.item-delete svg { position: relative; width: 18px; height: 18px; stroke: var(--on-accent); }
-.item-delete:active { opacity: .8; }
+.item-delete svg, .swipe-delete svg { position: relative; width: 18px; height: 18px; stroke: var(--on-accent); }
+.item-delete:active, .swipe-delete:active { opacity: .8; }
 /* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
-.item-delete:disabled { opacity: .6; cursor: default; }
+.item-delete:disabled, .swipe-delete:disabled { opacity: .6; cursor: default; }
 /* 拖過「放手就刪」的門檻時圓放大一點——純 transform 的預告，讓滑到底不是盲的 */
 .item-row.is-armed .item-delete::before { transform: scale(1.1); }
 /* outline-offset 內縮：.item-row 是 overflow:clip，往外長的外框會被裁掉半圈 */
-.item-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.item-delete:focus-visible, .swipe-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 /* 加入成功的短暫高亮：疊一層 --accent-soft 只動 opacity，不動 layout */
 /* inset 不外擴——.item-row 是 overflow:clip，往外長會被裁掉 */
@@ -1140,7 +1140,7 @@ button { -webkit-user-select: none; user-select: none; }
 .field-float { position: relative; margin-bottom: var(--s-4); padding-top: 22px; }
 /* 表單控件一律 --t-md（16px）：iOS Safari 對 <16px 的輸入框聚焦會自動 zoom，
    heuristic 關不掉，唯一乾淨解法就是別低於 16（真機實測撞到，2026-07-29） */
-.field-float input, .field-float select, .search-box { --line: var(--rule-field);
+.field-float input, .field-float select, .search-box, .tr-search, .tr-field input, .tr-field textarea { --line: var(--rule-field);
   background: linear-gradient(var(--line), var(--line)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--fill);
   border: none; border-radius: var(--r-tab); }
 .field-float input, .field-float select { width: 100%; min-height: 48px;
@@ -1148,7 +1148,8 @@ button { -webkit-user-select: none; user-select: none; }
   padding: 0 var(--s-3); -webkit-appearance: none; appearance: none;
   transition: box-shadow var(--dur-base) var(--ease); }
 /* 聚焦：底線變 jade、整欄換 --card 底並加 3px jade 光暈 */
-.field-float input:focus, .field-float select:focus, .search-box:focus-within { outline: none;
+.field-float input:focus, .field-float select:focus, .search-box:focus-within, .tr-search:focus-within,
+.tr-field input:focus, .tr-field textarea:focus { outline: none;
   --line: var(--accent);
   background: linear-gradient(var(--line), var(--line)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--card);
   box-shadow: 0 0 0 3px var(--accent-ring); }
@@ -1229,42 +1230,6 @@ button { -webkit-user-select: none; user-select: none; }
   .form-lock[disabled] .field-float:has(input:placeholder-shown)::after { animation: none; opacity: .8; }
 }
 
-/* ── vaul sheet 的動效覆寫 ──
-   vaul 內建動效走 CSS 動畫（[data-vaul-drawer]/[data-vaul-overlay] 的 data-state 屬性），
-   不是 legacy 那種掛 .opening／.closing class 手動控制的寫法，所以「用 CSS 覆寫其 data
-   屬性動畫」是唯一路徑：vaul 自己的規則用 [data-vaul-drawer][data-state=...] 這組選擇器
-   （二個屬性選擇器，優先權 (0,0,2,0)），這裡用相同優先權的選擇器覆寫，靠 !important
-   保證勝出（vaul 的 <style> 插入時機不保證在這份元件的 <style> 之前）。
-   進場沿用 --dur-sheet/--ease-sheet（DESIGN.md v1.9 動效階梯）；drawer 退場 --dur-mid
-   （退場比進場降一級；原 200ms 真機體感「像直接消失」）；scrim 退場另走 --dur-fast，
-   比 drawer 短——暗幕先清，否則滑走掀開的區域與頂部帶淡出起點不同，分區變色（下方詳註）。
-   scrim（Drawer.Overlay）的動畫只有這一軌——app.css 的 .scrim base class 不掛動畫。 */
-[data-vaul-drawer][data-state="open"], [data-vaul-overlay][data-state="open"] {
-  animation-duration: var(--dur-sheet, 280ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-[data-vaul-drawer][data-state="closed"] {
-  animation-duration: var(--dur-mid, 220ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-/* overlay 退場比 sheet 短：兩者同速時，sheet 滑走「掀開」的區域露出的是淡到一半的
-   scrim，而頂部 96px 從全黑開始淡——真機看起來就是頂部延遲變色（2026-07-29 實測）。
-   暗幕先清、sheet 慢滑，掀開處已是乾淨背景，不一致感即消失 */
-[data-vaul-overlay][data-state="closed"] {
-  animation-duration: var(--dur-fast, 100ms) !important;
-  animation-timing-function: var(--ease-sheet, cubic-bezier(.32, .72, 0, 1)) !important;
-}
-/* reduced-motion 要在這裡自帶一份：上面幾條都掛著 !important，app.css 的全域
-   reduced-motion 區塊（無 !important）壓不過，只能同權重就地覆寫 */
-@media (prefers-reduced-motion: reduce) {
-  [data-vaul-drawer][data-state], [data-vaul-overlay][data-state] {
-    animation-duration: .01ms !important;
-  }
-}
-/* 2026-08-05 從 LogSheet 的內嵌 <style> 搬來這裡：選擇器本來就是全域的，而食品庫的
-   訓練的幾張 sheet（仍走 vaul）在別的分頁下 LogSheet 根本沒掛載，內嵌寫法吃不到，
-   會用 vaul 預設時長跑動畫、跟 DESIGN.md 的動效階梯對不上。 */
-
 /* ═══ 訓練分頁（階段 2；樣式來自已核可的 _design-sample/training.html，token 一律引用） ═══ */
 .tr-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-1) var(--s-5) var(--s-4); }
 .tr-scroll::-webkit-scrollbar { display: none; }
@@ -1272,7 +1237,7 @@ button { -webkit-user-select: none; user-select: none; }
 .tr-sec { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs);
   margin: var(--s-4) 0 var(--s-2); }
 .tr-sec:first-child { margin-top: var(--s-2); }
-.tr-card { background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-tab); overflow: clip; }
+.tr-card { background: var(--card); box-shadow: var(--shadow-1); border-radius: var(--r-tab); overflow: clip; }
 .tr-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: 0 var(--s-4);
   border: none; border-top: 1px solid var(--rule-subtle); background: none; text-align: left;
   font-family: inherit; color: inherit; }
@@ -1319,56 +1284,112 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tr-ib svg { width: 20px; height: 20px; }
 .tr-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 var(--s-5) var(--s-3);
-  background: var(--card); border: 1px solid var(--rule-subtle); border-radius: var(--r-tab); flex-shrink: 0; }
+  background: var(--card); box-shadow: var(--shadow-1); border-radius: var(--r-tab); flex-shrink: 0; }
 .tr-stat { padding: var(--s-3) var(--s-2); text-align: center; border-left: 1px solid var(--rule-subtle); }
 .tr-stat:first-child { border-left: none; }
 .tr-stat .v { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg);
   font-weight: 600; letter-spacing: var(--track-lg); line-height: 1.1; }
 .tr-stat .l { display: block; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); margin-top: 2px; }
 .ex { margin-bottom: var(--s-3); }
-.ex-head { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 60px;
-  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); border: none; background: none; text-align: left;
-  font-family: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.ex-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tr-cards { display: block; }
+/* 排序中：捲動區往上多開 14px（內距補回，內容位置不動），橡皮筋露出的部分畫得出來、不被捲動區裁掉 */
+.tr-scroll.is-sorting { margin-top: -14px; padding-top: calc(var(--s-1) + 14px); }
+.ex.is-dragging { position: relative; z-index: 2; scale: 1.02; box-shadow: var(--shadow-2); }
+/* 卡片頭：握把｜名稱（點了收合／展開）｜ⓘ｜⋯。四件事每張卡一模一樣、上下對齊 */
+.ex-head { display: flex; align-items: center; gap: var(--s-1); min-height: 60px;
+  padding: var(--s-2) var(--s-1) var(--s-2) var(--s-4); }
 .ex.collapsed .ex-head { min-height: 56px; }
-.ex-head .grow { flex: 1; min-width: 0; }
+.ex-toggle { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--s-2);
+  padding: 0; border: none; background: none; text-align: left; font-family: inherit; color: inherit;
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.ex-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--s-1); }
+.ex-toggle .grow { flex: 1; min-width: 0; }
 .ex-head .nm { display: block; font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md); line-height: 1.2; }
-.ex-head .sub { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: 3px;
-  font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: var(--track-xs); }
-.ex-head .chev { width: 14px; height: 14px; color: var(--ink-muted); margin-right: var(--s-3);
+/* 第二行：展開＝肌群、收合＝進度。換內容時整段下移 35% 淡入（元件用 key 重掛） */
+.ex-head .sub { display: flex; align-items: center; min-height: 18px; margin-top: 3px; font-size: var(--t-xs);
+  color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-xs); animation: sub-in var(--dur-base) var(--ease) both; }
+@keyframes sub-in { from { opacity: 0; transform: translateY(35%); } }
+.ex-head .prog { display: inline-flex; align-items: center; gap: var(--s-2); }
+.ex-head .dots { display: inline-flex; gap: 4px; }
+.ex-head .dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--rule-field); }
+.ex-head .dot.is-done { background: var(--accent); box-shadow: none; }
+.ex-toggle .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
-.ex-head .chev.is-open { transform: rotate(90deg); }
-.ex-tips { display: block; width: calc(100% - 2 * var(--s-4)); margin: 0 var(--s-4) var(--s-3); padding: var(--s-3);
-  border: none; border-radius: var(--r-tab); background: var(--raised); text-align: left; white-space: pre-wrap;
-  font-family: inherit; font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; cursor: pointer;
-  -webkit-appearance: none; appearance: none; }
-.ex-tips:active { opacity: .6; }
-.ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.ex-tips .t { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); display: flex;
-  align-items: center; justify-content: space-between; margin-bottom: 2px; }
-.ex-tips .pen { width: 14px; height: 14px; color: var(--ink-faint); }
-.ex-tips.is-empty { color: var(--accent); }
-.ex-tips.is-empty .t { margin-bottom: 0; }
+.ex-toggle .chev.is-open { transform: rotate(90deg); }
+.ex-info.is-empty { color: var(--ink-faint); }
+.ex-info[aria-expanded="true"] { color: var(--accent); }
+.ex-info:disabled { opacity: .35; cursor: default; }
+/* 要點面板：點 ⓘ 在卡片頭下方展開（柔和底色塊），高度走 spring（motion） */
+.ex-tips-body { margin: 0 var(--s-3) var(--s-2); padding: var(--s-3); border-radius: var(--r-tab); background: var(--raised); }
+.ex-tips-text { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
+.ex-tips-text.is-empty { color: var(--ink-muted); }
+.ex-tips-edit { display: block; min-height: 44px; margin: 0 calc(var(--s-2) * -1) calc(var(--s-2) * -1) auto;
+  padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font-family: inherit;
+  font-size: var(--t-sm); font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.ex-tips-edit:active { opacity: .6; }
+.ex-tips-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
+/* ⋯ 選單：從按鈕位置縮放長出（scale .95，永不從 0 開始）；開 160ms／關 100ms */
+.ex-menu-pos { z-index: 30; }
+.ex-menu { min-width: 176px; padding: var(--s-1); border-radius: var(--r-tab); background: var(--card);
+  box-shadow: var(--shadow-2); transform-origin: var(--transform-origin);
+  transition: transform 160ms var(--ease), opacity 160ms var(--ease); }
+.ex-menu[data-starting-style], .ex-menu[data-ending-style] { opacity: 0; transform: scale(.95); }
+.ex-menu[data-ending-style] { transition-duration: 100ms; }
+.ex-menu-item { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); border-radius: 10px;
+  font-size: var(--t-base); color: var(--ink); cursor: pointer; outline: none; }
+.ex-menu-item[data-highlighted] { background: var(--raised); }
+.ex-menu-item.is-danger { color: var(--over); }
+/* 一組一列：組｜重量｜次數｜勾。欄頭最後一格是「全部完成」雙勾 */
+.ex-body { padding-bottom: var(--s-1); }
 .set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;
   padding: 0 var(--s-4); }
-.set-head { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); text-align: center; min-height: 24px; }
+.set-head { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); text-align: center; min-height: 40px; }
+.tr-all { justify-self: center; width: 36px; height: 36px; border: none; border-radius: var(--r-pill);
+  background: var(--fill); color: var(--ink-faint); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 200ms cubic-bezier(.23, 1, .32, 1); }
+.tr-all svg { width: 20px; height: 20px; stroke-width: 2.2; }
+.tr-all:active { transform: scale(.9); }
+.tr-all.is-on { background: var(--accent); color: var(--on-accent); }
+.tr-all:disabled { opacity: .4; cursor: default; }
+.tr-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .set { padding-top: var(--s-1); padding-bottom: var(--s-1); }
 .set .no { text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-sm); }
-.set.active .no { color: var(--accent); font-weight: 700; }
-.tr-in { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background: var(--raised); font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-size: var(--t-md); font-weight: 600; text-align: center; color: var(--ink-muted);
-  -webkit-appearance: none; appearance: none; }
-.tr-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* 預填（還沒做）＝淡；打勾（做完了）＝ink 加深底變卡片色——不加任何新元件就分得出「預填」與「實際」 */
-.set.done .tr-in { color: var(--ink); background: var(--card); }
-.tr-check { width: 48px; height: 48px; border-radius: var(--r-pill); border: 1.5px solid var(--rule-field);
-  background: none; color: var(--ink-faint); display: flex; align-items: center; justify-content: center;
-  cursor: pointer; -webkit-appearance: none; appearance: none; justify-self: center; }
+/* 重量與次數是按鈕（點了開組編輯 sheet），不是輸入框；預填（還沒做）＝淡、打勾（做完了）＝墨色加深 */
+.tr-val { width: 100%; min-height: 48px; border: none; border-radius: 12px; background: var(--fill);
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 600;
+  text-align: center; color: var(--ink-muted); cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: transform var(--dur-fast) ease-out; }
+.tr-val:active { transform: scale(.97); }
+.tr-val:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.set.done .tr-val { color: var(--ink); }
+/* 圈裡一直有勾：未勾淡灰、已勾綠實心；圈 .86→1 不彈跳 */
+.tr-check { width: 48px; height: 48px; border-radius: var(--r-pill); border: none; background: var(--fill);
+  color: var(--ink-faint); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  -webkit-appearance: none; appearance: none; justify-self: center;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 200ms cubic-bezier(.23, 1, .32, 1); }
+.tr-check:active { transform: scale(.9); }
 .tr-check svg { width: 22px; height: 22px; stroke-width: 2.2; }
-.set.done .tr-check { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.set.done .tr-check { background: var(--accent); color: var(--on-accent); }
 .tr-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 同步剩餘組數：被改到的列淡綠閃一下（逐列錯開 50ms，延遲由元件內聯給） */
+.set.is-synced { animation: set-flash 700ms var(--ease) both; }
+@keyframes set-flash { 0%, 100% { background-color: transparent; } 20% { background-color: var(--accent-soft); } }
+/* 左滑刪除（SwipeDelete）：位移層要有底色，紅圓鈕壓在它底下，滑開才露出 */
+.swipe-row { position: relative; overflow: clip; }
+.swipe-slide { position: relative; z-index: 1; background: var(--card); }
+/* 新增一組：接在最後一組下方的整列（虛線框、全寬） */
+.tr-addset { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  width: calc(100% - 2 * var(--s-4)); min-height: 44px; margin: var(--s-2) var(--s-4) var(--s-3);
+  border: 1.5px dashed var(--rule-field); border-radius: var(--r-tab); background: none; color: var(--accent);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.tr-addset svg { width: 16px; height: 16px; }
+.tr-addset:active { opacity: .6; }
+.tr-addset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tr-text-btn { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-4);
   border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
   cursor: pointer; -webkit-appearance: none; appearance: none; }
@@ -1376,26 +1397,53 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-text-btn.is-quiet { color: var(--ink-muted); font-weight: 400; }
 .tr-text-btn-center { width: 100%; justify-content: center; margin-top: var(--s-1); }
 .tr-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.adj { margin: 0 var(--s-4) var(--s-2); padding: var(--s-2); border-radius: var(--r-tab); background: var(--raised); }
-.adj-line { display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; gap: 6px; align-items: center; }
-.adj-line + .adj-line { margin-top: 6px; }
-.adj-b { min-height: 44px; border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--card);
+/* 組編輯 sheet：上次籤、重量與次數各一排 ±（填色膠囊＋浮起圓鈕）、底部一列左右並排 */
+.set-sheet-body { display: flex; flex-direction: column; gap: var(--s-4); padding-top: var(--s-2); }
+.set-sec { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
+  letter-spacing: var(--track-xs); margin-bottom: var(--s-2); }
+.set-none { font-size: var(--t-sm); color: var(--ink-muted); }
+.last-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.last-chip { min-height: 40px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill); background: var(--fill);
   color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
   font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.adj-b:active { background: var(--accent-soft); }
-.adj-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.adj-v { text-align: center; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
-  color: var(--ink-muted); }
+.last-chip.is-current { background: var(--accent-soft); color: var(--accent); }
+.last-chip:active { opacity: .6; }
+.last-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step-line { display: grid; grid-template-columns: 1fr 1fr 1.7fr 1fr 1fr; gap: 4px; align-items: center; padding: 2px;
+  background: var(--fill); border-radius: var(--r-pill); }
+.step-b { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1);
+  color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
+  font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.step-b:active { opacity: .6; }
+.step-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step-num { width: 100%; min-height: 48px; border: none; border-radius: 10px; background: none; color: var(--ink);
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 600;
+  letter-spacing: var(--track-lg); text-align: center; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.step-num:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
+.step-num.is-input:focus { outline: none; }
+.set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
+/* 要壓過 `.tr-sheet-body .action-btn` 的 margin-top（同權重、排在後面）：三顆鈕才會在同一條線上 */
+.tr-sheet-body .set-acts .action-btn { flex: 1; margin-top: 0; }
+.set-acts .set-sync { flex: 1.3; justify-content: center; padding: 0 var(--s-2); }
+.set-del { flex: none; width: 52px; height: 52px; border: none; border-radius: var(--r-btn); background: var(--over-fill);
+  color: var(--on-accent); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.set-del svg { width: 20px; height: 20px; }
+.set-del:active { opacity: .8; }
+.set-del:disabled { opacity: .35; cursor: default; }
+.set-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tr-bottom { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-5); flex-shrink: 0;
   padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule-subtle);
   background: var(--paper); }
 .tr-bottom .action-btn { flex: 1; }
-.tr-secondary { flex: 0 0 auto; min-height: 52px; padding: 0 var(--s-4); border: 1px solid var(--rule-field);
-  border-radius: var(--r-btn); background: none; color: var(--accent); font-family: inherit; font-size: var(--t-md);
+.tr-secondary { flex: 0 0 auto; min-height: 52px; padding: 0 var(--s-4); border: none;
+  border-radius: var(--r-btn); background: var(--fill); color: var(--accent); font-family: inherit; font-size: var(--t-md);
   font-weight: 700; letter-spacing: var(--track-md); cursor: pointer; -webkit-appearance: none; appearance: none;
   display: flex; align-items: center; gap: var(--s-2); }
 .tr-secondary svg { width: 18px; height: 18px; }
 .tr-secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tr-secondary:disabled { opacity: .45; cursor: default; }
 
 /* 訓練的 sheet 內容：開始訓練、加動作、訓練完成 */
 .tr-sheet-body { padding: var(--s-3) var(--s-5) var(--s-6); }
@@ -1409,7 +1457,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .sync-body .tr-row .tr-text-btn { padding: 0 var(--s-2); margin-right: calc(var(--s-2) * -1); }
 .tr-filter { margin: 0 calc(var(--s-5) * -1) var(--s-2); padding: 0 var(--s-5) var(--s-1); }
 .tr-search { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3);
-  margin: 0 0 var(--s-3); border: 1px solid var(--rule-field); border-radius: var(--r-tab); background: var(--raised); }
+  margin: 0 0 var(--s-3); }
 .tr-search svg { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
 .tr-search input { flex: 1; min-width: 0; border: none; background: none; font-family: var(--font-body);
   font-size: var(--t-md); color: var(--ink); outline: none; }
@@ -1422,20 +1470,18 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field .lb { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
 .tr-field .lb em { font-style: normal; font-weight: 400; color: var(--ink-faint); margin-left: var(--s-2); }
-.tr-field input { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background: var(--raised); padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+.tr-field input { width: 100%; min-height: 48px; padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-md); color: var(--ink); -webkit-appearance: none; appearance: none; }
-.tr-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tr-field input.is-text, .tr-field textarea { font-family: var(--font-body); font-variant-numeric: normal; }
-.tr-field select { width: 100%; min-height: 48px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background-color: var(--raised); padding: 0 40px 0 var(--s-3); font-family: var(--font-body); font-size: var(--t-md);
+.tr-field select { --line: var(--rule-field); width: 100%; min-height: 48px; border: none; border-radius: var(--r-tab);
+  background-color: var(--fill); padding: 0 40px 0 var(--s-3); font-family: var(--font-body); font-size: var(--t-md);
   color: var(--ink); -webkit-appearance: none; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237A5C44' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 12px center; background-size: 18px; }
-.tr-field textarea { width: 100%; min-height: 96px; border: 1px solid var(--rule-field); border-radius: var(--r-tab);
-  background: var(--raised); padding: var(--s-3); font-size: var(--t-md); line-height: 1.6; color: var(--ink);
+  background-image: linear-gradient(var(--line), var(--line)), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237A5C44' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat; background-position: center bottom, right 12px center;
+  background-size: calc(100% - 2 * var(--s-3)) 2px, 18px; }
+.tr-field textarea { width: 100%; min-height: 96px; padding: var(--s-3); font-size: var(--t-md); line-height: 1.6; color: var(--ink);
   resize: none; -webkit-appearance: none; appearance: none; }
-.tr-field select:focus-visible, .tr-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tr-field select:focus { outline: none; --line: var(--accent); background-color: var(--card); box-shadow: 0 0 0 3px var(--accent-ring); }
 .tr-field .hint { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-1); line-height: 1.5; }
 .tr-field .hint.is-error { color: var(--over); }
 
@@ -1479,7 +1525,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-3) 0 0; }
 .tr-sheet-body .muted.tr-target-note { margin: 0 0 var(--s-2); font-size: var(--t-sm); line-height: 1.6; }
 
-/* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 vaul sheet（z 11）之上 */
+/* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 sheet（z 11）之上 */
 .dialog-scrim { z-index: 12; }
 .tr-dialog { position: fixed; left: var(--s-5); right: var(--s-5); top: 50%; transform: translateY(-50%);
   z-index: 13; max-width: 420px; margin: 0 auto; background: var(--paper); border-radius: var(--r-btn);

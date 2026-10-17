@@ -1,31 +1,47 @@
-/* 訓練中的整頁（樣張 ③）：一次訓練的所有動作與組，記組、打勾、調整、加動作、完成。
+/* 訓練中的整頁：一次訓練的所有動作與組，記組、打勾、調整、加動作、排序、完成。
    同一頁也用來重新打開已結束的訓練編輯（AC 8）：修改當下就存，不需要再按儲存。
 
-   寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。輸入框用「草稿」：打字途中不寫，
-   失焦或按 Enter 才寫一筆——每個按鍵都寫會讓佇列與 IndexedDB 每秒被寫幾次。± 與打勾是單一動作，
-   當下就寫。不合法的輸入（負數、超過 DDL 的上限）不寫、放回原值，不靜默截斷成別的數字。 */
-import { useCallback, useEffect, useState } from 'react'
+   組的重量與次數不在列上打字：點它開「組編輯 sheet」（SetSheet，± 與大數字都在那裡，每次立即寫入）。
+   列上只有兩顆數字鈕與一顆勾；整列可左滑露出紅鈕刪除。卡片頭固定四件事：握把、名稱（點了收合／展開）、
+   ⓘ 要點（點了在卡片內展開面板）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群。
+   欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
+   寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Menu } from '@base-ui/react/menu'
+import { DragDropProvider } from '@dnd-kit/react'
+import { useSortable } from '@dnd-kit/react/sortable'
+import { move } from '@dnd-kit/helpers'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import SwipeDelete from '@/components/SwipeDelete'
+import { rubberBandToElement } from '@/components/rubberBandModifier'
+import { sortableAccessibility } from '@/components/sortableA11y'
+import { SPRING_CARD } from '@/lib/durations'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
+import SetSheet, { type SetTarget } from './SetSheet'
 import {
   MUSCLE_GROUP_LABEL,
   addExerciseOps,
   addSetOps,
+  allSetsDone,
+  exerciseProgress,
   finishWorkoutOps,
   formatKg,
-  formatLastSets,
   isBackfilled,
-  lastCompletedSets,
+  removeSetOps,
+  reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
   setsOfDetail,
+  toggleAllDoneOps,
   workoutSummary,
   type MuscleGroup,
   type Row,
   type RowOp,
   type TrainingDb,
   type WorkoutDetail,
+  type WorkoutExerciseDetail,
 } from '@/lib/training'
 
 interface TrainingSessionProps {
@@ -55,135 +71,258 @@ function useNow(active: boolean): Date {
   return now
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100
-const parseWeight = (raw: string): number | null => {
-  const n = Number(raw.trim().replace(',', '.'))
-  return raw.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 1000 ? round2(n) : null
+/** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
+const MAX_DOTS = 8
+function Progress({ sets }: { sets: readonly Row[] }) {
+  const { done, total, next } = exerciseProgress(sets)
+  if (total === 0) return <>沒有組</>
+  const nextText = next ? `下一組 ${formatKg(next.weight)} kg × ${next.reps}` : '全部完成'
+  return (
+    <span className="prog">
+      <span className="sr-only">{`已完成 ${done} 組，共 ${total} 組。`}</span>
+      {total <= MAX_DOTS ? (
+        <span className="dots" aria-hidden="true">
+          {sets.map((s) => (
+            <i key={s.id} className={s.done === true ? 'dot is-done' : 'dot'} />
+          ))}
+        </span>
+      ) : (
+        <span aria-hidden="true">{`${done}/${total} 組`}</span>
+      )}
+      <span aria-hidden={total <= MAX_DOTS ? undefined : true}>{nextText}</span>
+    </span>
+  )
 }
-const parseReps = (raw: string): number | null => {
-  const n = Number(raw.trim())
-  return raw.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 999 ? n : null
-}
+
+const DotsIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M6 12h.01M12 12h.01M18 12h.01" />
+  </svg>
+)
 
 /* ═══════════ 一組 ═══════════ */
 
 interface SetRowProps {
   set: Row
   no: number
-  active: boolean
-  onActivate: () => void
-  onPatch: (patch: Record<string, unknown>) => void
+  canDelete: boolean
+  swipeOpen: boolean
+  /** 同步剩餘組數剛改到這一列：它在被改的列裡排第幾個（淡綠閃一下，依序錯開）；沒被改＝null。 */
+  flashIndex: number | null
+  onSwipe: (open: boolean) => void
+  onEdit: (opener: HTMLElement) => void
+  onToggle: () => void
+  onDelete: () => void
 }
 
-function SetRow({ set, no, active, onActivate, onPatch }: SetRowProps) {
+function SetRow({ set, no, canDelete, swipeOpen, flashIndex, onSwipe, onEdit, onToggle, onDelete }: SetRowProps) {
   const weight = Number(set.weight_kg)
   const reps = Number(set.reps)
   const done = set.done === true
-  // null＝顯示已存的值；有字串＝使用者正在打、還沒寫
-  const [dw, setDw] = useState<string | null>(null)
-  const [dr, setDr] = useState<string | null>(null)
-
-  const curWeight = (dw !== null ? parseWeight(dw) : null) ?? weight
-  const curReps = (dr !== null ? parseReps(dr) : null) ?? reps
-
-  /** 把草稿換算成要寫的欄位；不合法的草稿直接丟掉（放回原值）。 */
-  const draftPatch = (): Record<string, unknown> => {
-    const patch: Record<string, unknown> = {}
-    if (dw !== null) {
-      const v = parseWeight(dw)
-      if (v !== null && v !== weight) patch.weight_kg = v
-    }
-    if (dr !== null) {
-      const v = parseReps(dr)
-      if (v !== null && v !== reps) patch.reps = v
-    }
-    return patch
-  }
-  const flush = (extra: Record<string, unknown> = {}) => {
-    const patch = { ...draftPatch(), ...extra }
-    setDw(null)
-    setDr(null)
-    if (Object.keys(patch).length > 0) onPatch(patch)
-  }
-
-  const step = (field: 'weight_kg' | 'reps', delta: number) => {
-    if (field === 'weight_kg') flush({ weight_kg: Math.min(1000, Math.max(0, round2(curWeight + delta))) })
-    else flush({ reps: Math.min(999, Math.max(0, curReps + delta)) })
-  }
-
-  const onEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') e.currentTarget.blur()
-  }
-
   return (
-    <>
-      <div className={`set${done ? ' done' : ''}${active ? ' active' : ''}`} data-set-id={set.id}>
+    <SwipeDelete open={swipeOpen} onOpenChange={onSwipe} onDelete={onDelete} deleteLabel={`刪除第 ${no} 組`} disabled={!canDelete}>
+      <div
+        className={`set${done ? ' done' : ''}${flashIndex !== null ? ' is-synced' : ''}`}
+        data-set-id={set.id}
+        style={flashIndex !== null ? { animationDelay: `${flashIndex * 50}ms` } : undefined}
+      >
         <span className="no">{no}</span>
-        <input
-          className="tr-in w"
-          type="text"
-          inputMode="decimal"
-          value={dw ?? formatKg(weight)}
-          aria-label={`第 ${no} 組重量 kg`}
-          onFocus={onActivate}
-          onChange={(e) => setDw(e.target.value)}
-          onBlur={() => flush()}
-          onKeyDown={onEnter}
-        />
-        <input
-          className="tr-in r"
-          type="text"
-          inputMode="numeric"
-          value={dr ?? String(reps)}
-          aria-label={`第 ${no} 組次數`}
-          onFocus={onActivate}
-          onChange={(e) => setDr(e.target.value)}
-          onBlur={() => flush()}
-          onKeyDown={onEnter}
-        />
         <button
-          className="tr-check"
+          className="tr-val w"
           type="button"
-          aria-pressed={done}
-          aria-label={`第 ${no} 組完成`}
-          onClick={() => flush({ done: !done })}
+          aria-label={`第 ${no} 組重量 ${formatKg(weight)} 公斤，調整`}
+          onClick={(e) => onEdit(e.currentTarget)}
         >
+          {formatKg(weight)}
+        </button>
+        <button className="tr-val r" type="button" aria-label={`第 ${no} 組次數 ${reps}，調整`} onClick={(e) => onEdit(e.currentTarget)}>
+          {reps}
+        </button>
+        <button className="tr-check" type="button" aria-pressed={done} aria-label={`第 ${no} 組完成`} onClick={onToggle}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
         </button>
       </div>
-      {active && (
-        <div className="adj" role="group" aria-label={`第 ${no} 組調整`}>
-          <div className="adj-line" role="group" aria-label="重量 kg">
-            {[-5, -2.5].map((d) => (
-              <button key={d} className="adj-b" type="button" aria-label={`重量減 ${-d} 公斤`} onClick={() => step('weight_kg', d)}>
-                −{-d}
-              </button>
-            ))}
-            <output className="adj-v">{formatKg(curWeight)} kg</output>
-            {[2.5, 5].map((d) => (
-              <button key={d} className="adj-b" type="button" aria-label={`重量加 ${d} 公斤`} onClick={() => step('weight_kg', d)}>
-                +{d}
-              </button>
-            ))}
-          </div>
-          <div className="adj-line" role="group" aria-label="次數">
-            {[-5, -1].map((d) => (
-              <button key={d} className="adj-b" type="button" aria-label={`次數減 ${-d}`} onClick={() => step('reps', d)}>
-                −{-d}
-              </button>
-            ))}
-            <output className="adj-v">{curReps} 次</output>
-            {[1, 5].map((d) => (
-              <button key={d} className="adj-b" type="button" aria-label={`次數加 ${d}`} onClick={() => step('reps', d)}>
-                +{d}
-              </button>
-            ))}
-          </div>
-        </div>
+    </SwipeDelete>
+  )
+}
+
+/* ═══════════ 一張動作卡 ═══════════ */
+
+interface ExerciseCardProps {
+  item: WorkoutExerciseDetail
+  index: number
+  open: boolean
+  tipsOpen: boolean
+  /** 排序中：所有卡與要點面板一併收起。 */
+  sorting: boolean
+  swipeId: string | null
+  flash: readonly string[]
+  onToggleOpen: () => void
+  onToggleTips: () => void
+  onEditTips: () => void
+  onRemove: () => void
+  onToggleAll: () => void
+  onAddSet: () => void
+  onSwipe: (setId: string, open: boolean) => void
+  onEditSet: (setId: string, opener: HTMLElement) => void
+  onToggleSet: (set: Row) => void
+  onDeleteSet: (setId: string) => void
+}
+
+function ExerciseCard(p: ExerciseCardProps) {
+  const { item, index, sorting } = p
+  const { entry, exercise, sets } = item
+  const reduced = useReducedMotion()
+  const name = exercise ? String(exercise.name) : '（已刪除的動作）'
+  const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
+  const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
+  const open = p.open && !sorting
+  const tipsOpen = p.tipsOpen
+  const { ref, handleRef, isDragging } = useSortable({ id: entry.id, index, data: { name } })
+  const spring = reduced ? { duration: 0.01 } : { height: SPRING_CARD, opacity: { duration: 0.16 } }
+  const allDone = allSetsDone(sets)
+
+  return (
+    <section
+      ref={ref}
+      className={`tr-card ex${open ? '' : ' collapsed'}${isDragging ? ' is-dragging' : ''}`}
+      aria-label={name}
+      data-entry-id={entry.id}
+    >
+      <div className="ex-head">
+        <button className="tr-grip" type="button" ref={handleRef} aria-label={`拖曳排序：${name}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+          </svg>
+        </button>
+        <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
+          <span className="grow">
+            <span className="nm">{name}</span>
+            {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
+            <span className="sub" key={open ? 'group' : 'progress'}>
+              {open ? group : <Progress sets={sets} />}
+            </span>
+          </span>
+          <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+        {/* 每張卡都有 ⓘ（沒寫過要點的是淡色，不隱藏）：隱藏會讓箭頭、ⓘ、⋯ 在各卡上對不齊 */}
+        <button
+          className={`tr-ib ex-info${tips ? '' : ' is-empty'}`}
+          type="button"
+          aria-expanded={tipsOpen}
+          aria-label={tips ? `${name} 的要點` : `${name} 還沒有要點`}
+          disabled={!exercise}
+          onClick={p.onToggleTips}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5M12 8h.01" />
+          </svg>
+        </button>
+        <Menu.Root>
+          <Menu.Trigger className="tr-ib" aria-label={`${name} 的更多操作`}>
+            <DotsIcon />
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner className="ex-menu-pos" side="bottom" align="end" sideOffset={4} collisionPadding={12}>
+              <Menu.Popup className="ex-menu">
+                {exercise && (
+                  <Menu.Item className="ex-menu-item" onClick={p.onEditTips}>
+                    {tips ? '編輯要點' : '加要點'}
+                  </Menu.Item>
+                )}
+                <Menu.Item className="ex-menu-item is-danger" onClick={p.onRemove}>
+                  移除這個動作
+                </Menu.Item>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
+      </div>
+
+      {/* 排序中整段不掛 AnimatePresence：沒有退場動畫，收合在同一次 commit 完成。dnd-kit 在 beforedragstart 之後
+          等 React 渲染完才量尺寸並凍結被拖那張的寬高，退場動畫還在跑的話量到的是展開時的高度 */}
+      {!sorting && (
+        <>
+          <AnimatePresence initial={false}>
+            {tipsOpen && (
+              <motion.div
+                key="tips"
+                className="ex-tips-panel"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={spring}
+                style={{ overflow: 'hidden' }}
+              >
+                <div className="ex-tips-body">
+                  {tips ? <p className="ex-tips-text">{tips}</p> : <p className="ex-tips-text is-empty">還沒有要點</p>}
+                  <button className="ex-tips-edit" type="button" onClick={p.onEditTips}>
+                    {tips ? '編輯要點' : '新增要點'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence initial={false}>
+            {open && (
+              <motion.div
+                key="body"
+                className="ex-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={spring}
+                style={{ overflow: 'hidden' }}
+              >
+                <div className="set-head">
+                  <span aria-hidden="true">組</span>
+                  <span aria-hidden="true">重量 kg</span>
+                  <span aria-hidden="true">次數</span>
+                  <button
+                    className={`tr-all${allDone ? ' is-on' : ''}`}
+                    type="button"
+                    aria-pressed={allDone}
+                    aria-label={allDone ? '取消全部完成' : '全部完成'}
+                    disabled={sets.length === 0}
+                    onClick={p.onToggleAll}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />
+                    </svg>
+                  </button>
+                </div>
+                {sets.map((s, i) => (
+                  <SetRow
+                    key={s.id}
+                    set={s}
+                    no={i + 1}
+                    canDelete={sets.length > 1}
+                    swipeOpen={p.swipeId === s.id}
+                    flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
+                    onSwipe={(o) => p.onSwipe(s.id, o)}
+                    onEdit={(opener) => p.onEditSet(s.id, opener)}
+                    onToggle={() => p.onToggleSet(s)}
+                    onDelete={() => p.onDeleteSet(s.id)}
+                  />
+                ))}
+                <button className="tr-addset" type="button" onClick={p.onAddSet}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  新增一組
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
       )}
-    </>
+    </section>
   )
 }
 
@@ -197,16 +336,33 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const now = useNow(live)
 
   const [openEx, setOpenEx] = useState<string | null>(() => exercises[0]?.entry.id ?? null)
-  const [activeSet, setActiveSet] = useState<string | null>(null)
+  const [tipsOpenIds, setTipsOpenIds] = useState<ReadonlySet<string>>(new Set())
+  const [swipeId, setSwipeId] = useState<string | null>(null)
   const [picker, setPicker] = useState(false)
-  // 目標與開關分開：關閉動畫期間表單不能跳成別的動作
+  // 目標與開關分開：關閉動畫期間表單不能跳成別的目標
+  const [setTarget, setSetTarget] = useState<SetTarget | null>(null)
+  const [setOpen, setSetOpen] = useState(false)
+  const setOpener = useRef<HTMLElement | null>(null)
   const [tipsTarget, setTipsTarget] = useState<Row | null>(null)
   const [tipsOpen, setTipsOpen] = useState(false)
   const [finish, setFinish] = useState(false)
   const [askDelete, setAskDelete] = useState(false)
   const [askRemove, setAskRemove] = useState<string | null>(null)
+  const [flash, setFlash] = useState<readonly string[]>([])
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [sorting, setSorting] = useState(false)
+  // 放下後到寫入完成之間的顯示順序（entry id）；null＝照資料的順序
+  const [pending, setPending] = useState<string[] | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current)
+    },
+    [],
+  )
 
   const run = useCallback(
     async (ops: RowOp[]): Promise<boolean> => {
@@ -264,6 +420,25 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     await run([{ op: 'delete', table: 'workout_exercises', rowId: entryId }])
   }
 
+  const reorder = async (orderedIds: string[]) => {
+    try {
+      const ops = reorderWorkoutExercisesOps({ entries: exercises.map((e) => e.entry), orderedIds })
+      if (ops.length === 0) return
+      setPending(orderedIds)
+      await run(ops)
+    } catch (e) {
+      setError(`這筆沒有存下來：${errText(e)}`)
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const showFlash = (ids: string[]) => {
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    setFlash(ids)
+    flashTimer.current = setTimeout(() => setFlash([]), 700 + ids.length * 50)
+  }
+
   const finishLines: FinishLine[] = exercises.map(({ exercise, sets }) => ({
     name: exercise ? String(exercise.name) : '（已刪除的動作）',
     text: sets
@@ -274,6 +449,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
 
   const pickable = db.exercises.filter((e) => e.archived !== true)
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
+  const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
+
+  const askRemoveExercise = (item: WorkoutExerciseDetail) => {
+    if (item.sets.some((s) => s.done === true)) setAskRemove(item.entry.id)
+    else void removeExercise(item.entry.id)
+  }
 
   return (
     <div className="main" data-screen="training-session" data-workout-id={workout.id}>
@@ -318,103 +499,68 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         </div>
       )}
 
-      <div className="tr-scroll">
+      <div className={`tr-scroll${sorting ? ' is-sorting' : ''}`}>
         {exercises.length === 0 && <p className="muted">還沒有動作，按下面的「加動作」開始</p>}
-        {exercises.map(({ entry, exercise, sets }) => {
-          const open = openEx === entry.id
-          const name = exercise ? String(exercise.name) : '（已刪除的動作）'
-          const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
-          const last = formatLastSets(lastCompletedSets(db, String(entry.exercise_id), workout.id))
-          const sub = [group, open ? null : `${sets.length} 組`, last ? `上次 ${last}` : null].filter(Boolean).join(' · ')
-          const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
-          return (
-            <section key={entry.id} className={`tr-card ex${open ? '' : ' collapsed'}`} aria-label={name} data-entry-id={entry.id}>
-              <button
-                className="ex-head"
-                type="button"
-                aria-expanded={open}
-                onClick={() => {
-                  setOpenEx(open ? null : entry.id)
-                  setActiveSet(null)
+        <DragDropProvider
+          plugins={(defaults) => [...defaults, sortableAccessibility]}
+          modifiers={[rubberBandToElement(() => listRef.current)]}
+          onBeforeDragStart={() => {
+            setSorting(true)
+            setSwipeId(null)
+          }}
+          onDragEnd={(event) => {
+            setSorting(false)
+            if (event.canceled) return
+            void reorder(move(shown.map((e) => e.entry.id), event))
+          }}
+        >
+          <div className="tr-cards" ref={listRef}>
+            {shown.map((item, index) => (
+              <ExerciseCard
+                key={item.entry.id}
+                item={item}
+                index={index}
+                open={openEx === item.entry.id}
+                tipsOpen={tipsOpenIds.has(item.entry.id)}
+                sorting={sorting}
+                swipeId={swipeId}
+                flash={flash}
+                onToggleOpen={() => {
+                  setOpenEx(openEx === item.entry.id ? null : item.entry.id)
+                  setSwipeId(null)
                 }}
-              >
-                <span className="grow">
-                  <span className="nm">{name}</span>
-                  <span className="sub">{sub}</span>
-                </span>
-                <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M9 6l6 6-6 6" />
-                </svg>
-              </button>
-              {open && (
-                <>
-                  {/* 訓練中只能看；筆圖示開「編輯動作」sheet 才能改（AC 3），免得流汗時手滑 */}
-                  {exercise && (
-                    <button
-                      className={`ex-tips${tips ? '' : ' is-empty'}`}
-                      type="button"
-                      aria-label={tips ? `編輯要點：${tips}` : '加要點'}
-                      onClick={() => {
-                        setTipsTarget(exercise)
-                        setTipsOpen(true)
-                      }}
-                    >
-                      {tips ? (
-                        <>
-                          <span className="t">
-                            要點
-                            <svg className="pen" viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M4 20h4L19 9l-4-4L4 16v4z" />
-                            </svg>
-                          </span>
-                          {tips}
-                        </>
-                      ) : (
-                        <span className="t">＋ 加要點</span>
-                      )}
-                    </button>
-                  )}
-                  <div className="set-head" aria-hidden="true">
-                    <span>組</span>
-                    <span>重量 kg</span>
-                    <span>次數</span>
-                    <span>完成</span>
-                  </div>
-                  {sets.map((s, i) => (
-                    <SetRow
-                      key={s.id}
-                      set={s}
-                      no={i + 1}
-                      active={activeSet === s.id}
-                      onActivate={() => setActiveSet(s.id)}
-                      onPatch={(patch) => void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: patch }])}
-                    />
-                  ))}
-                  <button
-                    className="tr-text-btn"
-                    type="button"
-                    onClick={() => void run(addSetOps({ db, workoutExerciseId: entry.id, newId }))}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    新增一組
-                  </button>
-                  <button
-                    className="tr-text-btn is-quiet"
-                    type="button"
-                    onClick={() => {
-                      if (sets.some((s) => s.done === true)) setAskRemove(entry.id)
-                      else void removeExercise(entry.id)
-                    }}
-                  >
-                    移除這個動作
-                  </button>
-                </>
-              )}
-            </section>
-          )
-        })}
+                onToggleTips={() =>
+                  setTipsOpenIds((cur) => {
+                    const next = new Set(cur)
+                    if (next.has(item.entry.id)) next.delete(item.entry.id)
+                    else next.add(item.entry.id)
+                    return next
+                  })
+                }
+                onEditTips={() => {
+                  if (!item.exercise) return
+                  setTipsTarget(item.exercise)
+                  setTipsOpen(true)
+                }}
+                onRemove={() => askRemoveExercise(item)}
+                onToggleAll={() => void run(toggleAllDoneOps(detail, item.entry.id))}
+                onAddSet={() => void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))}
+                onSwipe={(setId, o) => setSwipeId(o ? setId : swipeId === setId ? null : swipeId)}
+                onEditSet={(setId, opener) => {
+                  setSwipeId(null)
+                  setOpener.current = opener
+                  setSetTarget({ entryId: item.entry.id, setId })
+                  setSetOpen(true)
+                }}
+                onToggleSet={(s) => void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])}
+                onDeleteSet={(setId) => {
+                  setSwipeId(null)
+                  void run(removeSetOps(detail, setId))
+                }}
+              />
+            ))}
+          </div>
+        </DragDropProvider>
       </div>
 
       <div className="tr-bottom">
@@ -430,6 +576,21 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
       </div>
 
       <ExercisePicker open={picker} exercises={pickable} onClose={() => setPicker(false)} onPick={(id) => void addExercise(id)} />
+
+      <SetSheet
+        open={setOpen}
+        onClose={() => setSetOpen(false)}
+        target={setTarget}
+        detail={detail}
+        db={db}
+        run={run}
+        finalFocus={setOpener}
+        onSynced={showFlash}
+        onDeleted={() => {
+          // 這一組已經不在了：關閉後焦點落到那張卡的名稱鈕
+          setOpener.current = document.querySelector<HTMLElement>(`[data-entry-id="${setTarget?.entryId}"] .ex-toggle`)
+        }}
+      />
 
       <ExerciseEditSheet
         open={tipsOpen}

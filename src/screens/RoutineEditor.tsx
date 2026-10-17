@@ -8,10 +8,10 @@
    列的其餘部分照常捲動。放下的當下先用本機的 `pending` 順序顯示、寫完才放掉，不然函式庫會先把列
    彈回原位、等寫入完成才跳到新位置，看起來像閃一下。 */
 import { useRef, useState } from 'react'
-import { Accessibility } from '@dnd-kit/dom'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
+import { sortableAccessibility } from '@/components/sortableA11y'
 import {
   addRoutineExerciseOps,
   checkRoutineName,
@@ -41,27 +41,6 @@ interface RoutineEditorProps {
 
 const newId = () => crypto.randomUUID()
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
-
-const nameOf = (source: { data?: Record<string, unknown> } | null | undefined) => String(source?.data?.name ?? '動作')
-
-type Announcements = NonNullable<NonNullable<ConstructorParameters<typeof Accessibility>[1]>['announcements']>
-
-/** 螢幕閱讀器的朗讀改成中文；預設是英文且念的是 id（我們的 id 是 uuid，聽不懂）。 */
-const announcements: Announcements = {
-  dragstart: ({ operation: { source } }) => (source ? `拿起${nameOf(source)}` : undefined),
-  // source 與 target 同一個＝移動後它成了自己的碰撞目標，念出來是「X移到X的位置」，函式庫預設也不念
-  dragover: ({ operation: { source, target } }) =>
-    source && target && source.id !== target.id ? `${nameOf(source)}移到${nameOf(target)}的位置` : undefined,
-  dragend: ({ operation: { source }, canceled }) =>
-    source ? (canceled ? `取消，${nameOf(source)}回到原位` : `放下${nameOf(source)}`) : undefined,
-}
-
-const accessibility = Accessibility.configure({
-  announcements,
-  screenReaderInstructions: {
-    draggable: '按空白鍵或 Enter 拿起這個動作，用上下方向鍵移動，再按空白鍵放下，按 Esc 取消。',
-  },
-})
 
 interface SortableRowProps {
   item: RoutineExerciseDetail
@@ -225,7 +204,7 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
 
         <div className="tr-sec">動作（依序）</div>
         <DragDropProvider
-          plugins={(defaults) => [...defaults, accessibility]}
+          plugins={(defaults) => [...defaults, sortableAccessibility]}
           onDragEnd={(event) => {
             if (event.canceled) return
             void reorder(move(shown.map((e) => e.entry.id), event))

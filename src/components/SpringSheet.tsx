@@ -27,6 +27,8 @@ interface SpringSheetProps {
   fit?: boolean
   /** 開啟時焦點落在哪；不給＝第一個可聚焦元素（標題列的關閉鈕）。 */
   initialFocus?: RefObject<HTMLElement | null>
+  /** 關閉後焦點回到哪；不給＝回到開啟前聚焦的元素。Safari 點按鈕不會讓它取得焦點，所以由「點哪顆開的」那端指定。 */
+  finalFocus?: RefObject<HTMLElement | null>
   /** 鎖住關閉：Escape、點 scrim、下滑手勢都不收（辨識中這類「誤關代價高」的時段）。關閉鈕由呼叫端自己 disable。 */
   locked?: boolean
   /** 把 popup 節點交出去（店家 Autocomplete 的 Portal 要指到這裡）。 */
@@ -50,7 +52,7 @@ export function SheetGrabZone({ className, children }: { className?: string; chi
 
 const screenH = () => (typeof window === 'undefined' ? 800 : window.innerHeight)
 
-export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
+export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, finalFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
   const reduced = useReducedMotion()
   const [present, setPresent] = useState(open)
   // 起點放在畫面下方：第一次畫出來就在外面，不會在 0 的位置閃一幀
@@ -159,6 +161,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
           aria-label={title ? undefined : label}
           data-screen={screen}
           initialFocus={initialFocus}
+          finalFocus={finalFocus}
           render={
             <motion.div
               style={{ y, pointerEvents: open ? undefined : 'none' }}

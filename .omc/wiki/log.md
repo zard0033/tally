@@ -40,3 +40,15 @@
 - **Pages:** lesson-spring-sheet-spring-sheet-2026-10-16.md
 - **Summary:** Created new page "lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）"
 
+## [2026-10-16T15:54:23.994Z] query
+- **Pages:** verified-platform-rls-a11y-supabase-pwa.md, status-facts-edge-function.md, open-failures.md, phase2-round1-log-2-2026-10-13-14.md, verified-testing-e2e-mutation.md, lesson-spring-sheet-spring-sheet-2026-10-16.md, lesson-sync-sheet-review-sheet-2026-10-15.md
+- **Summary:** Query "填色 底線 --raised 隱形 box-shadow" → 7 results (of 7 total)
+
+## [2026-10-16T15:54:38.652Z] ingest
+- **Pages:** lesson-field-controls-2026-10-16.md
+- **Summary:** Created new page "lesson-field-controls 填色控件的三條通則（2026-10-16）"
+
+## [2026-10-17T05:26:35.733Z] ingest
+- **Pages:** lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md
+- **Summary:** Created new page "lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）"
+

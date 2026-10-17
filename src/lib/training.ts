@@ -489,6 +489,82 @@ export function addSetOps(args: { db: TrainingDb; workoutExerciseId: string; new
   ]
 }
 
+const findSet = (detail: WorkoutDetail, setId: string) => {
+  for (const ex of detail.exercises) {
+    const index = ex.sets.findIndex((s) => s.id === setId)
+    if (index >= 0) return { ex, index }
+  }
+  return null
+}
+
+/** 同一個動作裡排在這一組後面、還沒打勾的組（「同步剩餘組數」要套到哪些、按鈕上的 N 是多少）。找不到這一組回空陣列。 */
+export function remainingSetsAfter(detail: WorkoutDetail, setId: string): Row[] {
+  const found = findSet(detail, setId)
+  return found ? found.ex.sets.slice(found.index + 1).filter((s) => s.done !== true) : []
+}
+
+/** 把這一組的重量與次數套到後面所有還沒打勾的組；已打勾的不動、值本來就一樣的不寫。 */
+export function syncSetsForwardOps(detail: WorkoutDetail, setId: string): RowOp[] {
+  const source = findSet(detail, setId)?.ex.sets.find((s) => s.id === setId)
+  if (!source) return []
+  const weight = Number(source.weight_kg)
+  const reps = Number(source.reps)
+  return remainingSetsAfter(detail, setId).flatMap((s): RowOp[] => {
+    const payload: Record<string, unknown> = {}
+    if (Number(s.weight_kg) !== weight) payload.weight_kg = weight
+    if (Number(s.reps) !== reps) payload.reps = reps
+    return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'workout_sets', rowId: s.id, payload }]
+  })
+}
+
+/** 欄頭雙勾的狀態：有組、而且每一組都打勾了才算「全部完成」。 */
+export const allSetsDone = (sets: readonly Row[]): boolean => sets.length > 0 && sets.every((s) => s.done === true)
+
+/** 欄頭雙勾按下去：還有沒打勾的就全部打勾；已經全勾就全部取消。一次回傳，呼叫端一次寫進佇列。 */
+export function toggleAllDoneOps(detail: WorkoutDetail, workoutExerciseId: string): RowOp[] {
+  const sets = detail.exercises.find((e) => e.entry.id === workoutExerciseId)?.sets ?? []
+  const target = !allSetsDone(sets)
+  return sets.flatMap((s): RowOp[] =>
+    (s.done === true) === target ? [] : [{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: target } }],
+  )
+}
+
+/** 刪一組：單筆 delete。不重排 set_no（畫面的組號本來就用序號，`addSetOps` 取 max+1）。
+ *  只剩一組、或找不到時回空陣列——要拿掉整個動作走「移除這個動作」。 */
+export function removeSetOps(detail: WorkoutDetail, setId: string): RowOp[] {
+  const found = findSet(detail, setId)
+  if (!found || found.ex.sets.length <= 1) return []
+  return [{ op: 'delete', table: 'workout_sets', rowId: setId }]
+}
+
+/** 收合列要看的進度：做完幾組、共幾組、下一組（第一個還沒打勾的）。全部做完 next＝null。 */
+export function exerciseProgress(sets: readonly Row[]): {
+  done: number
+  total: number
+  next: { weight: number; reps: number } | null
+} {
+  const next = sets.find((s) => s.done !== true)
+  return {
+    done: sets.filter((s) => s.done === true).length,
+    total: sets.length,
+    next: next ? { weight: Number(next.weight_kg), reps: Number(next.reps) } : null,
+  }
+}
+
+/** 訓練中拖曳排序的結果 → 只更新位置有變的 workout_exercises。與課表那支同樣嚴格：對不上就丟錯。 */
+export function reorderWorkoutExercisesOps(args: { entries: readonly Row[]; orderedIds: readonly string[] }): RowOp[] {
+  const { entries, orderedIds } = args
+  const known = new Map(entries.map((e) => [e.id, e]))
+  if (new Set(orderedIds).size !== known.size || !orderedIds.every((id) => known.has(id))) {
+    throw new Error('排序的項目與這次訓練現有的動作對不上')
+  }
+  return orderedIds.flatMap((id, i): RowOp[] =>
+    Number(known.get(id)?.position) === i
+      ? []
+      : [{ op: 'update', table: 'workout_exercises', rowId: id, payload: { position: i } }],
+  )
+}
+
 /** 結束一次進行中的訓練。即時的：ended_at＝現在；補記的：started_at／ended_at 由手填分鐘算
  *  （略過＝等於起點）。已結束的訓練重新打開編輯時，修改都是當下就存，不再呼叫這個。 */
 export function finishWorkoutOps(args: { workout: Row; now: Date; minutes: number | null }): RowOp[] {

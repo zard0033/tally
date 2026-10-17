@@ -2,9 +2,8 @@
    動作庫的管理（改名、肌群、要點、封存）是另一個畫面（ExerciseLibrary）；這裡只負責「挑」。
    搜尋與橫條與動作庫頁共用 ExerciseFilterBar。 */
 import { useEffect, useMemo, useState } from 'react'
-import { Drawer } from 'vaul'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
-import { useSheetFocus } from '@/components/useSheetFocus'
+import SpringSheet from '@/components/SpringSheet'
 import { MUSCLE_GROUP_LABEL, filterExercises, type ExerciseFilter, type MuscleGroup, type Row } from '@/lib/training'
 
 interface ExercisePickerProps {
@@ -18,62 +17,39 @@ interface ExercisePickerProps {
 const NO_FILTER: ExerciseFilter = { q: '', group: 'all' }
 
 export default function ExercisePicker({ open, exercises, onClose, onPick }: ExercisePickerProps) {
-  const attach = useSheetFocus()
   const [filter, setFilter] = useState<ExerciseFilter>(NO_FILTER)
   const list = useMemo(() => filterExercises(exercises, filter), [exercises, filter])
 
-  // 關閉的出口不只 vaul 的 onOpenChange（挑一個動作、右上 X 都是父層直接關），所以看 open 本身
+  // 關閉的出口不只 sheet 自己的關閉（挑一個動作是父層直接關），所以看 open 本身
   useEffect(() => {
     if (!open) setFilter(NO_FILTER)
   }, [open])
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose()
-      }}
-      direction="bottom"
-      shouldScaleBackground={false}
-      repositionInputs={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={attach} tabIndex={-1} className="sheet" aria-label="加動作" data-screen="exercise-picker">
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <h2 className="sheet-title">加動作</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
+    <SpringSheet open={open} onClose={onClose} label="加動作" title="加動作" screen="exercise-picker">
+    <div className="tr-sheet-body tr-sheet-scroll">
+      <ExerciseFilterBar value={filter} onChange={setFilter} />
+      {list.length === 0 ? (
+        <p className="muted">{exercises.length === 0 ? '動作庫是空的' : '沒有符合的動作'}</p>
+      ) : (
+        <div className="tr-card">
+          {list.map((e) => (
+            <button
+              key={e.id}
+              className="tr-row"
+              type="button"
+              data-exercise-id={e.id}
+              onClick={() => onPick(e.id)}
+            >
+              <span className="grow">
+                <span className="nm">{String(e.name)}</span>
+                <span className="sub">{MUSCLE_GROUP_LABEL[e.muscle_group as MuscleGroup] ?? '其他'}</span>
+              </span>
             </button>
-          </div>
-          <div className="tr-sheet-body tr-sheet-scroll">
-            <ExerciseFilterBar value={filter} onChange={setFilter} />
-            {list.length === 0 ? (
-              <p className="muted">{exercises.length === 0 ? '動作庫是空的' : '沒有符合的動作'}</p>
-            ) : (
-              <div className="tr-card">
-                {list.map((e) => (
-                  <button
-                    key={e.id}
-                    className="tr-row"
-                    type="button"
-                    data-exercise-id={e.id}
-                    onClick={() => onPick(e.id)}
-                  >
-                    <span className="grow">
-                      <span className="nm">{String(e.name)}</span>
-                      <span className="sub">{MUSCLE_GROUP_LABEL[e.muscle_group as MuscleGroup] ?? '其他'}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+          ))}
+        </div>
+      )}
+    </div>
+    </SpringSheet>
   )
 }

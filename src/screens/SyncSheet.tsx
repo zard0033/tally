@@ -5,10 +5,9 @@
    所以只說「伺服器拒絕、下次同步會再試」，放棄鈕是次要樣式，且先在 sheet 內確認、講清連帶消失幾筆。
    **也不承諾計時重試**：重試只發生在回到前景、回線、寫入、TOKEN_REFRESHED 或按「立即重試」，文案照實說這幾個時機。
    auth 只給文字不放登入鈕：被動登出保留佇列、主動登出會清佇列，兩條路徑易接錯。 */
-import { useCallback, useState } from 'react'
-import { Drawer } from 'vaul'
+import { useState } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { useSheetFocus } from '@/components/useSheetFocus'
+import SpringSheet from '@/components/SpringSheet'
 import type { QueueEntry } from '@/lib/queue'
 import { describeEntry } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
@@ -34,13 +33,11 @@ interface AskDiscard {
 }
 
 interface BodyProps extends Omit<SyncSheetProps, 'open' | 'onClose'> {
-  /** 這張 sheet 的 content 節點：確認對話框要掛進來（見 ConfirmDialog 的註解）。 */
-  sheetNode: HTMLDivElement | null
-  /** 處理中：sheet 據此擋下滑關與 X，免得放棄到一半被關掉看不到失敗說明。 */
+  /** 處理中：sheet 據此鎖住關閉，免得放棄到一半被關掉看不到失敗說明。 */
   onBusy: (busy: boolean) => void
 }
 
-function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, sheetNode, onBusy }: BodyProps) {
+function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, onBusy }: BodyProps) {
   const [busy, setBusyState] = useState(false)
   // 立即重試只鎖重試鈕：它不是會讓人看不到結果的流程，不該擋住關閉（busy 才擋）
   const [retrying, setRetrying] = useState(false)
@@ -165,7 +162,6 @@ function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, sheetNo
         cancelLabel="先不要"
         confirmLabel="放棄"
         danger
-        container={sheetNode}
         onCancel={() => setAsk(null)}
         onConfirm={() => void confirmDiscard()}
       >
@@ -177,55 +173,11 @@ function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, sheetNo
 }
 
 export default function SyncSheet({ open, onClose, ...rest }: SyncSheetProps) {
-  const focus = useSheetFocus()
-  const [sheetNode, setSheetNode] = useState<HTMLDivElement | null>(null)
   const [busy, setBusy] = useState(false)
-  const close = () => {
-    if (!busy) onClose()
-  }
-  const attach = useCallback(
-    (node: HTMLDivElement | null) => {
-      focus(node)
-      setSheetNode(node)
-    },
-    [focus],
-  )
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) close()
-      }}
-      direction="bottom"
-      shouldScaleBackground={false}
-      repositionInputs={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content
-          ref={attach}
-          tabIndex={-1}
-          className="sheet"
-          aria-label="未同步"
-          data-screen="sync-sheet"
-          // 確認對話框掛在這張 sheet 裡；vaul 在 document 的捕獲階段先聽到 Escape，不攔的話會連 sheet 一起關
-          onEscapeKeyDown={(e) => {
-            if (sheetNode?.querySelector('[role="alertdialog"]')) e.preventDefault()
-          }}
-        >
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <h2 className="sheet-title">未同步</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={close}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-          <SyncBody {...rest} sheetNode={sheetNode} onBusy={setBusy} />
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+    <SpringSheet open={open} onClose={onClose} label="未同步" title="未同步" screen="sync-sheet" fit locked={busy}>
+      <SyncBody {...rest} onBusy={setBusy} />
+    </SpringSheet>
   )
 }

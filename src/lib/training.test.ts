@@ -17,7 +17,14 @@ import {
   addExerciseOps,
   addRoutineExerciseOps,
   addSetOps,
+  allSetsDone,
   applyQueue,
+  exerciseProgress,
+  remainingSetsAfter,
+  removeSetOps,
+  reorderWorkoutExercisesOps,
+  syncSetsForwardOps,
+  toggleAllDoneOps,
   checkRoutineName,
   checkRoutineTarget,
   copyRoutineOps,
@@ -609,6 +616,144 @@ describe('addSetOps', () => {
   it('這個動作還沒有任何組：第 1 組、0×0', () => {
     const [op] = addSetOps({ db: db(), workoutExerciseId: 'we', newId: () => 'new' })
     expect(op.payload).toMatchObject({ set_no: 1, weight_kg: 0, reps: 0, done: false })
+  })
+})
+
+describe('訓練中改版的寫入組裝', () => {
+  // 動作 A（3 組：1 已勾、2 未勾、3 未勾）、動作 B（2 組全勾）、動作 C（1 組未勾）
+  const d = db({
+    workouts: [workout('w1', '2026-10-17')],
+    exercises: [exercise('eA'), exercise('eB'), exercise('eC')],
+    workout_exercises: [we('A', 'w1', 'eA', 0), we('B', 'w1', 'eB', 1), we('C', 'w1', 'eC', 2)],
+    workout_sets: [
+      set('a1', 'A', 1, 60, 12, true),
+      set('a2', 'A', 2, 50, 10, false),
+      set('a3', 'A', 3, 60, 12, false),
+      set('b1', 'B', 1, 20, 8, true),
+      set('b2', 'B', 2, 20, 8, true),
+      set('c1', 'C', 1, 5, 5, false),
+    ],
+  })
+  const detail = workoutDetail(d, 'w1')!
+
+  describe('remainingSetsAfter／syncSetsForwardOps', () => {
+    it('只算排在後面、還沒打勾的組；已勾的、前面的、別的動作的都不算', () => {
+      expect(remainingSetsAfter(detail, 'a1').map((s) => s.id)).toEqual(['a2', 'a3'])
+      expect(remainingSetsAfter(detail, 'a2').map((s) => s.id)).toEqual(['a3'])
+      expect(remainingSetsAfter(detail, 'a3')).toEqual([])
+    })
+
+    it('套用這一組的重量與次數，值本來就一樣的那組不寫', () => {
+      const ops = syncSetsForwardOps(detail, 'a1')
+      // a3 本來就是 60×12，只剩 a2 要改
+      expect(ops).toEqual([
+        { op: 'update', table: 'workout_sets', rowId: 'a2', payload: { weight_kg: 60, reps: 12 } },
+      ])
+    })
+
+    it('只有一個欄位不同就只寫那個欄位', () => {
+      const d2 = db({
+        ...d,
+        workout_sets: [set('x1', 'A', 1, 60, 12, false), set('x2', 'A', 2, 60, 8, false)],
+      })
+      const ops = syncSetsForwardOps(workoutDetail(d2, 'w1')!, 'x1')
+      expect(ops.map((o) => o.payload)).toEqual([{ reps: 12 }])
+    })
+
+    it('已打勾的後面組不動', () => {
+      const d2 = db({
+        ...d,
+        workout_sets: [set('x1', 'A', 1, 60, 12, false), set('x2', 'A', 2, 40, 6, true), set('x3', 'A', 3, 40, 6, false)],
+      })
+      expect(syncSetsForwardOps(workoutDetail(d2, 'w1')!, 'x1').map((o) => o.rowId)).toEqual(['x3'])
+    })
+
+    it('找不到這一組、或沒有剩餘組：回空陣列', () => {
+      expect(syncSetsForwardOps(detail, 'nope')).toEqual([])
+      expect(syncSetsForwardOps(detail, 'a3')).toEqual([])
+    })
+  })
+
+  describe('allSetsDone／toggleAllDoneOps', () => {
+    it('有沒打勾的：只把沒打勾的組打勾', () => {
+      expect(toggleAllDoneOps(detail, 'A')).toEqual([
+        { op: 'update', table: 'workout_sets', rowId: 'a2', payload: { done: true } },
+        { op: 'update', table: 'workout_sets', rowId: 'a3', payload: { done: true } },
+      ])
+    })
+
+    it('已經全勾：全部取消', () => {
+      expect(toggleAllDoneOps(detail, 'B').map((o) => [o.rowId, o.payload])).toEqual([
+        ['b1', { done: false }],
+        ['b2', { done: false }],
+      ])
+    })
+
+    it('沒有組的動作、找不到的動作：不寫、也不算全部完成', () => {
+      const empty = workoutDetail(db({ ...d, workout_sets: [] }), 'w1')!
+      expect(toggleAllDoneOps(empty, 'A')).toEqual([])
+      expect(toggleAllDoneOps(detail, 'nope')).toEqual([])
+      expect(allSetsDone([])).toBe(false)
+    })
+
+    it('allSetsDone：每一組都勾了才是 true', () => {
+      expect(allSetsDone(detail.exercises[0].sets)).toBe(false)
+      expect(allSetsDone(detail.exercises[1].sets)).toBe(true)
+    })
+  })
+
+  describe('removeSetOps', () => {
+    it('單筆 delete，不重排其他組', () => {
+      expect(removeSetOps(detail, 'a2')).toEqual([{ op: 'delete', table: 'workout_sets', rowId: 'a2' }])
+    })
+
+    it('只剩一組、找不到：回空陣列（要拿掉整個動作走「移除這個動作」）', () => {
+      expect(removeSetOps(detail, 'c1')).toEqual([])
+      expect(removeSetOps(detail, 'nope')).toEqual([])
+    })
+  })
+
+  describe('exerciseProgress', () => {
+    it('做完幾組、共幾組、下一組是第一個沒打勾的', () => {
+      expect(exerciseProgress(detail.exercises[0].sets)).toEqual({ done: 1, total: 3, next: { weight: 50, reps: 10 } })
+    })
+
+    it('全部做完：next 是 null', () => {
+      expect(exerciseProgress(detail.exercises[1].sets)).toEqual({ done: 2, total: 2, next: null })
+    })
+
+    it('沒有組：0／0、沒有下一組', () => {
+      expect(exerciseProgress([])).toEqual({ done: 0, total: 0, next: null })
+    })
+  })
+})
+
+describe('reorderWorkoutExercisesOps', () => {
+  const entries = [we('a', 'w', 'e1', 0), we('b', 'w', 'e2', 1), we('c', 'w', 'e3', 2)]
+
+  it('只更新位置有變的列', () => {
+    const ops = reorderWorkoutExercisesOps({ entries, orderedIds: ['c', 'a', 'b'] })
+    expect(ops).toEqual([
+      { op: 'update', table: 'workout_exercises', rowId: 'c', payload: { position: 0 } },
+      { op: 'update', table: 'workout_exercises', rowId: 'a', payload: { position: 1 } },
+      { op: 'update', table: 'workout_exercises', rowId: 'b', payload: { position: 2 } },
+    ])
+    expect(reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'c', 'b'] }).map((o) => o.rowId)).toEqual(['c', 'b'])
+  })
+
+  it('順序沒變回空陣列；刪過動作留下的空洞會被整理成 0..n-1', () => {
+    expect(reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'b', 'c'] })).toEqual([])
+    const gappy = [we('a', 'w', 'e1', 0), we('c', 'w', 'e3', 5)]
+    expect(reorderWorkoutExercisesOps({ entries: gappy, orderedIds: ['a', 'c'] }).map((o) => [o.rowId, o.payload])).toEqual([
+      ['c', { position: 1 }],
+    ])
+  })
+
+  it('項目對不上（缺、多、重複）丟錯', () => {
+    expect(() => reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'b'] })).toThrow()
+    expect(() => reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'b', 'c', 'd'] })).toThrow()
+    expect(() => reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'a', 'b'] })).toThrow()
+    expect(() => reorderWorkoutExercisesOps({ entries, orderedIds: ['a', 'b', 'z'] })).toThrow()
   })
 })
 

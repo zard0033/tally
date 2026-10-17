@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 9 pages | Last updated: 2026-10-15T13:05:02.189Z
+> 11 pages | Last updated: 2026-10-17T05:26:35.895Z
 
 ## debugging
 
@@ -13,6 +13,8 @@
 
 ## pattern
 
+- [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
+- [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
 - [lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）](lesson-spring-sheet-spring-sheet-2026-10-16.md) — # lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）
 - [lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）](lesson-sync-sheet-review-sheet-2026-10-15.md) — # lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）

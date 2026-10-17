@@ -3,8 +3,7 @@
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
    欄位狀態放在 ExerciseForm、以動作 id 當 key：每次打開都是一份新的草稿，不會殘留上一次打到一半的字。 */
 import { useState } from 'react'
-import { Drawer } from 'vaul'
-import { useSheetFocus } from '@/components/useSheetFocus'
+import SpringSheet from '@/components/SpringSheet'
 import {
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABEL,
@@ -127,40 +126,11 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
 }
 
 export default function ExerciseEditSheet({ open, exercise, exercises, onClose, onWrite }: ExerciseEditSheetProps) {
-  const attach = useSheetFocus()
   const title = exercise ? '編輯動作' : '新增動作'
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose()
-      }}
-      direction="bottom"
-      shouldScaleBackground={false}
-      repositionInputs={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={attach} tabIndex={-1} className="sheet" aria-label={title} data-screen="exercise-edit">
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <h2 className="sheet-title">{title}</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-          <ExerciseForm
-            key={exercise?.id ?? 'new'}
-            exercise={exercise}
-            exercises={exercises}
-            onClose={onClose}
-            onWrite={onWrite}
-          />
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+    <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="exercise-edit" fit>
+      <ExerciseForm key={exercise?.id ?? 'new'} exercise={exercise} exercises={exercises} onClose={onClose} onWrite={onWrite} />
+    </SpringSheet>
   )
 }

@@ -1,8 +1,8 @@
 /* 訓練分頁（階段 2 第一輪第 2a 段）：分頁進得去、資料從本機底讀得到、連不上伺服器時講清楚、
    第一次開時預填 16 個動作。開始訓練／記組／離線記錄在後面的段落補。
    fetch 全 stub；注意 stub 的寫入不落地（寫進去的列下一次 GET 不會出現）。 */
-import { test, expect, type Page } from '@playwright/test'
-import { gotoDate, openApp, shiftIso } from './harness'
+import { test, expect, type Locator, type Page } from '@playwright/test'
+import { gotoDate, leg, openApp, shiftIso, slowDrag } from './harness'
 import { FIX, TODAY } from './fixtures'
 
 const EX_ID = '11111111-1111-4111-8111-111111111111'
@@ -155,8 +155,8 @@ test('開始訓練：空白開始、加動作預填上次實際完成的值、�
 
   await addExercise(page, '腿推舉')
   const first = page.locator('.ex .set').first()
-  await expect(first.locator('.w'), '重量應預填上次實際完成的 60').toHaveValue('60')
-  await expect(first.locator('.r'), '次數應預填上次的 12').toHaveValue('12')
+  await expect(first.locator('.w'), '重量應預填上次實際完成的 60').toHaveText('60')
+  await expect(first.locator('.r'), '次數應預填上次的 12').toHaveText('12')
   await expect(page.locator('.ex .set')).toHaveCount(2)
   await expect(stat(page, 'sets')).toHaveText('0/2')
   await expect(stat(page, 'volume'), '預填的值還沒打勾，不算訓練量').toHaveText('0')
@@ -170,7 +170,21 @@ test('開始訓練：空白開始、加動作預填上次實際完成的值、�
   await expect(page.locator('.ex .set').first()).toHaveClass(/done/)
 })
 
-test('調整：± 鈕與直接打字都會寫入；不合法的輸入放回原值、不截斷成別的數字', async ({ page }) => {
+const setSheet = (page: Page) => page.locator('[data-screen="set-sheet"]')
+
+/** 點某組的重量或次數開組編輯 sheet，等它落定。 */
+async function openSetSheet(page: Page, setIndex: number, field: 'w' | 'r' = 'w') {
+  await page.locator('.ex .set').nth(setIndex).locator(`.${field}`).click()
+  await expect(setSheet(page)).toBeVisible()
+}
+
+/** 關掉 sheet 並等它從畫面上卸載（spring 約 1 秒）：之後才能放心點背景頁。 */
+async function closeSetSheet(page: Page) {
+  await setSheet(page).getByRole('button', { name: '完成', exact: true }).click()
+  await expect(setSheet(page)).toHaveCount(0)
+}
+
+test('調整：點數字開組編輯 sheet，± 與大數字輸入都立即寫入；不合法的輸入放回原值、不截斷成別的數字', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -178,26 +192,158 @@ test('調整：± 鈕與直接打字都會寫入；不合法的輸入放回原�
   await tick(page, 0)
   await expect(stat(page, 'volume')).toHaveText('720')
 
-  const w = page.locator('.ex .set').first().locator('.w')
-  const r = page.locator('.ex .set').first().locator('.r')
-  await w.focus()
-  await expect(page.locator('.adj')).toHaveCount(1)
-  await page.getByRole('button', { name: '重量加 2.5 公斤' }).click()
-  await expect(w).toHaveValue('62.5')
+  const first = page.locator('.ex .set').first()
+  await expect(setSheet(page)).toHaveCount(0)
+  await openSetSheet(page, 0)
+  const sheet = setSheet(page)
+  await expect(sheet.getByRole('heading', { name: '腿推舉 · 第 1 組' })).toBeVisible()
+
+  await sheet.getByRole('button', { name: '重量加 2.5 公斤' }).click()
+  await expect(first.locator('.w'), '背景頁該列同步更新，沒有儲存鈕').toHaveText('62.5')
   await expect(stat(page, 'volume')).toHaveText('750') // 62.5 × 12
 
-  await r.fill('8')
-  await r.blur()
-  await expect(r).toHaveValue('8')
+  // 點中間的大數字才叫出鍵盤
+  await expect(sheet.getByRole('textbox')).toHaveCount(0)
+  await sheet.getByRole('button', { name: '次數，點一下直接輸入' }).click()
+  const reps = sheet.getByRole('textbox', { name: '次數' })
+  await reps.fill('8')
+  await reps.press('Enter')
+  await expect(first.locator('.r')).toHaveText('8')
   await expect(stat(page, 'volume')).toHaveText('500') // 62.5 × 8
 
-  await w.fill('abc')
-  await w.blur()
-  await expect(w, '打不出數字的輸入要放回原值').toHaveValue('62.5')
-  await w.fill('1500') // 超過 DDL 的 1000 上限
-  await w.blur()
-  await expect(w, '超過上限的輸入不寫入、放回原值').toHaveValue('62.5')
+  const weight = async (raw: string) => {
+    await sheet.getByRole('button', { name: '重量，點一下直接輸入' }).click()
+    const input = sheet.getByRole('textbox', { name: '重量' })
+    await input.fill(raw)
+    await input.press('Enter')
+  }
+  await weight('abc')
+  await expect(first.locator('.w'), '打不出數字的輸入要放回原值').toHaveText('62.5')
+  await weight('1500') // 超過 DDL 的 1000 上限
+  await expect(first.locator('.w'), '超過上限的輸入不寫入、放回原值').toHaveText('62.5')
   await expect(stat(page, 'volume')).toHaveText('500')
+
+  // 第一下 Esc 只取消輸入，不連 sheet 一起關掉
+  await sheet.getByRole('button', { name: '重量，點一下直接輸入' }).click()
+  await sheet.getByRole('textbox', { name: '重量' }).fill('99')
+  await page.keyboard.press('Escape')
+  await expect(sheet.getByRole('textbox')).toHaveCount(0)
+  await expect(sheet).toBeVisible()
+  await expect(first.locator('.w')).toHaveText('62.5')
+})
+
+test('組編輯 sheet：上次的籤點了套用整組；關閉後焦點回到被點的那顆；X、Esc 都能關', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const first = page.locator('.ex .set').first()
+
+  await openSetSheet(page, 0)
+  const sheet = setSheet(page)
+  const chips = sheet.getByRole('group', { name: '上次' }).getByRole('button')
+  await expect(chips, '上次實際完成的各組（60×12 兩組）').toHaveText(['60 × 12', '60 × 12'])
+  await expect(chips.first(), '目前這一組對到的那顆標起來').toHaveClass(/is-current/)
+
+  await sheet.getByRole('button', { name: '重量加 5 公斤' }).click()
+  await sheet.getByRole('button', { name: '次數減 5' }).click()
+  await expect(first.locator('.w')).toHaveText('65')
+  await expect(first.locator('.r')).toHaveText('7')
+  await expect(chips.first()).not.toHaveClass(/is-current/)
+  await chips.first().click()
+  await expect(first.locator('.w'), '點籤＝重量與次數一起套到這一組').toHaveText('60')
+  await expect(first.locator('.r')).toHaveText('12')
+
+  await closeSetSheet(page)
+  await expect(first.locator('.w'), '焦點回到被點的那顆數字鈕').toBeFocused()
+
+  await openSetSheet(page, 1, 'r')
+  await setSheet(page).getByRole('button', { name: '關閉' }).click()
+  await expect(setSheet(page)).toHaveCount(0)
+  await expect(page.locator('.ex .set').nth(1).locator('.r')).toBeFocused()
+
+  await openSetSheet(page, 0)
+  await page.keyboard.press('Escape')
+  await expect(setSheet(page)).toHaveCount(0)
+})
+
+test('沒做過的動作：上次寫「沒有紀錄」', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '坐姿划船')
+  await openSetSheet(page, 0)
+  await expect(setSheet(page).getByText('沒有紀錄')).toBeVisible()
+  await expect(setSheet(page).getByRole('group', { name: '上次' })).toHaveCount(0)
+})
+
+test('同步剩餘組數：只改這一組後面、還沒打勾的組，已打勾的不動；沒有剩餘組時 disabled', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const card = page.locator('.ex').first()
+  await card.getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+  await tick(page, 1) // 第 2 組已完成，同步時不能動它
+
+  await openSetSheet(page, 0)
+  const sheet = setSheet(page)
+  await sheet.getByRole('button', { name: '重量加 5 公斤' }).click()
+  await sheet.getByRole('button', { name: '次數加 1' }).click()
+  const sync = sheet.locator('.set-sync')
+  await expect(sync, '只有第 3 組還沒打勾').toHaveText('同步剩餘 1 組')
+  await sync.click()
+  await expect(sync).toHaveText('已同步 ✓')
+  await closeSetSheet(page)
+
+  const sets = page.locator('.ex .set')
+  await expect(sets.nth(2).locator('.w')).toHaveText('65')
+  await expect(sets.nth(2).locator('.r')).toHaveText('13')
+  await expect(sets.nth(1).locator('.w'), '已打勾的不動').toHaveText('60')
+  await expect(sets.nth(1).locator('.r')).toHaveText('12')
+
+  await expect
+    .poll(async () => {
+      const rows = await trainRows(page, 'workout_sets')
+      const mine = rows.filter((r) => r.workout_exercise_id !== 'we-1')
+      return mine.map((r) => `${r.weight_kg}x${r.reps}`).sort()
+    })
+    .toEqual(['60x12', '65x13', '65x13'])
+
+  // 最後一組：沒有剩餘組
+  await openSetSheet(page, 2)
+  await expect(setSheet(page).getByRole('button', { name: '沒有剩餘組' })).toBeDisabled()
+})
+
+test('組編輯 sheet 刪除這一組：沒打勾直接刪；已打勾先確認；只剩一組不能刪', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await expect(page.locator('.ex .set')).toHaveCount(2)
+
+  // 已打勾的第 1 組：先問，「先不要」不刪
+  await openSetSheet(page, 0)
+  const sheet = setSheet(page)
+  await sheet.getByRole('button', { name: '刪除這一組' }).click()
+  const dialog = page.getByRole('alertdialog', { name: '刪除這一組？' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('.ex .set')).toHaveCount(2)
+
+  await sheet.getByRole('button', { name: '刪除這一組' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '刪除', exact: true }).click()
+  await expect(setSheet(page)).toHaveCount(0)
+  await expect(page.locator('.ex .set')).toHaveCount(1)
+  await expect(stat(page, 'sets')).toHaveText('0/1')
+  await expect(page.locator('.ex .set').first().locator('.no'), '剩下的組號是序號').toHaveText('1')
+
+  // 只剩一組：兩條路都不能刪
+  await openSetSheet(page, 0)
+  await expect(setSheet(page).getByRole('button', { name: '刪除這一組' })).toBeDisabled()
 })
 
 test('完成訓練：摘要 sheet 列事實，按完成回到清單並落到伺服器', async ({ page }) => {
@@ -498,33 +644,84 @@ test('取消封存：回到清單與選單', async ({ page }) => {
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
 })
 
-test('訓練中：要點只能看，筆圖示開同一張編輯 sheet；改完卡片上立刻是新的；清空顯示「＋ 加要點」', async ({ page }) => {
+test('訓練中：ⓘ 在卡片內展開要點面板（只能看）；「編輯要點」開同一張編輯 sheet；清空顯示「還沒有要點」', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
   await addExercise(page, '腿推舉')
+  await addExercise(page, '坐姿划船')
 
-  const tips = page.locator('.ex .ex-tips')
-  await expect(tips).toContainText('背貼緊椅背')
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const row = page.locator('.ex', { hasText: '坐姿划船' })
+  // 每張卡都有 ⓘ，沒寫過要點的是淡色、不隱藏（隱藏會讓箭頭、ⓘ、⋯ 對不齊）
+  await expect(legs.locator('.ex-info')).toHaveCount(1)
+  await expect(row.locator('.ex-info')).toHaveCount(1)
+  await expect(row.locator('.ex-info')).toHaveClass(/is-empty/)
+  await expect(legs.locator('.ex-info')).not.toHaveClass(/is-empty/)
+
+  await expect(legs.locator('.ex-tips-panel')).toHaveCount(0)
+  await legs.getByRole('button', { name: '腿推舉 的要點' }).click()
+  const panel = legs.locator('.ex-tips-panel')
+  await expect(panel).toContainText('背貼緊椅背')
   // 不能就地改：卡片上沒有可打字的要點欄
   await expect(page.locator('.ex textarea')).toHaveCount(0)
 
-  await tips.click()
+  await panel.getByRole('button', { name: '編輯要點' }).click()
   await expect(editSheet(page).getByRole('textbox', { name: '要點' })).toHaveValue('背貼緊椅背')
   await editSheet(page).getByRole('textbox', { name: '要點' }).fill('第三組吃力就降 2.5')
   await editSheet(page).getByRole('button', { name: '儲存' }).click()
   await expect(editSheet(page)).toHaveCount(0)
-  await expect(tips).toContainText('第三組吃力就降 2.5')
+  await expect(panel).toContainText('第三組吃力就降 2.5')
   await expect
     .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips)
     .toBe('第三組吃力就降 2.5')
 
-  // 清空＝回到「＋ 加要點」，伺服器存 null
-  await tips.click()
+  // 清空＝「還沒有要點」，伺服器存 null；ⓘ 變淡色但仍在
+  await panel.getByRole('button', { name: '編輯要點' }).click()
   await editSheet(page).getByRole('textbox', { name: '要點' }).fill('   ')
   await editSheet(page).getByRole('button', { name: '儲存' }).click()
-  await expect(page.locator('.ex .ex-tips')).toHaveText('＋ 加要點')
+  await expect(panel).toContainText('還沒有要點')
+  await expect(panel.getByRole('button', { name: '新增要點' })).toBeVisible()
+  await expect(legs.locator('.ex-info')).toHaveClass(/is-empty/)
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
+
+  // 再點一下 ⓘ 收起；收合的卡也能直接點開（腿推舉在加了第二個動作後是收合的）
+  await legs.getByRole('button', { name: '腿推舉 還沒有要點' }).click()
+  await expect(legs.locator('.ex-tips-panel')).toHaveCount(0)
+  await expect(legs.locator('.set')).toHaveCount(0)
+  await legs.locator('.ex-info').click()
+  await expect(legs.locator('.ex-tips-panel')).toHaveCount(1)
+})
+
+test('⋯ 選單：「加要點」開編輯 sheet；「移除這個動作」沒打勾直接移除、有打勾先確認', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '坐姿划船')
+  await addExercise(page, '腿推舉')
+  const row = page.locator('.ex', { hasText: '坐姿划船' })
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+
+  await row.getByRole('button', { name: '坐姿划船 的更多操作' }).click()
+  await page.getByRole('menuitem', { name: '加要點' }).click()
+  await expect(editSheet(page)).toBeVisible()
+  await editSheet(page).getByRole('button', { name: '關閉' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+
+  // 有打勾的動作：先問（最後加的腿推舉是展開的）
+  await legs.locator('.set').first().locator('.tr-check').click()
+  await legs.getByRole('button', { name: '腿推舉 的更多操作' }).click()
+  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  const dialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(page.locator('.ex')).toHaveCount(2)
+
+  // 沒打勾的動作：直接移除
+  await row.getByRole('button', { name: '坐姿划船 的更多操作' }).click()
+  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await expect(page.locator('.ex')).toHaveCount(1)
+  await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
 })
 
 test('離線改要點：畫面立刻是新的，回線後上傳', async ({ page }) => {
@@ -692,7 +889,7 @@ test('編輯與刪除有氧：點列開同一張 sheet 帶入原值；改完落�
   await expect(cardioRows(page).locator('.sub')).toHaveText('36 分 · 預估 121 kcal')
 
   await cardioRows(page).click()
-  await expect(cardioSheet(page)).toHaveAttribute('aria-label', '編輯有氧')
+  await expect(cardioSheet(page)).toHaveAccessibleName('編輯有氧')
   await expect(kindBtn(page, '有氧拳擊')).toHaveAttribute('aria-pressed', 'true')
   await expect(field(page, '分鐘')).toHaveValue('36')
   await expect(field(page, '預估熱量 kcal')).toHaveValue('121')
@@ -982,8 +1179,8 @@ test('開始訓練選課表：動作依序帶入、有歷史的取上次實際�
 
   // 課表預設是 3 組 × 12，但這個動作有歷史（2 組 60×12）——一律取歷史，不是課表預設
   await expect(page.locator('.ex .set')).toHaveCount(2)
-  await expect(page.locator('.ex .set').first().locator('.w')).toHaveValue('60')
-  await expect(page.locator('.ex .set').first().locator('.r')).toHaveValue('12')
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveText('60')
+  await expect(page.locator('.ex .set').first().locator('.r')).toHaveText('12')
 
   await expect
     .poll(async () => (await trainRows(page, 'workouts')).find((w) => w.id !== 'w-1')?.routine_id)
@@ -1005,8 +1202,8 @@ test('沒做過的動作：用課表的預設組數與次數、重量 0', async 
   await page.getByRole('button', { name: '開始訓練' }).click()
   await page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]').click()
   await expect(page.locator('.ex .set')).toHaveCount(4)
-  await expect(page.locator('.ex .set').first().locator('.w')).toHaveValue('0')
-  await expect(page.locator('.ex .set').first().locator('.r')).toHaveValue('8')
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveText('0')
+  await expect(page.locator('.ex .set').first().locator('.r')).toHaveText('8')
 })
 
 test('離線建課表、加動作：畫面立刻有，回線後上傳且父列先到', async ({ page }) => {
@@ -1132,6 +1329,225 @@ test('課表排序：離線排好，回線後上傳', async ({ page }) => {
   expect(await storedOrder(page), '離線時伺服器還是舊順序').toEqual(['rs-1', 'rs-2', 'rs-3'])
   await setOffline(page, false)
   await expect.poll(() => storedOrder(page), { timeout: 15_000 }).toEqual(['rs-2', 'rs-1', 'rs-3'])
+})
+
+/* ═══════════ 訓練中改版：左滑刪除、全部完成、進度、新增一組、排序 ═══════════ */
+
+/** 在某一列上用滑鼠左滑 dx px：從左側組號處起手（不壓在按鈕上）。用 harness 的 slowDrag：冷頁面上 `mouse.move({ steps })` 不足以讓 motion 的 drag 起手。 */
+async function swipeLeft(page: Page, row: Locator, dx: number) {
+  const box = (await row.boundingBox())!
+  const from = { x: box.x + 30, y: box.y + box.height / 2 }
+  await slowDrag(page, from, leg(from, { x: from.x - dx, y: from.y }))
+}
+
+test('組列左滑露出紅鈕，點紅鈕才刪；開著時點內容只關掉不觸發；只剩一組不能左滑', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const rows = page.locator('.ex .swipe-row')
+  await expect(rows).toHaveCount(2)
+
+  await swipeLeft(page, rows.nth(1), 70)
+  await expect(rows.nth(1)).toHaveClass(/is-open/)
+  // 同時只有一列是開的
+  await swipeLeft(page, rows.nth(0), 70)
+  await expect(rows.nth(0)).toHaveClass(/is-open/)
+  await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(1)
+
+  // 開著時點內容：只關掉，不觸發底下的勾或開 sheet
+  await rows.nth(0).locator('.tr-check').click()
+  await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
+  await expect(page.locator('.ex .set.done')).toHaveCount(0)
+  await swipeLeft(page, rows.nth(0), 70)
+  await expect(rows.nth(0)).toHaveClass(/is-open/)
+  await rows.nth(0).locator('.w').click()
+  await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
+  await expect(setSheet(page)).toHaveCount(0)
+
+  // 垂直捲動優先：幾乎只往上下拖、帶一點左偏，不該開
+  const box = (await rows.nth(1).boundingBox())!
+  const from = { x: box.x + 30, y: box.y + 10 }
+  await slowDrag(page, from, leg(from, { x: from.x - 6, y: from.y + 60 }))
+  await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
+
+  // 左滑露出紅鈕，點了才刪（不再多跳確認框）
+  await swipeLeft(page, rows.nth(1), 70)
+  await page.getByRole('button', { name: '刪除第 2 組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(1)
+  await expect.poll(async () => (await trainRows(page, 'workout_sets')).filter((r) => r.workout_exercise_id !== 'we-1').length).toBe(1)
+
+  // 只剩一組：沒有紅鈕、也滑不開
+  await expect(page.locator('.ex .swipe-delete')).toHaveCount(0)
+  await swipeLeft(page, page.locator('.ex .swipe-row').first(), 70)
+  await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
+})
+
+test('全部完成：欄頭雙勾一次打勾所有未完成的組；全勾時再按全部取消；狀態由各組推出', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const all = (name: '全部完成' | '取消全部完成') => page.locator('.ex').getByRole('button', { name, exact: true })
+
+  await expect(all('全部完成')).toHaveAttribute('aria-pressed', 'false')
+  await tick(page, 0)
+  await expect(all('全部完成'), '只勾了一組：還不是全部完成').toHaveAttribute('aria-pressed', 'false')
+  await all('全部完成').click()
+  await expect(stat(page, 'sets')).toHaveText('2/2')
+  await expect(all('取消全部完成')).toHaveAttribute('aria-pressed', 'true')
+
+  // 手動取消一組：雙勾跟著回到未全勾
+  await tick(page, 1)
+  await expect(stat(page, 'sets')).toHaveText('1/2')
+  await expect(all('全部完成')).toHaveAttribute('aria-pressed', 'false')
+
+  await all('全部完成').click()
+  await expect(stat(page, 'sets')).toHaveText('2/2')
+  await all('取消全部完成').click()
+  await expect(stat(page, 'sets')).toHaveText('0/2')
+  await expect
+    .poll(async () => (await trainRows(page, 'workout_sets')).filter((r) => r.workout_exercise_id !== 'we-1').map((r) => r.done))
+    .toEqual([false, false])
+})
+
+test('收合時第二行看進度（圓點＋下一組），展開時看肌群；新增一組是最後一組下方的整列', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const card = page.locator('.ex').first()
+  const toggle = card.locator('.ex-toggle')
+
+  await expect(card.locator('.sub .dot'), '展開時第二行是肌群，沒有圓點').toHaveCount(0)
+  await toggle.click()
+  await expect(card.locator('.set')).toHaveCount(0)
+  await expect(card.locator('.sub .dot')).toHaveCount(2)
+  await expect(card.locator('.sub .dot.is-done')).toHaveCount(0)
+  await expect(card.locator('.sub')).toContainText('下一組 60 kg × 12')
+  await expect(card.locator('.sub'), '不顯示分數').not.toContainText('0/2')
+
+  await toggle.click()
+  await tick(page, 0)
+  await toggle.click()
+  await expect(card.locator('.sub .dot.is-done')).toHaveCount(1)
+  await toggle.click()
+  await tick(page, 1)
+  await toggle.click()
+  await expect(card.locator('.sub')).toContainText('全部完成')
+
+  // 新增一組：最後一組下方的整列，新組沿用最後一組的值
+  await toggle.click()
+  const add = card.getByRole('button', { name: '新增一組' })
+  await expect(card.locator('.ex-body > :last-child')).toHaveText('新增一組')
+  await add.click()
+  await expect(card.locator('.set')).toHaveCount(3)
+  await expect(card.locator('.set').nth(2).locator('.w')).toHaveText('60')
+  await expect(card.locator('.set').nth(2).locator('.r')).toHaveText('12')
+  await expect(card.locator('.set').nth(2)).not.toHaveClass(/done/)
+})
+
+/* 訓練中排序：兩個動作，握把是唯一的拖曳來源；拖起時所有卡收合；範圍限制在清單區內（橡皮筋） */
+async function openTwoExercises(page: Page) {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await addExercise(page, '坐姿划船')
+  await expect(page.locator('.ex .nm')).toHaveText(['腿推舉', '坐姿划船'])
+}
+/** 握把聚焦、空白鍵拿起，並等 dnd-kit 真的進入拖曳：beforedragstart 之後它要等 React 把卡收合渲染完才開始，太快按方向鍵會被吃掉。 */
+async function pickUp(page: Page, name: string) {
+  await page.getByRole('button', { name: `拖曳排序：${name}` }).focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-dnd-dragging="true"]')).toHaveCount(1)
+}
+const storedExerciseOrder = async (page: Page) =>
+  (await trainRows(page, 'workout_exercises'))
+    .sort((a, b) => Number(a.position) - Number(b.position))
+    .map((r) => r.exercise_id)
+
+test('訓練中排序（鍵盤）：握把聚焦後空白鍵拿起、方向鍵移動、空白鍵放下；拖起時所有卡收合，位置落到伺服器', async ({ page }) => {
+  await openTwoExercises(page)
+  await expect(page.locator('.ex .set').first()).toBeVisible() // 划船是展開的
+
+  await pickUp(page, '腿推舉')
+  await expect(page.locator('.tr-scroll.is-sorting')).toHaveCount(1)
+  await expect(page.locator('.ex .set'), '拖起時所有卡收合（收合列仍看得到各自進度）').toHaveCount(0)
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Space')
+
+  await expect(page.locator('.ex .nm')).toHaveText(['坐姿划船', '腿推舉'])
+  await expect(page.locator('.tr-scroll.is-sorting')).toHaveCount(0)
+  await expect(page.locator('.ex .set').first(), '放下後恢復原本的展開').toBeVisible()
+  await expect.poll(() => storedExerciseOrder(page)).toEqual([ROW_ID, LEG_ID])
+})
+
+test('訓練中排序（Esc 取消）：不寫入、順序不變、卡片恢復展開', async ({ page }) => {
+  await openTwoExercises(page)
+  await pickUp(page, '腿推舉')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Escape')
+
+  await expect(page.locator('.ex .nm')).toHaveText(['腿推舉', '坐姿划船'])
+  await expect(page.locator('.tr-scroll.is-sorting')).toHaveCount(0)
+  await expect(page.locator('.ex .set').first()).toBeVisible()
+  await page.waitForTimeout(500)
+  expect(await storedExerciseOrder(page)).toEqual([LEG_ID, ROW_ID])
+})
+
+test('訓練中排序（指標拖曳）：拉過清單上緣只露出橡皮筋的一小段、不會拖進統計區後面；放手排到最前', async ({ page }) => {
+  await openTwoExercises(page)
+  const list = (await page.locator('.tr-cards').boundingBox())!
+  const stats = (await page.locator('.tr-stats').boundingBox())!
+  const grip = (await page.getByRole('button', { name: '拖曳排序：坐姿划船' }).boundingBox())!
+  const x = grip.x + grip.width / 2
+
+  await page.mouse.move(x, grip.y + grip.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(x, grip.y + grip.height / 2 - 20, { steps: 5 })
+  await page.waitForTimeout(150)
+  // 一路拉到統計區中間（遠超過清單上緣）
+  await page.mouse.move(x, stats.y + stats.height / 2, { steps: 20 })
+  await page.waitForTimeout(300)
+
+  // dnd-kit 會留一份隱藏的 placeholder（同 class），被拖的那張才有 data-dnd-dragging
+  const dragged = (await page.locator('[data-dnd-dragging="true"]').boundingBox())!
+  // 被拖的是展開中的划船：dnd-kit 在開始時凍結它的高度，所以要先收合再量（沒收合會是展開時的 300 多 px）
+  expect(dragged.height, '被拖的卡是收合後的高度').toBeLessThan(100)
+  expect(dragged.y, '最多露出約 14px 的橡皮筋，不會跑到統計區後面').toBeGreaterThan(list.y - 15)
+  expect(dragged.y, '有露出橡皮筋的那一小段（不是硬夾在邊界）').toBeLessThan(list.y - 2)
+  await page.mouse.up()
+
+  await expect(page.locator('.ex .nm')).toHaveText(['坐姿划船', '腿推舉'])
+  await expect.poll(() => storedExerciseOrder(page)).toEqual([ROW_ID, LEG_ID])
+})
+
+test('訓練中排序：只有握把是拖曳來源（名稱區按下拖動不會排序）；離線排好，回線後上傳', async ({ page }) => {
+  await openTwoExercises(page)
+  for (const name of ['腿推舉', '坐姿划船']) {
+    await expect(page.getByRole('button', { name: `拖曳排序：${name}` })).toHaveCount(1)
+  }
+  const head = (await page.locator('.ex').first().locator('.ex-toggle').boundingBox())!
+  const last = (await page.locator('.ex').nth(1).boundingBox())!
+  await page.mouse.move(head.x + 60, head.y + head.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(head.x + 60, head.y + head.height / 2 + 20, { steps: 5 })
+  await page.waitForTimeout(150)
+  await page.mouse.move(head.x + 60, last.y + last.height / 2, { steps: 15 })
+  await page.waitForTimeout(300)
+  await page.mouse.up()
+  await expect(page.locator('.ex .nm')).toHaveText(['腿推舉', '坐姿划船'])
+  expect(await storedExerciseOrder(page)).toEqual([LEG_ID, ROW_ID])
+
+  await setOffline(page, true)
+  await pickUp(page, '坐姿划船')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Space')
+  await expect(page.locator('.ex .nm')).toHaveText(['坐姿划船', '腿推舉'])
+  expect(await storedExerciseOrder(page), '離線時伺服器還是舊順序').toEqual([LEG_ID, ROW_ID])
+  await setOffline(page, false)
+  await expect.poll(() => storedExerciseOrder(page), { timeout: 15_000 }).toEqual([ROW_ID, LEG_ID])
 })
 
 /* ═══════════ 存成課表（第二輪 B 段，完成訓練 sheet） ═══════════ */

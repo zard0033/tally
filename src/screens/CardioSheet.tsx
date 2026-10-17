@@ -3,11 +3,10 @@
    **類型決定欄位**：走路＝分鐘＋速度＋坡度，拳擊＝分鐘＋預估熱量。沒有備註、沒有「新類型」入口。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。刪除不可逆，先問（DESIGN.md「確認對話框」條）。
    欄位狀態放在 CardioForm、以列 id 當 key：每次打開都是一份新的草稿。 */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Drawer } from 'vaul'
+import { useEffect, useState } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import SegmentedControl from '@/components/SegmentedControl'
-import { useSheetFocus } from '@/components/useSheetFocus'
+import SpringSheet from '@/components/SpringSheet'
 import {
   CARDIO_FIELDS,
   CARDIO_KINDS,
@@ -45,13 +44,11 @@ const FIELD_LABEL: Readonly<Record<'speed_kmh' | 'incline_pct' | 'est_kcal', str
 }
 
 interface FormProps extends Omit<CardioSheetProps, 'open' | 'session'> {
-  /** 這張 sheet 的 content 節點：確認對話框要掛進來（見 ConfirmDialog 的註解）。 */
-  sheetNode: HTMLDivElement | null
-  /** 寫入中：sheet 據此擋下滑關與 X（寫入失敗的說明要有地方出現，AC 20）。 */
+  /** 寫入中：sheet 據此鎖住關閉（Escape、點 scrim、下滑、X；寫入失敗的說明要有地方出現，AC 20）。 */
   onBusy: (busy: boolean) => void
 }
 
-function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite, onBusy }: FormProps) {
+function CardioForm({ row, date, dateNote, onClose, onWrite, onBusy }: FormProps) {
   const [draft, setDraft] = useState<CardioDraft>(() => cardioDraft(row))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -163,7 +160,6 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite, onBusy }
           cancelLabel="先不要"
           confirmLabel="刪除"
           danger
-          container={sheetNode}
           onCancel={() => setAskDelete(false)}
           onConfirm={() => {
             setAskDelete(false)
@@ -178,66 +174,12 @@ function CardioForm({ row, date, dateNote, sheetNode, onClose, onWrite, onBusy }
 }
 
 export default function CardioSheet({ open, row, date, dateNote, session, onClose, onWrite }: CardioSheetProps) {
-  const focus = useSheetFocus()
-  const busy = useRef(false)
-  const onBusy = useCallback((b: boolean) => {
-    busy.current = b
-  }, [])
-  const close = () => {
-    if (!busy.current) onClose()
-  }
-  const [sheetNode, setSheetNode] = useState<HTMLDivElement | null>(null)
-  const attach = useCallback(
-    (node: HTMLDivElement | null) => {
-      focus(node)
-      setSheetNode(node)
-    },
-    [focus],
-  )
+  const [busy, setBusy] = useState(false)
   const title = row ? '編輯有氧' : '記一筆有氧'
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) close()
-      }}
-      direction="bottom"
-      shouldScaleBackground={false}
-      repositionInputs={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={attach} tabIndex={-1} className="sheet"
-          aria-label={title}
-          data-screen="cardio-sheet"
-          // 確認對話框掛在這張 sheet 裡；vaul 在 document 的捕獲階段先聽到 Escape，不攔的話會連 sheet 一起關。
-          // 看「對話框開著沒」而不是事件目標：點過對話框的背景後焦點會落到 sheet 上，目標就不在對話框裡了
-          onEscapeKeyDown={(e) => {
-            if (sheetNode?.querySelector('[role="alertdialog"]')) e.preventDefault()
-          }}
-        >
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <h2 className="sheet-title">{title}</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={close}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-          <CardioForm
-            key={session}
-            row={row}
-            date={date}
-            dateNote={dateNote}
-            sheetNode={sheetNode}
-            onClose={onClose}
-            onWrite={onWrite}
-            onBusy={onBusy}
-          />
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+    <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="cardio-sheet" fit locked={busy}>
+      <CardioForm key={session} row={row} date={date} dateNote={dateNote} onClose={onClose} onWrite={onWrite} onBusy={setBusy} />
+    </SpringSheet>
   )
 }

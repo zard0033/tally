@@ -2,8 +2,7 @@
    這兩個值只在該動作從沒做過時才用；有歷史就一律取上次實際完成的值（AC 5）。課表不存重量。
    entry 為 null＝關著。表單以 entry id 當 key，每次打開都是新的草稿。 */
 import { useState } from 'react'
-import { Drawer } from 'vaul'
-import { useSheetFocus } from '@/components/useSheetFocus'
+import SpringSheet from '@/components/SpringSheet'
 import {
   MAX_TARGET_REPS,
   MAX_TARGET_SETS,
@@ -100,32 +99,9 @@ function TargetForm({ entry, onClose, onWrite }: Pick<RoutineTargetSheetProps, '
 }
 
 export default function RoutineTargetSheet({ open, entry, exerciseName, onClose, onWrite }: RoutineTargetSheetProps) {
-  const attach = useSheetFocus()
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose()
-      }}
-      direction="bottom"
-      shouldScaleBackground={false}
-      repositionInputs={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="scrim" />
-        <Drawer.Content ref={attach} tabIndex={-1} className="sheet" aria-label="預設組次" data-screen="routine-target">
-          <Drawer.Handle className="handle" />
-          <div className="sheet-head">
-            <h2 className="sheet-title">{exerciseName}</h2>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-          {entry && <TargetForm key={entry.id} entry={entry} onClose={onClose} onWrite={onWrite} />}
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+    <SpringSheet open={open} onClose={onClose} label="預設組次" title={exerciseName} screen="routine-target" fit>
+      {entry && <TargetForm key={entry.id} entry={entry} onClose={onClose} onWrite={onWrite} />}
+    </SpringSheet>
   )
 }
