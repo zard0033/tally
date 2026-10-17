@@ -18,6 +18,9 @@ export const DUR = {
 /** motion 吃的是秒 */
 export const sec = (ms: number) => ms / 1000
 
+/** 組編輯 sheet 的 ± 數字翻動：spec.md 動效表指定 120ms，落在 fast（100）與 base（160）之間，不是階梯的一級，單獨命名。 */
+export const NUMBER_FLIP_MS = 120
+
 /* 手勢放手後的吸附——四級階梯的**唯一例外**（v2.38）。固定時長不管手指離開時多快，
    都跑同一條曲線同一段時間；spring 會承接那個速度，甩得快就多衝一點再穩下來。
    階梯管的是「畫面自己要花多久」，這裡管的是「接住使用者的手」，兩件事。

@@ -3,6 +3,7 @@
    搜尋與橫條與動作庫頁共用 ExerciseFilterBar。 */
 import { useEffect, useMemo, useState } from 'react'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
+import ExerciseThumb from '@/components/ExerciseThumb'
 import SpringSheet from '@/components/SpringSheet'
 import { MUSCLE_GROUP_LABEL, filterExercises, type ExerciseFilter, type MuscleGroup, type Row } from '@/lib/training'
 
@@ -41,6 +42,7 @@ export default function ExercisePicker({ open, exercises, onClose, onPick }: Exe
               data-exercise-id={e.id}
               onClick={() => onPick(e.id)}
             >
+              <ExerciseThumb exercise={e} />
               <span className="grow">
                 <span className="nm">{String(e.name)}</span>
                 <span className="sub">{MUSCLE_GROUP_LABEL[e.muscle_group as MuscleGroup] ?? '其他'}</span>

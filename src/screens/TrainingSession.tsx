@@ -13,10 +13,11 @@ import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ExerciseThumb from '@/components/ExerciseThumb'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
-import { SPRING_CARD } from '@/lib/durations'
+import { DUR, SPRING_CARD, sec } from '@/lib/durations'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
@@ -182,6 +183,20 @@ function ExerciseCard(p: ExerciseCardProps) {
   const tipsOpen = p.tipsOpen
   const { ref, handleRef, isDragging } = useSortable({ id: entry.id, index, data: { name } })
   const spring = reduced ? { duration: 0.01 } : { height: SPRING_CARD, opacity: { duration: 0.16 } }
+  // 新增／刪除一組（spec 動效表）：新增＝新列由上方 8px 淡入 220ms ease-out；刪除＝該列淡出並左移 12px 160ms ease-in。
+  // 刪除時高度一併收到 0（同 160ms），不然下面的列要等淡出結束才「跳」上來；overflow 只在退場時才裁，免得平常裁掉聚焦外框。
+  // 減少動態：位移與高度都省掉，只剩 ≤120ms 的淡入淡出。
+  const rowMotion = reduced
+    ? {
+        initial: { opacity: 0 },
+        animate: { opacity: 1, transition: { duration: 0.12 } },
+        exit: { opacity: 0, transition: { duration: 0.12 } },
+      }
+    : {
+        initial: { opacity: 0, y: -8 },
+        animate: { opacity: 1, y: 0, transition: { duration: sec(DUR.mid), ease: 'easeOut' as const } },
+        exit: { opacity: 0, x: -12, height: 0, overflow: 'hidden', transition: { duration: sec(DUR.base), ease: 'easeIn' as const } },
+      }
   const allDone = allSetsDone(sets)
 
   return (
@@ -198,6 +213,7 @@ function ExerciseCard(p: ExerciseCardProps) {
           </svg>
         </button>
         <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
+          <ExerciseThumb exercise={exercise} />
           <span className="grow">
             <span className="nm">{name}</span>
             {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
@@ -297,20 +313,24 @@ function ExerciseCard(p: ExerciseCardProps) {
                     </svg>
                   </button>
                 </div>
-                {sets.map((s, i) => (
-                  <SetRow
-                    key={s.id}
-                    set={s}
-                    no={i + 1}
-                    canDelete={sets.length > 1}
-                    swipeOpen={p.swipeId === s.id}
-                    flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
-                    onSwipe={(o) => p.onSwipe(s.id, o)}
-                    onEdit={(opener) => p.onEditSet(s.id, opener)}
-                    onToggle={() => p.onToggleSet(s)}
-                    onDelete={() => p.onDeleteSet(s.id)}
-                  />
-                ))}
+                {/* initial={false}：卡片展開時已有的組不跑進場，只有展開之後才新增／刪掉的才動 */}
+                <AnimatePresence initial={false}>
+                  {sets.map((s, i) => (
+                    <motion.div key={s.id} className="set-slot" initial={rowMotion.initial} animate={rowMotion.animate} exit={rowMotion.exit}>
+                      <SetRow
+                        set={s}
+                        no={i + 1}
+                        canDelete={sets.length > 1}
+                        swipeOpen={p.swipeId === s.id}
+                        flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
+                        onSwipe={(o) => p.onSwipe(s.id, o)}
+                        onEdit={(opener) => p.onEditSet(s.id, opener)}
+                        onToggle={() => p.onToggleSet(s)}
+                        onDelete={() => p.onDeleteSet(s.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
                 <button className="tr-addset" type="button" onClick={p.onAddSet}>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M12 5v14M5 12h14" />

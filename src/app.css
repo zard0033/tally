@@ -1310,14 +1310,36 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   letter-spacing: var(--track-xs); animation: sub-in var(--dur-base) var(--ease) both; }
 @keyframes sub-in { from { opacity: 0; transform: translateY(35%); } }
+/* 有縮圖之後名稱欄少了約 60px：圓點多、下一組又長時要截斷「下一組…」，不能把箭頭與 ⓘ 擠出卡片 */
+.ex-head .sub, .ex-head .prog { min-width: 0; max-width: 100%; }
 .ex-head .prog { display: inline-flex; align-items: center; gap: var(--s-2); }
-.ex-head .dots { display: inline-flex; gap: 4px; }
+.ex-head .prog > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-head .dots { display: inline-flex; flex-shrink: 0; gap: 4px; }
 .ex-head .dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--fill);
   box-shadow: inset 0 0 0 1px var(--rule-field); }
 .ex-head .dot.is-done { background: var(--accent); box-shadow: none; }
 .ex-toggle .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
+/* 動作示意縮圖（ExerciseThumb）：尺寸固定（3:2＝原圖比例）、底色先鋪，圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字 */
+.ex-thumb { display: block; width: 54px; height: 36px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover; }
+.ex-thumb.is-glyph { display: flex; align-items: center; justify-content: center; font-size: var(--t-md); font-weight: 600;
+  color: var(--ink-muted); }
+/* 動作庫的「補齊預設動作」入口：不是 .tr-row（e2e 與列表計數都以 .tr-row 為列），單獨一塊 accent-soft 底 */
+.lib-fill { margin: var(--s-2) 0 var(--s-3); }
+.lib-fill-btn { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-3) var(--s-4);
+  border: none; border-radius: var(--r-tab); background: var(--accent-soft); color: var(--accent); text-align: left;
+  font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.lib-fill-btn .grow { flex: 1; min-width: 0; }
+.lib-fill-btn .nm { display: block; font-size: var(--t-base); font-weight: 700; }
+.lib-fill-btn .sub { display: block; margin-top: 2px; font-size: var(--t-xs); color: var(--ink-muted); }
+.lib-fill-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.lib-fill:focus { outline: none; }
+.lib-fill-done { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--r-tab); background: var(--accent-soft);
+  color: var(--accent); font-size: var(--t-sm); font-weight: 600; }
+.lib-fill-btn:active { opacity: .6; }
+.lib-fill-btn:disabled { opacity: .6; cursor: default; }
+.lib-fill-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ex-info.is-empty { color: var(--ink-faint); }
 .ex-info[aria-expanded="true"] { color: var(--accent); }
 .ex-info:disabled { opacity: .35; cursor: default; }
@@ -1420,6 +1442,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 600;
   letter-spacing: var(--track-lg); text-align: center; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .step-num:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.flip { display: inline-block; }
 .step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
 .step-num.is-input:focus { outline: none; }
 .set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }

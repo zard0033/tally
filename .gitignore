@@ -25,6 +25,9 @@ migrate-v2.sql
 .omc/wiki/environment.md
 .omc/wiki/session-log-*.md
 .omc/wiki/.omc/
+# 在子目錄（src/、e2e/…）裡跑 agent 時 hook 會在該目錄下產生 .omc/ 狀態檔；`.omc/*` 只錨定在根目錄擋不到它們。
+# 這條要求前面至少有一層目錄，所以不影響根目錄 .omc/ 的白名單
+/*/**/.omc/
 
 # Node / Vite
 node_modules

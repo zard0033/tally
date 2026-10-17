@@ -404,6 +404,8 @@ export interface RowOp {
   table: TrainingTable
   rowId: string
   payload?: Record<string, unknown>
+  /** insert 專用：id 已存在就不動它（upsert 的 ignoreDuplicates）。預填與補齊預設動作用，離線時不能蓋掉伺服器上被改過的列。 */
+  ignoreDuplicates?: boolean
 }
 
 /** 這次訓練是不是「補記」建的：started_at 剛好是 performed_on 當天本機 12:00:00.000（補記的合成起點，
@@ -624,7 +626,7 @@ export interface ExerciseValue {
 export type ExerciseCheck = { ok: true; value: ExerciseValue } | { ok: false; error: string }
 
 /** 比對用：全形／半形、大小寫、連續空白都視為同一個名字（存的仍是使用者輸入的原樣）。 */
-const foldName = (s: unknown): string => String(s).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
+export const foldName = (s: unknown): string => String(s).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
 const sameName = (a: unknown, b: string) => foldName(a) === foldName(b)
 
 /** 表單送出前的檢查。名稱不能空（DDL 有 btrim 檢查，擋在這裡才說得出白話）、肌群必須是七類之一、

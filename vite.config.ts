@@ -48,7 +48,7 @@ export default defineConfig({
        - injectRegister false：註冊由 src/registerSW.ts 自己呼叫，dev 與 e2e 不註冊。
        - manifest false：沿用 public/manifest.webmanifest。
        - 只 precache 同源外殼，沒有 runtime route，Supabase 請求不被攔。
-       - woff2 要列進來，否則離線掉字型；_probe 是拋棄式探針頁，不進快取。
+       - woff2 要列進來，否則離線掉字型；webp 是動作示意圖（150 張約 700KB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
        - reset.html（救援頁）要「不進 precache」**且**「列入 denylist」，缺一不可：不進 precache 才走
          網路；不在 denylist 的導覽會被 navigateFallback 吞成 App 首頁。
        - denylist 的比對對象是 pathname＋search，所以救援頁的規則允許帶 query、也允許無 .html 的網址
@@ -64,7 +64,7 @@ export default defineConfig({
           injectRegister: false,
           manifest: false,
           workbox: {
-            globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
+            globPatterns: ['**/*.{js,css,html,svg,png,webp,webmanifest,woff2}'],
             globIgnores: ['_probe/**', 'reset.html'],
             navigateFallback: 'index.html',
             navigateFallbackDenylist: [/\/_probe\//, /\/reset(\.html)?(\?|$)/],
@@ -75,6 +75,11 @@ export default defineConfig({
           },
         }),
   ],
+  build: {
+    // 動作示意圖（src/assets/exercises，每張 3–11KB）一律不內嵌：Vite 預設把 < 4KB 的資產轉 base64 塞進 JS，
+    // 150 張裡有 54 張會被吞進主 bundle（約 +240KB），還不會被當成獨立檔案 precache。其餘資產維持預設行為
+    assetsInlineLimit: (file) => (file.includes('/assets/exercises/') ? false : undefined),
+  },
   server: {
     port: 5500,
     strictPort: true,

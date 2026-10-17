@@ -644,6 +644,178 @@ test('取消封存：回到清單與選單', async ({ page }) => {
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
 })
 
+/* ═══════════ 動作示意圖與補齊預設動作 ═══════════ */
+
+/** 圖已載入且是我們產的 240 寬 webp（lazy 圖要在視窗內才會載，所以用 poll）。 */
+const imgLoaded = (img: Locator) =>
+  expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(240)
+
+/** 第一次開、伺服器沒有動作 → App 預填 16 個（帶 user_id），等伺服器那邊真的收到再往下。 */
+async function openSeededLibrary(page: Page) {
+  await openApp(page, {}, { ...FIX, exercises: [] })
+  await openTraining(page)
+  await expect(page.locator('[data-action="open-library"]')).toContainText('16 個動作', { timeout: 15_000 })
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 15_000 }).toBe(16)
+  await openLibrary(page)
+}
+
+test('動作示意圖：預設動作有照片、自建的動作用肌群單字；動作庫、加動作 sheet、訓練中卡片都有', async ({ page }) => {
+  await openSeededLibrary(page)
+  // 自建一個動作（沒有圖）
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+
+  const legRow = library(page).locator('.tr-row', { hasText: '腿推舉' })
+  const img = legRow.locator('img.ex-thumb')
+  await expect(img).toHaveCount(1)
+  expect(await img.getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.webp$/)
+  expect(await img.getAttribute('alt'), '旁邊就是名稱，圖是裝飾').toBe('')
+  await imgLoaded(img)
+
+  const custom = library(page).locator('.tr-row', { hasText: '我的自建動作' })
+  await expect(custom.locator('img.ex-thumb')).toHaveCount(0)
+  await expect(custom.locator('.ex-thumb.is-glyph')).toHaveText('他')
+  const a = (await img.boundingBox())!
+  const b = (await custom.locator('.ex-thumb').boundingBox())!
+  expect([b.width, b.height], '沒有圖的縮圖與有圖的同尺寸，列不會因為有沒有圖而跳').toEqual([a.width, a.height])
+  expect(await legRow.evaluate((el) => el.getBoundingClientRect().height)).toBe(await custom.evaluate((el) => el.getBoundingClientRect().height))
+
+  // 加動作 sheet 與訓練中卡片
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const pickRow = page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '腿推舉' })
+  await expect(pickRow.locator('img.ex-thumb')).toHaveCount(1)
+  await imgLoaded(pickRow.locator('img.ex-thumb'))
+  await pickRow.click()
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  const cardImg = page.locator('.ex .ex-toggle img.ex-thumb')
+  await expect(cardImg).toHaveCount(1)
+  await imgLoaded(cardImg)
+
+  // 建置層：圖是獨立檔案、進了 precache（離線健身房看得到），沒有被內嵌成 base64 吞進主 JS
+  const scripts = await page.evaluate(() => Array.from(document.scripts).map((el) => el.src).filter(Boolean))
+  expect(scripts.length).toBeGreaterThan(0)
+  for (const src of scripts) {
+    const text = await (await page.request.get(src)).text()
+    expect(text.includes('data:image/webp'), `${src} 不該內嵌動作圖`).toBe(false)
+  }
+  const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
+  const precached = new Set(sw.match(/assets\/[\w-]+\.webp/g) ?? [])
+  expect(precached.size, 'service worker 的 precache 清單要列出 150 張動作圖').toBe(150)
+})
+
+test('補齊預設動作：只補缺的，改過名的預設動作不被蓋回，補完入口消失，補進來的有圖', async ({ page }) => {
+  await openSeededLibrary(page)
+  const fill = library(page).locator('[data-section="fill-catalog"]')
+  await expect(fill).toContainText('新增 134 個')
+
+  // 先把一個預設動作改名：補齊不能把它蓋回「腿推舉」
+  await library(page).locator('.tr-row', { hasText: '腿推舉' }).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的腿推')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(fill, '改名後缺的還是 134 個').toContainText('新增 134 個')
+
+  await fill.getByRole('button', { name: /補齊預設動作/ }).click()
+  await expect(library(page).locator('.tr-row')).toHaveCount(150)
+  // 入口不會就這樣消失（焦點會掉到 body、讀屏沒回饋）：換成「已加入 N 個」的狀態，焦點移到它
+  await expect(fill.getByRole('status')).toHaveText('已加入 134 個預設動作')
+  await expect(fill.getByRole('button')).toHaveCount(0)
+  await expect(fill).toBeFocused()
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 30_000 }).toBe(150)
+
+  const rows = await trainRows(page, 'exercises')
+  expect(rows.some((r) => r.name === '我的腿推'), '改過名的沒被蓋回').toBe(true)
+  expect(rows.filter((r) => r.name === '腿推舉'), '預設的「腿推舉」沒有被補第二份').toHaveLength(0)
+  expect(new Set(rows.map((r) => r.id)).size).toBe(150)
+  const posts = (await page.evaluate(() => (window as unknown as { __writes: { table: string; method: string }[] }).__writes)).filter(
+    (w) => w.table === 'exercises' && w.method === 'POST',
+  )
+  expect(posts, '預填 16＋補齊 134，每個 id 各送一次').toHaveLength(150)
+
+  // 名稱要精確比對：「槓鈴臥推」是「上斜槓鈴臥推」「窄握槓鈴臥推」的子字串
+  const added = library(page).locator('.tr-row').filter({ has: page.getByText('槓鈴臥推', { exact: true }) })
+  await expect(added.locator('img.ex-thumb')).toHaveCount(1)
+  await imgLoaded(added.locator('img.ex-thumb'))
+  // 補進來的肌群歸類正確：篩「手臂」要看得到新加的
+  await expect(library(page).locator('.tr-row').filter({ has: page.getByText('啞鈴二頭彎舉', { exact: true }) })).toBeVisible()
+})
+
+test('補齊預設動作：名稱與既有動作重複的不補（同名會讓兩列都存不了，而且動作不能真刪）', async ({ page }) => {
+  await openSeededLibrary(page)
+  // 自建一個與目錄同名的動作
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('槓鈴臥推')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+
+  const fill = library(page).locator('[data-section="fill-catalog"]')
+  await expect(fill, '134 個裡「槓鈴臥推」撞名，不補').toContainText('新增 133 個')
+  await fill.getByRole('button', { name: /補齊預設動作/ }).click()
+  await expect(fill.getByRole('status')).toHaveText('已加入 133 個預設動作')
+  await expect(library(page).locator('.tr-row')).toHaveCount(150) // 16＋自建 1＋補 133
+
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 30_000 }).toBe(150)
+  const names = (await trainRows(page, 'exercises')).map((r) => String(r.name))
+  expect(names.filter((n) => n === '槓鈴臥推'), '整份動作庫只有一個「槓鈴臥推」').toHaveLength(1)
+  expect(new Set(names).size, '沒有任何同名動作').toBe(names.length)
+  // 撞名的那一列（自建的）要能照常改要點：不會被「已經有這個動作」擋下
+  await library(page).locator('.tr-row').filter({ has: page.getByText('槓鈴臥推', { exact: true }) }).click()
+  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('握距略寬於肩')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+})
+
+test('離線補齊時，伺服器上已存在的預設動作（本機底不知道）不會被蓋回預設值', async ({ page }) => {
+  await openSeededLibrary(page)
+  await setOffline(page, true)
+  await library(page).locator('[data-section="fill-catalog"]').getByRole('button', { name: /補齊預設動作/ }).click()
+  await expect(library(page).locator('.tr-row')).toHaveCount(150)
+
+  // 離線期間「別台裝置」把槓鈴深蹲改成「我的深蹲」並封存、寫了要點。id 是 userId＋key 的 uuid v5
+  // （字面值取自 Python 的 uuid.uuid5，同時鎖住 id 演算法）
+  const SQUAT_ID = '54a8d7cc-c000-5491-a958-7c4747688023'
+  await page.evaluate(
+    (id) =>
+      (window as unknown as { __trainPut: (t: string, r: Record<string, unknown> | object) => void }).__trainPut('exercises', {
+        id,
+        user_id: '00000000-0000-0000-0000-000000000001',
+        name: '我的深蹲',
+        muscle_group: 'legs',
+        tips: '腳尖外開',
+        archived: true,
+      }),
+    SQUAT_ID,
+  )
+
+  await setOffline(page, false)
+  // 16 預填＋伺服器上多出的 1 列＋補齊的 134 個裡 133 個是新的（深蹲那筆被 ignore）
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 40_000 }).toBe(150)
+  const squat = (await trainRows(page, 'exercises')).find((r) => r.id === SQUAT_ID)!
+  expect(squat.name, '沒有被蓋回「槓鈴深蹲」').toBe('我的深蹲')
+  expect(squat.archived).toBe(true)
+  expect(squat.tips).toBe('腳尖外開')
+  // 補齊確實對這個 id 送過 insert（本機底不知道它），是 ignoreDuplicates 保護了它
+  const posts = (await page.evaluate(() => (window as unknown as { __writes: { table: string; method: string; body: unknown }[] }).__writes)).filter(
+    (w) => w.table === 'exercises' && w.method === 'POST',
+  )
+  expect(posts.some((w) => (Array.isArray(w.body) ? w.body[0] : (w.body as { id: string })).id === SQUAT_ID)).toBe(true)
+})
+
+test('離線補齊預設動作：畫面立刻有，回線後上傳、不重複', async ({ page }) => {
+  await openSeededLibrary(page)
+  await setOffline(page, true)
+  await library(page).locator('[data-section="fill-catalog"]').getByRole('button', { name: /補齊預設動作/ }).click()
+  await expect(library(page).locator('.tr-row')).toHaveCount(150)
+  expect((await trainRows(page, 'exercises')).length, '離線時伺服器還是 16 個').toBe(16)
+
+  await setOffline(page, false)
+  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 40_000 }).toBe(150)
+})
+
 test('訓練中：ⓘ 在卡片內展開要點面板（只能看）；「編輯要點」開同一張編輯 sheet；清空顯示「還沒有要點」', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
@@ -1383,6 +1555,169 @@ test('組列左滑露出紅鈕，點紅鈕才刪；開著時點內容只關掉�
   await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
 })
 
+/* ── 動效取樣：動畫是 JS 在跑，看不到 CSS 動畫，只能在 DOM 變動當下起每幀量 computed style ── */
+interface Sample { t: number; o: number; x: number; y: number }
+type Series = Sample[]
+
+/** 從現在起，每個新掛進 DOM、符合 selector 的節點（含整塊新掛進來的子樹裡的後代）都各自取樣約 700ms。用 readSeries 取回。 */
+async function watchAdded(page: Page, selector: string) {
+  await page.evaluate((sel) => {
+    const w = window as unknown as { __series: Series[]; __observer?: MutationObserver }
+    w.__observer?.disconnect() // 連續呼叫時舊的觀察器要關掉，否則同一個節點被取樣兩次
+    w.__series = []
+    const seen = new WeakSet<Node>() // 同一個節點可能在父層與自己的紀錄裡各報一次
+    w.__observer = new MutationObserver((muts) => {
+      for (const m of muts) {
+        for (const added of Array.from(m.addedNodes)) {
+          if (!(added instanceof HTMLElement)) continue
+          const targets = [added, ...Array.from(added.querySelectorAll<HTMLElement>(sel))].filter((n) => n.matches(sel))
+          for (const n of targets) {
+            if (seen.has(n)) continue
+            seen.add(n)
+            const out: Series = []
+            const t0 = performance.now()
+            const tick = () => {
+              const cs = getComputedStyle(n)
+              const mx = new DOMMatrix(cs.transform)
+              out.push({ t: performance.now() - t0, o: Number(cs.opacity), x: mx.m41, y: mx.m42 })
+              if (performance.now() - t0 < 700) requestAnimationFrame(tick)
+            }
+            tick()
+            w.__series.push(out)
+          }
+        }
+      }
+    })
+    w.__observer.observe(document.body, { childList: true, subtree: true })
+  }, selector)
+}
+const readSeries = (page: Page) => page.evaluate(() => (window as unknown as { __series: Series[] }).__series)
+
+/** 對一個現有的節點每幀取樣，直到它離開 DOM（最多 800ms）。先 await 這個 promise 之前就要觸發動作。 */
+const sampleUntilGone = (el: Locator) =>
+  el.evaluate(
+    (n) =>
+      new Promise<{ out: Series; gone: boolean }>((resolve) => {
+        const out: Series = []
+        const t0 = performance.now()
+        const tick = () => {
+          const cs = getComputedStyle(n)
+          const mx = new DOMMatrix(cs.transform)
+          out.push({ t: performance.now() - t0, o: Number(cs.opacity), x: mx.m41, y: mx.m42 })
+          if (!n.isConnected || performance.now() - t0 > 800) resolve({ out, gone: !n.isConnected })
+          else requestAnimationFrame(tick)
+        }
+        tick()
+      }),
+  )
+
+test('新增一組：新列由上方 8px 淡入；卡片展開時已有的組不跑進場', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await expect(page.locator('.ex .set')).toHaveCount(2)
+  await watchAdded(page, '.set-slot')
+  await page.locator('.ex').first().getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+  await page.waitForTimeout(800)
+
+  const series = await readSeries(page)
+  expect(series, '只有新增的那一列跑進場').toHaveLength(1)
+  const [rowSeries] = series
+  expect(rowSeries[0].o, '一開始是透明').toBeLessThan(0.2)
+  expect(rowSeries[0].y, '一開始在上方約 8px').toBeLessThan(-4)
+  expect(rowSeries.some((s) => s.o > 0.2 && s.o < 0.95), '中間有過渡，不是瞬間跳').toBe(true)
+  const last = rowSeries.at(-1)!
+  expect(last.o).toBe(1)
+  expect(Math.abs(last.y)).toBeLessThan(0.5)
+
+  // 收合再展開：已有的組不該再跑進場
+  await watchAdded(page, '.set-slot')
+  await page.locator('.ex .ex-toggle').click()
+  await expect(page.locator('.ex .set')).toHaveCount(0)
+  await page.locator('.ex .ex-toggle').click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+  await page.waitForTimeout(500)
+  const reopened = await readSeries(page)
+  expect(reopened.length, '三列都有被取樣到').toBe(3)
+  for (const s of reopened) expect(s[0].o, '展開時已有的組一出現就是不透明').toBe(1)
+})
+
+test('刪除一組：該列淡出並左移 12px 後離開；高度一併收掉', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const slots = page.locator('.ex .set-slot')
+  await expect(slots).toHaveCount(2)
+
+  await swipeLeft(page, page.locator('.ex .swipe-row').nth(1), 70)
+  await expect(page.locator('.ex .swipe-row').nth(1)).toHaveClass(/is-open/)
+  const sampling = sampleUntilGone(slots.nth(1))
+  await page.getByRole('button', { name: '刪除第 2 組' }).click()
+  const { out, gone } = await sampling
+
+  expect(gone, '動畫結束後那一列離開 DOM').toBe(true)
+  expect(out.some((s) => s.o > 0.05 && s.o < 0.95), '淡出有過渡').toBe(true)
+  expect(Math.min(...out.map((s) => s.x)), '往左移（約 12px）').toBeLessThan(-4)
+  expect(Math.min(...out.map((s) => s.x)), '不超過 12px 太多').toBeGreaterThan(-13)
+  // 取樣在點擊之前就開始了，所以從「第一次開始變透明」量到離開 DOM
+  const start = out.find((s) => s.o < 0.99)!
+  expect(out.at(-1)!.t - start.t, '約 160ms 內收完').toBeLessThan(400)
+  await expect(page.locator('.ex .set')).toHaveCount(1)
+})
+
+test('新增與刪除一組：減少動態只剩淡入淡出，沒有位移', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await watchAdded(page, '.set-slot')
+  await page.locator('.ex').first().getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+  await page.waitForTimeout(500)
+  const [added] = await readSeries(page)
+  expect(added.every((s) => s.x === 0 && s.y === 0), '新增沒有位移').toBe(true)
+  expect(added.at(-1)!.o).toBe(1)
+
+  await swipeLeft(page, page.locator('.ex .swipe-row').nth(2), 70)
+  const sampling = sampleUntilGone(page.locator('.ex .set-slot').nth(2))
+  await page.getByRole('button', { name: '刪除第 3 組' }).click()
+  const { out, gone } = await sampling
+  expect(gone).toBe(true)
+  // 位移與縮放都省掉：slot 自己沒有 x／y（swipe-slide 在它裡面，不算）
+  expect(out.every((s) => s.x === 0 && s.y === 0), '刪除沒有位移').toBe(true)
+})
+
+test('組編輯 sheet 的 ± 數字翻動：變動時下移 35% 淡入，開 sheet 時不翻', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await watchAdded(page, '.flip')
+  await openSetSheet(page, 0)
+  await page.waitForTimeout(400)
+  const opening = await readSeries(page)
+  expect(opening.length, '重量與次數各一個數字').toBe(2)
+  for (const s of opening) expect(s[0].o, '開 sheet 時數字一出現就是不透明、不翻').toBe(1)
+
+  await watchAdded(page, '.flip')
+  await setSheet(page).getByRole('button', { name: '重量加 2.5 公斤' }).click()
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveText('62.5')
+  await page.waitForTimeout(400)
+  const [flip, ...rest] = await readSeries(page)
+  expect(rest, '只有被改的那個數字翻').toHaveLength(0)
+  expect(flip[0].o, '一開始是透明').toBeLessThan(0.3)
+  expect(flip[0].y, '一開始在下方（約數字高度的 35%）').toBeGreaterThan(3)
+  expect(flip.some((s) => s.o > 0.3 && s.o < 0.95), '中間有過渡').toBe(true)
+  const last = flip.at(-1)!
+  expect(last.o).toBe(1)
+  expect(Math.abs(last.y)).toBeLessThan(0.5)
+  expect(last.t, '120ms 級的短動畫，不是拖長的').toBeGreaterThan(100)
+})
+
 test('全部完成：欄頭雙勾一次打勾所有未完成的組；全勾時再按全部取消；狀態由各組推出', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
@@ -1445,6 +1780,41 @@ test('收合時第二行看進度（圓點＋下一組），展開時看肌群�
   await expect(card.locator('.set').nth(2).locator('.w')).toHaveText('60')
   await expect(card.locator('.set').nth(2).locator('.r')).toHaveText('12')
   await expect(card.locator('.set').nth(2)).not.toHaveClass(/done/)
+})
+
+test('收合列：滿 8 組的圓點加上很長的「下一組」不會把箭頭與 ⓘ 擠出卡片', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const card = page.locator('.ex').first()
+  for (let i = 0; i < 5; i++) await card.getByRole('button', { name: '新增一組' }).click()
+  await expect(card.locator('.set')).toHaveCount(7)
+  // 第 1 組改成又重又多的數字，讓「下一組 …」最長
+  await openSetSheet(page, 0)
+  await setSheet(page).getByRole('button', { name: '重量，點一下直接輸入' }).click()
+  await setSheet(page).getByRole('textbox', { name: '重量' }).fill('187.5')
+  await setSheet(page).getByRole('textbox', { name: '重量' }).press('Enter')
+  await setSheet(page).getByRole('button', { name: '次數，點一下直接輸入' }).click()
+  await setSheet(page).getByRole('textbox', { name: '次數' }).fill('150')
+  await setSheet(page).getByRole('textbox', { name: '次數' }).press('Enter')
+  await closeSetSheet(page)
+  await card.getByRole('button', { name: '新增一組' }).click()
+  await expect(card.locator('.set')).toHaveCount(8)
+
+  await card.locator('.ex-toggle').click()
+  await expect(card.locator('.set')).toHaveCount(0)
+  await expect(card.locator('.sub .dot')).toHaveCount(8)
+  const cardBox = (await card.boundingBox())!
+  for (const sel of ['.ex-toggle .chev', '.ex-info', '[aria-label$="的更多操作"]']) {
+    const box = (await card.locator(sel).boundingBox())!
+    expect(box.x + box.width, `${sel} 要在卡片右緣之內`).toBeLessThanOrEqual(cardBox.x + cardBox.width)
+  }
+  const overflow = await card.locator('.ex-head').evaluate((el) => el.scrollWidth - el.clientWidth)
+  expect(overflow, '卡片頭沒有橫向溢出').toBeLessThanOrEqual(0)
+  // 不截斷的話文字會折成兩行、把卡片頭撐高（不是橫向溢出），所以也要量高度：收合卡片頭只該有一行名稱＋一行進度
+  const headHeight = await card.locator('.ex-head').evaluate((el) => el.getBoundingClientRect().height)
+  expect(headHeight, '進度只佔一行，卡片頭不長高').toBeLessThanOrEqual(64)
 })
 
 /* 訓練中排序：兩個動作，握把是唯一的拖曳來源；拖起時所有卡收合；範圍限制在清單區內（橡皮筋） */
@@ -1512,9 +1882,13 @@ test('訓練中排序（指標拖曳）：拉過清單上緣只露出橡皮筋�
   await page.waitForTimeout(300)
 
   // dnd-kit 會留一份隱藏的 placeholder（同 class），被拖的那張才有 data-dnd-dragging
+  // 被拖的是展開中的划船：dnd-kit 在開始時凍結它的高度，所以要先收合再量（沒收合會是展開時的 300 多 px）。
+  // 用輪詢：dnd-kit 的位置觀測是非同步的，機器忙時偶爾晚一兩幀才追上（全量 e2e 出現過一次 342px）；
+  // 「根本沒收合」是永久偏高，輪詢仍會失敗
+  await expect
+    .poll(async () => (await page.locator('[data-dnd-dragging="true"]').boundingBox())!.height, { message: '被拖的卡是收合後的高度' })
+    .toBeLessThan(100)
   const dragged = (await page.locator('[data-dnd-dragging="true"]').boundingBox())!
-  // 被拖的是展開中的划船：dnd-kit 在開始時凍結它的高度，所以要先收合再量（沒收合會是展開時的 300 多 px）
-  expect(dragged.height, '被拖的卡是收合後的高度').toBeLessThan(100)
   expect(dragged.y, '最多露出約 14px 的橡皮筋，不會跑到統計區後面').toBeGreaterThan(list.y - 15)
   expect(dragged.y, '有露出橡皮筋的那一小段（不是硬夾在邊界）').toBeLessThan(list.y - 2)
   await page.mouse.up()
