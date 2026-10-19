@@ -471,17 +471,26 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     flashTimer.current = setTimeout(() => setFlash([]), 700 + ids.length * 50)
   }
 
-  // 全部完成：資料一次寫入，畫面由上往下逐組換（每組錯開 CASCADE_STEP_MS）。class 要在資料換狀態之前就掛上
-  // （transition-delay 在樣式變動當下才取值），所以先 set、再寫入。進行中再按：新的一輪從當前畫面狀態接續。
+  // 全部完成：資料一次寫入，畫面由上往下逐組換（每組錯開 CASCADE_STEP_MS）。class 不能晚於 done 的變動才掛上
+  // （transition 建立當下就取 transition-delay），所以先 set、再寫入；寫入落地後才開始倒數收掉，
+  // 慢的寫入（離線佇列、跨分頁鎖）不會讓 class 在 done 變動之前就被收走。進行中再按：新一輪從畫面當前狀態接續。
   // 減少動態不逐組錯開，全部同時換。
-  const toggleAll = (entryId: string) => {
+  const endCascade = () => {
+    if (cascadeTimer.current) clearTimeout(cascadeTimer.current)
+    cascadeTimer.current = null
+    setCascade([])
+  }
+  const toggleAll = async (entryId: string) => {
     const ops = toggleAllDoneOps(detail, entryId)
-    if (!reduced && ops.length > 1) {
+    const staggered = !reduced && ops.length > 1
+    if (staggered) {
       if (cascadeTimer.current) clearTimeout(cascadeTimer.current)
       setCascade(ops.map((o) => o.rowId))
-      cascadeTimer.current = setTimeout(() => setCascade([]), DUR.base + 200 + ops.length * CASCADE_STEP_MS)
     }
-    void run(ops)
+    await run(ops)
+    if (!staggered) return
+    if (cascadeTimer.current) clearTimeout(cascadeTimer.current)
+    cascadeTimer.current = setTimeout(() => setCascade([]), DUR.base + 200 + ops.length * CASCADE_STEP_MS)
   }
 
   const finishLines: FinishLine[] = exercises.map(({ exercise, sets }) => ({
@@ -589,7 +598,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   setTipsOpen(true)
                 }}
                 onRemove={() => askRemoveExercise(item)}
-                onToggleAll={() => toggleAll(item.entry.id)}
+                onToggleAll={() => void toggleAll(item.entry.id)}
                 onAddSet={() => void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))}
                 onSwipe={(setId, o) => setSwipeId(o ? setId : swipeId === setId ? null : swipeId)}
                 onEditSet={(setId, opener) => {
@@ -598,7 +607,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   setSetTarget({ entryId: item.entry.id, setId })
                   setSetOpen(true)
                 }}
-                onToggleSet={(s) => void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])}
+                onToggleSet={(s) => {
+                  endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
+                  void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
+                }}
                 onDeleteSet={(setId) => {
                   setSwipeId(null)
                   void run(removeSetOps(detail, setId))

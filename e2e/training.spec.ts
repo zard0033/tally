@@ -1520,7 +1520,10 @@ test('組列左滑露出紅鈕，點紅鈕才刪；開著時點內容只關掉�
   await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
 })
 
-/* ── 動效取樣：動畫是 JS 在跑，看不到 CSS 動畫，只能在 DOM 變動當下起每幀量 computed style ── */
+/* ── 動效取樣（舊量法，僅剩兩種用法還安全）：在 DOM 變動當下起每幀量 computed style ──
+   ① 掛上當下的第一個樣本（同步取，起點是確定的）；② 「每一幀都符合」的斷言（幀少只會少驗、不會假紅）。
+   **「中間有過渡」「最後一幀的值」「約 N ms 內收完」這類吃幀時間的斷言不要用**——機器忙時 rAF 幀間隔會拖到 40–100ms，
+   短動畫取不到中間幀而假紅。要驗中間過程用下面的 watchFlips／readFlips（攔 Element.animate＋MutationObserver）。 */
 interface Sample { t: number; o: number; x: number; y: number }
 type Series = Sample[]
 
@@ -1582,20 +1585,22 @@ test('新增一組：新列由上方 8px 淡入；卡片展開時已有的組不
   await startBlank(page)
   await addExercise(page, '腿推舉')
   await expect(page.locator('.ex .set')).toHaveCount(2)
-  await watchAdded(page, '.set-slot')
+  await watchFlips(page, '.set-slot') // 量法見 watchFlips 上方的說明：不靠逐幀取樣
   await page.locator('.ex').first().getByRole('button', { name: '新增一組' }).click()
   await expect(page.locator('.ex .set')).toHaveCount(3)
   await page.waitForTimeout(800)
 
-  const series = await readSeries(page)
-  expect(series, '只有新增的那一列跑進場').toHaveLength(1)
-  const [rowSeries] = series
-  expect(rowSeries[0].o, '一開始是透明').toBeLessThan(0.2)
-  expect(rowSeries[0].y, '一開始在上方約 8px').toBeLessThan(-4)
-  expect(rowSeries.some((s) => s.o > 0.2 && s.o < 0.95), '中間有過渡，不是瞬間跳').toBe(true)
-  const last = rowSeries.at(-1)!
-  expect(last.o).toBe(1)
-  expect(Math.abs(last.y)).toBeLessThan(0.5)
+  const entered = await readFlips(page)
+  expect(entered, '只有新增的那一列跑進場').toHaveLength(1)
+  const [row] = entered
+  expect(row.initialStyle, '一掛上就是透明').toContain('opacity: 0')
+  expect(row.initialStyle, '一掛上就在上方 8px').toContain('translateY(-8px)')
+  const fade = row.anims.find((a) => a.props.includes('opacity'))
+  expect(fade, '淡入走 Web Animations').toBeTruthy()
+  expect(fade!.ms, '淡入 220ms（durations.ts 的 DUR.mid）').toBe(220)
+  expect(fade!.easing).toBe('ease-out')
+  expect(row.finalO, '落定後不透明').toBe(1)
+  expect(Math.abs(row.finalY), '落定後歸位').toBeLessThan(0.5)
 
   // 收合再展開：已有的組不該再跑進場
   await watchAdded(page, '.set-slot')
@@ -1761,7 +1766,8 @@ const readFlips = (page: Page): Promise<FlipRec[]> =>
     }),
   )
 
-/** 一個翻動過的 .flip 該有的樣子：起點透明且在下方 35%、淡入走 Web Animations（ms、ease-out）、落定後不透明且歸位。 */
+/** 一個翻動過的 .flip 該有的樣子：起點透明且在下方 35%、淡入走 Web Animations（ms、ease-out）、落定後不透明且歸位。
+ *  ms 是寫死的，對應 src/lib/durations.ts：± 數字 NUMBER_FLIP_MS＝120、統計格 DUR.base＝160（e2e 不 import src/）。 */
 function expectFlipped(f: FlipRec, ms: number) {
   expect(f.initialStyle, '一掛上就是透明').toContain('opacity: 0')
   expect(f.initialStyle, '一掛上就在下方 35%').toContain('translateY(35%)')
@@ -1798,30 +1804,39 @@ test('組編輯 sheet 的 ± 數字翻動：變動時下移 35% 淡入，開 she
   expectFlipped(flips[0], 120)
 })
 
-/** 等每一組的打勾圈都開始背景色過渡（最多 1.5 秒），回傳各組那條過渡的 delay（ms，照畫面由上到下）與當時有幾列掛著 .is-cascade。
- *  讀 getAnimations() 的 delay 而不是逐幀量「第一次變色的時間」：後者吃幀時間，全量跑機器忙、一幀拖過 60ms 時
- *  相鄰兩組會在同一幀才被看到，量出間隔 0（2026-10-19 全量紅過一次，單跑都綠）。先 await 這個 promise 之前就要觸發動作。 */
+/** 等每一組的打勾圈都開始背景色過渡（最多 1.5 秒），回傳各組那條過渡的 delay（ms，照畫面由上到下）、
+ *  各組 transform 那項的 computed transition-delay（按下縮放不該被延後），以及最後一個過渡建立當下有幾列掛著 .is-cascade。
+ *  用 transitionrun 事件、在事件當下讀：過渡一建立（含還在 delay 階段）就會發，不吃幀時間。早先逐幀量「第一次變色的時間」
+ *  在全量跑機器忙、一幀拖過 60ms 時相鄰兩組會在同一幀才被看到，量出間隔 0（2026-10-19 全量紅過一次，單跑都綠）；
+ *  後來改成每幀輪詢 getAnimations()，幀間隔超過 160ms 時第一組已經結束又會讀不到。先 await 這個 promise 之前就要觸發動作。 */
 const readCheckDelays = (page: Page) =>
   page.evaluate(
     () =>
-      new Promise<{ delays: number[]; cascadeRows: number }>((resolve) => {
+      new Promise<{ delays: number[]; transformDelays: string[]; cascadeRows: number }>((resolve) => {
         const checks = Array.from(document.querySelectorAll<HTMLElement>('.ex .set .tr-check'))
-        const t0 = performance.now()
-        const tick = () => {
-          const delays = checks.map((c) => {
-            const tr = c
-              .getAnimations()
-              .find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
-            return tr ? Number(tr.effect?.getTiming().delay ?? 0) : null
-          })
-          if (delays.every((d) => d !== null) || performance.now() - t0 > 1500) {
-            resolve({
-              delays: delays.map((d) => d ?? -1),
-              cascadeRows: document.querySelectorAll('.ex .set.is-cascade').length,
-            })
-          } else requestAnimationFrame(tick)
+        const delays: (number | null)[] = checks.map(() => null)
+        const transformDelays: string[] = checks.map(() => '')
+        let cascadeRows = 0
+        const finish = () => {
+          document.removeEventListener('transitionrun', onRun, true)
+          clearTimeout(timer)
+          resolve({ delays: delays.map((d) => d ?? -1), transformDelays, cascadeRows })
         }
-        tick()
+        function onRun(e: Event) {
+          const te = e as TransitionEvent
+          const i = checks.indexOf(te.target as HTMLElement)
+          if (i < 0 || te.propertyName !== 'background-color') return
+          const tr = checks[i]
+            .getAnimations()
+            .find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
+          delays[i] = Number(tr?.effect?.getTiming().delay ?? 0)
+          // transition-property 清單的順序是 background-color／color／transform，transform 是第三項
+          transformDelays[i] = getComputedStyle(checks[i]).transitionDelay.split(',')[2]?.trim() ?? ''
+          cascadeRows = document.querySelectorAll('.ex .set.is-cascade').length
+          if (delays.every((d) => d !== null)) finish()
+        }
+        document.addEventListener('transitionrun', onRun, true)
+        const timer = setTimeout(finish, 1500)
       }),
   )
 
@@ -1842,9 +1857,10 @@ test('全部完成：按下當下狀態就換，畫面由上往下逐組換色�
   await all.click()
   await expect(page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(stat(page, 'sets')).toHaveText('3/3')
-  const { delays, cascadeRows } = await reading
+  const { delays, transformDelays, cascadeRows } = await reading
 
   expect(delays, '三組的打勾圈依序晚 0／60／120ms 開始換色').toEqual([0, 60, 120])
+  expect(transformDelays, '按下縮放（transform）不跟著延後，回饋在按下的當下發生').toEqual(['0s', '0s', '0s'])
   expect(cascadeRows, '被換的三列掛著逐組延遲的 class').toBe(3)
   await expect(page.locator('.ex .set.is-cascade'), '一輪跑完後 class 收掉').toHaveCount(0)
 })
@@ -1857,6 +1873,36 @@ test('全部完成：減少動態不逐組錯開，三組同時換色', async ({
   const { delays, cascadeRows } = await reading
   expect(delays, '三組同時換，沒有錯開').toEqual([0, 0, 0])
   expect(cascadeRows, '不掛逐組延遲的 class').toBe(0)
+})
+
+test('全部完成：逐組進行中單點一組，換色不被逐組的延遲拖慢', async ({ page }) => {
+  await openThreeSets(page)
+  await page.locator('.ex').getByRole('button', { name: '全部完成', exact: true }).click()
+  await expect(stat(page, 'sets')).toHaveText('3/3') // 資料已落地，逐組的 class 還掛著（約 540ms 內）
+  // 在頁內同一個 tick 裝監聽、直接點：Playwright 的 click() 要等 actionability，可能慢過逐組 class 的存活時間（約 540ms），
+  // 那樣量到的 0 是空過（mutation 驗證時拿掉 endCascade 照樣綠）。所以同時回報點下去當下 class 還在不在，當作測試自己的前提
+  const { hadClass, delay } = await page
+    .locator('.ex .set')
+    .nth(2)
+    .locator('.tr-check')
+    .evaluate(
+      (el) =>
+        new Promise<{ hadClass: boolean; delay: number }>((resolve) => {
+          const row = el.closest('.set') as HTMLElement
+          const hadClass = row.classList.contains('is-cascade')
+          const timer = setTimeout(() => resolve({ hadClass, delay: -2 }), 1500)
+          el.addEventListener('transitionrun', function on(e) {
+            if ((e as TransitionEvent).propertyName !== 'background-color') return
+            el.removeEventListener('transitionrun', on)
+            clearTimeout(timer)
+            const tr = el.getAnimations().find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
+            resolve({ hadClass, delay: Number(tr?.effect?.getTiming().delay ?? -1) })
+          })
+          el.click()
+        }),
+    )
+  expect(hadClass, '前提：點下去的當下，這一列還掛著逐組的 class（不然這條測試什麼都沒驗）').toBe(true)
+  expect(delay, '單點第 3 組取消完成：換色立刻開始（第 3 組在逐組裡是 120ms，不該套到這次單點）').toBe(0)
 })
 
 test('全部完成：逐組進行中再按一次，從當前畫面狀態接續，最後全部回到未完成', async ({ page }) => {
@@ -1872,7 +1918,30 @@ test('全部完成：逐組進行中再按一次，從當前畫面狀態接續�
   await expect(page.locator('.ex .set.is-cascade')).toHaveCount(0)
 })
 
-test('統計格數字：訓練量與完成組數變動時翻一下（160ms），開頁時不翻', async ({ page }) => {
+test('統計格數字：減少動態只淡入、不位移，時長不超過 120ms', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await page.waitForTimeout(400)
+  await watchFlips(page, '.tr-stats .flip')
+  await tick(page, 0)
+  await expect(stat(page, 'sets')).toHaveText('1/2')
+  await page.waitForTimeout(500)
+  const flips = await readFlips(page)
+  expect(flips, '訓練量與完成組數各淡入一次').toHaveLength(2)
+  for (const f of flips) {
+    expect(f.initialStyle, '一掛上就是透明').toContain('opacity: 0')
+    expect(f.initialStyle, '減少動態沒有位移').not.toContain('translateY(35%)')
+    const fade = f.anims.find((a) => a.props.includes('opacity'))
+    expect(fade, '淡入走 Web Animations').toBeTruthy()
+    expect(fade!.ms, 'spec AC 10：減少動態的淡入不超過 120ms（durations.ts 的 REDUCED_FADE_MAX_MS）').toBe(120)
+    expect(f.finalO).toBe(1)
+  }
+})
+
+test('統計格數字：訓練量與完成組數變動時翻一下（160ms），時長跳秒不翻', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)

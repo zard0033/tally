@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-19）：v2.73 本機完成、未 push／未 review／真機未驗：全部完成逐組 60ms、統計格翻動 160ms、Flip 抽共用元件、動效 e2e 改不靠逐幀取樣（機器忙時幀間隔 40–100ms 會假紅）。vitest 651／e2e 240 全過（11.6 分）。SW「新版裝好就接手」全量紅過 1 次、單跑綠、原因未查（該 spec 別用 --repeat-each）。
-下一步：確認手機已是 v2.72（縮圖、雙勾、新增一組整列）；動效只剩排序收合動畫；待決：中文名清單、照片上游來源。push 前走 gate。
+現況（2026-10-19）：v2.73（逐組 60ms、統計格翻動、Flip 共用、動效 e2e 不靠逐幀）commit d0c638f＋review 修正已 stage 未 commit；未 push、真機未驗。push 前 review 已做（兩軸 0 blocking，已修）。vitest 651／e2e 242：241 過、1 紅＝tally.spec 今日頁 .undo-bar 偶發（基線也紅，不擋 push）；SW 那條紅過 1 次、原因未查。
+下一步：commit→「準備 push」確認→push；手機驗 v2.72／v2.73。待決見 MANUAL 2026-10-19。scratchpad 的基線 worktree ctl 待清。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -73,3 +73,10 @@ D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking
 - 第 1 點「有氧併入動作」（肌群＝其他，不再是獨立入口）推翻 2026-10-13 的有氧獨立模型（cardio_sessions 表＋開始訓練 sheet 進入）；牽涉 schema，另案先 spec＋plan。
 - 全站精緻度：B3（設定、每日目標、身體數據、食品庫、體重趨勢含 prototype 殘留清除；`.scan-btn` 與食物庫篩選膠囊還是舊外框）、B4（載入／離線／錯誤狀態、登入頁）要使用者各自核可。盤點發現與根因在 `.omc/plans/polish-audit-findings.md`（本機、不進 git，spec.md「全站基礎」節有指路）；Gymwork 對照截圖使用者未提供，提案沒對照 Gymwork 校準。
 - 背景縮小約 95.5%（modal sheet 開著時）：0 號實驗結論「不需要解法」（DESIGN v2.61），但**縮放本身沒實作**；要做時只在掛在 body 的 SpringSheet 開著時啟用、原點 `50% 0`，真機驗 iOS 工具列收合與動畫掉幀。
+### 2026-10-19 17:30
+v2.73 push 前 review 後的待決與已知狀況（全文在 DESIGN.md v2.73「已知限制」）
+- **減少動態下 `.tr-check`／`.tr-val` 的顏色過渡要不要降到 0.01ms**：DESIGN「互動與動效」寫「全部降到 0.01ms」、spec AC 10 寫「位移與縮放改 ≤120ms 淡入淡出」，兩份文件互相不一致，需要裁決以哪份為準；收進 app.css 的 reduced-motion 清單會連帶動到「減少動態不錯開」那條 e2e（它讀 background-color 過渡的 delay）。`.tr-check` 是舊缺口，`.tr-val` 是本輪新加的 160ms 顏色過渡。
+- **`tally.spec.ts` 偶發紅（今日頁 `.undo-bar` 一族）**：基線 `ddb5292` 也會紅（單跑 10 次紅 2 次），使用者裁決先當已知偶發、不擋 push；原因未查。單跑重複的過濾字串用 `tally.spec`，寫 `tally` 會把整套跑進去。
+- **SW「新版 SW 裝好就接手」全量紅過 1 次**（停在 `activating`），單跑綠、原因未查；該 spec 不能用 `--repeat-each`。
+- **排序收合動畫**：2026-10-19 評估過，touch 起手有 250ms 按住可以做，但建議等真機看過再決定（沒有裁決）。
+- 本機 scratchpad 有基線 worktree `…\scratchpad\ctl`（指到 `ddb5292`、node_modules 是 junction）用完要清；**刪除前先列清單給使用者確認**。

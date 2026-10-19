@@ -21,6 +21,9 @@ export const sec = (ms: number) => ms / 1000
 /** 組編輯 sheet 的 ± 數字翻動：spec.md 動效表指定 120ms，落在 fast（100）與 base（160）之間，不是階梯的一級，單獨命名。 */
 export const NUMBER_FLIP_MS = 120
 
+/** 減少動態時淡入淡出的時長上限（spec.md AC 10：位移與縮放改 ≤120ms 淡入淡出）。 */
+export const REDUCED_FADE_MAX_MS = 120
+
 /** 全部完成：資料一次寫入，畫面由上往下逐組換狀態，每組錯開這麼久（spec.md 動效表）。 */
 export const CASCADE_STEP_MS = 60
 
