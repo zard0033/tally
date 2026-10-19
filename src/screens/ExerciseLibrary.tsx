@@ -24,16 +24,19 @@ function ExerciseRow({ exercise, onOpen }: { exercise: Row; onOpen: () => void }
   const group = MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他'
   const hasTips = typeof exercise.tips === 'string' && exercise.tips.trim() !== ''
   return (
-    <button className="tr-row" type="button" data-exercise-id={exercise.id} onClick={onOpen}>
-      <ExerciseThumb exercise={exercise} />
-      <span className="grow">
-        <span className="nm">{String(exercise.name)}</span>
-        <span className="sub">{hasTips ? `${group} · 有要點` : group}</span>
-      </span>
-      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </button>
+    // 縮圖是獨立的放大鈕，不能包在開編輯的按鈕裡：列拆成「縮圖｜主按鈕」並排
+    <div className="tr-row has-zoom">
+      <ExerciseThumb exercise={exercise} zoom />
+      <button className="tr-row-main is-row" type="button" data-exercise-id={exercise.id} onClick={onOpen}>
+        <span className="grow">
+          <span className="nm">{String(exercise.name)}</span>
+          <span className="sub">{hasTips ? `${group} · 有要點` : group}</span>
+        </span>
+        <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
+    </div>
   )
 }
 

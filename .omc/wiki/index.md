@@ -1,9 +1,10 @@
 # Wiki Index
 
-> 12 pages | Last updated: 2026-10-17T07:06:03.410Z
+> 15 pages | Last updated: 2026-10-19T14:30:26.188Z
 
 ## debugging
 
+- [lesson-sw-precache-size 預快取項數與新版 SW 卡 activating（2026-10-19）](lesson-sw-precache-size-sw-activating-2026-10-19.md) — # lesson-sw-precache-size 預快取項數與新版 SW 卡 activating（2026-10-19）
 - [open-failures 未解失敗與已結案別撿回](open-failures.md) — # open-failures 未解失敗與已結案別撿回
 - [verified-testing 已驗證事實：e2e 環境、mutation 檢查、量測與判讀](verified-testing-e2e-mutation.md) — # verified-testing 已驗證事實：e2e 環境、mutation 檢查、量測與判讀
 
@@ -28,3 +29,5 @@
 ## session-log
 
 - [phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）](phase2-round1-log-2-2026-10-13-14.md) — # phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）
+- [Session Log 2026-10-14](session-log-2026-10-14-66cbedf6.md) — # Session Log 2026-10-14
+- [Session Log 2026-10-19](session-log-2026-10-19-d5690309.md) — # Session Log 2026-10-19

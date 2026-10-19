@@ -4,6 +4,7 @@ import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row }
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
 const images = import.meta.glob<string>('../assets/exercises/*.webp', { eager: true, query: '?inline', import: 'default' })
+const large = import.meta.glob<string>('../assets/exercises-large/*.webp', { eager: true, query: '?inline', import: 'default' })
 const imageMap = Object.values(
   import.meta.glob<Record<string, string>>('../../scripts/exercise-images.json', { eager: true, import: 'default' }),
 )[0]
@@ -69,6 +70,22 @@ describe('示意圖檔案', () => {
     for (const [path, uri] of Object.entries(images)) {
       const { size, head } = inspect(uri)
       expect(size, fileKey(path)).toBeLessThanOrEqual(20 * 1024)
+      expect(head.slice(0, 4), fileKey(path)).toBe('RIFF')
+      expect(head.slice(8, 12), fileKey(path)).toBe('WEBP')
+    }
+  })
+
+  it('放大圖：每個動作都有起始姿勢（-0），收尾姿勢（-1）只能附在有 -0 的動作上；真 webp、每張 ≤ 45KB（離線 precache 的預算）', () => {
+    const keys = new Set(EXERCISE_CATALOG.map((p) => p.key))
+    const names = Object.keys(large).map(fileKey)
+    for (const k of keys) expect(names, k).toContain(`${k}-0`)
+    for (const n of names) {
+      expect(n, n).toMatch(/-[01]$/)
+      expect(keys.has(n.replace(/-[01]$/, '')), n).toBe(true)
+    }
+    for (const [path, uri] of Object.entries(large)) {
+      const { size, head } = inspect(uri)
+      expect(size, fileKey(path)).toBeLessThanOrEqual(45 * 1024)
       expect(head.slice(0, 4), fileKey(path)).toBe('RIFF')
       expect(head.slice(8, 12), fileKey(path)).toBe('WEBP')
     }

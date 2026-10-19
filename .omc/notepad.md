@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-19）：v2.73（逐組 60ms、統計格翻動、Flip 共用、動效 e2e 不靠逐幀）commit d0c638f＋review 修正已 stage 未 commit；未 push、真機未驗。push 前 review 已做（兩軸 0 blocking，已修）。vitest 651／e2e 242：241 過、1 紅＝tally.spec 今日頁 .undo-bar 偶發（基線也紅，不擋 push）；SW 那條紅過 1 次、原因未查。
-下一步：commit→「準備 push」確認→push；手機驗 v2.72／v2.73。待決見 MANUAL 2026-10-19。scratchpad 的基線 worktree ctl 待清。
+現況（2026-10-19）：v2.74 點動作縮圖放大已 commit、未 push（待使用者確認）；v2.73 已 push（352c306）。vitest 652、e2e 249 全過、lint／build 過；真機未驗 v2.72–v2.74。放大圖只有起始姿勢進 precache（311 項）；全進（460 項）SW 會卡 activating，見 MANUAL 2026-10-19。
+下一步：確認後 push；手機驗；體重趨勢圖（含體脂，spec 已核可未開工）。scratchpad 的 base／ctl worktree 待清（刪前列清單）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -77,6 +77,11 @@ D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking
 v2.73 push 前 review 後的待決與已知狀況（全文在 DESIGN.md v2.73「已知限制」）
 - **減少動態下 `.tr-check`／`.tr-val` 的顏色過渡要不要降到 0.01ms**：DESIGN「互動與動效」寫「全部降到 0.01ms」、spec AC 10 寫「位移與縮放改 ≤120ms 淡入淡出」，兩份文件互相不一致，需要裁決以哪份為準；收進 app.css 的 reduced-motion 清單會連帶動到「減少動態不錯開」那條 e2e（它讀 background-color 過渡的 delay）。`.tr-check` 是舊缺口，`.tr-val` 是本輪新加的 160ms 顏色過渡。
 - **`tally.spec.ts` 偶發紅（今日頁 `.undo-bar` 一族）**：基線 `ddb5292` 也會紅（單跑 10 次紅 2 次），使用者裁決先當已知偶發、不擋 push；原因未查。單跑重複的過濾字串用 `tally.spec`，寫 `tally` 會把整套跑進去。
-- **SW「新版 SW 裝好就接手」全量紅過 1 次**（停在 `activating`），單跑綠、原因未查；該 spec 不能用 `--repeat-each`。
+- **SW「新版 SW 裝好就接手」**：2026-10-19 查到與 precache 項數有關（全進 460 項單跑只過 3/6、基線與 311 項都穩），v2.74 已改成放大圖只預快取起始姿勢，詳見下方 v2.74 一節與 wiki `lesson-sw-precache-size`；根因仍未查。該 spec 不能用 `--repeat-each`。
 - **排序收合動畫**：2026-10-19 評估過，touch 起手有 250ms 按住可以做，但建議等真機看過再決定（沒有裁決）。
-- 本機 scratchpad 有基線 worktree `…\scratchpad\ctl`（指到 `ddb5292`、node_modules 是 junction）用完要清；**刪除前先列清單給使用者確認**。
+- 本機 scratchpad 有基線 worktree `…\scratchpad\ctl`（指到 `ddb5292`、node_modules 是 junction）用完要清；**刪除前先列清單給使用者確認**。另一個 `…\6f6a523b-…\scratchpad\base`（指到 `352c306`，2026-10-19 SW 對照用）同樣待清。
+### 2026-10-19 21:00
+v2.74 點動作縮圖放大（使用者提出，spec.md 沒寫；DESIGN v2.74 有全文）
+- [追加 2026-10-19] 點縮圖開放大檢視（起始＋收尾兩姿勢）；動作庫／加動作／訓練中卡片／課表編輯四處可點。放大圖 640 寬 299 張（`src/assets/exercises-large`，腳本 `build-exercise-images.mjs` 重產）。
+- **離線取捨（使用者 2026-10-19 裁決方案 1）**：只有起始姿勢進 precache（311 項／4.5MB），收尾姿勢離線看不到、檢視器自動藏起來。原因：放大圖全進 precache（460 項）時新版 SW 偶發卡在 activating。要把收尾姿勢也做成離線可看，得先查清 SW 卡住的根因。
+- **待辦**：①真機驗檢視器疊在加動作 sheet 上的手感與下滑關閉（巢狀 dialog 沒有自己的暗色背景層，已知）。②體重趨勢圖（含體脂）spec 已核可、未開工：折線＋7 天平均、30／90／全部、體脂另畫一張共用 X 軸與十字線、明細表。

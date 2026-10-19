@@ -35,19 +35,14 @@ export default function ExercisePicker({ open, exercises, onClose, onPick }: Exe
       ) : (
         <div className="tr-card">
           {list.map((e) => (
-            <button
-              key={e.id}
-              className="tr-row"
-              type="button"
-              data-exercise-id={e.id}
-              onClick={() => onPick(e.id)}
-            >
-              <ExerciseThumb exercise={e} />
-              <span className="grow">
+            // 縮圖是獨立的放大鈕，不能包在選取鈕裡：列拆成「縮圖｜主按鈕」並排
+            <div key={e.id} className="tr-row has-zoom">
+              <ExerciseThumb exercise={e} zoom />
+              <button className="tr-row-main" type="button" data-exercise-id={e.id} onClick={() => onPick(e.id)}>
                 <span className="nm">{String(e.name)}</span>
                 <span className="sub">{MUSCLE_GROUP_LABEL[e.muscle_group as MuscleGroup] ?? '其他'}</span>
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       )}

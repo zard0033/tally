@@ -65,7 +65,7 @@ function SortableRow({ item, index, label, onEdit, onRemove }: SortableRowProps)
           <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
         </svg>
       </button>
-      <ExerciseThumb exercise={item.exercise} />
+      <ExerciseThumb exercise={item.exercise} zoom />
       <button className="tr-row-main" type="button" aria-label={`${label}，改預設組次`} onClick={onEdit}>
         <span className="nm">{label}</span>
         <span className="sub">{formatRoutineTarget(entry)}</span>

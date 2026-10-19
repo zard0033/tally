@@ -695,7 +695,7 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
   await imgLoaded(pickRow.locator('img.ex-thumb'))
   await pickRow.click()
   await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
-  const cardImg = page.locator('.ex .ex-toggle img.ex-thumb')
+  const cardImg = page.locator('.ex .ex-head img.ex-thumb')
   await expect(cardImg).toHaveCount(1)
   await imgLoaded(cardImg)
 
@@ -708,7 +708,150 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
   }
   const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
   const precached = new Set(sw.match(/assets\/[\w-]+\.webp/g) ?? [])
-  expect(precached.size, 'service worker 的 precache 清單要列出 150 張動作圖').toBe(150)
+  // 150 縮圖＋150 放大圖的起始姿勢。收尾姿勢（-1）不進 precache：全進去（449 張）時新版 SW 會偶發卡在 activating，
+  // 見 vite.config.ts 的 globIgnores；這個數字同時鎖住「縮圖沒有被 -1 的樣式誤排除」
+  expect(precached.size, 'service worker 的 precache 清單：縮圖與放大圖的起始姿勢').toBe(300)})
+
+const viewer = (page: Page) => page.locator('[data-screen="exercise-viewer"]')
+
+test('動作示意圖放大：點動作庫的縮圖開檢視器（起始＋收尾兩張 640 寬），不會誤開編輯；Esc 關、焦點回縮圖；自建動作沒有放大鈕', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(library(page).locator('.tr-row', { hasText: '我的自建動作' }).locator('.ex-zoom')).toHaveCount(0)
+
+  const zoom = library(page).getByRole('button', { name: '放大腿推舉的示意圖' })
+  const box = (await zoom.boundingBox())!
+  expect(box.height, '觸控區 ≥ 44px').toBeGreaterThanOrEqual(44)
+  await zoom.click()
+  await expect(viewer(page)).toBeVisible()
+  await expect(editSheet(page), '點縮圖不該同時開編輯').toHaveCount(0)
+  await expect(viewer(page).getByRole('heading', { name: '腿推舉' })).toBeVisible()
+  await expect(viewer(page).locator('.ex-viewer-group'), '標題下一行是肌群').toHaveText('下半身')
+  const imgs = viewer(page).locator('img')
+  await expect(imgs).toHaveCount(2)
+  await expect(viewer(page).locator('figcaption')).toHaveText(['起始姿勢', '收尾姿勢'])
+  for (let i = 0; i < 2; i++) {
+    await expect.poll(() => imgs.nth(i).evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(640)
+    expect(await imgs.nth(i).getAttribute('alt')).toBe(`腿推舉・${i === 0 ? '起始' : '收尾'}姿勢`)
+  }
+  const first = (await imgs.nth(0).boundingBox())!
+  expect(first.width, '放大後明顯比縮圖（54px）大').toBeGreaterThan(300)
+
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(zoom).toBeFocused()
+})
+
+test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；關掉後 sheet 還在，點名稱才選取', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const picker = page.locator('[data-screen="exercise-picker"]')
+  await picker.getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await expect(page.locator('.ex'), '還沒選取任何動作').toHaveCount(0)
+  // 巢狀 sheet：Esc 只關最上面那張（檢視器），加動作 sheet 要留著
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(picker, 'Esc 不該連加動作 sheet 一起關掉').toHaveCount(1)
+  await picker.getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await viewer(page).getByRole('button', { name: '關閉' }).click()
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(picker).toHaveCount(1)
+  await picker.locator('[data-exercise-id]').filter({ has: page.getByText('腿推舉', { exact: true }) }).click()
+  await expect(picker).toHaveCount(0)
+  await expect(page.locator('.ex')).toHaveCount(1)
+})
+
+test('動作示意圖放大：上游兩張相同的動作（反握槓鈴划船）只顯示一張、沒有「起始／收尾」標籤', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '放大反握槓鈴划船的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await expect(viewer(page).locator('img')).toHaveCount(1)
+  await expect(viewer(page).locator('figcaption')).toHaveCount(0)
+  expect(await viewer(page).locator('img').getAttribute('alt')).toBe('反握槓鈴划船・起始姿勢')
+})
+
+test('動作示意圖放大：收尾姿勢載不到（離線不進 precache）就藏起來退成單張，下次開再試', async ({ page }) => {
+  await openSeededLibrary(page)
+  await page.route('**/assets/*-1-*.webp', (route) => route.abort())
+  const zoom = library(page).getByRole('button', { name: '放大腿推舉的示意圖' })
+  await zoom.click()
+  await expect(viewer(page)).toBeVisible()
+  const imgs = viewer(page).locator('img')
+  await expect(imgs, '收尾那張失敗後只剩起始姿勢，沒有破圖').toHaveCount(1)
+  expect(await imgs.getAttribute('alt')).toBe('腿推舉・起始姿勢')
+  await expect.poll(() => imgs.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(640)
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+
+  // 網路回來：再開一次，收尾姿勢重新出現
+  await page.unroute('**/assets/*-1-*.webp')
+  await zoom.click()
+  await expect(viewer(page).locator('img')).toHaveCount(2)
+  await expect(viewer(page).locator('figcaption')).toHaveText(['起始姿勢', '收尾姿勢'])
+})
+
+test('動作示意圖放大：除了縮圖本身，整列都還是主按鈕（左內距、自建動作的肌群單字點了照樣開編輯）', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+
+  // 預設動作：點縮圖左邊的內距（縮圖是放大鈕、這裡不是）
+  const legRow = library(page).locator('.tr-row').filter({ has: page.getByText('腿推舉', { exact: true }) })
+  await legRow.scrollIntoViewIfNeeded()
+  const row = (await legRow.boundingBox())!
+  await page.mouse.click(row.x + 6, row.y + row.height / 2)
+  await expect(editSheet(page)).toBeVisible()
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(editSheet(page).getByRole('textbox', { name: '名稱' })).toHaveValue('腿推舉')
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+
+  // 自建動作：肌群單字不是按鈕，點它要落在主按鈕上
+  const custom = library(page).locator('.tr-row', { hasText: '我的自建動作' })
+  await custom.scrollIntoViewIfNeeded()
+  const glyph = (await custom.locator('.ex-thumb.is-glyph').boundingBox())!
+  await page.mouse.click(glyph.x + glyph.width / 2, glyph.y + glyph.height / 2)
+  await expect(editSheet(page)).toBeVisible()
+  await expect(editSheet(page).getByRole('textbox', { name: '名稱' })).toHaveValue('我的自建動作')
+})
+
+test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，不會開「改預設組次」', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await newRoutine(page, '菜單 A')
+  await page.locator('[data-action="add-routine-exercise"]').click()
+  await page.locator('[data-screen="exercise-picker"] [data-exercise-id]').filter({ has: page.getByText('腿推舉', { exact: true }) }).click()
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  await editor(page).getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await expect(viewer(page).locator('img')).toHaveCount(2)
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(targetSheet(page), '點縮圖不該同時開「預設組次」').toHaveCount(0)
+})
+
+test('動作示意圖放大：訓練中卡片點縮圖只放大，卡片不收合', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await page.locator('[data-screen="exercise-picker"] [data-exercise-id]').filter({ has: page.getByText('腿推舉', { exact: true }) }).click()
+  const toggle = page.locator('.ex .ex-toggle')
+  const before = await toggle.getAttribute('aria-expanded')
+  await page.locator('.ex').getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(toggle).toHaveAttribute('aria-expanded', before!)
 })
 
 /** App 自己預填過的帳號長的樣子：16 個原始預設動作。id 是 uuid v5(namespace, `${user_id}:exercise:${key}`)，

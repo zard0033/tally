@@ -51,7 +51,7 @@ export default defineConfig({
        - injectRegister false：註冊由 src/registerSW.ts 自己呼叫，dev 與 e2e 不註冊。
        - manifest false：沿用 public/manifest.webmanifest。
        - 只 precache 同源外殼，沒有 runtime route，Supabase 請求不被攔。
-       - woff2 要列進來，否則離線掉字型；webp 是動作示意圖（150 張約 700KB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
+       - woff2 要列進來，否則離線掉字型；webp 是動作示意圖（縮圖 150 張約 700KB＋放大圖的起始姿勢 150 張約 2.6MB，離線健身房要看得到；收尾姿勢不進，原因見 globIgnores）；_probe 是拋棄式探針頁，不進快取。
        - reset.html（救援頁）要「不進 precache」**且**「列入 denylist」，缺一不可：不進 precache 才走
          網路；不在 denylist 的導覽會被 navigateFallback 吞成 App 首頁。
        - denylist 的比對對象是 pathname＋search，所以救援頁的規則允許帶 query、也允許無 .html 的網址
@@ -68,7 +68,10 @@ export default defineConfig({
           manifest: false,
           workbox: {
             globPatterns: ['**/*.{js,css,html,svg,png,webp,webmanifest,woff2}'],
-            globIgnores: ['_probe/**', 'reset.html'],
+            // 放大圖的收尾姿勢（`<key>-1-<hash>.webp`）不進 precache：全進去是 460 項／7.1MB，實測新版 SW 會偶發卡在
+            // activating（單跑 6 次只過 3 次，放寬到 60 秒也不出來）；只留起始姿勢是 311 項／4.5MB，單跑 5/5 過。
+            // 檢視器載不到收尾姿勢時自己藏起來（ExerciseViewer）。hash 固定 8 碼，縮圖的檔名不會撞上這個樣式（e2e 鎖數量）。
+            globIgnores: ['_probe/**', 'reset.html', 'assets/*-1-????????.webp'],
             navigateFallback: 'index.html',
             navigateFallbackDenylist: [/\/_probe\//, /\/reset(\.html)?(\?|$)/],
             ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^v$/],
@@ -81,7 +84,8 @@ export default defineConfig({
   build: {
     // 動作示意圖（src/assets/exercises，每張 3–11KB）一律不內嵌：Vite 預設把 < 4KB 的資產轉 base64 塞進 JS，
     // 150 張裡有 54 張會被吞進主 bundle（約 +240KB），還不會被當成獨立檔案 precache。其餘資產維持預設行為
-    assetsInlineLimit: (file) => (file.includes('/assets/exercises/') ? false : undefined),
+    // （放大圖 exercises-large 每張 4–40KB，最小的 pallof-press-1 只比 4096 位元組的門檻高約 230 位元組，所以也要列入）
+    assetsInlineLimit: (file) => (file.includes('/assets/exercises') ? false : undefined),
   },
   server: {
     port: 5500,

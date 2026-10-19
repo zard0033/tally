@@ -19,6 +19,7 @@ import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
 import { CASCADE_STEP_MS, DUR, SPRING_CARD, sec } from '@/lib/durations'
+import { catalogKey } from '@/lib/exerciseCatalog'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
@@ -186,6 +187,9 @@ function ExerciseCard(p: ExerciseCardProps) {
   const name = exercise ? String(exercise.name) : '（已刪除的動作）'
   const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
   const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
+  // 有照片的動作（目錄裡的預設動作，圖檔齊全由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；
+  // 沒照片的（自建、已刪除）肌群單字留在 ex-toggle 裡，點它仍是展開／收合，不留點不到的死區
+  const photo = exercise != null && catalogKey(exercise) !== null
   const open = p.open && !sorting
   const tipsOpen = p.tipsOpen
   const { ref, handleRef, isDragging } = useSortable({ id: entry.id, index, data: { name } })
@@ -219,8 +223,10 @@ function ExerciseCard(p: ExerciseCardProps) {
             <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
           </svg>
         </button>
+        {/* 縮圖是獨立的放大鈕，不能包在展開／收合的按鈕裡：與 ex-toggle 並排 */}
+        {photo ? <ExerciseThumb exercise={exercise} zoom /> : null}
         <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
-          <ExerciseThumb exercise={exercise} />
+          {photo ? null : <ExerciseThumb exercise={exercise} />}
           <span className="grow">
             <span className="nm">{name}</span>
             {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
