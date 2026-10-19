@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-17）：動作示意圖 150 個＋自動補預設動作（不用按鈕）＋SW 改為新版裝好就接手（推翻 spec AC 6）已 push。使用者手機原本停在好幾版之前（iOS 不關頁面，舊 SW 永遠不讓位）；這版 push 後會自己更新並重載一次。vitest 651；e2e 這輪只跑 service-worker／training／sync-sheet 93 條全過，全量沒重跑、沒 review（使用者要求）。
-下一步：確認手機已更新到新版（看到縮圖、全部完成雙勾、新增一組整列）；補跑全量 e2e；動效未做項（全部完成逐組 60ms、統計格翻動、排序收合動畫）；待決：中文名待確認清單、照片上游來源。
+現況（2026-10-19）：v2.72 已 push（動作示意圖 150 個＋自動補預設動作＋SW 新版裝好就接手）。基線已補：vitest 651／e2e 236 全過（10.9 分），「慢態有出口」這次綠但歷史上時紅時綠，不算已修。未做 push 前 review（使用者要求）。
+下一步：確認手機已更新到新版（看到縮圖、全部完成雙勾、新增一組整列）；動效未做項（全部完成逐組 60ms、統計格翻動、排序收合動畫）；待決：中文名待確認清單、照片上游來源。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
