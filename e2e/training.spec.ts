@@ -1619,17 +1619,54 @@ test('刪除一組：該列淡出並左移 12px 後離開；高度一併收掉',
 
   await swipeLeft(page, page.locator('.ex .swipe-row').nth(1), 70)
   await expect(page.locator('.ex .swipe-row').nth(1)).toHaveClass(/is-open/)
-  const sampling = sampleUntilGone(slots.nth(1))
+  // 不靠逐幀取樣：全量跑機器忙時 rAF 幀間隔會拖到 50–100ms，160ms 的動畫只取到幾幀，左移最深的那幀常常沒取到
+  // （2026-10-19 全量紅過一次：min x 只量到 -3.2，單跑 8 次全綠）。這裡量兩件與幀無關的事：
+  // ① opacity 走 Web Animations——攔 Element.animate 記下呼叫（目標、時長、屬性）；
+  // ② 位移與高度是 motion 每幀寫 inline style——MutationObserver 記每一次寫入，不管有沒有幀被 rAF 看到，
+  //    最後一次寫入（-12px／0px）一定在紀錄裡。
+  const watching = slots.nth(1).evaluate(
+    (n) =>
+      new Promise<{ anims: { props: string; ms: number }[]; xs: number[]; heights: number[]; gone: boolean }>((resolve) => {
+        const anims: { props: string; ms: number }[] = []
+        const xs: number[] = []
+        const heights: number[] = []
+        const native = Element.prototype.animate
+        Element.prototype.animate = function (this: Element, kf: Keyframe[] | PropertyIndexedKeyframes | null, opts?: number | KeyframeAnimationOptions) {
+          if (this === n) anims.push({ props: JSON.stringify(kf), ms: typeof opts === 'number' ? opts : Number(opts?.duration) })
+          return native.call(this, kf, opts)
+        }
+        const style = new MutationObserver(() => {
+          const el = n as HTMLElement
+          const x = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform)
+          if (x) xs.push(Number(x[1]))
+          const h = /^([\d.]+)px$/.exec(el.style.height)
+          if (h) heights.push(Number(h[1]))
+        })
+        style.observe(n, { attributes: true, attributeFilter: ['style'] })
+        const finish = (gone: boolean) => {
+          Element.prototype.animate = native
+          style.disconnect()
+          removal.disconnect()
+          resolve({ anims, xs, heights, gone })
+        }
+        const removal = new MutationObserver(() => {
+          if (!n.isConnected) finish(true)
+        })
+        removal.observe(n.parentElement!, { childList: true })
+        setTimeout(() => finish(!n.isConnected), 1500)
+      }),
+  )
   await page.getByRole('button', { name: '刪除第 2 組' }).click()
-  const { out, gone } = await sampling
+  const { anims, xs, heights, gone } = await watching
 
   expect(gone, '動畫結束後那一列離開 DOM').toBe(true)
-  expect(out.some((s) => s.o > 0.05 && s.o < 0.95), '淡出有過渡').toBe(true)
-  expect(Math.min(...out.map((s) => s.x)), '往左移（約 12px）').toBeLessThan(-4)
-  expect(Math.min(...out.map((s) => s.x)), '不超過 12px 太多').toBeGreaterThan(-13)
-  // 取樣在點擊之前就開始了，所以從「第一次開始變透明」量到離開 DOM
-  const start = out.find((s) => s.o < 0.99)!
-  expect(out.at(-1)!.t - start.t, '約 160ms 內收完').toBeLessThan(400)
+  const fade = anims.find((a) => a.props.includes('opacity'))
+  expect(fade, '淡出走 Web Animations，有 opacity').toBeTruthy()
+  expect(fade!.ms, '淡出 160ms（durations.ts 的 DUR.base）').toBe(160)
+  expect(Math.min(...xs), '往左移到 -12px').toBeLessThan(-11.9)
+  expect(Math.min(...xs), '不超過 12px').toBeGreaterThan(-12.1)
+  expect(Math.max(...heights), '高度從有值開始收').toBeGreaterThan(10)
+  expect(heights.at(-1), '高度最後收到 0').toBe(0)
   await expect(page.locator('.ex .set')).toHaveCount(1)
 })
 
@@ -1656,31 +1693,207 @@ test('新增與刪除一組：減少動態只剩淡入淡出，沒有位移', as
   expect(out.every((s) => s.x === 0 && s.y === 0), '刪除沒有位移').toBe(true)
 })
 
+/* ── 數字翻動（Flip）：不靠逐幀取樣 ──
+   全量跑機器忙時 rAF 幀間隔會拖到 50–100ms，120／160ms 的動畫只取到幾幀，「中間有過渡」常常沒取到
+   （2026-10-19：這條在乾淨 HEAD 單跑 8 次也紅 1 次）。改量與幀無關的三件事：
+   ① 掛上當下的 inline style（確定的起點）；② Element.animate 的呼叫（淡入走 Web Animations：屬性、時長、緩動）；
+   ③ 落定後的 computed 值。位移（translateY）是 motion 每幀寫 style，取不到中間值也不影響這三項。 */
+interface FlipRec {
+  text: string
+  initialStyle: string
+  anims: { props: string; ms: number; easing: string }[]
+  finalO: number
+  finalY: number
+}
+
+/** 從現在起記下每個新掛進 DOM、符合 selector 的 .flip。用 readFlips 取回。連續呼叫時舊的觀察器關掉、animate 的包裝不疊加。 */
+async function watchFlips(page: Page, selector = '.flip') {
+  await page.evaluate((sel) => {
+    type Rec = { el: HTMLElement; text: string; initialStyle: string; anims: FlipRec['anims'] }
+    const w = window as unknown as {
+      __flips: Rec[]
+      __flipObserver?: MutationObserver
+      __nativeAnimate?: typeof Element.prototype.animate
+    }
+    w.__flipObserver?.disconnect()
+    w.__flips = []
+    const native = (w.__nativeAnimate ??= Element.prototype.animate)
+    const recOf = (el: HTMLElement) => {
+      let r = w.__flips.find((x) => x.el === el)
+      if (!r) {
+        r = { el, text: '', initialStyle: '', anims: [] }
+        w.__flips.push(r)
+      }
+      return r
+    }
+    // animate 在 React commit 的 layout effect 裡就被呼叫，比 MutationObserver 的 microtask 早，所以兩邊各自 recOf
+    Element.prototype.animate = function (this: Element, kf: Keyframe[] | PropertyIndexedKeyframes | null, opts?: number | KeyframeAnimationOptions) {
+      if (this instanceof HTMLElement && this.matches(sel)) {
+        recOf(this).anims.push({
+          props: JSON.stringify(kf),
+          ms: typeof opts === 'number' ? opts : Number(opts?.duration),
+          easing: typeof opts === 'number' ? '' : String(opts?.easing ?? ''),
+        })
+      }
+      return native.call(this, kf, opts)
+    }
+    w.__flipObserver = new MutationObserver((muts) => {
+      for (const m of muts) {
+        for (const added of Array.from(m.addedNodes)) {
+          if (!(added instanceof HTMLElement)) continue
+          for (const n of [added, ...Array.from(added.querySelectorAll<HTMLElement>(sel))].filter((x) => x.matches(sel))) {
+            const r = recOf(n)
+            r.text = n.textContent ?? ''
+            r.initialStyle = n.getAttribute('style') ?? ''
+          }
+        }
+      }
+    })
+    w.__flipObserver.observe(document.body, { childList: true, subtree: true })
+  }, selector)
+}
+
+const readFlips = (page: Page): Promise<FlipRec[]> =>
+  page.evaluate(() =>
+    (window as unknown as { __flips: { el: HTMLElement; text: string; initialStyle: string; anims: FlipRec['anims'] }[] }).__flips.map((r) => {
+      const cs = getComputedStyle(r.el)
+      return { text: r.text, initialStyle: r.initialStyle, anims: r.anims, finalO: Number(cs.opacity), finalY: new DOMMatrix(cs.transform).m42 }
+    }),
+  )
+
+/** 一個翻動過的 .flip 該有的樣子：起點透明且在下方 35%、淡入走 Web Animations（ms、ease-out）、落定後不透明且歸位。 */
+function expectFlipped(f: FlipRec, ms: number) {
+  expect(f.initialStyle, '一掛上就是透明').toContain('opacity: 0')
+  expect(f.initialStyle, '一掛上就在下方 35%').toContain('translateY(35%)')
+  const fade = f.anims.find((a) => a.props.includes('opacity'))
+  expect(fade, '淡入走 Web Animations，有 opacity').toBeTruthy()
+  expect(fade!.ms, `淡入 ${ms}ms`).toBe(ms)
+  expect(fade!.easing).toBe('ease-out')
+  expect(f.finalO, '落定後不透明').toBe(1)
+  expect(Math.abs(f.finalY), '落定後歸位').toBeLessThan(0.5)
+}
+
 test('組編輯 sheet 的 ± 數字翻動：變動時下移 35% 淡入，開 sheet 時不翻', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
   await addExercise(page, '腿推舉')
-  await watchAdded(page, '.flip')
+  await watchFlips(page)
   await openSetSheet(page, 0)
   await page.waitForTimeout(400)
-  const opening = await readSeries(page)
+  const opening = await readFlips(page)
   expect(opening.length, '重量與次數各一個數字').toBe(2)
-  for (const s of opening) expect(s[0].o, '開 sheet 時數字一出現就是不透明、不翻').toBe(1)
+  for (const f of opening) {
+    expect(f.anims, '開 sheet 時不翻').toHaveLength(0)
+    expect(f.initialStyle, '一出現就是不透明').not.toContain('opacity: 0')
+  }
 
-  await watchAdded(page, '.flip')
+  await watchFlips(page)
   await setSheet(page).getByRole('button', { name: '重量加 2.5 公斤' }).click()
   await expect(page.locator('.ex .set').first().locator('.w')).toHaveText('62.5')
+  await page.waitForTimeout(500)
+  const flips = await readFlips(page)
+  expect(flips, '只有被改的那個數字翻').toHaveLength(1)
+  expect(flips[0].text).toBe('62.5')
+  expectFlipped(flips[0], 120)
+})
+
+/** 等每一組的打勾圈都開始背景色過渡（最多 1.5 秒），回傳各組那條過渡的 delay（ms，照畫面由上到下）與當時有幾列掛著 .is-cascade。
+ *  讀 getAnimations() 的 delay 而不是逐幀量「第一次變色的時間」：後者吃幀時間，全量跑機器忙、一幀拖過 60ms 時
+ *  相鄰兩組會在同一幀才被看到，量出間隔 0（2026-10-19 全量紅過一次，單跑都綠）。先 await 這個 promise 之前就要觸發動作。 */
+const readCheckDelays = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<{ delays: number[]; cascadeRows: number }>((resolve) => {
+        const checks = Array.from(document.querySelectorAll<HTMLElement>('.ex .set .tr-check'))
+        const t0 = performance.now()
+        const tick = () => {
+          const delays = checks.map((c) => {
+            const tr = c
+              .getAnimations()
+              .find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
+            return tr ? Number(tr.effect?.getTiming().delay ?? 0) : null
+          })
+          if (delays.every((d) => d !== null) || performance.now() - t0 > 1500) {
+            resolve({
+              delays: delays.map((d) => d ?? -1),
+              cascadeRows: document.querySelectorAll('.ex .set.is-cascade').length,
+            })
+          } else requestAnimationFrame(tick)
+        }
+        tick()
+      }),
+  )
+
+async function openThreeSets(page: Page) {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await page.locator('.ex').first().getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+  await page.waitForTimeout(400) // 新列進場跑完，免得取樣掃到它的淡入
+}
+
+test('全部完成：按下當下狀態就換，畫面由上往下逐組換色、每組晚約 60ms', async ({ page }) => {
+  await openThreeSets(page)
+  const all = page.locator('.ex').getByRole('button', { name: '全部完成', exact: true })
+  const reading = readCheckDelays(page)
+  await all.click()
+  await expect(page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(stat(page, 'sets')).toHaveText('3/3')
+  const { delays, cascadeRows } = await reading
+
+  expect(delays, '三組的打勾圈依序晚 0／60／120ms 開始換色').toEqual([0, 60, 120])
+  expect(cascadeRows, '被換的三列掛著逐組延遲的 class').toBe(3)
+  await expect(page.locator('.ex .set.is-cascade'), '一輪跑完後 class 收掉').toHaveCount(0)
+})
+
+test('全部完成：減少動態不逐組錯開，三組同時換色', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openThreeSets(page)
+  const reading = readCheckDelays(page)
+  await page.locator('.ex').getByRole('button', { name: '全部完成', exact: true }).click()
+  const { delays, cascadeRows } = await reading
+  expect(delays, '三組同時換，沒有錯開').toEqual([0, 0, 0])
+  expect(cascadeRows, '不掛逐組延遲的 class').toBe(0)
+})
+
+test('全部完成：逐組進行中再按一次，從當前畫面狀態接續，最後全部回到未完成', async ({ page }) => {
+  await openThreeSets(page)
+  const undone = await page.locator('.ex .set .tr-check').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
+  await page.locator('.ex').getByRole('button', { name: '全部完成', exact: true }).click()
+  await page.waitForTimeout(80) // 第一輪才跑到一半
+  await page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true }).click()
+  await expect(stat(page, 'sets')).toHaveText('0/3')
+  await page.waitForTimeout(900)
+  const settled = await page.locator('.ex .set .tr-check').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
+  expect(settled, '每一組都回到未完成的顏色，沒有卡在中途').toEqual(undone)
+  await expect(page.locator('.ex .set.is-cascade')).toHaveCount(0)
+})
+
+test('統計格數字：訓練量與完成組數變動時翻一下（160ms），開頁時不翻', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
   await page.waitForTimeout(400)
-  const [flip, ...rest] = await readSeries(page)
-  expect(rest, '只有被改的那個數字翻').toHaveLength(0)
-  expect(flip[0].o, '一開始是透明').toBeLessThan(0.3)
-  expect(flip[0].y, '一開始在下方（約數字高度的 35%）').toBeGreaterThan(3)
-  expect(flip.some((s) => s.o > 0.3 && s.o < 0.95), '中間有過渡').toBe(true)
-  const last = flip.at(-1)!
-  expect(last.o).toBe(1)
-  expect(Math.abs(last.y)).toBeLessThan(0.5)
-  expect(last.t, '120ms 級的短動畫，不是拖長的').toBeGreaterThan(100)
+
+  await watchFlips(page, '.tr-stats .flip')
+  await tick(page, 0)
+  await expect(stat(page, 'sets')).toHaveText('1/2')
+  await page.waitForTimeout(500)
+  const flips = await readFlips(page)
+  expect(flips, '訓練量與完成組數各翻一次，時長（跳秒）不翻').toHaveLength(2)
+  const texts = flips.map((f) => f.text)
+  expect(texts, '完成組數翻成 1/2').toContain('1/2')
+  expect(texts.find((t) => t !== '1/2'), '訓練量翻成一個大於 0 的數字').toMatch(/^[1-9][\d,]*$/)
+  for (const f of flips) expectFlipped(f, 160)
+
+  // 計時器跳秒不翻：量一段時間，時長那格沒有任何新的 .flip
+  await watchFlips(page, '[data-stat="time"] .flip')
+  await page.waitForTimeout(2200)
+  expect(await readFlips(page)).toHaveLength(0)
 })
 
 test('全部完成：欄頭雙勾一次打勾所有未完成的組；全勾時再按全部取消；狀態由各組推出', async ({ page }) => {

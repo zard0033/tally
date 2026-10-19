@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-19）：v2.72 已 push（動作示意圖 150 個＋自動補預設動作＋SW 新版裝好就接手）。基線已補：vitest 651／e2e 236 全過（10.9 分），「慢態有出口」這次綠但歷史上時紅時綠，不算已修。未做 push 前 review（使用者要求）。
-下一步：確認手機已更新到新版（看到縮圖、全部完成雙勾、新增一組整列）；動效未做項（全部完成逐組 60ms、統計格翻動、排序收合動畫）；待決：中文名待確認清單、照片上游來源。
+現況（2026-10-19）：v2.73 本機完成、未 push／未 review／真機未驗：全部完成逐組 60ms、統計格翻動 160ms、Flip 抽共用元件、動效 e2e 改不靠逐幀取樣（機器忙時幀間隔 40–100ms 會假紅）。vitest 651／e2e 240 全過（11.6 分）。SW「新版裝好就接手」全量紅過 1 次、單跑綠、原因未查（該 spec 別用 --repeat-each）。
+下一步：確認手機已是 v2.72（縮圖、雙勾、新增一組整列）；動效只剩排序收合動畫；待決：中文名清單、照片上游來源。push 前走 gate。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

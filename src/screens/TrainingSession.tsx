@@ -6,7 +6,7 @@
    ⓘ 要點（點了在卡片內展開面板）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群。
    欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Menu } from '@base-ui/react/menu'
 import { DragDropProvider } from '@dnd-kit/react'
@@ -14,10 +14,11 @@ import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseThumb from '@/components/ExerciseThumb'
+import Flip from '@/components/Flip'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
-import { DUR, SPRING_CARD, sec } from '@/lib/durations'
+import { CASCADE_STEP_MS, DUR, SPRING_CARD, sec } from '@/lib/durations'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
@@ -110,22 +111,27 @@ interface SetRowProps {
   swipeOpen: boolean
   /** 同步剩餘組數剛改到這一列：它在被改的列裡排第幾個（淡綠閃一下，依序錯開）；沒被改＝null。 */
   flashIndex: number | null
+  /** 全部完成剛換了這一列：它在被換的列裡排第幾個（打勾的顏色變化依序延後）；沒被換＝null。 */
+  cascadeIndex: number | null
   onSwipe: (open: boolean) => void
   onEdit: (opener: HTMLElement) => void
   onToggle: () => void
   onDelete: () => void
 }
 
-function SetRow({ set, no, canDelete, swipeOpen, flashIndex, onSwipe, onEdit, onToggle, onDelete }: SetRowProps) {
+function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwipe, onEdit, onToggle, onDelete }: SetRowProps) {
   const weight = Number(set.weight_kg)
   const reps = Number(set.reps)
   const done = set.done === true
+  const rowStyle: CSSProperties = {}
+  if (flashIndex !== null) rowStyle.animationDelay = `${flashIndex * 50}ms`
+  if (cascadeIndex !== null) (rowStyle as Record<string, string>)['--cascade-delay'] = `${cascadeIndex * CASCADE_STEP_MS}ms`
   return (
     <SwipeDelete open={swipeOpen} onOpenChange={onSwipe} onDelete={onDelete} deleteLabel={`刪除第 ${no} 組`} disabled={!canDelete}>
       <div
-        className={`set${done ? ' done' : ''}${flashIndex !== null ? ' is-synced' : ''}`}
+        className={`set${done ? ' done' : ''}${flashIndex !== null ? ' is-synced' : ''}${cascadeIndex !== null ? ' is-cascade' : ''}`}
         data-set-id={set.id}
-        style={flashIndex !== null ? { animationDelay: `${flashIndex * 50}ms` } : undefined}
+        style={rowStyle}
       >
         <span className="no">{no}</span>
         <button
@@ -160,6 +166,7 @@ interface ExerciseCardProps {
   sorting: boolean
   swipeId: string | null
   flash: readonly string[]
+  cascade: readonly string[]
   onToggleOpen: () => void
   onToggleTips: () => void
   onEditTips: () => void
@@ -323,6 +330,7 @@ function ExerciseCard(p: ExerciseCardProps) {
                         canDelete={sets.length > 1}
                         swipeOpen={p.swipeId === s.id}
                         flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
+                        cascadeIndex={p.cascade.includes(s.id) ? p.cascade.indexOf(s.id) : null}
                         onSwipe={(o) => p.onSwipe(s.id, o)}
                         onEdit={(opener) => p.onEditSet(s.id, opener)}
                         onToggle={() => p.onToggleSet(s)}
@@ -370,6 +378,9 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [askRemove, setAskRemove] = useState<string | null>(null)
   const [flash, setFlash] = useState<readonly string[]>([])
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reduced = useReducedMotion()
+  const [cascade, setCascade] = useState<readonly string[]>([])
+  const cascadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sorting, setSorting] = useState(false)
   // 放下後到寫入完成之間的顯示順序（entry id）；null＝照資料的順序
   const [pending, setPending] = useState<string[] | null>(null)
@@ -380,6 +391,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   useEffect(
     () => () => {
       if (flashTimer.current) clearTimeout(flashTimer.current)
+      if (cascadeTimer.current) clearTimeout(cascadeTimer.current)
     },
     [],
   )
@@ -459,6 +471,19 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     flashTimer.current = setTimeout(() => setFlash([]), 700 + ids.length * 50)
   }
 
+  // 全部完成：資料一次寫入，畫面由上往下逐組換（每組錯開 CASCADE_STEP_MS）。class 要在資料換狀態之前就掛上
+  // （transition-delay 在樣式變動當下才取值），所以先 set、再寫入。進行中再按：新的一輪從當前畫面狀態接續。
+  // 減少動態不逐組錯開，全部同時換。
+  const toggleAll = (entryId: string) => {
+    const ops = toggleAllDoneOps(detail, entryId)
+    if (!reduced && ops.length > 1) {
+      if (cascadeTimer.current) clearTimeout(cascadeTimer.current)
+      setCascade(ops.map((o) => o.rowId))
+      cascadeTimer.current = setTimeout(() => setCascade([]), DUR.base + 200 + ops.length * CASCADE_STEP_MS)
+    }
+    void run(ops)
+  }
+
   const finishLines: FinishLine[] = exercises.map(({ exercise, sets }) => ({
     name: exercise ? String(exercise.name) : '（已刪除的動作）',
     text: sets
@@ -501,13 +526,13 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         </div>
         <div className="tr-stat">
           <span className="v" data-stat="volume">
-            {summary.volume.toLocaleString('en-US')}
+            <Flip text={summary.volume.toLocaleString('en-US')} ms={DUR.base} />
           </span>
           <span className="l">訓練量 kg</span>
         </div>
         <div className="tr-stat">
           <span className="v" data-stat="sets">
-            {summary.doneSets}/{summary.totalSets}
+            <Flip text={`${summary.doneSets}/${summary.totalSets}`} ms={DUR.base} />
           </span>
           <span className="l">完成組數</span>
         </div>
@@ -545,6 +570,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 sorting={sorting}
                 swipeId={swipeId}
                 flash={flash}
+                cascade={cascade}
                 onToggleOpen={() => {
                   setOpenEx(openEx === item.entry.id ? null : item.entry.id)
                   setSwipeId(null)
@@ -563,7 +589,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   setTipsOpen(true)
                 }}
                 onRemove={() => askRemoveExercise(item)}
-                onToggleAll={() => void run(toggleAllDoneOps(detail, item.entry.id))}
+                onToggleAll={() => toggleAll(item.entry.id)}
                 onAddSet={() => void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))}
                 onSwipe={(setId, o) => setSwipeId(o ? setId : swipeId === setId ? null : swipeId)}
                 onEditSet={(setId, opener) => {

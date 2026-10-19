@@ -7,11 +7,11 @@
    底部一列左右並排：🗑 刪除（最左）｜同步剩餘 N 組｜完成。
    走 SpringSheet（含輸入欄位，守 `--kb`／`--vvtop`）。目標與開關分開（呼叫端），關閉動畫期間內容不能消失，
    所以這裡留一份最後一次算得出來的畫面（刪掉這一組後，目標在資料裡已經找不到）。 */
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import Flip from '@/components/Flip'
 import SpringSheet from '@/components/SpringSheet'
-import { NUMBER_FLIP_MS, sec } from '@/lib/durations'
+import { NUMBER_FLIP_MS } from '@/lib/durations'
 import {
   MUSCLE_GROUP_LABEL,
   formatKg,
@@ -83,27 +83,6 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
     last: lastCompletedSets(db, String(ex.entry.exercise_id), detail.workout.id),
     remaining: remainingSetsAfter(detail, target.setId).length,
   }
-}
-
-/** 數字變動時翻一下（spec 動效表：下移 35%→歸位、淡入，120ms ease-out）。靠 key 隨文字重掛；第一次出現不動
- *  （開 sheet 時不該每個數字都翻一次）。減少動態只留淡入。 */
-function Flip({ text }: { text: string }) {
-  const reduced = useReducedMotion()
-  const seen = useRef(false)
-  useEffect(() => {
-    seen.current = true
-  }, [])
-  return (
-    <motion.span
-      key={text}
-      className="flip"
-      initial={seen.current ? (reduced ? { opacity: 0 } : { y: '35%', opacity: 0 }) : false}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: sec(NUMBER_FLIP_MS), ease: 'easeOut' }}
-    >
-      {text}
-    </motion.span>
-  )
 }
 
 /** 一個數字：平常是大數字鈕，點了才變成輸入框（叫鍵盤）。失焦或 Enter 寫入；Esc 或不合法就放回原值。 */
@@ -178,7 +157,7 @@ function BigNumber({
         setEditing(true)
       }}
     >
-      <Flip text={text} />
+      <Flip text={text} ms={NUMBER_FLIP_MS} />
     </button>
   )
 }
