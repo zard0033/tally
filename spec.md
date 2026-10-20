@@ -769,7 +769,7 @@ RPE；GIF 與動作圖庫；組間計時器；課表的週期排程；1RM 與趨
 - **大標題與飲食／訓練的日期標題**：兩頁根頁頂部已是日期標題，我解讀為不加 large title；使用者若想三頁統一，要另外設計日期元件與 large title 的關係。
 - **改動面積大**：`Today.tsx` 934 行、`LogSheet.tsx` 673 行、`app.css` 1483 行；每批只動該批範圍。
 
-### 階段 3 甲：組間休息計時器（2026-10-20 起草，**★ 待核可**；核可前不動碼）
+### 階段 3 甲：組間休息計時器（2026-10-20 起草；**使用者同日核可（預設 90 秒、要提示音、全部完成不啟動）並已實作＝v2.79**，與下面「要改的檔」不同處：測試在獨立的 `e2e/rest-timer.spec.ts`，另新增 `src/components/useRestTimer.ts`、`scripts/build-rest-chime.mjs`、`src/assets/rest-chime.wav`）
 
 **範圍（使用者 2026-10-20 選定）**：畫面內倒數＋回前景補算。**不做鎖屏通知**：網頁在 iOS 鎖屏或切到背景時 JS 會被暫停，沒有「排程本機通知」的網頁 API，要鎖屏會響只剩伺服器推 Web Push（Edge Function＋VAPID 金鑰＋訂閱表，屬 schema＋secret 影響面，要另案）。iOS Safari 也沒有 `navigator.vibrate`。以上來自社群回報與 WebKit bug 單，**沒找到 iOS 26／27 的官方確認**，真機要驗。
 

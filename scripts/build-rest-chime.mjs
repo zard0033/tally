@@ -1,6 +1,6 @@
 /* 組間休息計時器的提示音（一次性，產物已進 repo；要改音再重跑）。
    自己合成的兩聲短促正弦波（880Hz → 1175Hz，各 130ms，指數衰減），沒有任何外部素材，所以沒有授權或致謝問題。
-   產出 `src/assets/rest-chime.wav`：單聲道 16-bit 22.05kHz，約 13KB，進 precache（離線健身房也響）。
+   產出 `src/assets/rest-chime.wav`：單聲道 16-bit 22.05kHz，約 15KB，進 precache（離線健身房也響）。
    用法：node scripts/build-rest-chime.mjs */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

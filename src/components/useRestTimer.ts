@@ -115,7 +115,7 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
 
   // 倒數中才重畫；回前景時立刻重算一次（interval 在背景被暫停時，數字靠這一下追上）
   useEffect(() => {
-    if (endAt === null) return
+    if (!enabled || endAt === null) return
     const tick = () => setNow(Date.now())
     tick()
     const t = setInterval(tick, 250)
@@ -124,11 +124,12 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
       clearInterval(t)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [endAt])
+  }, [enabled, endAt])
 
   // 歸零：準時看著（前景、超時不到 REST_ON_TIME_MS）才響、才自動收起；回前景時已經過了好一陣子就只顯示已過多久
   useEffect(() => {
-    if (endAt === null || remainingMs(endAt, now) > 0) return
+    // enabled 變 false（訓練在畫面還掛著時被結束）：不響，也不再讀已隱藏的 endAt
+    if (!enabled || endAt === null || remainingMs(endAt, now) > 0) return
     if (alerted.current !== endAt) {
       alerted.current = endAt
       onTime.current = document.visibilityState === 'visible' && firedOnTime(endAt, now)
@@ -140,7 +141,7 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
       }
     }
     if (onTime.current && now - endAt >= REST_AUTO_HIDE_MS) commit(null, now)
-  }, [endAt, now, commit])
+  }, [enabled, endAt, now, commit])
 
   return { endAt: enabled ? endAt : null, now, preset, start, adjust, skip, cyclePreset }
 }

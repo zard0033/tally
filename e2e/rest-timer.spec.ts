@@ -70,13 +70,16 @@ async function openTraining(page: Page) {
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
 }
 
-/** 進行中的訓練整頁（fixture 的 w-live）。 */
-async function openLive(page: Page) {
+/** 進行中的訓練整頁（fixture 的 w-live）。
+ *  `freeze`（預設開）：把 `Date.now` 定在目前這一刻，之後只在 `jump` 時才動——倒數的數字是 `ceil(剩餘)`，時間照流動的話，
+ *  機器一忙（全量與別的 spec 同時跑時實測過），勾組到斷言之間多過 1 秒，`1:15` 就變成 `1:14`，斷言只會越等越錯。 */
+async function openLive(page: Page, freeze = true) {
   await openApp(page, {}, LIVE)
   await openTraining(page)
   await page.locator('.tr-row[data-workout-id="w-live"]').click()
   await expect(page.locator('[data-screen="training-session"]')).toBeVisible()
   await expect(page.locator('.ex .set')).toHaveCount(3)
+  if (freeze) await jump(page, 0)
 }
 
 test('單點把一組勾成完成才開始倒數：預設 1:30；略過收起；取消勾、全部完成都不開始', async ({ page }) => {
@@ -239,7 +242,7 @@ test('歸零且畫面在前景：響一聲（第一次勾組那下先無聲解�
 
 test('回前景（visibilitychange）立刻重算：計時器全凍結時只靠這個事件，數字仍追上', async ({ page }) => {
   await prepare(page)
-  await openLive(page)
+  await openLive(page, false) // 這條自己用 pauseAt／setFixedTime 控時間，不先定住
   await tick(page, 0)
   await expect(barText(page)).toHaveText('1:30')
   // 凍結所有計時器（等於 JS 被暫停），再把「現在」直接改成 30 秒後

@@ -29,7 +29,8 @@ export function remainingMs(endAt: number, now: number): number {
 }
 
 /** −15／＋15 秒。以「現在起還剩多久」夾在 0～REST_MAX_MS：加到超過上限就停在上限；減到 0 以下就是結束（剩 0）。
- *  已經超時（剩餘為負）時當成剩 0 再加減，所以超時後按＋15 是重新倒數 15 秒。 */
+ *  已經超時（剩餘為負）時當成剩 0 再加減（超時後按＋15 是重新倒數 15 秒）。畫面的超時狀態目前沒有 ±15 鈕，
+ *  所以這是安全的退路，不是使用者走得到的路徑。 */
 export function adjustEnd(endAt: number, deltaSec: number, now: number): number {
   const remaining = Math.max(0, endAt - now) + deltaSec * 1000
   return now + Math.min(REST_MAX_MS, Math.max(0, remaining))
