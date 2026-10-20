@@ -72,7 +72,7 @@ export function trendPoints(rows: TrendRow[], range: TrendRange, today: string):
 }
 
 /** X 軸範圍：固定範圍＝[起點, 今天]，圖的右緣永遠是今天；全部＝[第一筆, 今天]。沒有資料回 null。 */
-export function xDomain(points: TrendPoint[], range: TrendRange, today: string): [number, number] | null {
+export function xDomain(points: readonly { t: number }[], range: TrendRange, today: string): [number, number] | null {
   if (points.length === 0) return null
   const end = Math.max(dayIndex(today), points[points.length - 1].t)
   const from = rangeStart(range, today)

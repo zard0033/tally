@@ -8,9 +8,10 @@
  * 進行中的整頁（TrainingSession）與動作庫（ExerciseLibrary）接管整個畫面，並通知 App 把底部列收起來
  * （同設定的次級頁面）。 */
 
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
 import { localDate, monthDay, weekdayDate } from '@/lib/dates'
+import { progressList } from '@/lib/strength'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import {
   cardioLabel,
@@ -35,6 +36,8 @@ import RoutineNameSheet from './RoutineNameSheet'
 import StartSheet from './StartSheet'
 import SyncSheet from './SyncSheet'
 import TrainingSession from './TrainingSession'
+
+const Analysis = lazy(() => import('./Analysis')) // recharts 不進主 bundle
 
 interface TrainingProps {
   view: TrainingView | null
@@ -130,6 +133,7 @@ export default function Training({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [syncOpen, setSyncOpen] = useState(false)
   const [library, setLibrary] = useState(false)
+  const [analysis, setAnalysis] = useState(false)
   const [routineId, setRoutineId] = useState<string | null>(null)
   const [nameOpen, setNameOpen] = useState(false)
   const [startBusy, setStartBusy] = useState(false)
@@ -151,7 +155,9 @@ export default function Training({
   const detail = view && sessionId ? workoutDetail(view.db, sessionId) : null
   const routines = useMemo(() => (view ? routineList(view.db) : { active: [], archived: [] }), [view])
   const editing = view && routineId ? routineDetail(view.db, routineId) : null
-  const full = detail !== null || library || editing !== null
+  const full = detail !== null || library || analysis || editing !== null
+  // 訓練中整頁開著時每記一組 view 就變一次，列表又看不到入口：整頁開著就不算
+  const analysed = useMemo(() => (view && !full ? progressList(view.db).length : 0), [view, full])
 
   useEffect(() => {
     onFullPage(full)
@@ -215,6 +221,29 @@ export default function Training({
 
   if (library && view) {
     return <ExerciseLibrary exercises={view.db.exercises} onBack={() => setLibrary(false)} onWrite={onWrite} />
+  }
+
+  if (analysis && view) {
+    return (
+      // 第一次進來要先載 recharts 的 chunk：fallback 畫出同樣的頂列與骨架，版面不從空白跳出來
+      <Suspense
+        fallback={
+          <div className="main" data-screen="analysis">
+            <div className="lib-topbar">
+              <button className="icon-btn" type="button" aria-label="返回訓練" onClick={() => setAnalysis(false)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
+              <h1>訓練分析</h1>
+            </div>
+            <div className="trend-scroll">
+              <div className="trend-skel" aria-busy="true" aria-label="載入中" />
+            </div>
+          </div>
+        }
+      >
+        <Analysis db={view.db} onBack={() => setAnalysis(false)} />
+      </Suspense>
+    )
   }
 
   const inProgress = cards.filter((c) => c.inProgress)
@@ -337,6 +366,19 @@ export default function Training({
                 <span className="sub">
                   {view.db.exercises.filter((e) => e.archived !== true).length} 個動作 · 搜尋、編輯要點
                 </span>
+              </span>
+              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+            <button className="tr-row" type="button" data-action="open-analysis" onClick={() => setAnalysis(true)}>
+              <svg className="lead" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 19h16" />
+                <path d="M5 15l4-5 4 3 6-8" />
+              </svg>
+              <span className="grow">
+                <span className="nm">訓練分析</span>
+                <span className="sub">{analysed > 0 ? `${analysed} 個動作有進度 · 估算 1RM` : '還沒有可估算的紀錄'}</span>
               </span>
               <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 6l6 6-6 6" />

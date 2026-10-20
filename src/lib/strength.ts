@@ -1,5 +1,6 @@
 /* 訓練分析 A（spec.md「階段 4 甲」）的純運算：e1RM 與單一動作的歷次進度。
    不沾 DOM；吃的是已疊上離線佇列的 TrainingDb，所以離線剛記完的訓練也算。 */
+import { dayIndex, rangeStart, type TrendRange } from './weightTrend'
 import type { Row, TrainingDb } from './training'
 
 /** 只信 10 下以內：次數越高 Epley 估得越不準。 */
@@ -50,7 +51,8 @@ export function strengthHistory(db: TrainingDb, exerciseId: string): StrengthPoi
     const est = e1rm(weight_kg, reps)
     if (est === null) continue
     const cur = best.get(workoutId)
-    if (!cur || est > cur.e1rm) best.set(workoutId, { e1rm: est, weight_kg, reps })
+    // e1RM 四捨五入後相同時取較重的一組（60×10 與 75×2 都是 80.0），不讓結果取決於資料列順序
+    if (!cur || est > cur.e1rm || (est === cur.e1rm && weight_kg > cur.weight_kg)) best.set(workoutId, { e1rm: est, weight_kg, reps })
   }
 
   return [...best]
@@ -97,3 +99,15 @@ export function progressList(db: TrainingDb): ProgressListItem[] {
   }
   return items.sort((a, b) => b.lastDate.localeCompare(a.lastDate) || a.name.localeCompare(b.name))
 }
+
+export interface ChartPoint extends StrengthPoint {
+  /** 自 1970-01-01 起算的天數（同體重趨勢：X 軸用數字軸，沒練的日子留白） */
+  readonly t: number
+}
+
+/** 範圍切片＋補上 X 軸座標。範圍起點（含）同體重趨勢：「30 天」＝今天加前 29 天；全部不設下界。 */
+export function chartPoints(points: readonly StrengthPoint[], range: TrendRange, today: string): ChartPoint[] {
+  const from = rangeStart(range, today)
+  return points.filter((p) => from === null || p.date >= from).map((p) => ({ ...p, t: dayIndex(p.date) }))
+}
+

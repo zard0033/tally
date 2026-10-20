@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bestE1rm, e1rm, progressList, strengthHistory } from './strength'
+import { bestE1rm, chartPoints, e1rm, progressList, strengthHistory, type StrengthPoint } from './strength'
 import { emptyTrainingDb, type Row, type TrainingDb, type TrainingTable } from './training'
 
 const db = (p: Partial<Record<TrainingTable, readonly Row[]>> = {}): TrainingDb => ({ ...emptyTrainingDb(), ...p })
@@ -49,6 +49,18 @@ describe('strengthHistory', () => {
     expect(strengthHistory(d, 'sq')).toEqual([
       { workoutId: 'w1', date: '2026-10-10', e1rm: 81.7, topSet: { weight_kg: 70, reps: 5 } },
     ])
+  })
+
+  it('e1RM 相同時 topSet 取較重的一組，與資料列順序無關（60×10 與 75×2 都是 80.0）', () => {
+    const mk = (a: Row, b: Row) =>
+      db({ workouts: [workout('w1', '2026-10-10')], workout_exercises: [entry('e1', 'w1', 'sq')], workout_sets: [a, b] })
+    const light = set('s1', 'e1', 60, 10) // 60 × 40/30 = 80
+    const heavy = set('s2', 'e1', 75, 2) // 75 × 32/30 = 80
+    for (const d of [mk(light, heavy), mk(heavy, light)]) {
+      const p = strengthHistory(d, 'sq')[0]
+      expect(p.e1rm).toBe(80)
+      expect(p.topSet).toEqual({ weight_kg: 75, reps: 2 })
+    }
   })
 
   it('只算已打勾的組；整次沒有有效組的訓練不出點', () => {
@@ -133,5 +145,25 @@ describe('progressList', () => {
     })
     expect(list.find((i) => i.exerciseId === 'pu')).toBeUndefined()
     expect(list[2].exerciseId).toBe('sq')
+  })
+})
+
+describe('chartPoints', () => {
+  const pt = (date: string): StrengthPoint => ({ workoutId: date, date, e1rm: 80, topSet: { weight_kg: 60, reps: 10 } })
+  const pts = [pt('2026-09-20'), pt('2026-09-21'), pt('2026-10-20')]
+
+  it('30 天＝今天加前 29 天：9/21 在內、9/20 在外', () => {
+    expect(chartPoints(pts, '30', '2026-10-20').map((p) => p.date)).toEqual(['2026-09-21', '2026-10-20'])
+  })
+
+  it('全部不設下界；t 是自 1970-01-01 起算的天數，兩天相差 1', () => {
+    const all = chartPoints(pts, 'all', '2026-10-20')
+    expect(all).toHaveLength(3)
+    expect(all[1].t - all[0].t).toBe(1)
+    expect(all[0].t).toBe(20716) // 2026-09-20：自 1970-01-01 起 20716 天（2026-01-01 是 20454，加 262）
+  })
+
+  it('範圍內沒有點→空陣列', () => {
+    expect(chartPoints([pt('2026-01-01')], '30', '2026-10-20')).toEqual([])
   })
 })

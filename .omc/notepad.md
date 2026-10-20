@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-20）：v2.80／v2.81 已 push（HEAD b36cc09 時與 origin 同步）。階段 4 A（核可 A→B→C，12 下、要套用鈕、加重幅度內建）：strength.ts＋unit 已 commit（7061973，vitest 701、7 mutation 全殺）、樣張 `_design-sample/analysis.html` 已 commit（05d09bd），**待使用者核可樣式**；未動 UI。
-下一步：樣張核可後做動作進度頁（Analysis.tsx＋e2e/analysis.spec.ts）→ push 前 review → 真機；之後 B（weightStep 歸類表）、C（recovery.ts）。待確認：健身房有無 1.25 kg 槓片、啞鈴一格 2 或 2.5；Gym visual 回覆信存檔並補問 public repo。SW 接手測試本機不穩，原因未查。
+現況（2026-10-20）：階段 4 A 動作進度頁（v2.82：Analysis.tsx、strength.ts、訓練頁入口、e2e/analysis.spec.ts 10 條）已做完、code-reviewer 0 blocking 且 MEDIUM 已修；vitest 705、e2e 285（全量結果見 push 時）。真機未驗。B（重量建議）、C（肌群狀態）未動。
+下一步：真機看折線觸控與十字線；之後做 B（weightStep 歸類表＋SetSheet 建議行）、C（recovery.ts，並補回「動作進度｜肌群狀態」分段控制）。待確認：健身房有無 1.25 kg 槓片、啞鈴一格 2 或 2.5；進行中的訓練是否計入「N 次訓練」（目前計入）。SW 接手測試本機不穩，原因未查。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

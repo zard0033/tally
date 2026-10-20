@@ -1651,3 +1651,15 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   border: 1px solid var(--rule-field); background: none; color: var(--ink-muted); }
 .tr-dialog .acts button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tr-dialog .acts .danger { background: var(--over-fill); border-color: var(--over-fill); color: var(--on-accent); }
+
+/* ═══════════ 訓練分析（階段 4 A；樣張 _design-sample/analysis.html）：沿用 .trend-* 的卡片、圖、明細表 ═══════════ */
+.an-val { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.an-val small { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+.an-hero { display: flex; gap: var(--s-5); padding: 0 var(--s-1) var(--s-3); }
+.an-hero div { display: flex; flex-direction: column; gap: 2px; }
+.an-hero .k { font-size: var(--t-xs); color: var(--ink-muted); }
+.an-hero .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 700;
+  color: var(--ink); line-height: 1.2; }
+.an-hero .v small { margin-left: 2px; font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+.an-note { margin: 0; padding: var(--s-2) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+.trend-scroll > .tr-card + .an-note { padding: var(--s-3) var(--s-4) 0; }
