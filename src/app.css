@@ -1359,16 +1359,23 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
 /* 動作示意縮圖（ExerciseThumb）：尺寸固定（3:2＝原圖比例）、底色先鋪，圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字 */
-.ex-thumb { display: block; width: 54px; height: 36px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover; }
+.ex-thumb { display: block; width: 72px; height: 48px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover; }
+/* 訓練中卡片的名稱欄很擠（滿 8 組的圓點＋長的「下一組」），縮圖維持 54×36；列表類畫面（動作庫、加動作、課表編輯）是 72×48 */
+.ex-head .ex-thumb { width: 54px; height: 36px; }
 .ex-thumb.is-glyph { display: flex; align-items: center; justify-content: center; font-size: var(--t-md); font-weight: 600;
   color: var(--ink-muted); }
-/* 點縮圖放大（ExerciseThumb zoom）：外包一顆 44px 高的鈕（觸控下限），圖本身仍是 54×36，視覺不變；
+/* 點縮圖放大（ExerciseThumb zoom）：外包一顆鈕（高度 ≥ 44px 觸控下限），寬度與圖同寬；
+   圖右下角疊一顆放大鏡角標——使用者 2026-10-20 回報「點圖看大圖很難觸發、看不出能點」，角標就是那個提示。
    按下時圖淡一階，與其他列按鈕的 :active 同語言 */
-.ex-zoom { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 54px; height: 44px;
+.ex-zoom { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 72px; height: 48px;
   padding: 0; border: none; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .ex-zoom:active .ex-thumb { opacity: .6; }
 .ex-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
-.ex-head > .ex-zoom { margin-right: var(--s-1); }
+.ex-zoom-badge { position: absolute; right: 4px; bottom: 4px; width: 20px; height: 20px; padding: 4px; box-sizing: border-box;
+  border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none;
+  fill: none; stroke: var(--ink-muted); stroke-width: 2.4; stroke-linecap: round; }
+.ex-head > .ex-zoom { width: 54px; height: 44px; margin-right: var(--s-1); }
+.ex-head > .ex-zoom .ex-zoom-badge { right: 2px; bottom: 5px; width: 16px; height: 16px; padding: 3px; }
 /* 放大檢視（ExerciseViewer）：兩個姿勢上下排、各撐滿寬度（3:2），小螢幕放不下就在 sheet 內捲動 */
 .ex-viewer { display: flex; flex-direction: column; gap: var(--s-3); }
 .ex-viewer-group { margin: 0; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }

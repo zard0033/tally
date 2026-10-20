@@ -725,6 +725,8 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（起始＋收�
   const zoom = library(page).getByRole('button', { name: '放大腿推舉的示意圖' })
   const box = (await zoom.boundingBox())!
   expect(box.height, '觸控區 ≥ 44px').toBeGreaterThanOrEqual(44)
+  await expect(zoom.locator('.ex-zoom-badge'), '縮圖角落有放大鏡角標，看得出能點').toHaveCount(1)
+  expect(Math.round((await zoom.locator('img.ex-thumb').boundingBox())!.width), '列表縮圖 72px 寬').toBe(72)
   await zoom.click()
   await expect(viewer(page)).toBeVisible()
   await expect(editSheet(page), '點縮圖不該同時開編輯').toHaveCount(0)
@@ -738,7 +740,7 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（起始＋收�
     expect(await imgs.nth(i).getAttribute('alt')).toBe(`腿推舉・${i === 0 ? '起始' : '收尾'}姿勢`)
   }
   const first = (await imgs.nth(0).boundingBox())!
-  expect(first.width, '放大後明顯比縮圖（54px）大').toBeGreaterThan(300)
+  expect(first.width, '放大後明顯比縮圖（72px）大').toBeGreaterThan(300)
 
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)

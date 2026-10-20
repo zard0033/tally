@@ -33,7 +33,7 @@ export default function ExerciseThumb({ exercise, zoom = false }: { exercise: Ro
       </span>
     )
   }
-  const img = <img className="ex-thumb" src={src} alt="" width={54} height={36} loading="lazy" decoding="async" draggable={false} />
+  const img = <img className="ex-thumb" src={src} alt="" width={72} height={48} loading="lazy" decoding="async" draggable={false} />
   if (!zoom || !exercise) return img
   return (
     <>
@@ -48,6 +48,10 @@ export default function ExerciseThumb({ exercise, zoom = false }: { exercise: Ro
         }}
       >
         {img}
+        <svg className="ex-zoom-badge" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6" />
+          <path d="M15 15l5 5" />
+        </svg>
       </button>
       {mounted ? (
         <Suspense fallback={null}>
