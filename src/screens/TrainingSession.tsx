@@ -15,6 +15,8 @@ import { move } from '@dnd-kit/helpers'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import Flip from '@/components/Flip'
+import RestBar from '@/components/RestBar'
+import { useRestTimer } from '@/components/useRestTimer'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
@@ -368,6 +370,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const backfilled = isBackfilled(workout)
   const live = inProgress && !backfilled
   const now = useNow(live)
+  // 組間休息：只在即時進行中的訓練啟動（補記與已結束的不啟動）；「全部完成」不啟動，只有單點勾組才算「剛做完一組」
+  const rest = useRestTimer(String(workout.id), live)
 
   const [openEx, setOpenEx] = useState<string | null>(() => exercises[0]?.entry.id ?? null)
   const [tipsOpenIds, setTipsOpenIds] = useState<ReadonlySet<string>>(new Set())
@@ -615,6 +619,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onToggleSet={(s) => {
                   endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
+                  if (s.done !== true) rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
                   void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
                 }}
                 onDeleteSet={(setId) => {
@@ -626,6 +631,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
           </div>
         </DragDropProvider>
       </div>
+
+      <RestBar timer={rest} />
 
       <div className="tr-bottom">
         <button className="tr-secondary" type="button" onClick={() => setPicker(true)}>

@@ -54,6 +54,7 @@ export default defineConfig({
        - woff2 要列進來，否則離線掉字型；jpg 是動作示意縮圖（148 張約 1MB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
        - **gif（動作示意動畫，148 個共約 14MB）刻意不在 globPatterns 裡、不進 precache**：項數與體積太大時新版 SW 會偶發卡在
          activating（2026-10-19 實測：460 項／7.1MB 單跑 6 次只過 3 次，311 項／4.5MB 單跑 5/5 過）。離線時檢視器退回靜態縮圖（ExerciseViewer）。
+       - wav 只有一個：組間休息的提示音（src/assets/rest-chime.wav，約 15KB），離線健身房也要響，所以進 precache。
        - reset.html（救援頁）要「不進 precache」**且**「列入 denylist」，缺一不可：不進 precache 才走
          網路；不在 denylist 的導覽會被 navigateFallback 吞成 App 首頁。
        - denylist 的比對對象是 pathname＋search，所以救援頁的規則允許帶 query、也允許無 .html 的網址
@@ -69,7 +70,7 @@ export default defineConfig({
           injectRegister: false,
           manifest: false,
           workbox: {
-            globPatterns: ['**/*.{js,css,html,svg,png,jpg,webmanifest,woff2}'],
+            globPatterns: ['**/*.{js,css,html,svg,png,jpg,wav,webmanifest,woff2}'],
             globIgnores: ['_probe/**', 'reset.html'],
             navigateFallback: 'index.html',
             navigateFallbackDenylist: [/\/_probe\//, /\/reset(\.html)?(\?|$)/],
