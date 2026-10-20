@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 階段 4 A 訓練分析（動作進度）</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 980px; line-height: 1.7; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; }
+  .frame-note { font-size: 12px; color: #7A5C44; max-width: 393px; line-height: 1.6; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px;
+    border: 1px solid #D8C9AE; position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ── */
+  .an-seg { margin: var(--s-3) var(--s-3) 0; flex: none; }
+  .an-list { margin: var(--s-3) var(--s-3) 0; border-radius: var(--r-tab); background: var(--card);
+    border: 1px solid var(--rule-subtle); overflow: clip; }
+  .an-row { display: flex; align-items: center; gap: var(--s-3); min-height: 60px; padding: 0 var(--s-4);
+    border-top: 1px solid var(--rule-subtle); }
+  .an-list > :first-child { border-top: none; }
+  .an-row .grow { flex: 1; min-width: 0; }
+  .an-row .nm { display: block; font-size: var(--t-base); font-weight: 600; }
+  .an-row .sub { display: block; margin-top: 2px; font-size: var(--t-xs); color: var(--ink-muted);
+    font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .an-row .val { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; }
+  .an-row .val small { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+  .an-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
+  .an-hero { display: flex; gap: var(--s-5); padding: 0 var(--s-1) var(--s-3); }
+  .an-hero div { display: flex; flex-direction: column; gap: 2px; }
+  .an-hero .k { font-size: var(--t-xs); color: var(--ink-muted); }
+  .an-hero .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg, 24px);
+    font-weight: 700; color: var(--ink); line-height: 1.2; }
+  .an-hero .v small { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); margin-left: 2px; }
+  .an-chart { position: relative; }
+  .an-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .an-tip { position: absolute; pointer-events: none; }
+  .an-note { margin: 0; padding: var(--s-2) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">樣張 — 階段 4 A：訓練分析（動作進度）</h1>
+<p class="harness-sub">
+  單一系列（e1RM 估算），所以只用一個強調色、不畫圖例（標題已說明是什麼）；每次訓練一個點，點少時點與線都畫，
+  只在最後一點標數字，其餘靠十字線讀值。樣式沿用體重趨勢頁（同一組 <code>.trend-*</code> token）。
+  <b>下面的數字全是示意</b>，不是你的真實紀錄；你目前約一週資料，真實畫面會接近第三、四張。
+</p>
+<div class="frames">
+
+  <!-- ① 列表 -->
+  <div class="frame-block">
+    <div class="frame-label">① 訓練分析：動作進度（列表）</div>
+    <div class="device"><div class="main">
+      <div class="lib-topbar">
+        <button class="icon-btn" type="button" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <h1>訓練分析</h1>
+      </div>
+      <div class="seg an-seg" role="group" aria-label="分析類型">
+        <button type="button" aria-pressed="true"><span class="seg-thumb" aria-hidden="true"></span><span class="seg-label">動作進度</span></button>
+        <button type="button" aria-pressed="false"><span class="seg-label">肌群狀態</span></button>
+      </div>
+      <div class="an-list">
+        <div class="an-row"><div class="grow"><span class="nm">槓鈴深蹲</span><span class="sub">6 次訓練 · 最近 10/19</span></div>
+          <span class="val">99.2 <small>kg 估算</small></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+        <div class="an-row"><div class="grow"><span class="nm">槓鈴臥推</span><span class="sub">2 次訓練 · 最近 10/17</span></div>
+          <span class="val">80.0 <small>kg 估算</small></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+        <div class="an-row"><div class="grow"><span class="nm">啞鈴肩推</span><span class="sub">1 次訓練 · 最近 10/17</span></div>
+          <span class="val">35.5 <small>kg 估算</small></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+        <div class="an-row"><div class="grow"><span class="nm">坐姿划船</span><span class="sub">2 次訓練 · 最近 10/14</span></div>
+          <span class="val">64.0 <small>kg 估算</small></span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></div>
+      </div>
+      <p class="an-note" style="padding: var(--s-3) var(--s-4) 0">只列有打勾完成的組；超過 10 下的組不估算（次數越多越不準）。</p>
+    </div></div>
+    <div class="frame-note"><b>列表</b>：依最近練的排前面，右邊是歷來最佳 e1RM。「估算」兩個字一直在。</div>
+  </div>
+
+  <!-- ② 單一動作：6 點 -->
+  <div class="frame-block">
+    <div class="frame-label">② 單一動作（資料較多時，示意）</div>
+    <div class="device"><div class="main">
+      <div class="lib-topbar">
+        <button class="icon-btn" type="button" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <h1>槓鈴深蹲</h1>
+      </div>
+      <div class="trend-scroll">
+        <div class="seg trend-range" role="group" aria-label="範圍">
+          <button type="button" aria-pressed="false"><span class="seg-label">30 天</span></button>
+          <button type="button" aria-pressed="true"><span class="seg-thumb" aria-hidden="true"></span><span class="seg-label">90 天</span></button>
+          <button type="button" aria-pressed="false"><span class="seg-label">全部</span></button>
+        </div>
+        <section class="trend-card" aria-label="e1RM">
+          <div class="an-hero">
+            <div><span class="k">歷來最佳（估算）</span><span class="v">99.2<small>kg</small></span></div>
+            <div><span class="k">最近一次</span><span class="v">96.0<small>kg</small></span></div>
+          </div>
+          <div class="trend-head"><h2>e1RM <small>kg，估算</small></h2></div>
+          <div class="an-chart" id="c2"></div>
+        </section>
+        <section class="trend-card" aria-label="明細">
+          <table class="trend-table">
+            <caption class="sr-only">每次訓練的最重一組與估算 1RM，新到舊</caption>
+            <thead><tr><th scope="col">日期</th><th scope="col">最重一組</th><th scope="col">e1RM</th></tr></thead>
+            <tbody id="t2"></tbody>
+          </table>
+        </section>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>折線＋點</b>：每次訓練一點，最後一點標數字，其餘用十字線讀。圖上不寫圖例（單一系列，標題就是說明）。
+      圖例在多系列才出現。</div>
+  </div>
+
+  <!-- ③ 2 點 -->
+  <div class="frame-block">
+    <div class="frame-label">③ 只有 2 次紀錄（你現在最接近這張）</div>
+    <div class="device"><div class="main">
+      <div class="lib-topbar">
+        <button class="icon-btn" type="button" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <h1>槓鈴臥推</h1>
+      </div>
+      <div class="trend-scroll">
+        <div class="seg trend-range" role="group" aria-label="範圍">
+          <button type="button" aria-pressed="false"><span class="seg-label">30 天</span></button>
+          <button type="button" aria-pressed="true"><span class="seg-thumb" aria-hidden="true"></span><span class="seg-label">90 天</span></button>
+          <button type="button" aria-pressed="false"><span class="seg-label">全部</span></button>
+        </div>
+        <section class="trend-card" aria-label="e1RM">
+          <div class="an-hero">
+            <div><span class="k">歷來最佳（估算）</span><span class="v">80.0<small>kg</small></span></div>
+            <div><span class="k">最近一次</span><span class="v">80.0<small>kg</small></span></div>
+          </div>
+          <div class="trend-head"><h2>e1RM <small>kg，估算</small></h2></div>
+          <div class="an-chart" id="c3"></div>
+        </section>
+        <section class="trend-card" aria-label="明細">
+          <table class="trend-table">
+            <caption class="sr-only">每次訓練的最重一組與估算 1RM，新到舊</caption>
+            <thead><tr><th scope="col">日期</th><th scope="col">最重一組</th><th scope="col">e1RM</th></tr></thead>
+            <tbody id="t3"></tbody>
+          </table>
+        </section>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>2 個點</b>：照樣畫線，不假裝是趨勢。</div>
+  </div>
+
+  <!-- ④ 1 點 -->
+  <div class="frame-block">
+    <div class="frame-label">④ 只有 1 次紀錄</div>
+    <div class="device"><div class="main">
+      <div class="lib-topbar">
+        <button class="icon-btn" type="button" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg></button>
+        <h1>啞鈴肩推</h1>
+      </div>
+      <div class="trend-scroll">
+        <div class="seg trend-range" role="group" aria-label="範圍">
+          <button type="button" aria-pressed="false"><span class="seg-label">30 天</span></button>
+          <button type="button" aria-pressed="true"><span class="seg-thumb" aria-hidden="true"></span><span class="seg-label">90 天</span></button>
+          <button type="button" aria-pressed="false"><span class="seg-label">全部</span></button>
+        </div>
+        <section class="trend-card" aria-label="e1RM">
+          <div class="an-hero">
+            <div><span class="k">歷來最佳（估算）</span><span class="v">35.5<small>kg</small></span></div>
+            <div><span class="k">最近一次</span><span class="v">35.5<small>kg</small></span></div>
+          </div>
+          <div class="trend-head"><h2>e1RM <small>kg，估算</small></h2></div>
+          <div class="an-chart" id="c4"></div>
+          <p class="an-note">只有 1 次訓練，再練一次就畫得出線。</p>
+        </section>
+        <section class="trend-card" aria-label="明細">
+          <table class="trend-table">
+            <caption class="sr-only">每次訓練的最重一組與估算 1RM，新到舊</caption>
+            <thead><tr><th scope="col">日期</th><th scope="col">最重一組</th><th scope="col">e1RM</th></tr></thead>
+            <tbody id="t4"></tbody>
+          </table>
+        </section>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>1 個點</b>：只畫點與說明，不畫線。</div>
+  </div>
+
+</div>
+
+<script>
+  const NS = 'http://www.w3.org/2000/svg'
+  const W = 321, H = 200, M = { l: 36, r: 12, t: 16, b: 24 }
+  const day = (iso) => Math.round(Date.UTC(...iso.split('-').map((v, i) => (i === 1 ? v - 1 : +v))) / 864e5)
+  const md = (iso) => `${+iso.slice(5, 7)}/${+iso.slice(8)}`
+  const el = (n, a = {}, p) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); p && p.appendChild(e); return e }
+
+  /* pts: [{d:'2026-10-10', e:80, w:60, r:10}]；dom: [起, 迄]（yyyy-mm-dd）；yd: [min,max,step] */
+  function chart(id, pts, dom, yd, hoverIdx) {
+    const box = document.getElementById(id)
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'e1RM 折線圖' })
+    const x0 = day(dom[0]), x1 = day(dom[1])
+    const X = (iso) => M.l + ((day(iso) - x0) / (x1 - x0)) * (W - M.l - M.r)
+    const Y = (v) => M.t + (1 - (v - yd[0]) / (yd[1] - yd[0])) * (H - M.t - M.b)
+    for (let v = yd[0]; v <= yd[1] + 1e-9; v += yd[2]) {
+      el('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), stroke: 'var(--rule-subtle)' }, svg)
+      const t = el('text', { x: M.l - 8, y: Y(v) + 4, 'text-anchor': 'end', class: 'recharts-cartesian-axis-tick-value' }, svg); t.textContent = v
+    }
+    el('line', { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, stroke: 'var(--rule)' }, svg)
+    const mid = new Date((x0 + x1) / 2 * 864e5).toISOString().slice(0, 10)
+    ;[dom[0], mid, dom[1]].forEach((iso, i) => {
+      const t = el('text', { x: X(iso), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === 2 ? 'end' : 'middle', class: 'recharts-cartesian-axis-tick-value' }, svg)
+      t.textContent = md(iso)
+    })
+    if (hoverIdx != null) el('line', { x1: X(pts[hoverIdx].d), x2: X(pts[hoverIdx].d), y1: M.t - 8, y2: H - M.b, stroke: 'var(--ink-faint)' }, svg)
+    if (pts.length > 1) {
+      el('polyline', { points: pts.map((p) => `${X(p.d)},${Y(p.e)}`).join(' '), fill: 'none', stroke: 'var(--accent)',
+        'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg)
+    }
+    pts.forEach((p, i) => {
+      const hot = i === hoverIdx || i === pts.length - 1
+      el('circle', { cx: X(p.d), cy: Y(p.e), r: hot ? 5 : 4, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 2 }, svg)
+    })
+    const last = pts[pts.length - 1]
+    const lab = el('text', { x: X(last.d), y: Y(last.e) - 12, 'text-anchor': pts.length > 1 ? 'end' : 'middle', class: 'trend-endlabel' }, svg)
+    lab.textContent = last.e.toFixed(1)
+    box.appendChild(svg)
+    if (hoverIdx != null) {
+      const p = pts[hoverIdx]
+      const tip = document.createElement('div')
+      tip.className = 'trend-tip an-tip'; tip.setAttribute('role', 'status')
+      tip.style.left = `${(X(p.d) / W) * 100 - 48}%`; tip.style.top = '8px'
+      tip.innerHTML = `<div class="trend-tip-date">${md(p.d)}</div>
+        <div class="trend-tip-row"><b>${p.e.toFixed(1)} kg</b><span>e1RM 估算</span></div>
+        <div class="trend-tip-row"><b>${p.w} × ${p.r}</b><span>最重一組</span></div>`
+      box.appendChild(tip)
+    }
+  }
+  function table(id, pts) {
+    document.getElementById(id).innerHTML = [...pts].reverse().map((p) =>
+      `<tr><th scope="row">${md(p.d)}</th><td>${p.w} kg × ${p.r}</td><td>${p.e.toFixed(1)} kg</td></tr>`).join('')
+  }
+
+  // 全部手算：e1RM＝重量 ×（1＋次數/30），小數一位
+  const squat = [
+    { d: '2026-09-22', w: 70, r: 8, e: 88.7 },   // 70×38/30 = 88.67
+    { d: '2026-09-29', w: 75, r: 6, e: 90.0 },   // 75×36/30
+    { d: '2026-10-06', w: 80, r: 5, e: 93.3 },   // 80×35/30 = 93.33
+    { d: '2026-10-10', w: 75, r: 8, e: 95.0 },   // 75×38/30
+    { d: '2026-10-14', w: 85, r: 5, e: 99.2 },   // 85×35/30 = 99.17
+    { d: '2026-10-19', w: 80, r: 6, e: 96.0 },   // 80×36/30
+  ]
+  chart('c2', squat, ['2026-09-21', '2026-10-20'], [85, 100, 5], 3); table('t2', squat)
+  const bench = [
+    { d: '2026-10-10', w: 60, r: 8, e: 76.0 },   // 60×38/30
+    { d: '2026-10-17', w: 60, r: 10, e: 80.0 },  // 60×40/30
+  ]
+  chart('c3', bench, ['2026-09-21', '2026-10-20'], [70, 85, 5]); table('t3', bench)
+  const ohp = [{ d: '2026-10-17', w: 28, r: 8, e: 35.5 }] // 28×38/30 = 35.47
+  chart('c4', ohp, ['2026-09-21', '2026-10-20'], [30, 40, 5]); table('t4', ohp)
+</script>
+</body>
+</html>
