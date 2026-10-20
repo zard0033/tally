@@ -4,10 +4,8 @@
  * 遞減會停住；endAt 不會，回到前景時用 `endAt − now` 重算就一定準。所以這裡每個函式都吃 `now` 參數，
  * 不自己讀時鐘；localStorage／sessionStorage 也由呼叫端讀了字串傳進來（比照 session.ts），lib 內禁沾 DOM。 */
 
-/** 可選的休息時長（秒），點倒數條上的時長依序循環。 */
-export const REST_PRESETS = [60, 90, 120, 180] as const
-export type RestPreset = (typeof REST_PRESETS)[number]
-export const DEFAULT_REST_SEC: RestPreset = 90
+/** 每次開始的休息時長（秒）：固定 1:30，不讓使用者選（使用者 2026-10-20 裁決），要多休息用＋15。 */
+export const REST_SEC = 90
 
 /** −15／＋15 秒。 */
 export const REST_ADJUST_SEC = 15
@@ -53,20 +51,6 @@ export function overtimeText(ms: number): string {
 /** 歸零那刻使用者在前景看著嗎（播提示音、自動收起的條件）：超時不到 REST_ON_TIME_MS。 */
 export function firedOnTime(endAt: number, now: number): boolean {
   return now - endAt < REST_ON_TIME_MS
-}
-
-/** 時長循環：60→90→120→180→60；不認得的值（含 undefined 的來源）回預設 90。 */
-export function nextPreset(current: number): RestPreset {
-  const i = REST_PRESETS.indexOf(current as RestPreset)
-  if (i === -1) return DEFAULT_REST_SEC
-  return REST_PRESETS[(i + 1) % REST_PRESETS.length]
-}
-
-/** 驗證 localStorage 裡的時長字串；沒有、不是數字、不在可選清單都回預設 90。 */
-export function parsePreset(raw: string | null): RestPreset {
-  if (raw === null) return DEFAULT_REST_SEC
-  const n = Number(raw)
-  return REST_PRESETS.find((p) => p === n) ?? DEFAULT_REST_SEC
 }
 
 /** 驗證 sessionStorage 裡的 endAt 字串：沒有、不是有限數字、已經過期、或比上限還遠（壞資料）都回 null。

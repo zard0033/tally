@@ -521,7 +521,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }
 
   return (
-    <div className="main" data-screen="training-session" data-workout-id={workout.id}>
+    <div className={`main${rest.endAt !== null ? ' has-rest' : ''}`} data-screen="training-session" data-workout-id={workout.id}>
       <header className="tr-top">
         <button className="tr-ib" type="button" aria-label={inProgress ? '返回（訓練繼續進行）' : '返回'} onClick={onBack}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -632,9 +632,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         </DragDropProvider>
       </div>
 
-      <RestBar timer={rest} />
-
       <div className="tr-bottom">
+        <RestBar timer={rest} />
         <button className="tr-secondary" type="button" onClick={() => setPicker(true)}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />

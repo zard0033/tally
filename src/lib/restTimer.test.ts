@@ -3,11 +3,10 @@ import {
   adjustEnd,
   firedOnTime,
   formatRest,
-  nextPreset,
   overtimeText,
   parseEndAt,
-  parsePreset,
   remainingMs,
+  REST_SEC,
   startRest,
 } from './restTimer'
 
@@ -105,35 +104,10 @@ describe('firedOnTime', () => {
   })
 })
 
-describe('nextPreset（60→90→120→180→60）', () => {
-  it('依序循環，180 繞回 60', () => {
-    expect(nextPreset(60)).toBe(90)
-    expect(nextPreset(90)).toBe(120)
-    expect(nextPreset(120)).toBe(180)
-    expect(nextPreset(180)).toBe(60)
-  })
-
-  it('不認得的值回預設 90', () => {
-    expect(nextPreset(75)).toBe(90)
-    expect(nextPreset(0)).toBe(90)
-    expect(nextPreset(Number.NaN)).toBe(90)
-  })
-})
-
-describe('parsePreset（localStorage 的時長字串）', () => {
-  it('四個可選值照收', () => {
-    expect(parsePreset('60')).toBe(60)
-    expect(parsePreset('90')).toBe(90)
-    expect(parsePreset('120')).toBe(120)
-    expect(parsePreset('180')).toBe(180)
-  })
-
-  it('沒有、壞掉、不在清單都回 90', () => {
-    expect(parsePreset(null)).toBe(90)
-    expect(parsePreset('')).toBe(90)
-    expect(parsePreset('abc')).toBe(90)
-    expect(parsePreset('75')).toBe(90)
-    expect(parsePreset('-60')).toBe(90)
+describe('REST_SEC', () => {
+  it('固定 1 分 30 秒', () => {
+    expect(REST_SEC).toBe(90)
+    expect(startRest(NOW, REST_SEC)).toBe(NOW + 90_000)
   })
 })
 

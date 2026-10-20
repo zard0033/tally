@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-20）：v2.75–v2.77 已 push（6eccab9）；v2.78 放大檢視 fit 已 commit（3902198）；v2.79 組間休息計時器（階段 3 甲）做完待 commit，**都未 push、未 review、真機未驗**。vitest 692；e2e 272 全過。PWA 舊 SW：刪圖示重加後正常接手，Safari 清快取清不到 PWA。
-下一步：push 前 review；真機驗計時器（鎖屏回前景數字、iOS 提示音解鎖與靜音開關）與縮圖、趨勢圖觸控、飛航模式；使用者存下 Gym visual 回覆信並補問 public repo 是否涵蓋、列表畫面要不要補著作權標示（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。
+現況（2026-10-20）：v2.78 放大檢視 fit、v2.79 組間休息計時器已 push 部署並經使用者真機驗（放大檢視 OK、計時器 OK、靜音開關打開照樣會響）。v2.80（計時器改成浮起來的深色 pill、固定 1:30、只剩 −15／＋15／略過）已改、測試待跑完，**未 commit／push／review**。vitest 689；e2e 272。
+下一步：確認全量 e2e、commit v2.80、push 前 review；真機看 v2.80 浮動條手感與縮圖、趨勢圖觸控、飛航模式；使用者存下 Gym visual 回覆信並補問 public repo 是否涵蓋、列表畫面要不要補著作權標示（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

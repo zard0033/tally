@@ -20,6 +20,17 @@ const LIVE: typeof FIX = {
   workout_sets: [1, 2, 3].map((n) => ({ id: `s-${n}`, workout_exercise_id: 'we-live', set_no: n, weight_kg: 60, reps: 12, done: false })),
 }
 
+/** 同一次進行中的訓練再多 9 個（收合的）動作：列表夠長、要捲才到最後一張卡。 */
+const LONG: typeof FIX = {
+  ...LIVE,
+  workout_exercises: Array.from({ length: 10 }, (_, i) => ({
+    id: i === 0 ? 'we-live' : `we-live-${i}`,
+    workout_id: 'w-live',
+    exercise_id: EX_ID,
+    position: i,
+  })),
+}
+
 /** 今天有一次已結束的訓練（2 組、都已完成）。 */
 const FINISHED: typeof FIX = {
   ...FIX,
@@ -73,8 +84,8 @@ async function openTraining(page: Page) {
 /** 進行中的訓練整頁（fixture 的 w-live）。
  *  `freeze`（預設開）：把 `Date.now` 定在目前這一刻，之後只在 `jump` 時才動——倒數的數字是 `ceil(剩餘)`，時間照流動的話，
  *  機器一忙（全量與別的 spec 同時跑時實測過），勾組到斷言之間多過 1 秒，`1:15` 就變成 `1:14`，斷言只會越等越錯。 */
-async function openLive(page: Page, freeze = true) {
-  await openApp(page, {}, LIVE)
+async function openLive(page: Page, freeze = true, fix: typeof FIX = LIVE) {
+  await openApp(page, {}, fix)
   await openTraining(page)
   await page.locator('.tr-row[data-workout-id="w-live"]').click()
   await expect(page.locator('[data-screen="training-session"]')).toBeVisible()
@@ -163,35 +174,25 @@ test('−15／＋15：各調整 15 秒；＋15 最多到 10:00；−15 減到 0 
   await expect(bar(page), '準時看到的歸零，約 3 秒後自動收起').toHaveCount(0)
 })
 
-test('時長循環 60→90→120→180→60，換的是下一次開始用的時長；重新載入後維持', async ({ page }) => {
+test('只有三個動作（−15／＋15／略過），沒有時長選擇；每次開始都是 1:30，調過的不會被記住', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   await tick(page, 0)
-  const preset = btn(page, /下一次休息/)
-  await expect(preset).toHaveText('90 秒')
-  await preset.click()
-  await expect(preset).toHaveText('120 秒')
-  await expect(barText(page), '換時長不動目前這一輪').toHaveText('1:30')
-  await preset.click()
-  await expect(preset).toHaveText('180 秒')
-  await preset.click()
-  await expect(preset).toHaveText('60 秒')
-  await preset.click()
-  await expect(preset).toHaveText('90 秒')
-  await preset.click()
-  await expect(preset).toHaveText('120 秒')
-  expect(await page.evaluate(() => localStorage.getItem('tally.rest.preset'))).toBe('120')
+  await expect(barText(page)).toHaveText('1:30')
+  await expect(bar(page).getByRole('button'), '倒數中只有三顆鈕').toHaveText(['−15', '＋15', '略過'])
 
+  await btn(page, '加 15 秒').click()
+  await expect(barText(page)).toHaveText('1:45')
   await btn(page, '略過休息').click()
   await tick(page, 1)
-  await expect(barText(page), '下一次勾組以新時長起算').toHaveText('2:00')
+  await expect(barText(page), '調過的時長不留到下一輪').toHaveText('1:30')
 
   await page.reload()
   await page.locator('.tab[aria-label="訓練"]').click()
   await page.locator('.tr-row[data-workout-id="w-live"]').click()
   await expect(page.locator('.ex .set')).toHaveCount(3)
   await tick(page, 2)
-  await expect(barText(page), '重新載入後時長偏好還在').toHaveText('2:00')
+  await expect(barText(page), '重新載入後也是 1:30').toHaveText(/^1:(30|29)$/)
 })
 
 test('重新載入：倒數中續算；已過期的不復活', async ({ page }) => {
@@ -255,21 +256,44 @@ test('回前景（visibilitychange）立刻重算：計時器全凍結時只靠�
   await expect(barText(page)).toHaveText('1:00')
 })
 
-test('倒數條與列表、底部列各自佔位：條出現時列表縮短，不蓋住最後一列也不蓋住底部列', async ({ page }) => {
+test('倒數條浮在底部列上方的深色 pill：不佔版面（列表高度不變）、疊在列表上、不蓋住底部列；最後一張卡捲得到條的上方', async ({ page }) => {
   await prepare(page)
-  await openLive(page)
+  await openLive(page, true, LONG)
   const scroll = page.locator('[data-screen="training-session"] .tr-scroll')
   const before = (await scroll.boundingBox())!.height
   await tick(page, 0)
   await expect(bar(page)).toBeVisible()
-  await expect.poll(async () => (await scroll.boundingBox())!.height, '列表讓出條的高度').toBeLessThan(before - 40)
+  await page.waitForTimeout(400) // 進場位移跑完，量到的才是落定的位置
   const s = (await scroll.boundingBox())!
   const b = (await bar(page).boundingBox())!
   const bottom = (await page.locator('.tr-bottom').boundingBox())!
-  expect(s.y + s.height, '列表在條的上方').toBeLessThanOrEqual(b.y + 1)
-  expect(b.y + b.height, '條在底部列的上方').toBeLessThanOrEqual(bottom.y + 1)
-  const btns = await bar(page).getByRole('button').all()
-  for (const x of btns) expect((await x.boundingBox())!.height, '觸控下限 44px').toBeGreaterThanOrEqual(44)
+  expect(s.height, '浮動：不走版面流，列表高度不變').toBe(before)
+  expect(b.y, '疊在列表區域上').toBeLessThan(s.y + s.height)
+  expect(b.y + b.height, '在底部列上方').toBeLessThanOrEqual(bottom.y + 1)
+  expect(bottom.y - (b.y + b.height), '與底部列留一點間距').toBeGreaterThanOrEqual(6)
+  const dark = await page.evaluate(() => {
+    const d = document.createElement('div')
+    d.style.background = 'var(--ink)'
+    document.body.append(d)
+    const c = getComputedStyle(d).backgroundColor
+    d.remove()
+    return c
+  })
+  expect(await bar(page).evaluate((el) => getComputedStyle(el).backgroundColor), '底色是 --ink（深色，跟動作卡分開）').toBe(dark)
+  expect(await bar(page).evaluate((el) => getComputedStyle(el).boxShadow), '有陰影，浮起來').not.toBe('none')
+  for (const x of await bar(page).getByRole('button').all()) {
+    expect((await x.boundingBox())!.height, '觸控下限 44px').toBeGreaterThanOrEqual(44)
+  }
+
+  // 條出現時列表多留底部空間：捲到最底，最後一張卡的下緣在條的上方
+  const pad = await scroll.evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom))
+  expect(pad, '底部留白 ≥ 條高＋間距').toBeGreaterThanOrEqual(b.height + 8)
+  await scroll.evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  await page.waitForTimeout(200)
+  const last = (await page.locator('.ex').last().boundingBox())!
+  expect(last.y + last.height, '最後一張卡沒被條蓋住').toBeLessThanOrEqual(b.y + 1)
 })
 
 /** 條「進場」那一刻的 inline style（motion 掛上去的起點）；減少動態時不該有位移。 */

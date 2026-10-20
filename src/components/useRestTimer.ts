@@ -3,39 +3,36 @@
  * 時間來源是 `Date.now()` 與存起來的 endAt，不是每秒遞減：鎖屏或切到背景時網頁的 JS 會被暫停，
  * 回到前景（`visibilitychange`）立刻重算，數字就是準的。這裡的 interval 只是讓畫面每 250ms 重畫，不是計時的依據。
  * 提示音走 `<audio>` 元素（WebKit 回報 Web Audio 在回前景後可能靜音）；iOS 要先有使用者手勢才放行，
- * 所以第一次開始倒數（＝勾組那一下）順手無聲播一次解鎖。靜音開關打開時 `<audio>` 也會靜音，那種情況只剩視覺提示。
- * 狀態不進資料庫：endAt 存 sessionStorage（重新載入、SW 換版重載後續算），時長偏好存 localStorage。 */
+ * 所以第一次開始倒數（＝勾組那一下）順手無聲播一次解鎖。靜音開關打開時照樣會響（使用者 2026-10-20 真機實測，
+ * 與我原本「`<audio>` 會被靜音」的推測相反）。
+ * 狀態不進資料庫：endAt 存 sessionStorage（重新載入、SW 換版重載後續算）；休息時長固定 REST_SEC，沒有偏好要存。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import chimeUrl from '@/assets/rest-chime.wav'
 import {
   adjustEnd,
   firedOnTime,
-  nextPreset,
   parseEndAt,
-  parsePreset,
   remainingMs,
   REST_ADJUST_SEC,
   REST_AUTO_HIDE_MS,
+  REST_SEC,
   startRest,
-  type RestPreset,
 } from '@/lib/restTimer'
 
-const PRESET_KEY = 'tally.rest.preset'
 const endKey = (workoutId: string) => `tally.rest.end.${workoutId}`
 
 // 隱私模式或停用儲存時存取會丟錯：讀不到當沒有、寫不進去就算了，計時器本身照常
-function readStore(kind: 'local' | 'session', key: string): string | null {
+function readStore(key: string): string | null {
   try {
-    return (kind === 'local' ? localStorage : sessionStorage).getItem(key)
+    return sessionStorage.getItem(key)
   } catch {
     return null
   }
 }
-function writeStore(kind: 'local' | 'session', key: string, value: string | null): void {
+function writeStore(key: string, value: string | null): void {
   try {
-    const s = kind === 'local' ? localStorage : sessionStorage
-    if (value === null) s.removeItem(key)
-    else s.setItem(key, value)
+    if (value === null) sessionStorage.removeItem(key)
+    else sessionStorage.setItem(key, value)
   } catch {
     /* 見上 */
   }
@@ -46,18 +43,14 @@ export interface RestTimer {
   endAt: number | null
   /** 上一次重畫時的時間（毫秒時間戳）。 */
   now: number
-  /** 下一次開始倒數用的時長（秒）。 */
-  preset: RestPreset
   start: () => void
   adjust: (sign: 1 | -1) => void
   skip: () => void
-  cyclePreset: () => void
 }
 
 export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
-  const [preset, setPreset] = useState<RestPreset>(() => parsePreset(readStore('local', PRESET_KEY)))
   const [endAt, setEndAt] = useState<number | null>(() =>
-    enabled ? parseEndAt(readStore('session', endKey(workoutId)), Date.now()) : null,
+    enabled ? parseEndAt(readStore(endKey(workoutId)), Date.now()) : null,
   )
   const [now, setNow] = useState(() => Date.now())
   const audio = useRef<HTMLAudioElement | null>(null)
@@ -71,7 +64,7 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
     (next: number | null, at: number) => {
       setNow(at)
       setEndAt(next)
-      writeStore('session', endKey(workoutId), next === null ? null : String(next))
+      writeStore(endKey(workoutId), next === null ? null : String(next))
     },
     [workoutId],
   )
@@ -79,7 +72,7 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
   const start = useCallback(() => {
     if (!enabled) return
     const at = Date.now()
-    commit(startRest(at, preset), at)
+    commit(startRest(at, REST_SEC), at)
     if (unlocked.current) return
     unlocked.current = true
     const a = getAudio()
@@ -94,7 +87,7 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
         a.muted = false
         unlocked.current = false
       })
-  }, [enabled, preset, commit])
+  }, [enabled, commit])
 
   const adjust = useCallback(
     (sign: 1 | -1) => {
@@ -106,12 +99,6 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
   )
 
   const skip = useCallback(() => commit(null, Date.now()), [commit])
-
-  const cyclePreset = useCallback(() => {
-    const next = nextPreset(preset)
-    setPreset(next)
-    writeStore('local', PRESET_KEY, String(next))
-  }, [preset])
 
   // 倒數中才重畫；回前景時立刻重算一次（interval 在背景被暫停時，數字靠這一下追上）
   useEffect(() => {
@@ -143,5 +130,5 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
     if (onTime.current && now - endAt >= REST_AUTO_HIDE_MS) commit(null, now)
   }, [enabled, endAt, now, commit])
 
-  return { endAt: enabled ? endAt : null, now, preset, start, adjust, skip, cyclePreset }
+  return { endAt: enabled ? endAt : null, now, start, adjust, skip }
 }
