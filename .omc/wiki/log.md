@@ -64,3 +64,11 @@
 - **Pages:** lesson-sw-precache-size-sw-activating-2026-10-19.md
 - **Summary:** Created new page "lesson-sw-precache-size 預快取項數與新版 SW 卡 activating（2026-10-19）"
 
+## [2026-10-20T01:22:30.003Z] query
+- **Pages:** verified-platform-rls-a11y-supabase-pwa.md, lesson-pointers.md, lesson-field-controls-2026-10-16.md, lesson-sw-precache-size-sw-activating-2026-10-19.md, verified-testing-e2e-mutation.md
+- **Summary:** Query "體重趨勢" → 5 results (of 9 total)
+
+## [2026-10-20T01:51:49.967Z] ingest
+- **Pages:** lesson-recharts-trend-chart-recharts-2026-10-20.md
+- **Summary:** Created new page "lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）"
+

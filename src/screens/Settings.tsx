@@ -7,14 +7,15 @@
    唯一的落地差異（沿用自舊版）：legacy 用 `#sheet-root.closing .sheet` 這個
    id-scoped 選擇器做退場動畫，但 id="sheet-root" 已經被 LogSheet 佔用，這裡改用
    另一個 id 掛容器，退場動畫直接用 inline style 套用同一組 keyframes。 */
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { num } from '@/lib/formulas'
 import DailyGoal from './DailyGoal'
 import FoodLibrary from './FoodLibrary'
-import WeightTrend from './WeightTrend'
 import type { SettingsProps } from './types'
+
+const WeightTrend = lazy(() => import('./WeightTrend')) // recharts 不進主 bundle
 
 type View = 'list' | 'goal' | 'library' | 'trend'
 
@@ -202,7 +203,11 @@ export default function Settings(props: SettingsProps) {
     )
   }
   if (view === 'trend') {
-    return <WeightTrend weights={weights} onBack={() => setView('list')} />
+    return (
+      <Suspense fallback={<div className="main" data-screen="weight-trend" />}>
+        <WeightTrend weights={weights} onBack={() => setView('list')} />
+      </Suspense>
+    )
   }
 
   const hasSpark = weights !== null && weights.length >= 2

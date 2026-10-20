@@ -2,8 +2,7 @@
    view state；三個入口的進出、以及「次級頁要收起底部列」全靠那個 state 加一個
    onSubViewChange callback 撐著。沒有 URL 可以直接開，壞了只有走一遍才知道。
 
-   體重趨勢頁目前是佔位卡（完整圖表要等 dataviz 定案），所以這裡只驗它進得去、回得來，
-   不鎖卡片內容——鎖了等於把一塊明講是暫時的東西焊死。 */
+   體重趨勢頁的內容（圖表、明細、範圍切換）由 weight-trend.spec.ts 守，這裡只驗進得去、回得來。 */
 import { test, expect, type Page } from '@playwright/test'
 import { openApp } from './harness'
 

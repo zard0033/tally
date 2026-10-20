@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-19）：v2.74 點動作縮圖放大已 commit、未 push（待使用者確認）；v2.73 已 push（352c306）。vitest 652、e2e 249 全過、lint／build 過；真機未驗 v2.72–v2.74。放大圖只有起始姿勢進 precache（311 項）；全進（460 項）SW 會卡 activating，見 MANUAL 2026-10-19。
-下一步：確認後 push；手機驗；體重趨勢圖（含體脂，spec 已核可未開工）。scratchpad 的 base／ctl worktree 待清（刪前列清單）。
+現況（2026-10-19）：v2.74 點動作縮圖放大已 push（79b056d）；vitest 652、e2e 249 全過、lint／build 過；真機未驗 v2.72–v2.74。放大圖只有起始姿勢進 precache（311 項）；全進（460 項）SW 會卡 activating，見 MANUAL 2026-10-19。
+下一步：手機驗 v2.72–v2.74（尤其更新後 SW 有沒有卡住）；體重趨勢圖（含體脂，spec 已核可未開工）。scratchpad 的 base／ctl worktree 待清（刪前列清單）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -65,12 +65,10 @@ D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking
 - [LOW] useTraining.discard 成功後刷新 view 失敗，會顯示成「沒辦法放棄這筆」但其實已放棄；把刷新分開 try、失敗只 setError 不 rethrow。
 - 可簡化：SyncSheet labelOf 的 O(n²) filter、trainingRuntime.ts:356 多餘的 sort、SyncSheet:172 與 :128 重複的標籤取得。
 ### 2026-10-15 17:30
-訓練中改版與全站精緻度現況（2026-10-17 B2 完成後改寫）
-- **B2 本機完成、未 commit／未 push**（使用者要最後統一真機驗）：訓練中改版（組編輯 sheet、左滑刪除、卡片頭／ⓘ／⋯、全部完成、新增一組整列、訓練中排序）＋訓練六張 sheet 換 SpringSheet、vaul 依賴移除。細節、與 spec 的差異、真機待驗清單全在 DESIGN.md v2.69；spec 在 spec.md「訓練中畫面改版」。
-- **動效**：v2.70 補上新增／刪除一組的淡入淡出與 ± 數字翻動；**還沒做**：統計格數字變動翻一下（160ms）；排序時收合與恢復是瞬間的（dnd-kit 限制，見 v2.69）。真機看了覺得缺再補。
-- **[追加 2026-10-17] 動作示意圖＋動作庫填滿（autopilot 無人值守做完，未 commit）**：150 個預設動作（原 16＋新 134，繁中名、七類肌群）各一張 webp（free-exercise-db，Unlicense；照片上游來源不明，見 DESIGN v2.71）；縮圖在動作庫、加動作 sheet、訓練中卡片名稱鈕左側；自建動作用肌群單字。**新帳號首次預填仍是 16 個；其餘 134 個走動作庫頁首「補齊預設動作」入口（按了才寫）**。細節、實測數字、待確認清單全在 DESIGN.md v2.71 與「動作示意圖與預設動作目錄」條。
-- **待使用者決定（`.omc/autopilot/decisions-pending.md` 本機、不進 git，內容摘要在此）**：①既有帳號要不要「自動」補進新預設動作（現況是按鈕版；自動版一次對真實資料庫寫約 134 筆，`exercises` 無法真刪，不想要的得逐個封存；改自動只要改 `trainingRuntime.seedIfEmpty`）②134 個新動作的中文名稱待確認（清單在 DESIGN v2.71）③沒有圖的動作要不要換成肌肉解剖圖（需素材與授權）。
-- 第 1 點「有氧併入動作」（肌群＝其他，不再是獨立入口）推翻 2026-10-13 的有氧獨立模型（cardio_sessions 表＋開始訓練 sheet 進入）；牽涉 schema，另案先 spec＋plan。
+訓練中改版與全站精緻度的未結項（2026-10-20 清掉已出貨的：B2 與動效已 push；自動補預設動作 v2.72；統計格數字翻動 v2.73）
+- 訓練中改版（B2）的真機待驗清單在 DESIGN.md v2.69；spec 在 spec.md「訓練中畫面改版」。
+- **待使用者決定**：①150 個預設動作裡新增的 134 個繁中名稱待確認（清單在 DESIGN v2.71）②沒有圖的動作現在用肌群單字，要不要換成肌肉解剖圖（需素材與授權）。圖源 free-exercise-db 是 Unlicense，但照片上游來源不明，見 DESIGN v2.71。
+- 「有氧併入動作」（肌群＝其他，不再是獨立入口）推翻 2026-10-13 的有氧獨立模型（cardio_sessions 表＋開始訓練 sheet 進入）；牽涉 schema，另案先 spec＋plan，未開工。
 - 全站精緻度：B3（設定、每日目標、身體數據、食品庫、體重趨勢含 prototype 殘留清除；`.scan-btn` 與食物庫篩選膠囊還是舊外框）、B4（載入／離線／錯誤狀態、登入頁）要使用者各自核可。盤點發現與根因在 `.omc/plans/polish-audit-findings.md`（本機、不進 git，spec.md「全站基礎」節有指路）；Gymwork 對照截圖使用者未提供，提案沒對照 Gymwork 校準。
 - 背景縮小約 95.5%（modal sheet 開著時）：0 號實驗結論「不需要解法」（DESIGN v2.61），但**縮放本身沒實作**；要做時只在掛在 body 的 SpringSheet 開著時啟用、原點 `50% 0`，真機驗 iOS 工具列收合與動畫掉幀。
 ### 2026-10-19 17:30
