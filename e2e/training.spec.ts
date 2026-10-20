@@ -751,6 +751,8 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×18
   const first = (await imgs.boundingBox())!
   expect(first.width, '放大後明顯比縮圖（52px）大').toBeGreaterThan(200)
   expect(Math.round(first.width), '寬高相同（正方形）').toBe(Math.round(first.height))
+  const sheetH = (await viewer(page).boundingBox())!.height
+  expect(sheetH, '檢視器貼合內容（圖＋標題＋標示），不是近全高留一大塊空白').toBeLessThan(first.height + 220)
 
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)

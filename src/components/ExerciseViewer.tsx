@@ -43,7 +43,7 @@ export default function ExerciseViewer({ exercise, thumb, open, onClose, finalFo
   const playing = gif !== undefined && !gifFailed && !reduced
   const note = reduced ? '已開啟「減少動態」，顯示靜態圖' : gifFailed ? '離線時只能看靜態圖，連上網路後再開就有動畫' : null
   return (
-    <SpringSheet open={open} onClose={onClose} label={`${name}示意圖`} title={name} screen="exercise-viewer" finalFocus={finalFocus}>
+    <SpringSheet open={open} onClose={onClose} label={`${name}示意圖`} title={name} screen="exercise-viewer" fit finalFocus={finalFocus}>
       <div className="tr-sheet-body tr-sheet-scroll ex-viewer">
         <p className="ex-viewer-group">{group}</p>
         <figure className="ex-viewer-fig">
