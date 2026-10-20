@@ -547,6 +547,8 @@ button { -webkit-user-select: none; user-select: none; }
 @media (hover: hover) { .settings .signout:hover { opacity: .7; } }
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 第三方素材致謝（動作示意圖 © Gym visual，著作權人要求每次使用都附標示） */
+.settings-credit { margin: var(--s-6) 0 0; font-size: var(--t-xs); color: var(--ink-faint); text-align: center; line-height: 1.5; }
 
 /* ═══════════ 設定頁入口列表（v2.22，取代第一版唯讀 dl） ═══════════ */
 .entry-list { margin: var(--s-2) 0 0; border-radius: var(--r-tab); overflow: clip;
@@ -1358,31 +1360,36 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-toggle .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
-/* 動作示意縮圖（ExerciseThumb）：尺寸固定（3:2＝原圖比例）、底色先鋪，圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字 */
-.ex-thumb { display: block; width: 72px; height: 48px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover; }
-/* 訓練中卡片的名稱欄很擠（滿 8 組的圓點＋長的「下一組」），縮圖維持 54×36；列表類畫面（動作庫、加動作、課表編輯）是 72×48 */
-.ex-head .ex-thumb { width: 54px; height: 36px; }
+/* 動作示意縮圖（ExerciseThumb）：正方形（Gym visual 的圖是 180×180、白底 3D 人形標出肌群）、尺寸固定、底色先鋪，
+   圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字。1px 內描邊讓白底圖在米色卡片上有個邊。
+   52px：列的 min-height 是 56，縮圖與放大鈕都 ≤ 55，有圖與沒圖（肌群單字）的列才一樣高。 */
+.ex-thumb { display: block; width: 52px; height: 52px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover;
+  outline: 1px solid var(--rule-subtle); outline-offset: -1px; }
+/* 訓練中卡片的名稱欄很擠（滿 8 組的圓點＋長的「下一組」），縮圖縮成 40×40；列表類畫面（動作庫、加動作、課表編輯）是 52×52 */
+.ex-head .ex-thumb { width: 40px; height: 40px; }
 .ex-thumb.is-glyph { display: flex; align-items: center; justify-content: center; font-size: var(--t-md); font-weight: 600;
-  color: var(--ink-muted); }
-/* 點縮圖放大（ExerciseThumb zoom）：外包一顆鈕（高度 ≥ 44px 觸控下限），寬度與圖同寬；
+  color: var(--ink-muted); outline: none; }
+/* 點縮圖放大（ExerciseThumb zoom）：外包一顆鈕（≥ 44px 觸控下限），與圖同大；
    圖右下角疊一顆放大鏡角標——使用者 2026-10-20 回報「點圖看大圖很難觸發、看不出能點」，角標就是那個提示。
    按下時圖淡一階，與其他列按鈕的 :active 同語言 */
-.ex-zoom { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 72px; height: 48px;
+.ex-zoom { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 52px; height: 52px;
   padding: 0; border: none; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .ex-zoom:active .ex-thumb { opacity: .6; }
 .ex-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
-.ex-zoom-badge { position: absolute; right: 4px; bottom: 4px; width: 20px; height: 20px; padding: 4px; box-sizing: border-box;
+.ex-zoom-badge { position: absolute; right: 1px; bottom: 1px; width: 20px; height: 20px; padding: 4px; box-sizing: border-box;
   border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none;
   fill: none; stroke: var(--ink-muted); stroke-width: 2.4; stroke-linecap: round; }
-.ex-head > .ex-zoom { width: 54px; height: 44px; margin-right: var(--s-1); }
-.ex-head > .ex-zoom .ex-zoom-badge { right: 2px; bottom: 5px; width: 16px; height: 16px; padding: 3px; }
-/* 放大檢視（ExerciseViewer）：兩個姿勢上下排、各撐滿寬度（3:2），小螢幕放不下就在 sheet 內捲動 */
+.ex-head > .ex-zoom { width: 44px; height: 44px; margin-right: var(--s-1); }
+.ex-head > .ex-zoom .ex-zoom-badge { right: 0; bottom: 0; width: 16px; height: 16px; padding: 3px; }
+/* 放大檢視（ExerciseViewer）：一個 180×180 的動畫（GIF），放大到最寬 270px 置中；離線或減少動態時退成靜態縮圖 */
 .ex-viewer { display: flex; flex-direction: column; gap: var(--s-3); }
 .ex-viewer-group { margin: 0; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
 .ex-viewer-fig { margin: 0; }
-.ex-viewer-fig img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; border-radius: var(--r-tab);
-  background: var(--fill); object-fit: cover; }
-.ex-viewer-fig figcaption { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.ex-viewer-fig img { display: block; width: min(100%, 270px); height: auto; aspect-ratio: 1; margin: 0 auto; border-radius: var(--r-tab);
+  background: var(--fill); object-fit: cover; outline: 1px solid var(--rule-subtle); outline-offset: -1px; }
+.ex-viewer-fig figcaption { margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs);
+  text-align: center; }
+.ex-viewer-credit { margin: 0; font-size: var(--t-xs); color: var(--ink-faint); text-align: center; }
 .ex-info.is-empty { color: var(--ink-faint); }
 .ex-info[aria-expanded="true"] { color: var(--accent); }
 .ex-info:disabled { opacity: .35; cursor: default; }

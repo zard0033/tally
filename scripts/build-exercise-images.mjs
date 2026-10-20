@@ -1,77 +1,60 @@
-/* 動作示意圖的產生腳本（一次性，圖已進 repo；之後新增動作時重跑）。
-   來源：free-exercise-db（https://github.com/yuhonas/free-exercise-db ，The Unlicense，LICENSE.md 在 repo 根目錄）。
-   注意：該 repo 的照片轉自 wrkout/exercises.json，原始拍攝來源 repo 沒有交代——「公有領域」是 repo 作者的宣告。
+/* 動作示意圖的取得腳本（一次性，圖已進 repo；之後新增動作時重跑）。
+   來源：exercises-dataset（https://github.com/hasaneyldrm/exercises-dataset）。圖與 GIF 是 Gym visual 的
+   （© Gym visual — https://gymvisual.com/），經版權方許可以 180×180 散布；使用者 2026-10-20 向 Gym visual 確認個人 App 可以使用。
+   授權條款與致謝要求見 NOTICE.md；dataset 的 MIT 只涵蓋文字資料，不涵蓋圖。
    **下載釘在固定 commit**（不跟 main）：上游內容會變，重跑要得到同樣的圖；要更新就換 SHA 並看 diff。
-   對照表 `scripts/exercise-images.json`：{ 動作 key: 資料集的動作 id }。
-   產出兩組（原圖 850×567，3:2）：
-   - 縮圖 `src/assets/exercises/<key>.webp`：第一張（起始姿勢），寬 240，約 3–11KB。
-   - 放大圖 `src/assets/exercises-large/<key>-0.webp`（起始）與 `<key>-1.webp`（收尾），寬 640，約 4–40KB；
-     資料集沒有第二張、或第二張與第一張完全相同的動作只有 -0（檢視器退成單張）。這類動作每次重跑都會重抓一次
-     兩張圖（沒有 -1 檔可供判斷「已做過」），只有少數幾個，不值得為它記狀態。
-   需要 ffmpeg（含 libwebp）在 PATH。用法：node scripts/build-exercise-images.mjs [--force] */
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+   對照表 `scripts/exercise-images.json`：{ map: { 動作 key: 資料集的動作 id }, noImage: [沒有對應的 key] }。
+   產出（原檔直接存，不轉檔、不縮放）：
+   - 縮圖 `src/assets/exercises/<key>.jpg`：180×180，約 6–9KB，進 precache（離線看得到）。
+   - 動畫 `src/assets/exercise-gifs/<key>.gif`：180×180，不進 precache（檢視器才載，離線退回縮圖）。
+   用法：node scripts/build-exercise-images.mjs [--force] */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const map = JSON.parse(readFileSync(join(root, 'scripts/exercise-images.json'), 'utf8'))
-const outDir = join(root, 'src/assets/exercises')
-const largeDir = join(root, 'src/assets/exercises-large')
+const { map } = JSON.parse(readFileSync(join(root, 'scripts/exercise-images.json'), 'utf8'))
+const thumbDir = join(root, 'src/assets/exercises')
+const gifDir = join(root, 'src/assets/exercise-gifs')
 const force = process.argv.includes('--force')
-const COMMIT = 'f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5'
-const BASE = `https://raw.githubusercontent.com/yuhonas/free-exercise-db/${COMMIT}/exercises`
-// key 會組成輸出檔名、datasetId 會組成網址：只收安全字元，對照表被改壞時直接停（不會寫到 outDir 以外、也不會打到別的路徑）
-const SAFE = /^[A-Za-z0-9_-]+$/
-mkdirSync(outDir, { recursive: true })
-mkdirSync(largeDir, { recursive: true })
-// 暫存放在每次新建的私有目錄，不用固定檔名（共用 /tmp 的系統上可被預先放 symlink）
-const tmpDir = mkdtempSync(join(tmpdir(), 'tally-ex-'))
+const COMMIT = '7455efae41b330c265e7cd4b78dfa848e7ce5ebd'
+const BASE = `https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/${COMMIT}`
+// key 會組成輸出檔名、路徑會組成網址：只收安全字元，對照表或資料集被改壞時直接停（不會寫到輸出目錄以外）
+const SAFE_KEY = /^[A-Za-z0-9_-]+$/
+const SAFE_PATH = /^(images|videos)\/[A-Za-z0-9_-]+\.(jpg|gif)$/
+mkdirSync(thumbDir, { recursive: true })
+mkdirSync(gifDir, { recursive: true })
 
-/** 下載 <datasetId>/<n>.jpg；404 回 null（該動作沒有這一張），其餘失敗直接丟。 */
-async function download(key, datasetId, n) {
-  const res = await fetch(`${BASE}/${datasetId}/${n}.jpg`)
-  if (res.status === 404) return null
-  if (!res.ok) throw new Error(`${key}（${datasetId}/${n}）下載失敗：HTTP ${res.status}`)
-  const tmp = join(tmpDir, `${key}-${n}.jpg`)
-  writeFileSync(tmp, Buffer.from(await res.arrayBuffer()))
-  return tmp
+async function get(path) {
+  const res = await fetch(`${BASE}/${path}`)
+  if (!res.ok) throw new Error(`${path} 下載失敗：HTTP ${res.status}`)
+  return Buffer.from(await res.arrayBuffer())
 }
 
-function toWebp(tmp, out, width, quality) {
-  // 指定輸入格式為 jpeg、只准讀本機檔：不讓 ffmpeg 依內容猜成 playlist 之類會再去抓別的資源的格式
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-protocol_whitelist', 'file', '-f', 'jpeg_pipe', '-i', tmp, '-vf', `scale=${width}:-2:flags=lanczos`, '-c:v', 'libwebp', '-quality', String(quality), '-compression_level', '6', out])
-  return statSync(out).size
-}
-
-let made = 0
-let total = 0
-let madeLarge = 0
-let totalLarge = 0
-const noEnd = []
-try {
-  for (const [key, datasetId] of Object.entries(map)) {
-    if (!SAFE.test(key) || !SAFE.test(datasetId)) throw new Error(`對照表含不合法字元：${key} → ${datasetId}`)
-    const thumb = join(outDir, `${key}.webp`)
-    const large0 = join(largeDir, `${key}-0.webp`)
-    const large1 = join(largeDir, `${key}-1.webp`)
-    const needThumb = force || !existsSync(thumb)
-    const need0 = force || !existsSync(large0)
-    const need1 = force || !existsSync(large1)
-    if (!needThumb && !need0 && !need1) continue
-    const tmp = await download(key, datasetId, 0)
-    if (!tmp) throw new Error(`${key}（${datasetId}）沒有第一張圖`)
-    if (needThumb) { total += toWebp(tmp, thumb, 240, 60); made++ }
-    if (need0) { totalLarge += toWebp(tmp, large0, 640, 60); madeLarge++ }
-    if (need1) {
-      const tmp1 = await download(key, datasetId, 1)
-      // 有些動作上游的兩張是同一張圖（例：reverse-grip-barbell-row）：並排放兩張一樣的照片沒有意義，當作沒有收尾姿勢
-      if (tmp1 && !readFileSync(tmp).equals(readFileSync(tmp1))) { totalLarge += toWebp(tmp1, large1, 640, 60); madeLarge++ } else noEnd.push(key)
-    }
+const dataset = JSON.parse((await get('data/exercises.json')).toString('utf8'))
+const byId = new Map(dataset.map((r) => [r.id, r]))
+let thumbs = 0
+let gifs = 0
+let thumbBytes = 0
+let gifBytes = 0
+for (const [key, id] of Object.entries(map)) {
+  if (!SAFE_KEY.test(key)) throw new Error(`對照表含不合法的 key：${key}`)
+  const row = byId.get(id)
+  if (!row) throw new Error(`${key} 的資料集 id ${id} 不存在`)
+  if (!SAFE_PATH.test(row.image) || !SAFE_PATH.test(row.gif_url)) throw new Error(`${key}（${id}）的檔案路徑不合法：${row.image}／${row.gif_url}`)
+  const thumb = join(thumbDir, `${key}.jpg`)
+  const gif = join(gifDir, `${key}.gif`)
+  if (force || !existsSync(thumb)) {
+    const buf = await get(row.image)
+    writeFileSync(thumb, buf)
+    thumbs++
+    thumbBytes += buf.length
   }
-} finally {
-  rmSync(tmpDir, { recursive: true, force: true })
+  if (force || !existsSync(gif)) {
+    const buf = await get(row.gif_url)
+    writeFileSync(gif, buf)
+    gifs++
+    gifBytes += buf.length
+  }
 }
-console.log(`縮圖 ${made} 張，共 ${(total / 1024).toFixed(0)} KB；放大圖 ${madeLarge} 張，共 ${(totalLarge / 1024).toFixed(0)} KB`)
-if (noEnd.length > 0) console.log(`沒有收尾姿勢（只有單張）：${noEnd.join(', ')}`)
+console.log(`縮圖 ${thumbs} 張，共 ${(thumbBytes / 1024).toFixed(0)} KB；動畫 ${gifs} 個，共 ${(gifBytes / 1024 / 1024).toFixed(1)} MB`)

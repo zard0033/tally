@@ -3,15 +3,15 @@ import { EXERCISE_CATALOG, EXTRA_EXERCISES, autoSeedOps, catalogInsertOps, catal
 import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
-const images = import.meta.glob<string>('../assets/exercises/*.webp', { eager: true, query: '?inline', import: 'default' })
-const large = import.meta.glob<string>('../assets/exercises-large/*.webp', { eager: true, query: '?inline', import: 'default' })
-const imageMap = Object.values(
-  import.meta.glob<Record<string, string>>('../../scripts/exercise-images.json', { eager: true, import: 'default' }),
+const images = import.meta.glob<string>('../assets/exercises/*.jpg', { eager: true, query: '?inline', import: 'default' })
+const gifs = import.meta.glob<string>('../assets/exercise-gifs/*.gif', { eager: true, query: '?inline', import: 'default' })
+const { map: imageMap, noImage } = Object.values(
+  import.meta.glob<{ map: Record<string, string>; noImage: string[] }>('../../scripts/exercise-images.json', { eager: true, import: 'default' }),
 )[0]
 /** 該帳號原始的 16 個預設動作（App 自己預填過的樣子）。 */
 const coreRows = (u: string): Row[] =>
   PRESET_EXERCISES.map((p) => ({ id: presetExerciseId(u, p.key), user_id: u, name: p.name, muscle_group: p.muscle_group, tips: null, archived: false }))
-const fileKey = (path: string) => path.replace(/^.*\//, '').replace(/\.webp$/, '')
+const fileKey = (path: string) => path.replace(/^.*\//, '').replace(/\.(jpg|gif)$/, '')
 /** data URI → 位元組數與前 12 個位元組（latin1 字串） */
 function inspect(dataUri: string) {
   const bin = atob(dataUri.slice(dataUri.indexOf(',') + 1))
@@ -60,40 +60,40 @@ describe('動作目錄', () => {
 })
 
 describe('示意圖檔案', () => {
-  it('目錄裡每個動作都有圖、也都在對照表裡；沒有多餘的圖或對照', () => {
+  it('目錄裡每個動作不是有圖就是明列在 noImage；縮圖與動畫都和對照表一一對應，沒有多餘的檔案', () => {
     const keys = EXERCISE_CATALOG.map((p) => p.key).sort()
-    expect(Object.keys(imageMap).sort()).toEqual(keys)
-    expect(Object.keys(images).map(fileKey).sort()).toEqual(keys)
+    // 資料集沒有對應的兩個（退回肌群單字）；要新增例外得連這條一起改，不會悄悄多出沒圖的動作
+    expect(noImage.slice().sort()).toEqual(['bodyweight-squat', 'box-squat'])
+    expect([...Object.keys(imageMap), ...noImage].sort()).toEqual(keys)
+    expect(Object.keys(images).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
+    expect(Object.keys(gifs).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
   })
 
-  it('圖是真的 webp、每張 ≤ 20KB（離線 precache 的預算）', () => {
+  it('縮圖是真的 jpg、每張 ≤ 15KB（離線 precache 的預算）', () => {
     for (const [path, uri] of Object.entries(images)) {
       const { size, head } = inspect(uri)
-      expect(size, fileKey(path)).toBeLessThanOrEqual(20 * 1024)
-      expect(head.slice(0, 4), fileKey(path)).toBe('RIFF')
-      expect(head.slice(8, 12), fileKey(path)).toBe('WEBP')
+      expect(size, fileKey(path)).toBeLessThanOrEqual(15 * 1024)
+      expect(head.charCodeAt(0), fileKey(path)).toBe(0xff)
+      expect(head.charCodeAt(1), fileKey(path)).toBe(0xd8)
     }
   })
 
-  it('放大圖：每個動作都有起始姿勢（-0），收尾姿勢（-1）只能附在有 -0 的動作上；真 webp、每張 ≤ 45KB（離線 precache 的預算）', () => {
-    const keys = new Set(EXERCISE_CATALOG.map((p) => p.key))
-    const names = Object.keys(large).map(fileKey)
-    for (const k of keys) expect(names, k).toContain(`${k}-0`)
-    for (const n of names) {
-      expect(n, n).toMatch(/-[01]$/)
-      expect(keys.has(n.replace(/-[01]$/, '')), n).toBe(true)
-    }
-    for (const [path, uri] of Object.entries(large)) {
+  it('動畫是真的 GIF（180×180）、每個 ≤ 300KB；不進 precache，所以這是首次播放的流量上限', () => {
+    for (const [path, uri] of Object.entries(gifs)) {
       const { size, head } = inspect(uri)
-      expect(size, fileKey(path)).toBeLessThanOrEqual(45 * 1024)
-      expect(head.slice(0, 4), fileKey(path)).toBe('RIFF')
-      expect(head.slice(8, 12), fileKey(path)).toBe('WEBP')
+      expect(size, fileKey(path)).toBeLessThanOrEqual(300 * 1024)
+      expect(head.slice(0, 4), fileKey(path)).toBe('GIF8')
+      // 邏輯螢幕寬高：位元組 6–9，小端 16 位元
+      expect(head.charCodeAt(6) + head.charCodeAt(7) * 256, fileKey(path)).toBe(180)
+      expect(head.charCodeAt(8) + head.charCodeAt(9) * 256, fileKey(path)).toBe(180)
     }
   })
 
-  it('對照表的資料集 id 不重複（一個動作一張自己的圖）', () => {
-    const ids = Object.values(imageMap)
-    expect(new Set(ids).size).toBe(ids.length)
+  it('對照表的資料集 id 只有已知的重複：資料集沒有單腿腿屈伸，借腿屈伸的圖', () => {
+    const byId = new Map<string, string[]>()
+    for (const [k, id] of Object.entries(imageMap)) byId.set(id, [...(byId.get(id) ?? []), k])
+    const dups = [...byId.values()].filter((ks) => ks.length > 1).map((ks) => ks.sort().join('+'))
+    expect(dups).toEqual(['leg-extension+single-leg-extension'])
   })
 })
 

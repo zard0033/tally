@@ -647,10 +647,10 @@ test('取消封存：回到清單與選單', async ({ page }) => {
 
 /* ═══════════ 動作示意圖與自動補預設動作 ═══════════ */
 
-/** 圖已載入且是我們產的 240 寬 webp（lazy 圖要在視窗內才會載，所以用 poll）。 */
+/** 圖已載入且是 180 寬（Gym visual 的縮圖與動畫都是 180×180；lazy 圖要在視窗內才會載，所以用 poll）。 */
 const imgLoaded = async (img: Locator) => {
   await img.scrollIntoViewIfNeeded() // loading="lazy" 的圖不在視窗內不會載
-  await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(240)
+  await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(180)
 }
 
 /** 第一次開、伺服器沒有動作 → App 預填整份目錄 150 個（帶 user_id），等伺服器真的收到再往下。 */
@@ -674,13 +674,19 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
   const legRow = library(page).locator('.tr-row').filter({ has: page.getByText('腿推舉', { exact: true }) })
   const img = legRow.locator('img.ex-thumb')
   await expect(img).toHaveCount(1)
-  expect(await img.getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.webp$/)
+  expect(await img.getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.jpg$/)
   expect(await img.getAttribute('alt'), '旁邊就是名稱，圖是裝飾').toBe('')
   await imgLoaded(img)
 
   const custom = library(page).locator('.tr-row', { hasText: '我的自建動作' })
   await expect(custom.locator('img.ex-thumb')).toHaveCount(0)
   await expect(custom.locator('.ex-thumb.is-glyph')).toHaveText('他')
+  // 資料集沒有對應的預設動作（徒手深蹲、箱式深蹲）也是肌群單字、不是放大鈕
+  for (const name of ['徒手深蹲', '箱式深蹲']) {
+    const row = library(page).locator('.tr-row').filter({ has: page.getByText(name, { exact: true }) })
+    await expect(row.locator('.ex-thumb.is-glyph'), `${name} 沒有圖，退回肌群單字`).toHaveCount(1)
+    await expect(row.locator('.ex-zoom'), `${name} 沒有圖就沒有放大鈕`).toHaveCount(0)
+  }
   const a = (await img.boundingBox())!
   const b = (await custom.locator('.ex-thumb').boundingBox())!
   expect([b.width, b.height], '沒有圖的縮圖與有圖的同尺寸，列不會因為有沒有圖而跳').toEqual([a.width, a.height])
@@ -704,17 +710,20 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
   expect(scripts.length).toBeGreaterThan(0)
   for (const src of scripts) {
     const text = await (await page.request.get(src)).text()
-    expect(text.includes('data:image/webp'), `${src} 不該內嵌動作圖`).toBe(false)
+    expect(/data:image\/(jpeg|gif)/.test(text), `${src} 不該內嵌動作圖`).toBe(false)
   }
   const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
-  const precached = new Set(sw.match(/assets\/[\w-]+\.webp/g) ?? [])
-  // 150 縮圖＋150 放大圖的起始姿勢。收尾姿勢（-1）不進 precache：全進去（449 張）時新版 SW 會偶發卡在 activating，
-  // 見 vite.config.ts 的 globIgnores；這個數字同時鎖住「縮圖沒有被 -1 的樣式誤排除」
-  expect(precached.size, 'service worker 的 precache 清單：縮圖與放大圖的起始姿勢').toBe(300)})
+  const precached = new Set(sw.match(/assets\/[\w-]+\.jpg/g) ?? [])
+  // 148 個有圖的動作＝147 個不同的檔案（腿屈伸與單腿腿屈伸共用同一張圖，內容相同所以檔名雜湊也相同）進 precache，
+  // 離線健身房看得到。動畫（gif，共約 14MB）不進：項數與體積太大時新版 SW 會偶發卡在 activating，見 vite.config.ts；
+  // 這兩個斷言一起鎖住「縮圖都在、動畫都不在」
+  expect(precached.size, 'service worker 的 precache 清單：縮圖').toBe(147)
+  expect(sw.match(/\.gif/g), 'gif 動畫不該進 precache').toBeNull()
+})
 
 const viewer = (page: Page) => page.locator('[data-screen="exercise-viewer"]')
 
-test('動作示意圖放大：點動作庫的縮圖開檢視器（起始＋收尾兩張 640 寬），不會誤開編輯；Esc 關、焦點回縮圖；自建動作沒有放大鈕', async ({ page }) => {
+test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×180 的示意動畫），不會誤開編輯；Esc 關、焦點回縮圖；自建動作沒有放大鈕', async ({ page }) => {
   await openSeededLibrary(page)
   await library(page).getByRole('button', { name: '新增動作' }).click()
   await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
@@ -726,21 +735,22 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（起始＋收�
   const box = (await zoom.boundingBox())!
   expect(box.height, '觸控區 ≥ 44px').toBeGreaterThanOrEqual(44)
   await expect(zoom.locator('.ex-zoom-badge'), '縮圖角落有放大鏡角標，看得出能點').toHaveCount(1)
-  expect(Math.round((await zoom.locator('img.ex-thumb').boundingBox())!.width), '列表縮圖 72px 寬').toBe(72)
+  expect(Math.round((await zoom.locator('img.ex-thumb').boundingBox())!.width), '列表縮圖 52px 寬').toBe(52)
   await zoom.click()
   await expect(viewer(page)).toBeVisible()
   await expect(editSheet(page), '點縮圖不該同時開編輯').toHaveCount(0)
   await expect(viewer(page).getByRole('heading', { name: '腿推舉' })).toBeVisible()
   await expect(viewer(page).locator('.ex-viewer-group'), '標題下一行是肌群').toHaveText('下半身')
   const imgs = viewer(page).locator('img')
-  await expect(imgs).toHaveCount(2)
-  await expect(viewer(page).locator('figcaption')).toHaveText(['起始姿勢', '收尾姿勢'])
-  for (let i = 0; i < 2; i++) {
-    await expect.poll(() => imgs.nth(i).evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(640)
-    expect(await imgs.nth(i).getAttribute('alt')).toBe(`腿推舉・${i === 0 ? '起始' : '收尾'}姿勢`)
-  }
-  const first = (await imgs.nth(0).boundingBox())!
-  expect(first.width, '放大後明顯比縮圖（72px）大').toBeGreaterThan(300)
+  await expect(imgs, '一個動畫，沒有「起始／收尾」兩張').toHaveCount(1)
+  expect(await imgs.getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.gif$/)
+  expect(await imgs.getAttribute('alt')).toBe('腿推舉示意動畫')
+  await expect.poll(() => imgs.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(180)
+  await expect(viewer(page).locator('figcaption'), '動畫正常播放時沒有說明').toHaveCount(0)
+  await expect(viewer(page).locator('.ex-viewer-credit'), '著作權人要求每次使用都附標示').toHaveText('© Gym visual — https://gymvisual.com/')
+  const first = (await imgs.boundingBox())!
+  expect(first.width, '放大後明顯比縮圖（52px）大').toBeGreaterThan(200)
+  expect(Math.round(first.width), '寬高相同（正方形）').toBe(Math.round(first.height))
 
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)
@@ -770,33 +780,42 @@ test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；�
   await expect(page.locator('.ex')).toHaveCount(1)
 })
 
-test('動作示意圖放大：上游兩張相同的動作（反握槓鈴划船）只顯示一張、沒有「起始／收尾」標籤', async ({ page }) => {
+test('動作示意圖放大：動畫載不到（離線不進 precache）就退成靜態縮圖並說明，下次開再試', async ({ page }) => {
   await openSeededLibrary(page)
-  await library(page).getByRole('button', { name: '放大反握槓鈴划船的示意圖' }).click()
-  await expect(viewer(page)).toBeVisible()
-  await expect(viewer(page).locator('img')).toHaveCount(1)
-  await expect(viewer(page).locator('figcaption')).toHaveCount(0)
-  expect(await viewer(page).locator('img').getAttribute('alt')).toBe('反握槓鈴划船・起始姿勢')
-})
-
-test('動作示意圖放大：收尾姿勢載不到（離線不進 precache）就藏起來退成單張，下次開再試', async ({ page }) => {
-  await openSeededLibrary(page)
-  await page.route('**/assets/*-1-*.webp', (route) => route.abort())
+  await page.route('**/assets/*.gif', (route) => route.abort())
   const zoom = library(page).getByRole('button', { name: '放大腿推舉的示意圖' })
   await zoom.click()
   await expect(viewer(page)).toBeVisible()
   const imgs = viewer(page).locator('img')
-  await expect(imgs, '收尾那張失敗後只剩起始姿勢，沒有破圖').toHaveCount(1)
-  expect(await imgs.getAttribute('alt')).toBe('腿推舉・起始姿勢')
-  await expect.poll(() => imgs.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(640)
+  await expect(viewer(page).locator('figcaption'), '動畫失敗後說明原因').toHaveText('離線時只能看靜態圖，連上網路後再開就有動畫')
+  await expect(imgs, '只有一張圖，沒有破圖').toHaveCount(1)
+  expect(await imgs.getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.jpg$/)
+  expect(await imgs.getAttribute('alt')).toBe('腿推舉示意圖')
+  await expect.poll(() => imgs.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth)).toBe(180)
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)
 
-  // 網路回來：再開一次，收尾姿勢重新出現
-  await page.unroute('**/assets/*-1-*.webp')
+  // 網路回來：再開一次，動畫重新出現、說明消失
+  await page.unroute('**/assets/*.gif')
   await zoom.click()
-  await expect(viewer(page).locator('img')).toHaveCount(2)
-  await expect(viewer(page).locator('figcaption')).toHaveText(['起始姿勢', '收尾姿勢'])
+  await expect(viewer(page).locator('figcaption')).toHaveCount(0)
+  await expect.poll(() => viewer(page).locator('img').getAttribute('src')).toMatch(/\.gif$/)
+})
+
+test('動作示意圖放大：減少動態時直接顯示靜態縮圖（GIF 沒辦法暫停）', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openSeededLibrary(page)
+  let gifRequests = 0
+  await page.route('**/assets/*.gif', (route) => {
+    gifRequests++
+    return route.continue()
+  })
+  await library(page).getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  const imgs = viewer(page).locator('img')
+  await expect(viewer(page).locator('figcaption')).toHaveText('已開啟「減少動態」，顯示靜態圖')
+  expect(await imgs.getAttribute('src')).toMatch(/\.jpg$/)
+  expect(gifRequests, '減少動態時不該去抓動畫').toBe(0)
 })
 
 test('動作示意圖放大：除了縮圖本身，整列都還是主按鈕（左內距、自建動作的肌群單字點了照樣開編輯）', async ({ page }) => {
@@ -835,7 +854,7 @@ test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，�
   await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
   await editor(page).getByRole('button', { name: '放大腿推舉的示意圖' }).click()
   await expect(viewer(page)).toBeVisible()
-  await expect(viewer(page).locator('img')).toHaveCount(2)
+  await expect(viewer(page).locator('img')).toHaveCount(1)
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)
   await expect(targetSheet(page), '點縮圖不該同時開「預設組次」').toHaveCount(0)

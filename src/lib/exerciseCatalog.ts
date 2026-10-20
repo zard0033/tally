@@ -1,6 +1,7 @@
 /* 動作庫的預設目錄：既有 16 個預填動作（`PRESET_EXERCISES`，新帳號首次預填）加上 134 個常見動作，共 150 個。
-   每個動作有一張示意圖 `src/assets/exercises/<key>.webp`（來源與授權見 `scripts/build-exercise-images.mjs`，
-   key→資料集 id 的對照在 `scripts/exercise-images.json`）。
+   每個動作有一張縮圖 `src/assets/exercises/<key>.jpg` 與一個示意動畫 `src/assets/exercise-gifs/<key>.gif`
+   （Gym visual 的圖；來源與授權見 `scripts/build-exercise-images.mjs` 與 `NOTICE.md`，key→資料集 id 的對照在
+   `scripts/exercise-images.json`；徒手深蹲、箱式深蹲資料集沒有對應，列在該檔的 `noImage`，退回肌群單字）。
 
    **id 與圖的對應不靠 schema**：預設動作的列 id 是確定性的（`presetExerciseId`：userId＋key 的 uuid v5），
    所以拿列上的 `user_id` 與 `id` 重算一次就知道它是哪個預設動作、該用哪張圖——使用者改名、封存、寫要點都不影響。

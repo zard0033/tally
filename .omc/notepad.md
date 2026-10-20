@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-19）：v2.74 點動作縮圖放大已 push（79b056d）；vitest 652、e2e 249 全過、lint／build 過；真機未驗 v2.72–v2.74。放大圖只有起始姿勢進 precache（311 項）；全進（460 項）SW 會卡 activating，見 MANUAL 2026-10-19。
-下一步：手機驗 v2.72–v2.74（尤其更新後 SW 有沒有卡住）；體重趨勢圖（含體脂，spec 已核可未開工）。scratchpad 的 base／ctl worktree 待清（刪前列清單）。
+現況（2026-10-20）：v2.75 體重趨勢圖（e822424）、v2.76 縮圖放大角標（49b01af）已 commit；v2.77 換成 Gym visual 3D 人形＋GIF 縮圖本機完成、待 commit。均未 push。vitest 668；e2e 258 條 257 過（tally.spec 已知偶發）。真機未驗 v2.72–v2.77。
+下一步：commit v2.77 → push 前 review；建議存下 Gym visual 的回覆並補問 public repo 是否涵蓋（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。scratchpad 的 base／ctl worktree 待清（刪前列清單）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -83,3 +83,9 @@ v2.74 點動作縮圖放大（使用者提出，spec.md 沒寫；DESIGN v2.74 �
 - [追加 2026-10-19] 點縮圖開放大檢視（起始＋收尾兩姿勢）；動作庫／加動作／訓練中卡片／課表編輯四處可點。放大圖 640 寬 299 張（`src/assets/exercises-large`，腳本 `build-exercise-images.mjs` 重產）。
 - **離線取捨（使用者 2026-10-19 裁決方案 1）**：只有起始姿勢進 precache（311 項／4.5MB），收尾姿勢離線看不到、檢視器自動藏起來。原因：放大圖全進 precache（460 項）時新版 SW 偶發卡在 activating。要把收尾姿勢也做成離線可看，得先查清 SW 卡住的根因。
 - **待辦**：①真機驗檢視器疊在加動作 sheet 上的手感與下滑關閉（巢狀 dialog 沒有自己的暗色背景層，已知）。②體重趨勢圖（含體脂）spec 已核可、未開工：折線＋7 天平均、30／90／全部、體脂另畫一張共用 X 軸與十字線、明細表。
+### 2026-10-20 11:20
+動作示意圖換成 Gym visual 的 3D 人形＋GIF（v2.77；DESIGN v2.77 與元件規則「動作示意圖與預設動作目錄」條有全文）
+- 來源 https://github.com/hasaneyldrm/exercises-dataset：**MIT 只涵蓋程式與文字資料，圖與 GIF 是 Gym visual 的**（180×180，要求每次使用附 `© Gym visual — https://gymvisual.com/`，已印在設定頁底部與放大檢視、repo 根目錄 NOTICE.md）。使用者已向 Gym visual 確認「個人 app 沒問題」（口頭轉述，**信件沒存、沒確認 public repo 內放圖檔是否涵蓋**——建議存信並補問一句）。
+- 150 個動作對應：148 個有圖（腿屈伸與單腿腿屈伸共用一張），徒手深蹲、箱式深蹲沒有對應（退回肌群單字，列在 `scripts/exercise-images.json` 的 `noImage`）。縮圖 jpg 進 precache（159 項／2.4MB），GIF 不進（約 14MB），離線退回靜態縮圖。
+- 瘦身清單（只留初中階，33 個，程度 7／冗餘 26）擱置：使用者 2026-10-20 說「先不刪」，目錄維持 150 個。要做時：改目錄＋對使用者帳號封存被拿掉的動作（exercises 不能真刪），寫入前先列清單確認。
+- 取代了上面 2026-10-15 17:30 那節的待決②（肌肉解剖圖）與 v2.71 的照片來源。

@@ -255,6 +255,7 @@ export default function Settings(props: SettingsProps) {
         <button className="signout" type="button" onClick={onSignOut}>
           登出
         </button>
+        <p className="settings-credit">動作示意圖 © Gym visual — https://gymvisual.com/</p>
       </div>
 
       {bodyUpdateSheet}

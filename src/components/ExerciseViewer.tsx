@@ -1,63 +1,65 @@
 /* 動作示意圖的放大檢視（點縮圖開，見 ExerciseThumb 的 `zoom`；規則見 DESIGN.md「動作示意圖」條）。
-   底部升起的 SpringSheet（與全站其他 sheet 同一套手感：下滑、點背景、Esc 都能關），起始與收尾兩個姿勢上下排、
-   各撐滿寬度，一屏看完不必切換。資料集沒有收尾姿勢的動作只顯示一張。
-   放大圖（`src/assets/exercises-large/<key>-0|1.webp`，640 寬）網址的對照表放在這個檔案——ExerciseThumb 用 lazy 載入它，
-   約 300 個網址字串不進主 bundle。
-   **離線**：只有起始姿勢（-0）進 precache；收尾姿勢（-1）不進（precache 到 460 項時 SW 會偶發卡在 activating，見 DESIGN v2.74），
-   所以離線時收尾那張載不到——載入失敗就把那一張藏起來、退成單張，而不是留一個破圖。下次開檢視器會再試一次。
-   **alt 有內容**：這裡的圖就是要看的資訊（縮圖才是裝飾、alt=""）。 */
+   底部升起的 SpringSheet（與全站其他 sheet 同一套手感：下滑、點背景、Esc 都能關），中間播放該動作的示意動畫
+   （`src/assets/exercise-gifs/<key>.gif`，180×180，Gym visual 的 3D 人形標出肌群），最寬放大到 270px。
+   動畫網址的對照表放在這個檔案——ExerciseThumb 用 lazy 載入它，約 150 個網址字串不進主 bundle。
+   **離線**：縮圖（jpg）進 precache、動畫（gif，共約 14MB）不進——全進會讓 precache 項數與體積太大（見 DESIGN v2.74／v2.77）。
+   所以離線時動畫載不到：載入失敗就退成靜態縮圖並說明，而不是留一個破圖；下次開檢視器會再試一次。
+   **減少動態**：GIF 沒辦法暫停，`prefers-reduced-motion` 時直接顯示靜態縮圖。
+   **alt 有內容**：這裡的圖就是要看的資訊（縮圖才是裝飾、alt=""）。
+   圖片 © Gym visual：每次使用都要附著作權標示（NOTICE.md），所以檢視器底下固定印一行。 */
 import { useEffect, useState, type RefObject } from 'react'
+import { useReducedMotion } from 'motion/react'
 import SpringSheet from '@/components/SpringSheet'
 import { catalogKey } from '@/lib/exerciseCatalog'
 import { MUSCLE_GROUP_LABEL, type MuscleGroup, type Row } from '@/lib/training'
 
-const urls = import.meta.glob<string>('/src/assets/exercises-large/*.webp', { eager: true, query: '?url', import: 'default' })
+const urls = import.meta.glob<string>('/src/assets/exercise-gifs/*.gif', { eager: true, query: '?url', import: 'default' })
 
-/** 該動作的放大圖：[起始, 收尾]；沒有收尾回一張，沒有圖回空陣列。 */
-function largeImageUrls(exercise: Row | null): string[] {
-  const key = exercise ? catalogKey(exercise) : null
-  if (!key) return []
-  return [urls[`/src/assets/exercises-large/${key}-0.webp`], urls[`/src/assets/exercises-large/${key}-1.webp`]].filter(
-    (u): u is string => typeof u === 'string',
-  )
+/** 該動作的示意動畫網址；沒有回 undefined。 */
+function gifUrl(exercise: Row): string | undefined {
+  const key = catalogKey(exercise)
+  return key ? urls[`/src/assets/exercise-gifs/${key}.gif`] : undefined
 }
 
 interface ExerciseViewerProps {
   exercise: Row
+  /** 靜態縮圖網址（動畫載不到、或減少動態時顯示）。 */
+  thumb: string
   open: boolean
   onClose: () => void
   finalFocus?: RefObject<HTMLElement | null>
 }
 
-export default function ExerciseViewer({ exercise, open, onClose, finalFocus }: ExerciseViewerProps) {
+export default function ExerciseViewer({ exercise, thumb, open, onClose, finalFocus }: ExerciseViewerProps) {
   const name = String(exercise.name)
   const group = MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他'
-  const [endFailed, setEndFailed] = useState(false)
-  // 每次開啟都重新嘗試收尾姿勢：離線時藏起來，回線後再開就看得到
+  const reduced = useReducedMotion()
+  const [gifFailed, setGifFailed] = useState(false)
+  // 每次開啟都重新嘗試動畫：離線時退成靜態圖，回線後再開就看得到
   useEffect(() => {
-    if (open) setEndFailed(false)
+    if (open) setGifFailed(false)
   }, [open])
-  const all = largeImageUrls(exercise)
-  const images = endFailed ? all.slice(0, 1) : all
-  const poses = ['起始姿勢', '收尾姿勢']
+  const gif = gifUrl(exercise)
+  const playing = gif !== undefined && !gifFailed && !reduced
+  const note = reduced ? '已開啟「減少動態」，顯示靜態圖' : gifFailed ? '離線時只能看靜態圖，連上網路後再開就有動畫' : null
   return (
     <SpringSheet open={open} onClose={onClose} label={`${name}示意圖`} title={name} screen="exercise-viewer" finalFocus={finalFocus}>
       <div className="tr-sheet-body tr-sheet-scroll ex-viewer">
         <p className="ex-viewer-group">{group}</p>
-        {images.map((src, i) => (
-          <figure className="ex-viewer-fig" key={src}>
-            <img
-              src={src}
-              alt={`${name}・${poses[i]}`}
-              width={640}
-              height={427}
-              decoding="async"
-              draggable={false}
-              onError={i === 1 ? () => setEndFailed(true) : undefined}
-            />
-            {all.length > 1 ? <figcaption>{poses[i]}</figcaption> : null}
-          </figure>
-        ))}
+        <figure className="ex-viewer-fig">
+          <img
+            key={playing ? 'gif' : 'still'}
+            src={playing ? gif : thumb}
+            alt={`${name}示意${playing ? '動畫' : '圖'}`}
+            width={180}
+            height={180}
+            decoding="async"
+            draggable={false}
+            onError={playing ? () => setGifFailed(true) : undefined}
+          />
+          {note ? <figcaption>{note}</figcaption> : null}
+        </figure>
+        <p className="ex-viewer-credit">© Gym visual — https://gymvisual.com/</p>
       </div>
     </SpringSheet>
   )

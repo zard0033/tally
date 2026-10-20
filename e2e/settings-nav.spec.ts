@@ -125,3 +125,10 @@ test('多欄輸入群組一律包在 form 裡（iOS 鍵盤上下箭頭靠它分�
   ).toBe(1)
   await expect(page.locator('#lf-kcal'), 'Enter 之後表單狀態不見了').toHaveValue('123')
 })
+
+/* 動作示意圖是 Gym visual 的，著作權人要求每次使用都附標示（NOTICE.md）：設定頁底部固定印一行。 */
+test('設定頁底部有動作示意圖的著作權標示', async ({ page }) => {
+  await openApp(page)
+  await openSettings(page)
+  await expect(page.locator('.settings-credit')).toHaveText('動作示意圖 © Gym visual — https://gymvisual.com/')
+})
