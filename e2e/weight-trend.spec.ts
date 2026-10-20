@@ -113,3 +113,30 @@ test('只有一筆：畫得出來、不丟錯', async ({ page }) => {
   await expect(tableRows(page)).toHaveCount(1)
   expect(errors, '一筆資料時頁面丟了例外').toEqual([])
 })
+
+const setDataDown = (page: Page, down: boolean) =>
+  page.evaluate((d) => ((window as unknown as { __dataDown: boolean }).__dataDown = d), down)
+
+test('連不上伺服器、手上又沒有資料可畫：說「連不上」，不能說成「還沒有體重紀錄」', async ({ page }) => {
+  await openApp(page, {}, { ...FIX, weight: toRows(READINGS) })
+  // 開設定頁之前先斷網：設定頁自己撈體重失敗，傳給趨勢頁的是 []（跟真的 0 筆長得一樣）
+  await setDataDown(page, true)
+  await page.locator('.tab[aria-label="設定"]').click()
+  await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
+  // postgrest-js 的 GET 失敗會重試（1＋2＋4 秒），所以約 7 秒後才確定連不上；這段時間畫面是骨架，不下結論
+  await expect(page.locator('.trend-skel')).toBeVisible()
+  await expect(page.locator('[data-screen="weight-trend"]')).toContainText('連不上伺服器', { timeout: 20_000 })
+  await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('還沒有體重紀錄')
+  await expect(page.locator('.recharts-wrapper')).toHaveCount(0)
+})
+
+test('趨勢頁自己的請求失敗、但設定頁已經有資料：退回那一份，圖照畫', async ({ page }) => {
+  await openApp(page, {}, { ...FIX, weight: toRows(READINGS) })
+  await page.locator('.tab[aria-label="設定"]').click()
+  await expect(page.locator('.entry-row .spark'), '設定頁的體重已載入').toBeVisible()
+  await setDataDown(page, true)
+  await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
+  await expect(page.locator('section[aria-label="體重"] .recharts-wrapper')).toBeVisible()
+  await expect(tableRows(page)).toHaveCount(inRange(90))
+  await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('連不上伺服器')
+})

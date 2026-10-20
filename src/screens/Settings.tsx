@@ -204,7 +204,22 @@ export default function Settings(props: SettingsProps) {
   }
   if (view === 'trend') {
     return (
-      <Suspense fallback={<div className="main" data-screen="weight-trend" />}>
+      // 第一次進來要先載 recharts 的 chunk：fallback 畫出與 WeightTrend 同樣的頂列與骨架，版面不從空白跳出來（頂列標記與 WeightTrend 一致）
+      <Suspense
+        fallback={
+          <div className="main" data-screen="weight-trend">
+            <div className="lib-topbar">
+              <button className="icon-btn" type="button" aria-label="返回設定" onClick={() => setView('list')}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
+              <h1>體重趨勢</h1>
+            </div>
+            <div className="trend-scroll">
+              <div className="trend-skel" aria-busy="true" aria-label="載入中" />
+            </div>
+          </div>
+        }
+      >
         <WeightTrend weights={weights} onBack={() => setView('list')} />
       </Suspense>
     )

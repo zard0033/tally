@@ -81,7 +81,7 @@ export default defineConfig({
         }),
   ],
   build: {
-    // 動作示意圖（src/assets/exercises 縮圖 3–10KB、src/assets/exercise-gifs 動畫 46–227KB）一律不內嵌：Vite 預設把 < 4KB 的資產
+    // 動作示意圖（src/assets/exercises 縮圖 4–11KB、src/assets/exercise-gifs 動畫 46–227KB）一律不內嵌：Vite 預設把 < 4KB 的資產
     // 轉 base64 塞進 JS，會被吞進主 bundle，還不會被當成獨立檔案 precache。其餘資產維持預設行為。
     // 比對的是路徑前綴 `/assets/exercise`，同時涵蓋 exercises 與 exercise-gifs 兩個目錄。
     assetsInlineLimit: (file) => (file.includes('/assets/exercise') ? false : undefined),

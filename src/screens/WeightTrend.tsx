@@ -37,16 +37,21 @@ function TrendTip({ active, payload }: TooltipContentProps) {
 export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   const [range, setRange] = useState<TrendRange>('90')
   const [full, setFull] = useState<Weight[] | null>(null)
+  const [failed, setFailed] = useState(false)
   const today = useMemo(() => localDate(), [])
 
-  /* 自己撈完整歷史；撈不到（離線、伺服器錯誤）就退回設定頁傳進來的那份，圖不空。 */
+  /* 自己撈完整歷史；撈不到（離線、伺服器錯誤）就退回設定頁傳進來的那份，圖不空。
+     設定頁撈失敗時傳進來的是 []（跟「真的 0 筆」長得一樣），所以這裡自己記 failed——
+     「連不上」跟「還沒有體重紀錄」是兩句不同的話，不能把離線說成沒有紀錄。 */
   useEffect(() => {
     let alive = true
-    listWeights(FULL_HISTORY).then((r) => alive && setFull(r)).catch(() => {})
+    listWeights(FULL_HISTORY).then((r) => alive && setFull(r)).catch(() => alive && setFailed(true))
     return () => { alive = false }
   }, [])
 
   const source = full ?? weights
+  // 自己的請求還沒回來、手上又沒有資料可畫：不下結論，先骨架（否則真空帳號與離線都會先閃一下「還沒有體重紀錄」）
+  const loading = full === null && !failed
   const points = useMemo(() => (source ? trendPoints(source, range, today) : []), [source, range, today])
   const dom = useMemo(() => xDomain(points, range, today), [points, range, today])
   const ticks = useMemo(() => (dom ? xTicks(dom[0], dom[1]) : []), [dom])
@@ -73,10 +78,10 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   }
 
   let body
-  if (source === null) {
+  if (source === null || (loading && source.length === 0)) {
     body = <div className="trend-skel" aria-busy="true" aria-label="載入中" />
   } else if (source.length === 0) {
-    body = <p className="trend-empty">還沒有體重紀錄</p>
+    body = <p className="trend-empty">{failed ? '連不上伺服器，載不到體重紀錄。連上網路後再開一次。' : '還沒有體重紀錄'}</p>
   } else if (points.length === 0) {
     body = (
       <p className="trend-empty">

@@ -5,7 +5,7 @@
    **下載釘在固定 commit**（不跟 main）：上游內容會變，重跑要得到同樣的圖；要更新就換 SHA 並看 diff。
    對照表 `scripts/exercise-images.json`：{ map: { 動作 key: 資料集的動作 id }, noImage: [沒有對應的 key] }。
    產出（原檔直接存，不轉檔、不縮放）：
-   - 縮圖 `src/assets/exercises/<key>.jpg`：180×180，約 6–9KB，進 precache（離線看得到）。
+   - 縮圖 `src/assets/exercises/<key>.jpg`：180×180，約 4–11KB，進 precache（離線看得到）。
    - 動畫 `src/assets/exercise-gifs/<key>.gif`：180×180，不進 precache（檢視器才載，離線退回縮圖）。
    用法：node scripts/build-exercise-images.mjs [--force] */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
