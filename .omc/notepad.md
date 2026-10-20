@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-20）：v2.78 放大檢視 fit、v2.79 組間休息計時器已 push 部署並經使用者真機驗（放大檢視 OK、計時器 OK、靜音開關打開照樣會響）。v2.80（計時器改成浮起來的深色 pill、固定 1:30、只剩 −15／＋15／略過）已改、測試待跑完，**未 commit／push／review**。vitest 689；e2e 272。
-下一步：確認全量 e2e、commit v2.80、push 前 review；真機看 v2.80 浮動條手感與縮圖、趨勢圖觸控、飛航模式；使用者存下 Gym visual 回覆信並補問 public repo 是否涵蓋、列表畫面要不要補著作權標示（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。
+現況（2026-10-20）：v2.78、v2.79 已 push 並經真機驗。v2.80（計時器浮起來的 pill）已 commit、v2.81（列表畫面補 Gym visual 著作權標示）已改；**都未 push、未 review**。vitest 689；e2e 275（全量 272 過、3 偶發紅，含新發現的 food-library 焦點那條，基線也紅）。階段 4 甲 spec 已寫進 spec.md（1RM→重量建議→肌群狀態，A→B→C 核可，①12 下②要套用鈕；③最小加重等我解釋後裁決），**未動碼**。
+下一步：commit v2.81；push 前 review（v2.80＋v2.81）；解釋「最小加重」後開工階段 4 A（strength.ts e1RM＋unit，再 dataviz 樣張）；真機看浮動條、縮圖、趨勢圖觸控、飛航模式；使用者存下 Gym visual 回覆信並補問 public repo 是否涵蓋、列表畫面要不要補著作權標示（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
