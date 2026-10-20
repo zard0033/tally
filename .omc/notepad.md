@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-20）：v2.78、v2.79 已 push 並經真機驗。v2.80（計時器浮起來的 pill）已 commit、v2.81（列表畫面補 Gym visual 著作權標示）已改；**都未 push、未 review**。vitest 689；e2e 275（全量 272 過、3 偶發紅，含新發現的 food-library 焦點那條，基線也紅）。階段 4 甲 spec 已寫進 spec.md（1RM→重量建議→肌群狀態，A→B→C 核可，①12 下②要套用鈕；③最小加重等我解釋後裁決），**未動碼**。
-下一步：commit v2.81；push 前 review（v2.80＋v2.81）；解釋「最小加重」後開工階段 4 A（strength.ts e1RM＋unit，再 dataviz 樣張）；真機看浮動條、縮圖、趨勢圖觸控、飛航模式；使用者存下 Gym visual 回覆信並補問 public repo 是否涵蓋、列表畫面要不要補著作權標示（見 MANUAL）。SW 接手測試本機不穩、基線同，原因未查。
+現況（2026-10-20）：v2.80／v2.81 已 push（HEAD b36cc09 時與 origin 同步）。階段 4 A（核可 A→B→C，12 下、要套用鈕、加重幅度內建）：strength.ts＋unit 已 commit（7061973，vitest 701、7 mutation 全殺）、樣張 `_design-sample/analysis.html` 已 commit（05d09bd），**待使用者核可樣式**；未動 UI。
+下一步：樣張核可後做動作進度頁（Analysis.tsx＋e2e/analysis.spec.ts）→ push 前 review → 真機；之後 B（weightStep 歸類表）、C（recovery.ts）。待確認：健身房有無 1.25 kg 槓片、啞鈴一格 2 或 2.5；Gym visual 回覆信存檔並補問 public repo。SW 接手測試本機不穩，原因未查。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
