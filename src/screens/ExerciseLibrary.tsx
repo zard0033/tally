@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import {
   MUSCLE_GROUP_LABEL,
   filterExercises,
@@ -103,6 +104,7 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
             )}
           </>
         )}
+        <GymVisualCredit exercises={shown} />
       </div>
 
       <ExerciseEditSheet

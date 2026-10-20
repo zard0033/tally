@@ -2410,3 +2410,48 @@ test('存成課表連按兩次 Enter：只存一份（Enter 不經過按鈕的 d
   await page.waitForTimeout(500)
   expect((await trainRows(page, 'routines')).map((r) => r.name)).toEqual(['菜單 D'])
 })
+
+/* ═══════════ 著作權標示：列表類畫面（Gym visual 要求每次使用都附） ═══════════ */
+
+const CREDIT = '© Gym visual — https://gymvisual.com/'
+const credit = (scope: Locator) => scope.locator('[data-credit="gym-visual"]')
+
+test('著作權標示：動作庫、加動作 sheet、訓練中畫面的列表底部都印一行', async ({ page }) => {
+  await openSeededLibrary(page)
+  await expect(credit(library(page))).toHaveText(CREDIT)
+
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const picker = page.locator('[data-screen="exercise-picker"]')
+  await expect(credit(picker), '加動作 sheet').toHaveText(CREDIT)
+  await picker.locator('.tr-row', { has: page.locator('.nm', { hasText: /^腿推舉$/ }) }).click()
+  await expect(picker).toHaveCount(0)
+  await expect(credit(page.locator('[data-screen="training-session"]')), '訓練中畫面').toHaveText(CREDIT)
+})
+
+test('著作權標示：課表編輯有預設動作的圖時印一行', async ({ page }) => {
+  await openSeededLibrary(page)
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await newRoutine(page, '菜單 A')
+  await expect(credit(editor(page)), '還沒有動作，列表上沒有圖').toHaveCount(0)
+  await page.locator('[data-action="add-routine-exercise"]').click()
+  await page.locator('[data-screen="exercise-picker"] .tr-row', { has: page.locator('.nm', { hasText: /^腿推舉$/ }) }).click()
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  await expect(credit(editor(page))).toHaveText(CREDIT)
+})
+
+test('著作權標示：畫面上沒有任何預設動作的圖（全是自建動作）就不印', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX) // fixture 的動作 id 都不是預設動作的 id，所以都沒有圖
+  await openTraining(page)
+  await openLibrary(page)
+  await expect(library(page).locator('.ex-thumb').first()).toBeVisible()
+  await expect(library(page).locator('img.ex-thumb'), 'fixture 確實沒有圖').toHaveCount(0)
+  await expect(credit(library(page))).toHaveCount(0)
+
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await expect(page.locator('[data-screen="exercise-picker"] .tr-row').first()).toBeVisible()
+  await expect(credit(page.locator('[data-screen="exercise-picker"]'))).toHaveCount(0)
+})

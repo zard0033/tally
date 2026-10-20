@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import SpringSheet from '@/components/SpringSheet'
 import { MUSCLE_GROUP_LABEL, filterExercises, type ExerciseFilter, type MuscleGroup, type Row } from '@/lib/training'
 
@@ -46,6 +47,7 @@ export default function ExercisePicker({ open, exercises, onClose, onPick }: Exe
           ))}
         </div>
       )}
+      <GymVisualCredit exercises={list} />
     </div>
     </SpringSheet>
   )

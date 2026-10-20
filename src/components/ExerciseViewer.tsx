@@ -9,6 +9,7 @@
    圖片 © Gym visual：每次使用都要附著作權標示（NOTICE.md），所以檢視器底下固定印一行。 */
 import { useEffect, useState, type RefObject } from 'react'
 import { useReducedMotion } from 'motion/react'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import SpringSheet from '@/components/SpringSheet'
 import { catalogKey } from '@/lib/exerciseCatalog'
 import { MUSCLE_GROUP_LABEL, type MuscleGroup, type Row } from '@/lib/training'
@@ -59,7 +60,7 @@ export default function ExerciseViewer({ exercise, thumb, open, onClose, finalFo
           />
           {note ? <figcaption>{note}</figcaption> : null}
         </figure>
-        <p className="ex-viewer-credit">© Gym visual — https://gymvisual.com/</p>
+        <GymVisualCredit className="ex-viewer-credit" />
       </div>
     </SpringSheet>
   )

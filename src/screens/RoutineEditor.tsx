@@ -12,6 +12,7 @@ import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
 import ExerciseThumb from '@/components/ExerciseThumb'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import { sortableAccessibility } from '@/components/sortableA11y'
 import {
   addRoutineExerciseOps,
@@ -241,6 +242,7 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
             </li>
           </ul>
         </DragDropProvider>
+        <GymVisualCredit exercises={shown.map((e) => e.exercise)} />
 
         <p className="tr-note">
           課表不存重量。開始訓練時，組數、次數、重量都取該動作<b>上次實際完成</b>的值；這裡的預設只在動作從沒做過時才用。

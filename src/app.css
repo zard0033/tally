@@ -1408,6 +1408,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-viewer-fig figcaption { margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs);
   text-align: center; }
 .ex-viewer-credit { margin: 0; font-size: var(--t-xs); color: var(--ink-faint); text-align: center; }
+/* 列表類畫面（動作庫、加動作、課表編輯、訓練中）底部的著作權標示（GymVisualCredit）；用 --ink-muted：
+   這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
+.img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
 .ex-info.is-empty { color: var(--ink-faint); }
 .ex-info[aria-expanded="true"] { color: var(--accent); }
 .ex-info:disabled { opacity: .35; cursor: default; }

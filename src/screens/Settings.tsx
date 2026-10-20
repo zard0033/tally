@@ -8,6 +8,7 @@
    id-scoped 選擇器做退場動畫，但 id="sheet-root" 已經被 LogSheet 佔用，這裡改用
    另一個 id 掛容器，退場動畫直接用 inline style 套用同一組 keyframes。 */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { num } from '@/lib/formulas'
@@ -270,7 +271,7 @@ export default function Settings(props: SettingsProps) {
         <button className="signout" type="button" onClick={onSignOut}>
           登出
         </button>
-        <p className="settings-credit">動作示意圖 © Gym visual — https://gymvisual.com/</p>
+        <GymVisualCredit className="settings-credit" prefix="動作示意圖 " />
       </div>
 
       {bodyUpdateSheet}

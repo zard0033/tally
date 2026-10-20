@@ -15,6 +15,7 @@ import { move } from '@dnd-kit/helpers'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import Flip from '@/components/Flip'
+import GymVisualCredit from '@/components/GymVisualCredit'
 import RestBar from '@/components/RestBar'
 import { useRestTimer } from '@/components/useRestTimer'
 import SwipeDelete from '@/components/SwipeDelete'
@@ -630,6 +631,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
             ))}
           </div>
         </DragDropProvider>
+        <GymVisualCredit exercises={shown.map((e) => e.exercise)} />
       </div>
 
       <div className="tr-bottom">
