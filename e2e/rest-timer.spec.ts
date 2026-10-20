@@ -288,6 +288,7 @@ test('倒數條浮在底部列上方的深色 pill：不佔版面（列表高度
   // 條出現時列表多留底部空間：捲到最底，最後一張卡的下緣在條的上方
   const pad = await scroll.evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom))
   expect(pad, '底部留白 ≥ 條高＋間距').toBeGreaterThanOrEqual(b.height + 8)
+  expect(await scroll.evaluate((el) => el.scrollHeight > el.clientHeight), '列表真的長到要捲，下面「最後一張卡在條上方」才有意義').toBe(true)
   await scroll.evaluate((el) => {
     el.scrollTop = el.scrollHeight
   })

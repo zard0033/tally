@@ -2454,4 +2454,11 @@ test('著作權標示：畫面上沒有任何預設動作的圖（全是自建�
   await page.locator('.tr-bottom .tr-secondary').click()
   await expect(page.locator('[data-screen="exercise-picker"] .tr-row').first()).toBeVisible()
   await expect(credit(page.locator('[data-screen="exercise-picker"]'))).toHaveCount(0)
+
+  // 選一個自建動作進訓練中畫面：卡片上沒有圖，畫面底部也不印
+  await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '腿推舉' }).click()
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  await expect(page.locator('.ex .set').first()).toBeVisible()
+  await expect(page.locator('[data-screen="training-session"] img.ex-thumb')).toHaveCount(0)
+  await expect(credit(page.locator('[data-screen="training-session"]'))).toHaveCount(0)
 })

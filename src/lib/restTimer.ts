@@ -2,7 +2,7 @@
  *
  * 存「結束時間點」endAt（毫秒時間戳），不存剩餘秒數、也不每秒遞減：鎖屏或切到背景時網頁的 JS 會被暫停，
  * 遞減會停住；endAt 不會，回到前景時用 `endAt − now` 重算就一定準。所以這裡每個函式都吃 `now` 參數，
- * 不自己讀時鐘；localStorage／sessionStorage 也由呼叫端讀了字串傳進來（比照 session.ts），lib 內禁沾 DOM。 */
+ * 不自己讀時鐘；sessionStorage 也由呼叫端讀了字串傳進來（比照 session.ts），lib 內禁沾 DOM。 */
 
 /** 每次開始的休息時長（秒）：固定 1:30，不讓使用者選（使用者 2026-10-20 裁決），要多休息用＋15。 */
 export const REST_SEC = 90

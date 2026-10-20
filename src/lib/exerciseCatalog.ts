@@ -180,6 +180,15 @@ export function catalogKey(row: Row): string | null {
   return typeof row.user_id === 'string' ? (indexOf(row.user_id).idToKey.get(row.id) ?? null) : null
 }
 
+/** 資料集沒有對應圖的預設動作（退回肌群單字）；與 `scripts/exercise-images.json` 的 `noImage` 一致（單元測試鎖住）。 */
+export const NO_IMAGE_KEYS: ReadonlySet<string> = new Set(['bodyweight-squat', 'box-squat'])
+
+/** 畫面上這一列會不會出現示意圖：是預設動作、而且有圖。著作權標示（GymVisualCredit）用它決定要不要印。 */
+export function hasCatalogImage(row: Row): boolean {
+  const key = catalogKey(row)
+  return key !== null && !NO_IMAGE_KEYS.has(key)
+}
+
 /** 動作庫「補齊預設動作」要寫的列：目錄裡、這個帳號還沒有的。「已有」有兩種：
  *  ① 確定性 id 已在（含已封存的、改過名的預設動作）；
  *  ② **名稱與既有任何動作重複**（`foldName`：全形半形、大小寫、空白都視為同名；含已封存的）——

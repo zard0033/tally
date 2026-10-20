@@ -1,8 +1,9 @@
 /* 動作示意圖的著作權標示（`© Gym visual — https://gymvisual.com/`；NOTICE.md 說明來源）。
    Gym visual 的條款要求**每次使用都附標示**，所以凡是畫面上會出現示意圖的地方都印這一行：動作庫、加動作 sheet、課表編輯、
    訓練中畫面（列表底部）、放大檢視（底部）、設定頁（底部）——六處共用這一個元件，字串只有一份。
-   給 `exercises` 時只在列表裡真的有預設動作（有圖的）才印；全是自建動作（沒有圖）就不印。不給＝一定印（放大檢視、設定頁）。 */
-import { catalogKey } from '@/lib/exerciseCatalog'
+   給 `exercises` 時只在列表裡真的有會出現圖的動作（`hasCatalogImage`：預設動作且有圖）才印；全是自建動作，或只有沒有對應圖的
+   兩個預設動作（徒手深蹲、箱式深蹲），就不印。不給＝一定印（放大檢視、設定頁）。 */
+import { hasCatalogImage } from '@/lib/exerciseCatalog'
 import type { Row } from '@/lib/training'
 
 export const GYM_VISUAL_CREDIT = '© Gym visual — https://gymvisual.com/'
@@ -16,7 +17,7 @@ interface GymVisualCreditProps {
 }
 
 export default function GymVisualCredit({ exercises, prefix = '', className = 'img-credit' }: GymVisualCreditProps) {
-  if (exercises && !exercises.some((e) => e !== null && catalogKey(e) !== null)) return null
+  if (exercises && !exercises.some((e) => e !== null && hasCatalogImage(e))) return null
   return (
     <p className={className} data-credit="gym-visual">
       {prefix}

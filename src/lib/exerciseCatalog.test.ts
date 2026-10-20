@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { EXERCISE_CATALOG, EXTRA_EXERCISES, autoSeedOps, catalogInsertOps, catalogKey, catalogToAdd, glyphOf } from './exerciseCatalog'
+import {
+  EXERCISE_CATALOG,
+  EXTRA_EXERCISES,
+  NO_IMAGE_KEYS,
+  autoSeedOps,
+  catalogInsertOps,
+  catalogKey,
+  catalogToAdd,
+  glyphOf,
+  hasCatalogImage,
+} from './exerciseCatalog'
 import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
@@ -64,6 +74,7 @@ describe('示意圖檔案', () => {
     const keys = EXERCISE_CATALOG.map((p) => p.key).sort()
     // 資料集沒有對應的兩個（退回肌群單字）；要新增例外得連這條一起改，不會悄悄多出沒圖的動作
     expect(noImage.slice().sort()).toEqual(['bodyweight-squat', 'box-squat'])
+    expect([...NO_IMAGE_KEYS].sort()).toEqual(noImage.slice().sort())
     expect([...Object.keys(imageMap), ...noImage].sort()).toEqual(keys)
     expect(Object.keys(images).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
     expect(Object.keys(gifs).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
@@ -115,6 +126,13 @@ describe('catalogKey（由列反推是哪個預設動作）', () => {
     expect(catalogKey({ id: presetExerciseId('u1', 'leg-press'), name: 'x' })).toBeNull()
     // id 是 u1 算出來的，列卻說自己屬於 u2：對不上
     expect(catalogKey({ id: presetExerciseId('u1', 'leg-press'), user_id: 'u2', name: 'x' })).toBeNull()
+  })
+
+  it('hasCatalogImage：有圖的預設動作才算；沒有對應圖的兩個預設動作與自建動作都不算', () => {
+    expect(hasCatalogImage(row('u1', 'leg-press'))).toBe(true)
+    expect(hasCatalogImage(row('u1', 'bodyweight-squat'))).toBe(false)
+    expect(hasCatalogImage(row('u1', 'box-squat'))).toBe(false)
+    expect(hasCatalogImage({ id: '11111111-1111-4111-8111-111111111111', user_id: 'u1', name: '自建' })).toBe(false)
   })
 
   it('id 的演算法鎖死：字面值取自 Python 的 uuid.uuid5（獨立實作），namespace 或組字格式一改就紅', () => {
