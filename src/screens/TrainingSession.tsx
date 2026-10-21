@@ -21,7 +21,7 @@ import { useRestTimer } from '@/components/useRestTimer'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
-import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
+import { CASCADE_STEP_MS, DUR, REDUCED_FADE_MAX_MS, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
 import { catalogKey } from '@/lib/exerciseCatalog'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
@@ -86,8 +86,12 @@ const MAX_DOTS = 8
 /** 動作卡的頁尾：這個動作每一組都打勾之後，固定長在卡片最底（展開時在「新增一組」下面、收合時在標頭下面）。
  *  一個動作一個 RPE，和休息條是同一格；進行中的訓練才有。選中的是各組最大值對得上的那一顆（sheet 填的 6 沒有對應的 chip）。 */
 function RpeFooter({ name, sets, show, onPick }: { name: string; sets: readonly Row[]; show: boolean; onPick: (rpe: number) => void }) {
+  const reduced = useReducedMotion()
   const { complete, rpe } = exerciseRpe(sets)
   const shown = show && complete
+  // 外層只動 height／opacity：border-box 下 height: 0 縮不到 padding 以下，所以分隔線與 padding 都放內層（同要點面板）
+  const hidden = reduced ? { opacity: 0 } : { height: 0, opacity: 0 }
+  const visible = reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }
   return (
     <AnimatePresence initial={false}>
       {shown && (
@@ -95,21 +99,30 @@ function RpeFooter({ name, sets, show, onPick }: { name: string; sets: readonly 
           key="rpe-footer"
           className="ex-rpe"
           data-section="ex-rpe"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: sec(DUR.base), ease: 'easeOut' }}
+          initial={hidden}
+          animate={visible}
+          exit={hidden}
+          transition={{ duration: sec(reduced ? Math.min(DUR.base, REDUCED_FADE_MAX_MS) : DUR.base), ease: 'easeOut' }}
         >
-          <div className="lbl">
-            <span>最後一組還能再做幾下？</span>
-            <span className="st">{rpe === null ? '還沒填' : `RPE ${rpe}`}</span>
-          </div>
-          <div className="opts" role="group" aria-label={`${name} 的吃力程度`}>
-            {RPE_CHIPS.map((c) => (
-              <button key={c.rpe} className={`opt${rpe === c.rpe ? ' is-on' : ''}`} type="button" data-rpe={c.rpe} aria-pressed={rpe === c.rpe} onClick={() => onPick(c.rpe)}>
-                {c.label}
-              </button>
-            ))}
+          <div className="ex-rpe-in">
+            <div className="lbl">
+              <span>最後一組還能再做幾下？</span>
+              <span className="st">{rpe === null ? '還沒填' : `RPE ${rpe}`}</span>
+            </div>
+            <div className="opts" role="group" aria-label={`${name} 的吃力程度`}>
+              {RPE_CHIPS.map((c) => (
+                <button
+                  key={c.rpe}
+                  className={`opt${rpe === c.rpe ? ' is-on' : ''}`}
+                  type="button"
+                  data-rpe={c.rpe}
+                  aria-pressed={rpe === c.rpe}
+                  onClick={() => rpe !== c.rpe && onPick(c.rpe)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
           </div>
         </motion.div>
       )}
@@ -201,7 +214,7 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
 
 interface ExerciseCardProps {
   item: WorkoutExerciseDetail
-  /** 清單上標 RPE 填沒填：只在進行中的訓練。 */
+  /** 動作卡有沒有 RPE 頁尾：只在即時進行中的訓練（與休息條同一個條件，補記與已結束的沒有）。 */
   showRpe: boolean
   index: number
   open: boolean
@@ -635,7 +648,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
               <ExerciseCard
                 key={item.entry.id}
                 item={item}
-                showRpe={inProgress}
+                showRpe={live}
                 index={index}
                 open={openEx === item.entry.id}
                 tipsOpen={tipsOpenIds.has(item.entry.id)}
@@ -661,8 +674,15 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   setTipsOpen(true)
                 }}
                 onRemove={() => askRemoveExercise(item)}
-                onToggleAll={() => void toggleAll(item.entry.id)}
-                onPickRpe={(rpe) => void run(setExerciseRpeOps(item.sets, rpe))}
+                onToggleAll={() => {
+                  if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 全部完成／取消全部完成都不再問（沒有「剛做完一組」的語意）
+                  void toggleAll(item.entry.id)
+                }}
+                onPickRpe={(rpe) => {
+                  // 休息條正問著這個動作的同一題：在頁尾答了，條上那題也跟著標已答、走同一條 0.6 秒收起的路
+                  if (ask && ask.picked === null && item.sets.some((x) => x.id === ask.setId)) setAsk({ ...ask, picked: rpe })
+                  void run(setExerciseRpeOps(item.sets, rpe))
+                }}
                 onAddSet={() => {
                   if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 多了一組沒做的，這個動作就不算做完了
                   void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))
@@ -676,10 +696,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onToggleSet={(s) => {
                   endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
-                  if (s.done === true && ask?.setId === s.id) setAsk(null) // 取消勾：不再問這一組
+                  if (s.done === true && item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 取消勾：這個動作不算做完了，不再問
                   if (s.done !== true) {
                     rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
-                    setAsk(completesExercise(item.sets, s.id) && s.rpe == null ? { setId: s.id, picked: null } : null)
+                    setAsk(completesExercise(item.sets, s.id) && exerciseRpe(item.sets).rpe === null ? { setId: s.id, picked: null } : null)
                   }
                   void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
                 }}

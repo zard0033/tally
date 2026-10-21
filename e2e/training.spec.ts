@@ -2544,3 +2544,18 @@ test('離線時答的 RPE 進佇列，回線後送出（payload 只有 rpe）', 
     .poll(async () => (await trainRows(page, 'workout_sets')).filter((r) => r.rpe === 9).length, { timeout: 15_000 })
     .toBe(1)
 })
+
+test('補記的訓練沒有 RPE 頁尾，也沒有休息條（與休息條同一個條件）', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await gotoDate(page, shiftIso(TODAY, -1))
+  await page.getByRole('button', { name: '開始訓練' }).click()
+  await expect(page.locator('[data-screen="start-sheet"]')).toContainText('補記')
+  await page.locator('[data-action="start-blank"]').click()
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await tick(page, 1) // 兩組都勾完：進行中的訓練這時會長出頁尾
+  await expect(page.locator('.ex .set').nth(1).locator('.tr-check')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.ex [data-section="ex-rpe"]')).toHaveCount(0)
+  await expect(page.locator('.tr-rest')).toHaveCount(0)
+})

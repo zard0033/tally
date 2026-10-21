@@ -1331,7 +1331,8 @@ button { -webkit-user-select: none; user-select: none; }
 .rpe-chips.is-picked .rpe-chip:not(.is-on) { opacity: .35; }
 /* 動作卡的 RPE 頁尾（v2.86）：每一組都打勾之後固定長在卡片最底；四顆 chip 與休息條同一組字。沒填時狀態字較深較粗（不加顏色）。
    用 padding 不用 margin 撐底：卡片有 overflow clip，底部 margin 會被吃掉。 */
-.ex-rpe { margin: var(--s-1) var(--s-4) 0; padding: var(--s-3) 0 var(--s-4); border-top: 1px solid var(--rule-subtle); overflow: hidden; }
+.ex-rpe { margin: 0 var(--s-4); overflow: hidden; } /* 外層只給 height／opacity 動畫用，分隔線與 padding 在內層（border-box 下 height: 0 縮不到 padding 以下） */
+.ex-rpe-in { margin-top: var(--s-1); padding: var(--s-3) 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
 .ex-rpe .lbl { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2);
   font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .ex-rpe .lbl .st { font-weight: 700; color: var(--ink); }

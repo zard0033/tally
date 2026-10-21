@@ -595,3 +595,29 @@ test('頁尾：按「新增一組」就收掉（動作又不算做完了）；�
   await page.locator('.ex').getByRole('button', { name: '新增一組' }).click()
   await expect(footer(page)).toHaveCount(0)
 })
+
+test('頁尾先答：休息條上的同一題跟著收起，不會兩邊狀態不同', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await expect(ask(page)).toBeVisible()
+  await fchip(page, '2 下').click()
+  await expect(fchip(page, '2 下')).toHaveAttribute('aria-pressed', 'true')
+  await expect(ask(page), '條上同一題也收了').toHaveCount(0)
+  await expect(bar(page)).toBeVisible()
+  await expect.poll(() => rpeWrites(page)).toEqual([8])
+})
+
+test('問題還在時：亂序勾完後取消勾別組、取消全部完成，問題列都收掉，不會寫到沒打勾的組', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [2, 0, 1]) await tick(page, n) // 最後勾的是第 2 組，題目掛在它身上
+  await expect(ask(page)).toBeVisible()
+  await tick(page, 2) // 取消勾的是別組（第 3 組），動作不算做完了
+  await expect(ask(page)).toHaveCount(0)
+  await tick(page, 2)
+  await expect(ask(page), '再勾回來又做完了，重新問').toBeVisible()
+  await page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true }).click()
+  await expect(ask(page)).toHaveCount(0)
+  expect(await rpeWrites(page)).toEqual([])
+})
