@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、C、D（v2.84）、e2e 加速、v2.85、v2.86（動作卡 RPE 頁尾）已 push（6e988e9）。DDL 已執行。vitest 745、e2e 318（317 過、1 紅＝tally.spec；原因已查＝動畫等待太短，已改 `settle`，單 worker 10 次全過）。**真機未驗**：RPE 填寫、頁尾、寫入與讀回。B 未動。
-下一步：①真機驗 D ②B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
+現況（2026-10-21）：階段 4 A、B（v2.87 重量建議）、C、D 都做完；v2.86 以前已 push，**B 已 commit 未 push**（push 前要 review）。vitest 762、e2e 325 全過。**真機未驗**：RPE 填寫與頁尾、重量建議行。
+下一步：①push 前 review B ②真機驗 D 與 B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5（只改 exerciseCatalog.ts 的歸類表）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

@@ -232,6 +232,76 @@ export function autoSeedOps(userId: string, existing: readonly Row[], loadedFrom
   return core.every((id) => have.has(id)) ? catalogInsertOps(userId, existing) : []
 }
 
+/* ═══════════ 加重幅度（重量建議用；spec.md「階段 4 甲」口徑 3）═══════════
+   依器材歸類，不給使用者調：槓鈴／EZ 槓／史密斯 5 kg（兩邊各加最小 2.5 kg 槓片）、啞鈴與器械滑輪 2.5 kg、壺鈴 4 kg；
+   徒手動作不給重量建議；使用者自建的動作沒有 key，一律 2.5 kg。這是依常見做法的假設，健身房實際跳格不同時改這張表。 */
+const BARBELL_KEYS = [
+  'barbell-bench-press', 'incline-barbell-bench-press', 'decline-barbell-bench-press', 'smith-bench-press', 'smith-incline-bench-press',
+  'barbell-row', 'reverse-grip-barbell-row', 't-bar-row', 'smith-bent-over-row',
+  'barbell-deadlift', 'sumo-deadlift', 'rack-pull', 'romanian-deadlift', 'stiff-leg-deadlift', 'good-morning', 'barbell-shrug',
+  'barbell-squat', 'front-squat', 'smith-squat', 'box-squat', 'barbell-lunge', 'walking-lunge', 'barbell-step-up', 'smith-leg-press',
+  'hip-thrust', 'glute-bridge', 'standing-barbell-calf-raise', 'smith-calf-raise', 'power-clean',
+  'military-press', 'seated-barbell-press', 'smith-shoulder-press', 'upright-row',
+  'barbell-curl', 'ez-bar-curl', 'preacher-curl', 'reverse-barbell-curl', 'ez-bar-skullcrusher', 'close-grip-bench-press',
+  'barbell-wrist-curl', 'reverse-wrist-curl',
+] as const
+
+const DUMBBELL_KEYS = [
+  'dumbbell-bench-press', 'incline-dumbbell-press', 'decline-dumbbell-press', 'dumbbell-fly', 'incline-dumbbell-fly',
+  'dumbbell-row', 'two-dumbbell-row', 'dumbbell-shrug',
+  'goblet-squat', 'dumbbell-squat', 'dumbbell-lunge', 'dumbbell-rear-lunge', 'dumbbell-split-squat', 'dumbbell-step-up',
+  'dumbbell-stiff-leg-deadlift', 'dumbbell-calf-raise',
+  'dumbbell-shoulder-press', 'arnold-press', 'seated-dumbbell-press', 'side-lateral-raise', 'front-dumbbell-raise', 'rear-delt-raise',
+  'dumbbell-reverse-fly', 'dumbbell-upright-row',
+  'dumbbell-curl', 'alternate-dumbbell-curl', 'hammer-curl', 'incline-dumbbell-curl', 'concentration-curl', 'zottman-curl',
+  'dumbbell-overhead-extension', 'lying-dumbbell-extension', 'triceps-kickback', 'dumbbell-side-bend',
+] as const
+
+/** 器械（插銷配重片）與滑輪。 */
+const MACHINE_KEYS = [
+  'leg-press', 'leg-extension', 'leg-curl', 'calf-raise', 'hip-abduction', 'hip-adduction',
+  'lat-pulldown', 'seated-row', 'back-extension', 'chest-press', 'pec-fly', 'shoulder-press', 'reverse-fly', 'biceps-curl', 'triceps-pushdown',
+  'ab-crunch',
+  'cable-crossover', 'low-cable-crossover', 'cable-chest-press', 'incline-chest-press-machine', 'decline-chest-press-machine',
+  'close-grip-lat-pulldown', 'v-bar-pulldown', 'underhand-pulldown', 'one-arm-lat-pulldown', 'straight-arm-pulldown',
+  'leverage-high-row', 'leverage-iso-row', 'one-arm-seated-cable-row',
+  'hack-squat', 'narrow-leg-press', 'single-leg-extension', 'lying-leg-curl', 'standing-leg-curl',
+  'cable-kickback', 'cable-pull-through', 'seated-calf-raise', 'leg-press-calf-raise',
+  'machine-shoulder-press', 'cable-lateral-raise', 'front-cable-raise', 'cable-rear-delt-fly', 'face-pull',
+  'machine-preacher-curl', 'cable-curl', 'cable-rope-hammer-curl', 'rope-pushdown', 'vbar-pushdown', 'reverse-grip-pushdown',
+  'rope-overhead-extension', 'machine-triceps-extension', 'dip-machine',
+  'cable-crunch', 'pallof-press', 'cable-wood-chop', 'cable-side-bend',
+] as const
+
+const KETTLEBELL_KEYS = ['kettlebell-swing', 'turkish-get-up'] as const
+
+/** 徒手或以自重為主：不給重量建議。 */
+const BODYWEIGHT_KEYS = [
+  'pushup', 'pullup', 'chinup', 'bodyweight-squat', 'glute-ham-raise', 'dips', 'bench-dips',
+  'crunch', 'decline-crunch', 'reverse-crunch', 'sit-up', 'bench-leg-raise', 'russian-twist', 'plank', 'side-plank', 'ab-rollout', 'dead-bug',
+] as const
+
+export const CUSTOM_WEIGHT_STEP = 2.5
+
+const STEP_BY_KEY: ReadonlyMap<string, number | null> = new Map<string, number | null>([
+  ...BARBELL_KEYS.map((k): [string, number | null] => [k, 5]),
+  ...DUMBBELL_KEYS.map((k): [string, number | null] => [k, 2.5]),
+  ...MACHINE_KEYS.map((k): [string, number | null] => [k, 2.5]),
+  ...KETTLEBELL_KEYS.map((k): [string, number | null] => [k, 4]),
+  ...BODYWEIGHT_KEYS.map((k): [string, number | null] => [k, null]),
+])
+
+/** 該動作建議加重時一次加多少 kg；徒手動作回 null（不給建議）。`key` 是 `catalogKey` 的結果，自建動作（null）用 2.5。 */
+export function weightStep(key: string | null): number | null {
+  // 不能用 `??`：徒手動作的值本身就是 null，會被當成「沒有這個 key」而變成 2.5
+  return key !== null && STEP_BY_KEY.has(key) ? STEP_BY_KEY.get(key)! : CUSTOM_WEIGHT_STEP
+}
+
+/** 歸類表涵蓋的 key（單元測試用：必須與 `EXERCISE_CATALOG` 逐一對上，不多不少、不重複）。 */
+export const WEIGHT_STEP_KEYS: readonly string[] = [
+  ...BARBELL_KEYS, ...DUMBBELL_KEYS, ...MACHINE_KEYS, ...KETTLEBELL_KEYS, ...BODYWEIGHT_KEYS,
+]
+
 /** 肌群的單字（沒有圖的動作用它當縮圖）。 */
 export const MUSCLE_GLYPH: Readonly<Record<MuscleGroup, string>> = {
   chest: '胸',

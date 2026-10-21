@@ -9,6 +9,8 @@ import {
   catalogToAdd,
   glyphOf,
   hasCatalogImage,
+  WEIGHT_STEP_KEYS,
+  weightStep,
 } from './exerciseCatalog'
 import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
@@ -268,6 +270,34 @@ describe('autoSeedOps（開 App 載入完自動補）', () => {
     const after = [...coreRows(U), ...first.map((o) => ({ ...o.payload, id: o.rowId }) as Row)]
     expect(autoSeedOps(U, after, true)).toEqual([])
     expect(autoSeedOps(U, [...autoSeedOps(U, [], true).map((o) => ({ ...o.payload, id: o.rowId }) as Row)], true)).toEqual([])
+  })
+})
+
+describe('weightStep（加重幅度）', () => {
+  it('歸類表與目錄逐一對上：150 個 key 各出現一次，不多不少', () => {
+    const keys = EXERCISE_CATALOG.map((p) => p.key)
+    expect(new Set(WEIGHT_STEP_KEYS).size).toBe(WEIGHT_STEP_KEYS.length) // 沒有重複歸類
+    expect([...WEIGHT_STEP_KEYS].sort()).toEqual([...keys].sort())
+    expect(keys).toHaveLength(150)
+  })
+
+  it('不同器材不同幅度：槓鈴深蹲 5、史密斯 5、EZ 槓 5、啞鈴臥推 2.5、腿推舉 2.5、滑輪下拉 2.5、壺鈴 4', () => {
+    expect(weightStep('barbell-squat')).toBe(5)
+    expect(weightStep('smith-bench-press')).toBe(5)
+    expect(weightStep('ez-bar-curl')).toBe(5)
+    expect(weightStep('dumbbell-bench-press')).toBe(2.5)
+    expect(weightStep('leg-press')).toBe(2.5)
+    expect(weightStep('lat-pulldown')).toBe(2.5)
+    expect(weightStep('kettlebell-swing')).toBe(4)
+  })
+
+  it('徒手動作回 null（不給建議）；自建動作（沒有 key）2.5', () => {
+    for (const k of ['pushup', 'pullup', 'dips', 'plank', 'crunch', 'sit-up', 'bodyweight-squat']) expect(weightStep(k)).toBeNull()
+    expect(weightStep(null)).toBe(2.5)
+  })
+
+  it('原始 16 個預設動作都是器械：2.5', () => {
+    for (const p of PRESET_EXERCISES) expect(weightStep(p.key)).toBe(2.5)
   })
 })
 

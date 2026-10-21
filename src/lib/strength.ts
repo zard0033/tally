@@ -1,7 +1,7 @@
 /* 訓練分析 A（spec.md「階段 4 甲」）的純運算：e1RM 與單一動作的歷次進度。
    不沾 DOM；吃的是已疊上離線佇列的 TrainingDb，所以離線剛記完的訓練也算。 */
 import { dayIndex, rangeStart, type TrendRange } from './weightTrend'
-import type { Row, TrainingDb } from './training'
+import { completedSessions, type Row, type TrainingDb } from './training'
 
 /** 只信 10 下以內：次數越高 Epley 估得越不準。 */
 export const E1RM_MAX_REPS = 10
@@ -103,6 +103,51 @@ export function progressList(db: TrainingDb): ProgressListItem[] {
 export interface ChartPoint extends StrengthPoint {
   /** 自 1970-01-01 起算的天數（同體重趨勢：X 軸用數字軸，沒練的日子留白） */
   readonly t: number
+}
+
+/* ═══════════ 重量建議（B；雙重進階的簡化版）═══════════ */
+
+/** 沒有課表目標次數時，用多少下當「做到了」的門檻（使用者 2026-10-20 裁決 12）。 */
+export const DEFAULT_SUGGEST_REPS = 12
+
+/** 建議需要至少幾次有已打勾組的訓練（不含進行中的這一次）。 */
+export const SUGGEST_MIN_SESSIONS = 2
+
+export type WeightSuggestion =
+  | { readonly kind: 'suggest'; readonly weight_kg: number; readonly reason: string }
+  | { readonly kind: 'insufficient' }
+
+const NUMERALS = ['', '一', '兩', '三', '四', '五', '六', '七', '八', '九', '十']
+const countText = (n: number): string => NUMERALS[n] || String(n)
+const round2 = (n: number): number => Math.round(n * 100) / 100
+
+/** 這次訓練所屬課表替該動作設的目標次數；沒有課表、沒設、設成 0 都回 null。 */
+function routineTargetReps(db: TrainingDb, workoutId: string, exerciseId: string): number | null {
+  const routineId = db.workouts.find((w) => w.id === workoutId)?.routine_id
+  if (typeof routineId !== 'string') return null
+  const re = db.routine_exercises.find((r) => r.routine_id === routineId && r.exercise_id === exerciseId)
+  const reps = re?.target_reps == null ? null : Number(re.target_reps)
+  return reps !== null && Number.isFinite(reps) && reps >= 1 ? reps : null
+}
+
+/** 這一次該把某動作的重量設多少。只看「最近一次」的最高重量 w：重量等於 w 的各組都做到目標次數 T → w + step，
+ *  否則維持 w（理由：再做到 T 下）。T＝課表目標次數，沒有就 12。`step` 由呼叫端依動作給（`weightStep`）。
+ *  不足兩次有已打勾組的訓練 → insufficient；最高重量 ≤ 0（徒手）→ insufficient。
+ *  只讀已疊上離線佇列的 db；`currentWorkoutId`（進行中的訓練）不算歷史。沒有「降重」規則。 */
+export function suggestWeight(db: TrainingDb, exerciseId: string, step: number, currentWorkoutId: string): WeightSuggestion {
+  const sessions = completedSessions(db, exerciseId, currentWorkoutId)
+  if (new Set(sessions.map((s) => s.workoutId)).size < SUGGEST_MIN_SESSIONS) return { kind: 'insufficient' }
+
+  const last = sessions[0].sets
+  const top = Math.max(...last.map((s) => s.weight_kg))
+  if (!Number.isFinite(top) || top <= 0) return { kind: 'insufficient' }
+
+  const target = routineTargetReps(db, currentWorkoutId, exerciseId) ?? DEFAULT_SUGGEST_REPS
+  const atTop = last.filter((s) => s.weight_kg === top)
+  if (atTop.every((s) => s.reps >= target)) {
+    return { kind: 'suggest', weight_kg: round2(top + step), reason: `上次${countText(atTop.length)}組都做到 ${target} 下` }
+  }
+  return { kind: 'suggest', weight_kg: top, reason: `再做到 ${target} 下` }
 }
 
 /** 範圍切片＋補上 X 軸座標。範圍起點（含）同體重趨勢：「30 天」＝今天加前 29 天；全部不設下界。 */

@@ -12,6 +12,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import Flip from '@/components/Flip'
 import SpringSheet from '@/components/SpringSheet'
 import { NUMBER_FLIP_MS } from '@/lib/durations'
+import { catalogKey, weightStep } from '@/lib/exerciseCatalog'
+import { suggestWeight, type WeightSuggestion } from '@/lib/strength'
 import {
   MUSCLE_GROUP_LABEL,
   RPE_SHEET_VALUES,
@@ -67,6 +69,8 @@ interface SetView {
   total: number
   set: Row
   last: PrefillSet[]
+  /** 重量建議；徒手動作不給（null，整行不出現） */
+  suggest: WeightSuggestion | null
   remaining: number
 }
 
@@ -75,13 +79,16 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
   const ex = detail.exercises.find((e) => e.entry.id === target.entryId)
   const index = ex ? ex.sets.findIndex((s) => s.id === target.setId) : -1
   if (!ex || index < 0) return null
+  const exerciseId = String(ex.entry.exercise_id)
+  const step = weightStep(ex.exercise ? catalogKey(ex.exercise) : null)
   return {
     name: ex.exercise ? String(ex.exercise.name) : '（已刪除的動作）',
     group: ex.exercise ? (MUSCLE_GROUP_LABEL[ex.exercise.muscle_group as MuscleGroup] ?? '其他') : '',
     no: index + 1,
     total: ex.sets.length,
     set: ex.sets[index],
-    last: lastCompletedSets(db, String(ex.entry.exercise_id), detail.workout.id),
+    last: lastCompletedSets(db, exerciseId, detail.workout.id),
+    suggest: step === null ? null : suggestWeight(db, exerciseId, step, detail.workout.id),
     remaining: remainingSetsAfter(detail, target.setId).length,
   }
 }
@@ -243,6 +250,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
   const weight = view ? Number(view.set.weight_kg) : 0
   const reps = view ? Number(view.set.reps) : 0
   const done = view?.set.done === true
+  const suggest = view?.suggest ?? null
   const rpe = view?.set.rpe == null ? null : Number(view.set.rpe)
 
   return (
@@ -269,6 +277,28 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               </div>
             )}
           </div>
+
+          {suggest && (
+            <div className="set-suggest" data-section="suggest">
+              {suggest.kind === 'suggest' ? (
+                <>
+                  <span className="set-suggest-text">
+                    <span className="set-suggest-num">建議 {formatKg(suggest.weight_kg)} kg</span> · {suggest.reason}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={weight === suggest.weight_kg ? undefined : `套用建議重量 ${formatKg(suggest.weight_kg)} 公斤`}
+                    disabled={weight === suggest.weight_kg}
+                    onClick={() => patch({ weight_kg: suggest.weight_kg })}
+                  >
+                    {weight === suggest.weight_kg ? '已套用' : '套用'}
+                  </button>
+                </>
+              ) : (
+                <span className="set-none">建議：還沒有足夠紀錄（至少 2 次）</span>
+              )}
+            </div>
+          )}
 
           <div className="step-block">
             <span className="set-sec">重量 kg</span>

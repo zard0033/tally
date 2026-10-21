@@ -190,11 +190,14 @@ const startedMs = (w: Row): number => {
   return Number.isNaN(ms) ? 0 : ms
 }
 
-/** 該動作「上次實際完成」的各組：最近一次有打勾組的訓練裡，那個動作已打勾的組，依 set_no 排。
- *  - 沒打勾的組不算「完成」，整次都沒打勾的訓練跳過、改看更早一次。
- *  - `excludeWorkoutId`：進行中的這一次不能是自己的「上次」。
- *  吃的是已疊上佇列的 db，所以離線剛記完的訓練也算。 */
-export function lastCompletedSets(db: TrainingDb, exerciseId: string, excludeWorkoutId?: string): PrefillSet[] {
+export interface CompletedSession {
+  readonly workoutId: string
+  /** 該次該動作已打勾的組，依 set_no 排 */
+  readonly sets: PrefillSet[]
+}
+
+/** 該動作有已打勾組的各次訓練，由新到舊（同一次訓練的同動作出現兩個 entry 時各算一筆）。 */
+export function completedSessions(db: TrainingDb, exerciseId: string, excludeWorkoutId?: string): CompletedSession[] {
   const workouts = new Map(db.workouts.map((w) => [w.id, w]))
   const setsByWe = new Map<string, Row[]>()
   for (const s of db.workout_sets) {
@@ -217,15 +220,24 @@ export function lastCompletedSets(db: TrainingDb, exerciseId: string, excludeWor
         Number(b.we.position) - Number(a.we.position),
     )
 
-  const latest = candidates[0]
-  if (!latest) return []
-  return [...latest.done]
-    .sort(
-      (a, b) =>
-        Number(a.set_no) - Number(b.set_no) ||
-        String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')),
-    )
-    .map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps) }))
+  return candidates.map((c) => ({
+    workoutId: c.workout.id,
+    sets: [...c.done]
+      .sort(
+        (a, b) =>
+          Number(a.set_no) - Number(b.set_no) ||
+          String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')),
+      )
+      .map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps) })),
+  }))
+}
+
+/** 該動作「上次實際完成」的各組：最近一次有打勾組的訓練裡，那個動作已打勾的組，依 set_no 排。
+ *  - 沒打勾的組不算「完成」，整次都沒打勾的訓練跳過、改看更早一次。
+ *  - `excludeWorkoutId`：進行中的這一次不能是自己的「上次」。
+ *  吃的是已疊上佇列的 db，所以離線剛記完的訓練也算。 */
+export function lastCompletedSets(db: TrainingDb, exerciseId: string, excludeWorkoutId?: string): PrefillSet[] {
+  return completedSessions(db, exerciseId, excludeWorkoutId)[0]?.sets ?? []
 }
 
 export interface PrefillTarget {

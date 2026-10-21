@@ -1541,6 +1541,14 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .last-chip.is-current { background: var(--accent-soft); color: var(--accent); }
 .last-chip:active { opacity: .6; }
 .last-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 重量建議一行：左邊「建議 62.5 kg · 理由」，右邊文字鈕「套用」（沿用 .rpe-hint 的文字鈕語言）；已等於建議時鈕變灰「已套用」 */
+.set-suggest { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
+.set-suggest-num { color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
+.set-suggest button { flex: none; min-height: 44px; padding: 0 var(--s-2); border: none; background: none; color: var(--accent);
+  font: inherit; font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.set-suggest button:disabled { color: var(--ink-faint); cursor: default; }
+.set-suggest button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .step-line { display: grid; grid-template-columns: 1fr 1fr 1.7fr 1fr 1fr; gap: 4px; align-items: center; padding: 2px;
   background: var(--fill); border-radius: var(--r-pill); }
 .step-b { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1);
