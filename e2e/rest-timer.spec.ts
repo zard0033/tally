@@ -505,3 +505,29 @@ test('減少動態：問題列照出現、點了照寫入，收起只淡出', as
   await expect.poll(() => rpeWrites(page)).toEqual([8])
   await expect(ask(page)).toHaveCount(0)
 })
+
+test('訓練清單上標 RPE：動作做完才標；沒填＝「未填 RPE」，填了＝「RPE 9」；已結束的訓練不標', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  const note = page.locator('.ex [data-rpe-note]')
+  await tick(page, 0)
+  await tick(page, 1)
+  await expect(note, '還有一組沒做，談不上填沒填').toHaveCount(0)
+  await tick(page, 2)
+  await expect(note).toHaveText('未填 RPE')
+  await expect(note).toHaveAttribute('data-rpe-note', 'missing')
+  await chip(page, '1 下').click()
+  await expect(note).toHaveText('RPE 9')
+  await expect(note).toHaveAttribute('data-rpe-note', 'filled')
+  await page.locator('.ex .ex-toggle').click() // 收合列也要看得到
+  await expect(page.locator('.ex.collapsed [data-rpe-note]')).toHaveText('RPE 9')
+})
+
+test('已結束的訓練不在清單上標 RPE', async ({ page }) => {
+  await prepare(page)
+  await openApp(page, {}, FINISHED)
+  await openTraining(page)
+  await page.locator('.tr-row[data-workout-id="w-1"]').click()
+  await expect(page.locator('[data-screen="training-session"]')).toBeVisible()
+  await expect(page.locator('.ex [data-rpe-note]')).toHaveCount(0)
+})

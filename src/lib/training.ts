@@ -541,6 +541,13 @@ export function completesExercise(sets: readonly Row[], setId: string): boolean 
   return sets.some((s) => s.id === setId) && sets.every((s) => s.id === setId || s.done === true)
 }
 
+/** 一個動作在訓練清單上的 RPE 狀態：做完了（每一組都打勾）才談得上填沒填；rpe 取各組最大值，都沒填＝null。 */
+export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: number | null } {
+  const complete = sets.length > 0 && sets.every((s) => s.done === true)
+  const values = sets.map((s) => (s.rpe == null ? NaN : Number(s.rpe))).filter((n) => Number.isFinite(n))
+  return { complete, rpe: values.length > 0 ? Math.max(...values) : null }
+}
+
 /** 寫一組的 RPE；null＝清掉（回到沒填）。 */
 export function setRpeOps(setId: string, rpe: number | null): RowOp[] {
   return [{ op: 'update', table: 'workout_sets', rowId: setId, payload: { rpe } }]

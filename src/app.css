@@ -1329,6 +1329,8 @@ button { -webkit-user-select: none; user-select: none; }
 .rpe-chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
 .rpe-chip.is-on { background: var(--paper); color: var(--ink); }
 .rpe-chips.is-picked .rpe-chip:not(.is-on) { opacity: .35; }
+.rpe-note { margin-left: var(--s-2); }
+.rpe-note.is-missing { color: var(--ink); font-weight: 700; }
 .tr-rest .grow { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
 .tr-rest .lbl { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; }
 .tr-rest .time { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 700; }

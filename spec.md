@@ -955,7 +955,7 @@ RLS 不用動（`owner_all` 是整列的政策）。**部署順序不能反**：
 - **部署順序**：DDL 要先於 push，否則新寫入被拒絕；e2e 驗不到真資料庫（見資料表節）。
 
 #### 明確不做
-每組都問 RPE、0.5 刻度（7.5、8.5）、RPE 進 e1RM 或重量建議（B 不看 RPE）、RPE 趨勢圖、依 RPE 自動降重／deload、熱身標記的按鈕或欄位、在組列上顯示 RPE、設定頁開關、鎖屏通知問 RPE。
+每組都問 RPE、0.5 刻度（7.5、8.5）、RPE 進 e1RM 或重量建議（B 不看 RPE）、RPE 趨勢圖、依 RPE 自動降重／deload、熱身標記的按鈕或欄位、在**組列**上顯示 RPE（v2.85 起動作卡上標「RPE 9」「未填 RPE」，見 DESIGN）、設定頁開關、鎖屏通知問 RPE。
 
 #### ★ 核可後的順序
 ① 你執行 DDL（④）→ ② 純邏輯＋unit（含 mutation）：`isWarmup`、窗口、旗標、chip 對應、最後一組判斷 → ③ `recovery.ts` 接上、肌群狀態列副標與說明 → ④ 組編輯 sheet RPE 區＋e2e → ⑤ 休息條問題列＋e2e → ⑥ vitest／build／lint／e2e 全量、DESIGN.md 回寫、notepad → ⑦ push 前 review → ⑧ 真機：填一次 RPE，確認寫入、讀回、肌群狀態數字。

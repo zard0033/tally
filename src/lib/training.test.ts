@@ -6,6 +6,7 @@ import {
   RPE_CHIPS,
   RPE_SHEET_VALUES,
   completesExercise,
+  exerciseRpe,
   setRpeOps,
   PRESET_EXERCISES,
   cardioDraft,
@@ -1439,6 +1440,13 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
     expect(completesExercise([set('a', false)], 'a')).toBe(true) // 只有一組
     expect(completesExercise([set('a', true)], 'zz')).toBe(false) // 找不到這組
     expect(completesExercise([], 'a')).toBe(false)
+  })
+  it('exerciseRpe：每一組都打勾才算做完；rpe 取各組最大值，都沒填＝null；沒有組＝沒做完', () => {
+    const set = (done: boolean, rpe?: number | null): Row => ({ id: `${Math.random()}`, done, ...(rpe === undefined ? {} : { rpe }) })
+    expect(exerciseRpe([set(true), set(true)])).toEqual({ complete: true, rpe: null })
+    expect(exerciseRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: 9 })
+    expect(exerciseRpe([set(true, 9), set(false)])).toEqual({ complete: false, rpe: 9 })
+    expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
   })
   it('setRpeOps：單筆 update，payload 只有 rpe；null＝清掉', () => {
     expect(setRpeOps('s1', 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: 9 } }])

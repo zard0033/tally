@@ -34,6 +34,7 @@ import {
   allSetsDone,
   completesExercise,
   exerciseProgress,
+  exerciseRpe,
   finishWorkoutOps,
   formatKg,
   isBackfilled,
@@ -81,7 +82,18 @@ function useNow(active: boolean): Date {
 
 /** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
 const MAX_DOTS = 8
-function Progress({ sets }: { sets: readonly Row[] }) {
+/** 做完的動作在清單上標 RPE：填了＝「RPE 9」，沒填＝「未填 RPE」（較深、較粗，提醒回頭補）。只在進行中的訓練標。 */
+function RpeNote({ sets, show }: { sets: readonly Row[]; show: boolean }) {
+  const { complete, rpe } = exerciseRpe(sets)
+  if (!show || !complete) return null
+  return rpe === null ? (
+    <span className="rpe-note is-missing" data-rpe-note="missing">未填 RPE</span>
+  ) : (
+    <span className="rpe-note" data-rpe-note="filled">RPE {rpe}</span>
+  )
+}
+
+function Progress({ sets, showRpe }: { sets: readonly Row[]; showRpe: boolean }) {
   const { done, total, next } = exerciseProgress(sets)
   if (total === 0) return <>沒有組</>
   const nextText = next ? `下一組 ${formatKg(next.weight)} kg × ${next.reps}` : '全部完成'
@@ -98,6 +110,7 @@ function Progress({ sets }: { sets: readonly Row[] }) {
         <span aria-hidden="true">{`${done}/${total} 組`}</span>
       )}
       <span aria-hidden={total <= MAX_DOTS ? undefined : true}>{nextText}</span>
+      <RpeNote sets={sets} show={showRpe} />
     </span>
   )
 }
@@ -165,6 +178,8 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
 
 interface ExerciseCardProps {
   item: WorkoutExerciseDetail
+  /** 清單上標 RPE 填沒填：只在進行中的訓練。 */
+  showRpe: boolean
   index: number
   open: boolean
   tipsOpen: boolean
@@ -236,7 +251,14 @@ function ExerciseCard(p: ExerciseCardProps) {
             <span className="nm">{name}</span>
             {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
             <span className="sub" key={open ? 'group' : 'progress'}>
-              {open ? group : <Progress sets={sets} />}
+              {open ? (
+                <>
+                  {group}
+                  <RpeNote sets={sets} show={p.showRpe} />
+                </>
+              ) : (
+                <Progress sets={sets} showRpe={p.showRpe} />
+              )}
             </span>
           </span>
           <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
@@ -595,6 +617,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
               <ExerciseCard
                 key={item.entry.id}
                 item={item}
+                showRpe={inProgress}
                 index={index}
                 open={openEx === item.entry.id}
                 tipsOpen={tipsOpenIds.has(item.entry.id)}
