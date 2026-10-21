@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、B（v2.87 重量建議）、C、D 都做完；v2.86 以前已 push，**B 已 commit 未 push**（push 前要 review）。vitest 762、e2e 325 全過。**真機未驗**：RPE 填寫與頁尾、重量建議行。
-下一步：①push 前 review B ②真機驗 D 與 B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5（只改 exerciseCatalog.ts 的歸類表）。
+現況（2026-10-21）：階段 4 A、B（v2.87 重量建議）、C、D 都做完；v2.86 以前已 push，B 已 push（review 0 blocking；review 修正後沒重跑 e2e，使用者裁決）。vitest 765、e2e 上次全量 325 全過。**真機未驗**：RPE 填寫與頁尾、重量建議行。
+下一步：①真機驗 D 與 B（順便把 weight-suggest.spec 重跑一次）。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5（只改 exerciseCatalog.ts 的歸類表）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

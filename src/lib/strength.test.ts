@@ -248,8 +248,42 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
     expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
   })
 
-  it('最高重量 0（徒手記成 0 kg）→ insufficient，不建議 +2.5', () => {
-    expect(suggestWeight(base([[0, 15], [0, 15]]), 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
+  it('最高重量 0（徒手記成 0 kg）→ none（沒有重量可加），不建議 +2.5、也不說資料不足', () => {
+    expect(suggestWeight(base([[0, 15], [0, 15]]), 'sq', 2.5, 'cur')).toEqual({ kind: 'none' })
+  })
+
+  it('只有一組做到：理由寫「上次那組做到 12 下」，不寫「一組都」', () => {
+    expect(suggestWeight(base([[60, 12]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 62.5, reason: '上次那組做到 12 下',
+    })
+  })
+
+  it('編輯舊訓練時，比它晚的訓練不算「上次」：10/12 那次 100×12 不能拿來建議 10/08 這次', () => {
+    const d = db({
+      workouts: [workout('h1', '2026-10-05'), workout('h2', '2026-10-08'), workout('late', '2026-10-12')],
+      workout_exercises: [entry('e1', 'h1', 'sq'), entry('e3', 'late', 'sq')],
+      workout_sets: [set('a', 'e1', 60, 12), set('c', 'e3', 100, 12)],
+    })
+    // 編輯 h2（10/08）：它之前只有 h1 一次 → 不足；若把 10/12 算進來會變成兩次、建議 102.5
+    expect(suggestWeight(d, 'sq', 2.5, 'h2')).toEqual({ kind: 'insufficient' })
+    // 編輯 10/12 那次：之前有 h1 一次，仍然不足
+    expect(suggestWeight(d, 'sq', 2.5, 'late')).toEqual({ kind: 'insufficient' })
+  })
+
+  it('同一天只算開始時間更早的：補記與當天另一次訓練', () => {
+    const d = db({
+      workouts: [
+        workout('h1', '2026-10-05'),
+        workout('am', '2026-10-08', '2026-10-08T06:00:00Z'),
+        workout('pm', '2026-10-08', '2026-10-08T18:00:00Z'),
+      ],
+      workout_exercises: [entry('e1', 'h1', 'sq'), entry('e2', 'am', 'sq'), entry('e3', 'pm', 'sq')],
+      workout_sets: [set('a', 'e1', 60, 12), set('b', 'e2', 70, 12), set('c', 'e3', 90, 12)],
+    })
+    // 編輯 am：之前只有 h1（pm 晚於它）→ 不足
+    expect(suggestWeight(d, 'sq', 2.5, 'am')).toEqual({ kind: 'insufficient' })
+    // 編輯 pm：之前有 h1 與 am → 以 am 的 70×12 為準
+    expect(suggestWeight(d, 'sq', 2.5, 'pm')).toMatchObject({ weight_kg: 72.5 })
   })
 
   it('小數相加不留浮點尾巴：57.5＋2.5＝60、12.5＋2.5＝15', () => {

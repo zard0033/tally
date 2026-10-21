@@ -106,7 +106,7 @@ test('不同器材的加重幅度與理由：槓鈴 +5、啞鈴 +2.5、器械維
   await closeSheet(page)
 
   await openSet(page, 3)
-  await expect(suggest(page)).toContainText('建議 12.5 kg · 上次一組都做到 12 下') // 自建動作固定 2.5
+  await expect(suggest(page)).toContainText('建議 12.5 kg · 上次那組做到 12 下') // 自建動作固定 2.5
 })
 
 test('套用：把重量欄填成建議值、鈕變灰「已套用」；之後手動改掉，鈕回到「套用」', async ({ page }) => {

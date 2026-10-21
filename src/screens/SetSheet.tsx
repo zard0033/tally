@@ -70,9 +70,12 @@ interface SetView {
   set: Row
   last: PrefillSet[]
   /** 重量建議；徒手動作不給（null，整行不出現） */
-  suggest: WeightSuggestion | null
+  suggest: Exclude<WeightSuggestion, { kind: 'none' }> | null
   remaining: number
 }
+
+/** 「沒有重量可加」（0 kg 記法）的動作整行不出現，同徒手動作。 */
+const hideNone = (s: WeightSuggestion): Exclude<WeightSuggestion, { kind: 'none' }> | null => (s.kind === 'none' ? null : s)
 
 function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null): SetView | null {
   if (!target) return null
@@ -88,7 +91,7 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
     total: ex.sets.length,
     set: ex.sets[index],
     last: lastCompletedSets(db, exerciseId, detail.workout.id),
-    suggest: step === null ? null : suggestWeight(db, exerciseId, step, detail.workout.id),
+    suggest: step === null ? null : hideNone(suggestWeight(db, exerciseId, step, detail.workout.id)),
     remaining: remainingSetsAfter(detail, target.setId).length,
   }
 }

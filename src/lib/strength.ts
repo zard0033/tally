@@ -116,6 +116,8 @@ export const SUGGEST_MIN_SESSIONS = 2
 export type WeightSuggestion =
   | { readonly kind: 'suggest'; readonly weight_kg: number; readonly reason: string }
   | { readonly kind: 'insufficient' }
+  /** 這個動作沒有重量可加（最近一次最高重量 0 kg，徒手記法）：畫面整行不出現，不說「資料不足」（再記也不會變）。 */
+  | { readonly kind: 'none' }
 
 const NUMERALS = ['', '一', '兩', '三', '四', '五', '六', '七', '八', '九', '十']
 const countText = (n: number): string => NUMERALS[n] || String(n)
@@ -130,22 +132,38 @@ function routineTargetReps(db: TrainingDb, workoutId: string, exerciseId: string
   return reps !== null && Number.isFinite(reps) && reps >= 1 ? reps : null
 }
 
+/** 歷史只算「比正在編輯的這一次更早」的訓練：打開已結束或補記的舊訓練時，不能拿它之後的訓練當「上次」去建議。 */
+function earlierSessions(db: TrainingDb, exerciseId: string, currentWorkoutId: string) {
+  const workouts = new Map(db.workouts.map((w) => [w.id, w]))
+  const cur = workouts.get(currentWorkoutId)
+  const all = completedSessions(db, exerciseId, currentWorkoutId)
+  if (!cur) return all
+  const curDay = String(cur.performed_on)
+  const curStart = startedMs(cur)
+  return all.filter((s) => {
+    const w = workouts.get(s.workoutId)!
+    const day = String(w.performed_on)
+    return day < curDay || (day === curDay && startedMs(w) < curStart)
+  })
+}
+
 /** 這一次該把某動作的重量設多少。只看「最近一次」的最高重量 w：重量等於 w 的各組都做到目標次數 T → w + step，
  *  否則維持 w（理由：再做到 T 下）。T＝課表目標次數，沒有就 12。`step` 由呼叫端依動作給（`weightStep`）。
- *  不足兩次有已打勾組的訓練 → insufficient；最高重量 ≤ 0（徒手）→ insufficient。
- *  只讀已疊上離線佇列的 db；`currentWorkoutId`（進行中的訓練）不算歷史。沒有「降重」規則。 */
+ *  不足兩次有已打勾組的訓練 → insufficient；最高重量 ≤ 0（徒手）→ none。
+ *  只讀已疊上離線佇列的 db；進行中的這一次與它之後的訓練都不算歷史。沒有「降重」規則。 */
 export function suggestWeight(db: TrainingDb, exerciseId: string, step: number, currentWorkoutId: string): WeightSuggestion {
-  const sessions = completedSessions(db, exerciseId, currentWorkoutId)
+  const sessions = earlierSessions(db, exerciseId, currentWorkoutId)
   if (new Set(sessions.map((s) => s.workoutId)).size < SUGGEST_MIN_SESSIONS) return { kind: 'insufficient' }
 
   const last = sessions[0].sets
   const top = Math.max(...last.map((s) => s.weight_kg))
-  if (!Number.isFinite(top) || top <= 0) return { kind: 'insufficient' }
+  if (!Number.isFinite(top) || top <= 0) return { kind: 'none' }
 
   const target = routineTargetReps(db, currentWorkoutId, exerciseId) ?? DEFAULT_SUGGEST_REPS
   const atTop = last.filter((s) => s.weight_kg === top)
   if (atTop.every((s) => s.reps >= target)) {
-    return { kind: 'suggest', weight_kg: round2(top + step), reason: `上次${countText(atTop.length)}組都做到 ${target} 下` }
+    const done = atTop.length === 1 ? '上次那組做到' : `上次${countText(atTop.length)}組都做到`
+    return { kind: 'suggest', weight_kg: round2(top + step), reason: `${done} ${target} 下` }
   }
   return { kind: 'suggest', weight_kg: top, reason: `再做到 ${target} 下` }
 }
