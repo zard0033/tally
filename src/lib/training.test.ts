@@ -7,6 +7,7 @@ import {
   RPE_SHEET_VALUES,
   completesExercise,
   exerciseRpe,
+  setExerciseRpeOps,
   setRpeOps,
   PRESET_EXERCISES,
   cardioDraft,
@@ -1447,6 +1448,15 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
     expect(exerciseRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: 9 })
     expect(exerciseRpe([set(true, 9), set(false)])).toEqual({ complete: false, rpe: 9 })
     expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
+  })
+  it('setExerciseRpeOps：寫在最後一組；同動作其他組已有的 RPE 一併清成 null，沒有的不動；沒有組＝不寫', () => {
+    const rows: Row[] = [{ id: 'a', rpe: 8 }, { id: 'b' }, { id: 'c', rpe: null }, { id: 'd' }]
+    expect(setExerciseRpeOps(rows, 9)).toEqual([
+      { op: 'update', table: 'workout_sets', rowId: 'a', payload: { rpe: null } },
+      { op: 'update', table: 'workout_sets', rowId: 'd', payload: { rpe: 9 } },
+    ])
+    expect(setExerciseRpeOps([{ id: 'x' }], 7)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'x', payload: { rpe: 7 } }])
+    expect(setExerciseRpeOps([], 7)).toEqual([])
   })
   it('setRpeOps：單筆 update，payload 只有 rpe；null＝清掉', () => {
     expect(setRpeOps('s1', 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: 9 } }])

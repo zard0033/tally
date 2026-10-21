@@ -548,6 +548,15 @@ export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: num
   return { complete, rpe: values.length > 0 ? Math.max(...values) : null }
 }
 
+/** 一個動作的 RPE 只有一個：寫在最後一組上，同動作其他組若已有 RPE 一併清成 null（不然「取各組最大值」會讓新答案被舊的蓋過）。
+ *  休息條與動作卡的頁尾都走這個；組編輯 sheet 是逐組改，走 setRpeOps。 */
+export function setExerciseRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
+  const last = sets.at(-1)
+  if (!last) return []
+  const clears = sets.filter((s) => s.id !== last.id && s.rpe != null).map((s) => setRpeOps(s.id, null)[0])
+  return [...clears, ...setRpeOps(last.id, rpe)]
+}
+
 /** 寫一組的 RPE；null＝清掉（回到沒填）。 */
 export function setRpeOps(setId: string, rpe: number | null): RowOp[] {
   return [{ op: 'update', table: 'workout_sets', rowId: setId, payload: { rpe } }]

@@ -41,7 +41,8 @@ import {
   removeSetOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
-  setRpeOps,
+  RPE_CHIPS,
+  setExerciseRpeOps,
   setsOfDetail,
   toggleAllDoneOps,
   workoutSummary,
@@ -82,18 +83,41 @@ function useNow(active: boolean): Date {
 
 /** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
 const MAX_DOTS = 8
-/** 做完的動作在清單上標 RPE：填了＝「RPE 9」，沒填＝「未填 RPE」（較深、較粗，提醒回頭補）。只在進行中的訓練標。 */
-function RpeNote({ sets, show }: { sets: readonly Row[]; show: boolean }) {
+/** 動作卡的頁尾：這個動作每一組都打勾之後，固定長在卡片最底（展開時在「新增一組」下面、收合時在標頭下面）。
+ *  一個動作一個 RPE，和休息條是同一格；進行中的訓練才有。選中的是各組最大值對得上的那一顆（sheet 填的 6 沒有對應的 chip）。 */
+function RpeFooter({ name, sets, show, onPick }: { name: string; sets: readonly Row[]; show: boolean; onPick: (rpe: number) => void }) {
   const { complete, rpe } = exerciseRpe(sets)
-  if (!show || !complete) return null
-  return rpe === null ? (
-    <span className="rpe-note is-missing" data-rpe-note="missing">未填 RPE</span>
-  ) : (
-    <span className="rpe-note" data-rpe-note="filled">RPE {rpe}</span>
+  const shown = show && complete
+  return (
+    <AnimatePresence initial={false}>
+      {shown && (
+        <motion.div
+          key="rpe-footer"
+          className="ex-rpe"
+          data-section="ex-rpe"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: sec(DUR.base), ease: 'easeOut' }}
+        >
+          <div className="lbl">
+            <span>最後一組還能再做幾下？</span>
+            <span className="st">{rpe === null ? '還沒填' : `RPE ${rpe}`}</span>
+          </div>
+          <div className="opts" role="group" aria-label={`${name} 的吃力程度`}>
+            {RPE_CHIPS.map((c) => (
+              <button key={c.rpe} className={`opt${rpe === c.rpe ? ' is-on' : ''}`} type="button" data-rpe={c.rpe} aria-pressed={rpe === c.rpe} onClick={() => onPick(c.rpe)}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
-function Progress({ sets, showRpe }: { sets: readonly Row[]; showRpe: boolean }) {
+function Progress({ sets }: { sets: readonly Row[] }) {
   const { done, total, next } = exerciseProgress(sets)
   if (total === 0) return <>沒有組</>
   const nextText = next ? `下一組 ${formatKg(next.weight)} kg × ${next.reps}` : '全部完成'
@@ -110,7 +134,6 @@ function Progress({ sets, showRpe }: { sets: readonly Row[]; showRpe: boolean })
         <span aria-hidden="true">{`${done}/${total} 組`}</span>
       )}
       <span aria-hidden={total <= MAX_DOTS ? undefined : true}>{nextText}</span>
-      <RpeNote sets={sets} show={showRpe} />
     </span>
   )
 }
@@ -194,6 +217,7 @@ interface ExerciseCardProps {
   onRemove: () => void
   onToggleAll: () => void
   onAddSet: () => void
+  onPickRpe: (rpe: number) => void
   onSwipe: (setId: string, open: boolean) => void
   onEditSet: (setId: string, opener: HTMLElement) => void
   onToggleSet: (set: Row) => void
@@ -251,14 +275,7 @@ function ExerciseCard(p: ExerciseCardProps) {
             <span className="nm">{name}</span>
             {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
             <span className="sub" key={open ? 'group' : 'progress'}>
-              {open ? (
-                <>
-                  {group}
-                  <RpeNote sets={sets} show={p.showRpe} />
-                </>
-              ) : (
-                <Progress sets={sets} showRpe={p.showRpe} />
-              )}
+              {open ? group : <Progress sets={sets} />}
             </span>
           </span>
           <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
@@ -381,6 +398,7 @@ function ExerciseCard(p: ExerciseCardProps) {
               </motion.div>
             )}
           </AnimatePresence>
+          <RpeFooter name={name} sets={sets} show={p.showRpe} onPick={p.onPickRpe} />
         </>
       )}
     </section>
@@ -644,6 +662,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onRemove={() => askRemoveExercise(item)}
                 onToggleAll={() => void toggleAll(item.entry.id)}
+                onPickRpe={(rpe) => void run(setExerciseRpeOps(item.sets, rpe))}
                 onAddSet={() => {
                   if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 多了一組沒做的，這個動作就不算做完了
                   void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))
@@ -683,7 +702,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
           onPick={(rpe) => {
             if (!ask || ask.picked !== null) return
             setAsk({ ...ask, picked: rpe })
-            void run(setRpeOps(ask.setId, rpe))
+            const entrySets = exercises.find((e) => e.sets.some((s) => s.id === ask.setId))?.sets ?? []
+            void run(setExerciseRpeOps(entrySets, rpe))
           }}
         />
         <button className="tr-secondary" type="button" onClick={() => setPicker(true)}>

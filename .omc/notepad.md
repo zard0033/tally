@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、C、e2e 加速已 push。**D（RPE＋熱身，v2.84）與肌群狀態回前景已 commit 並 push**；DDL 已執行（workout_sets.rpe）。vitest 743、e2e 309 全過（600 秒）、review 0 blocking。**真機未驗**：填一次 RPE 確認寫入與讀回、休息條 139px 是否蓋住「新增一組」。B 未動。
-下一步：①真機驗 D ②B（重量建議）。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
+現況（2026-10-21）：階段 4 A、C、D（v2.84）、e2e 加速已 push（8dacb49）。**v2.85 清單標示與 v2.86 動作卡 RPE 頁尾已 commit、未 push**（v2.85 的收合列文字已被 v2.86 取代）。DDL 已執行。vitest 745、e2e 315（314 過、1 紅＝已知偶發「慢態有出口」，單跑 5 次全過）。**真機未驗**：頁尾填寫、休息條與頁尾同格、寫入與讀回。B 未動。
+下一步：①使用者說 push 才推（push 前 review 一次）②真機驗 D ③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

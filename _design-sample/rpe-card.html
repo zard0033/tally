@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — D 追加：訓練頁直接標 RPE</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 980px; line-height: 1.7; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; max-width: 393px; }
+  .frame-note { font-size: 12px; color: #7A5C44; max-width: 393px; line-height: 1.6; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px;
+    border: 1px solid #D8C9AE; position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .device .tr-scroll { flex: 1; min-height: 0; overflow: hidden; padding: var(--s-3) var(--s-5) var(--s-4); }
+  .device .set-slot-ph { display: block; }
+
+  /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ──────────────────────────
+     動作卡的「頁尾」RPE 列：只在「這個動作每一組都打勾」之後出現，**固定在卡片最底**（展開時在「新增一組」下面，收合時在標頭下面）。
+     四顆 chip 與休息條同一組字（3 下以上／2 下／1 下／力竭），點了寫在這個動作的最後一組上。
+     沒填：label 改成較深較粗的「還沒填」，不加顏色、不加紅點；填了：選中那顆淡綠底。 */
+  .ex-rpe { margin: var(--s-1) var(--s-4) 0; padding: var(--s-3) 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
+  .ex.collapsed .ex-rpe { margin-top: 0; }
+  .ex-rpe .lbl { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2);
+    font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+  .ex-rpe .lbl .st { font-weight: 700; color: var(--ink); }
+  .ex-rpe .opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-top: var(--s-2); }
+  .ex-rpe .opt { min-height: 44px; padding: 0 var(--s-1); border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+  .ex-rpe .opt.is-on { background: var(--accent-soft); color: var(--accent); }
+  .ex-rpe .opt:active { opacity: .6; }
+  .ex-rpe .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rpe-note { margin-left: var(--s-2); }
+  .rpe-note.is-missing { color: var(--ink); font-weight: 700; }
+  .ex .chev { width: 14px; height: 14px; color: var(--ink-muted); margin-right: var(--s-3); }
+  .dots { display: inline-flex; gap: 4px; margin-right: var(--s-2); vertical-align: middle; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rule-field); display: inline-block; }
+  .dot.is-done { background: var(--accent); }
+</style>
+</head>
+<body>
+<h1 class="harness-title">樣張（第二版）— 訓練頁直接標 RPE：頁尾列</h1>
+<p class="harness-sub">
+  上一版的問題：RPE 那一排插在「新增一組」上面，動作一做完按鈕就被往下推。這版把它改成<b>卡片的頁尾</b>：「新增一組」永遠在組列正下方、位置不動；
+  動作做完後，RPE 列從卡片最底「長出來」。收合的卡<b>也有同一條頁尾</b>（它是標頭按鈕的下一層、不是裡面），所以全部收合時可以直接逐張點著填，不用展開。
+  一個動作一個 RPE，寫在最後一組上，和休息條是同一格。<b>數字都是示意</b>。
+</p>
+<div class="frames">
+<div class="frame-block"><div class="frame-label">① 進行中（還沒做完）：沒有頁尾，「新增一組」在組列正下方</div><div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex"><div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身</span></span></div><div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div><div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="false" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<button class="tr-text-btn tr-text-btn-center" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增一組</button></section></main></div></div><div class="frame-note">第 3 組還沒勾，所以沒有 RPE 列。<b>「新增一組」的位置從頭到尾不變</b>：做完後 RPE 列出現在它的下面，不是它的上面。</div></div>
+<div class="frame-block"><div class="frame-label">② 做完、還沒填：頁尾長出來，狀態字「還沒填」較深較粗</div><div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex"><div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身<span class="rpe-note is-missing">未填 RPE</span></span></span></div><div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div><div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<button class="tr-text-btn tr-text-btn-center" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增一組</button><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">還沒填</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt" type="button">1 下</button><button class="opt" type="button">力竭</button></div></div></section></main></div></div><div class="frame-note">「新增一組」沒動。若這時又按「新增一組」，多了一組沒做的，頁尾收掉（動作又變成沒做完），做完再長出來。chip ≥44px，一次點一下。</div></div>
+<div class="frame-block"><div class="frame-label">③ 填了：選中的淡綠底，狀態字變 RPE 值</div><div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex"><div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身<span class="rpe-note">RPE 9</span></span></span></div><div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div><div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+<button class="tr-text-btn tr-text-btn-center" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新增一組</button><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">RPE 9</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt is-on" type="button" aria-pressed="true">1 下</button><button class="opt" type="button">力竭</button></div></div></section></main></div></div><div class="frame-note">頁尾<b>不收起來、不換位置</b>：填完前後高度一樣，後面的卡片不會跳。想改答案點別顆；沒有「清除」，要清到組編輯 sheet。</div></div>
+<div class="frame-block"><div class="frame-label">④ 全部收合：每張做完的卡都有頁尾，不用展開就能填</div><div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note">RPE 9</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">RPE 9</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt is-on" type="button" aria-pressed="true">1 下</button><button class="opt" type="button">力竭</button></div></div></section><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">坐姿胸推</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note is-missing">未填 RPE</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">還沒填</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt" type="button">1 下</button><button class="opt" type="button">力竭</button></div></div></section><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">滑輪下拉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot"></i></span>下一組 45 kg × 12</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></section><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">側平舉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note">RPE 10</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">RPE 10</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt" type="button">1 下</button><button class="opt is-on" type="button" aria-pressed="true">力竭</button></div></div></section></main></div></div><div class="frame-note">漏填的那張一眼看得出（沒有任何一顆亮、狀態字「還沒填」），直接點就填。代價：收合時每張做完的卡多 ≈ 88px 高，6 個動作全做完整頁會變長——所以我<b>填完的卡頁尾會縮成一行</b>（見下方備案）。</div></div>
+</div>
+<h2 class="harness-title" style="margin-top:40px">備案：填完後把頁尾縮成一行（省高度）</h2>
+<p class="harness-sub">這是 ④ 的長度問題的處理，請一起看。填完的卡頁尾縮成「吃力程度 RPE 9　改」一行（≈44px，點「改」展開成四顆 chip），沒填的維持四顆 chip。代價是填完那一下頁尾高度會變（約 −44px），後面的卡往上移一點；換來整頁比較短。我的建議是<b>先不縮</b>：高度不跳比較重要，等真的覺得頁面太長再縮。</p>
+<div class="frames">
+<div class="frame-block"><div class="frame-label">⑤ 備案：填完縮成一行</div><div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note">RPE 9</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" style="padding-top:var(--s-1)"><div class="lbl" style="min-height:44px;align-items:center"><span>吃力程度 RPE 9</span><button type="button" style="border:none;background:none;color:var(--accent);font:inherit;font-weight:600;min-height:44px;padding:0 var(--s-2)">改</button></div></div></section><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">坐姿胸推</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note is-missing">未填 RPE</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" data-section="ex-rpe"><div class="lbl"><span>最後一組還能再做幾下？</span><span class="st">還沒填</span></div><div class="opts" role="group" aria-label="這個動作的吃力程度"><button class="opt" type="button">3 下以上</button><button class="opt" type="button">2 下</button><button class="opt" type="button">1 下</button><button class="opt" type="button">力竭</button></div></div></section><section class="tr-card ex collapsed"><div class="ex-head"><span class="grow"><span class="nm">側平舉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成<span class="rpe-note">RPE 10</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="ex-rpe" style="padding-top:var(--s-1)"><div class="lbl" style="min-height:44px;align-items:center"><span>吃力程度 RPE 10</span><button type="button" style="border:none;background:none;color:var(--accent);font:inherit;font-weight:600;min-height:44px;padding:0 var(--s-2)">改</button></div></div></section></main></div></div><div class="frame-note">填了的兩張縮成一行，沒填的坐姿胸推維持四顆 chip，所以<b>漏填的永遠最大、最顯眼</b>。</div></div>
+</div>
+</body>
+</html>
