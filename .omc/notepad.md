@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A（v2.82）已 push；C 肌群狀態（v2.83，d6ce54a）與 e2e 加速（554bb15，981→573 秒）已 commit、review 0 blocking，**待使用者說「準備 push」**。vitest 727、e2e 291。真機未驗。B 未動。
-下一步：①push ②D：RPE＋熱身標記另開 spec＋休息條四檔樣張（方向已同意）③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。待決：肌群狀態回前景重取 now（review MEDIUM）。
+現況（2026-10-21）：階段 4 A（v2.82）、C 肌群狀態（v2.83）、e2e 加速（981→573 秒）已 push（ecef763），review 0 blocking。vitest 727、e2e 292。真機未驗。B 未動。
+下一步：①push ②D：RPE＋熱身標記另開 spec＋休息條四檔樣張（方向已同意）③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。肌群狀態回前景重取 now（review MEDIUM）已修、待 commit／push。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

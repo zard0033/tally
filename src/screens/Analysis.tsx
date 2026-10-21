@@ -148,8 +148,15 @@ function RecoveryRow({ r }: { r: MuscleRecovery }) {
 }
 
 function RecoveryList({ db }: { db: TrainingDb }) {
-  // 開頁當下取一次「現在」；頁面開著不動時剩餘小時不會自己更新（這頁很少停那麼久）
-  const [now] = useState(() => new Date())
+  // 開頁取一次「現在」，回到前景再取一次（PWA 退背景再喚回常不重新載入）；停在前景不動時不會自己更新
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(new Date())
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
   const rows = useMemo(() => recoveryStatus(db, now), [db, now])
   return (
     <>
