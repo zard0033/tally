@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、C、D（v2.84）、e2e 加速、v2.85、v2.86（動作卡 RPE 頁尾）已 push（6e988e9）。DDL 已執行。vitest 745、e2e 318（317 過、1 紅＝tally.spec，已 push 的前一版也紅，**近來明顯變差、值得單獨查**）。**真機未驗**：RPE 填寫、頁尾、寫入與讀回。B 未動。
-下一步：①真機驗 D ②查 tally.spec「Tally UI 回歸」近期變差 ③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
+現況（2026-10-21）：階段 4 A、C、D（v2.84）、e2e 加速、v2.85、v2.86（動作卡 RPE 頁尾）已 push（6e988e9）。DDL 已執行。vitest 745、e2e 318（317 過、1 紅＝tally.spec；原因已查＝動畫等待太短，已改 `settle`，單 worker 10 次全過）。**真機未驗**：RPE 填寫、頁尾、寫入與讀回。B 未動。
+下一步：①真機驗 D ②B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

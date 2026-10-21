@@ -15,13 +15,19 @@
 
    selector 對照 legacy → React（DOM 結構鏡像但沒有 id／data-* 屬性，逐一對過實際 DOM 才定案，
    詳細對照與裁決記在委派回報，不重複寫在這裡）。 */
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { mkdir, rm } from 'node:fs/promises'
 import {
   check, closeFirstRow, deleteViaTap, grabPoint, leg, must, mustText, numFrom, openApp, prevDay, slowDrag,
 } from './harness'
 
 const SHOTS_DIR = 'e2e/shots'
+
+/* 等動畫落定的固定等待。headless WebKit 的 rAF 不穩：有些輪是 60Hz（16ms）、有些輪掉到 30Hz（33ms），
+   同一段 220ms 的退場動畫實測點完到消失 258–440ms，原本寫死的 300／400ms 就時過時不過（2026-10-21 實測
+   「復原後提示條應該消失」「滑到底直接刪除」「切到設定頁後復原提示條仍殘留」都是這個）。
+   所以這幾條路徑的等待一律乘 2；負向斷言（不可以刪）多等只會更嚴、不會變鬆。 */
+const settle = (page: Page, ms: number) => page.waitForTimeout(ms * 2)
 
 interface Fail {
   step: string
@@ -219,7 +225,7 @@ test('Tally UI 回歸', async ({ page }) => {
     check((await items.count()) >= 2, '時間軸可點品項不足 2 個')
     const [a, b] = [rows.nth(0), rows.nth(1)]
     await items.nth(0).click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     check((await a.evaluate((el) => el.classList.contains('is-edit'))), '點第一列後沒有 .is-edit，編輯區沒展開')
     check(
       (await a.locator('.item-editor .qty-stepper').count()) === 1,
@@ -230,7 +236,7 @@ test('Tally UI 回歸', async ({ page }) => {
       '編輯區的餐別分段控制器應該有四格',
     )
     await items.nth(1).click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     check(
       !(await a.evaluate((el) => el.classList.contains('is-edit'))),
       '開第二列後第一列沒有自動收合（單值 active state 沒生效）',
@@ -253,7 +259,7 @@ test('Tally UI 回歸', async ({ page }) => {
     // ponytail: fixture 每餐只有一筆，刪掉等於整個 <ul> 隨餐次轉「待記錄」一起卸載，
     // AnimatePresence 的退場動畫其實不會跑（DOM 20ms 內就移除）。這個等待只是保險。
     // 要真的覆蓋退場動畫，fixture 得有某一餐兩筆以上——留給下次擴 fixture 時一起做。
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     const afterDelete = await page.locator('.timeline .item').count()
     check(afterDelete === before - 1, `刪除後品項數應為 ${before - 1}，實際 ${afterDelete}`)
     await must(page, '.undo-bar', '復原提示條')
@@ -261,7 +267,7 @@ test('Tally UI 回歸', async ({ page }) => {
     /* 焦點必須接到「復原」鈕上。被刪那列連同刪除鈕一起離開 DOM，焦點會掉回 body，
        鍵盤使用者等於要在 5 秒內盲摸 Tab。第一版的轉移寫在 undoOpen 轉 true 的當下、
        那時該鈕還在退場動畫裡沒卸載，判斷式永遠不成立——這條斷言就是鎖那個時機。 */
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     const focusedTag = await page.evaluate(() => document.activeElement?.tagName ?? 'NONE')
     check(
       (await page.locator('.undo-bar button:focus').count()) === 1,
@@ -269,7 +275,7 @@ test('Tally UI 回歸', async ({ page }) => {
     )
 
     await page.locator('.undo-bar button').click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     const afterUndo = await page.locator('.timeline .item').count()
     check(afterUndo === before, `復原後品項數應回到 ${before}，實際 ${afterUndo}`)
     check((await page.locator('.undo-bar').count()) === 0, '復原後提示條應該消失')
@@ -279,11 +285,11 @@ test('Tally UI 回歸', async ({ page }) => {
     // 復原回來的那一列必須還能再刪一次。v2.1 第一版的 deletingIds 只加不減，
     // 復原後該列的刪除鈕永久 disabled——這條就是為了鎖住那個 bug
     await deleteViaTap(page)
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     const afterRedelete = await page.locator('.timeline .item').count()
     check(afterRedelete === before - 1, `復原後再刪一次應剩 ${before - 1} 筆，實際 ${afterRedelete}——那一列刪不掉了`)
     await page.locator('.undo-bar button').click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
   })
 
   await step('滑到底直接刪除（v2.1）——同時證明底下那條縱向測試不是假通過', async () => {
@@ -293,12 +299,12 @@ test('Tally UI 回歸', async ({ page }) => {
     // 若拖曳路徑根本沒被觸發，這裡會先失敗，而不是讓下一條在無事發生的情況下綠著
     const start = await grabPoint(page)
     await slowDrag(page, start, leg(start, { x: start.x - 540, y: start.y }, 14))
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     const after = await page.locator('.timeline .item').count()
     check(after === before - 1, `滑到底放手應刪掉一筆（${before} → ${before - 1}），實際 ${after}`)
     await must(page, '.undo-bar', '滑到底刪除後的復原提示條')
     await page.locator('.undo-bar button').click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     check((await page.locator('.timeline .item').count()) === before, '滑到底刪除後復原沒把那一筆放回來')
   })
 
@@ -311,7 +317,7 @@ test('Tally UI 回歸', async ({ page }) => {
     const start = await grabPoint(page)
     const down = { x: start.x, y: start.y + 60 }
     await slowDrag(page, start, [...leg(start, down, 8), ...leg(down, { x: start.x - 540, y: down.y }, 12)])
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     const after = await page.locator('.timeline .item').count()
     check(after === before, `縱向拖曳帶左偏後品項從 ${before} 變成 ${after}——被誤判成刪除`)
     check((await page.locator('.undo-bar').count()) === 0, '縱向拖曳不該觸發刪除，卻出現了復原提示條')
@@ -324,15 +330,15 @@ test('Tally UI 回歸', async ({ page }) => {
   await step('切分頁時待刪要結清、復原提示條不可殘留（v2.1 回歸鎖）', async () => {
     await closeFirstRow(page)
     await deleteViaTap(page)
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     await must(page, '.undo-bar', '刪除後的復原提示條')
     // 提示條掛在 <main> 下、與 Today／Settings 同層，且定位是照今日頁 CTA 高度算的，
     // 不結清的話它會浮在設定頁半空中（precommit review 抓到）
     await page.locator('.tab[aria-label="設定"]').click()
-    await page.waitForTimeout(300)
+    await settle(page, 300)
     check((await page.locator('.undo-bar').count()) === 0, '切到設定頁後復原提示條仍殘留')
     await page.locator('.tabbar .tab').nth(0).click()
-    await page.waitForTimeout(500)
+    await settle(page, 500)
   })
 
   await step('日期切換 — 週列、歷史日語意、回今天焦點', async () => {
@@ -348,11 +354,11 @@ test('Tally UI 回歸', async ({ page }) => {
     // 這裡只鎖「今天可以往前走」與回今天的語意，避免累積回歸再長出第二份。
     check((await page.locator('button.date-today-btn').count()) === 0, '今天時不應出現「回今天」鈕')
     await prevDay(page)
-    await page.waitForTimeout(500)
+    await settle(page, 500)
     await mustText(page, '.gauge-lead', '攝取', '歷史日主數字標籤應為「攝取」不是「還能吃／超出」')
     await must(page, 'button.date-today-btn', '回今天鈕（歷史日應出現）')
     await page.click('button.date-today-btn')
-    await page.waitForTimeout(500)
+    await settle(page, 500)
     check((await page.locator('button.date-today-btn').count()) === 0, '點「回今天」後回今天鈕應消失')
     // review 抓到的焦點流失：「回今天」鈕自己會被卸載，焦點要接到 .datectl 容器，
     // 不能掉回 body（掉回 body 代表鍵盤使用者按完之後找不到自己在哪）
@@ -365,14 +371,14 @@ test('Tally UI 回歸', async ({ page }) => {
   await step('切設定頁 — 契約與標題', async () => {
     const tabs = page.locator('.tabbar .tab')
     await tabs.nth(2).click() // 設定（第三顆：飲食／訓練／設定）
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     await mustText(page, 'h1.today', '設定', '設定頁標題')
     await must(page, '.settings', '設定面板')
     // React 版 Today／Settings 是互斥條件渲染（App.tsx 只掛載其中一個），不是同時掛載、
     // 用 hidden 屬性藏起來——所以驗證方式跟 legacy 的 isHidden() 不同，改驗「根本不存在」
     check((await page.locator('.datectl').count()) === 0, '設定頁不該存在日期切換列（today 分頁的元件不該掛載在這裡）')
     await tabs.nth(0).click() // 日記
-    await page.waitForTimeout(400)
+    await settle(page, 400)
     const h1Text = ((await page.locator('h1.date-title').first().textContent()) ?? '').trim()
     check(/^週[一二三四五六日] \d+\/\d+$/.test(h1Text), `切回日記頁 h1 應為日期格式，實際「${h1Text}」`)
   })
