@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A（v2.82）已 commit；C 肌群狀態（v2.83）已做完、**未 commit、未 review**：recovery.ts＋22 unit、Analysis 分段控制、e2e +6；vitest 727、e2e 291（290 過，tally.spec 偶發紅，單跑綠）。窗口依文獻改成部位×組數（spec.md 口徑 4 已改）。真機未驗。B 未動。
-下一步：①push 前 review ②D：RPE＋熱身標記另開 spec＋休息條四檔樣張（使用者已同意方向，等寫完核可）③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。todo：加快 e2e（全量 983 秒）。
+現況（2026-10-21）：階段 4 A（v2.82）已 push；C 肌群狀態（v2.83，d6ce54a）與 e2e 加速（554bb15，981→573 秒）已 commit、review 0 blocking，**待使用者說「準備 push」**。vitest 727、e2e 291。真機未驗。B 未動。
+下一步：①push ②D：RPE＋熱身標記另開 spec＋休息條四檔樣張（方向已同意）③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。待決：肌群狀態回前景重取 now（review MEDIUM）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

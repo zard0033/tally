@@ -335,6 +335,7 @@ test('切回「動作進度」列表還在，再切回「肌群狀態」仍是�
   await openRecovery(page, buildRecovery([...REC_WORKOUTS, { id: 'r5', off: -3, startedH: 80, endedH: 79, items: [{ ex: CH, n: 3 }] }]))
   await page.locator('.seg button', { hasText: '動作進度' }).click()
   await expect(page.locator('[data-section="recovery-list"]')).toHaveCount(0)
+  await expect(page.locator('[data-section="progress-list"]')).toBeVisible()
   await page.locator('.seg button', { hasText: '肌群狀態' }).click()
   await expect(recRows(page)).toHaveCount(6)
   // 最近一次是 r1 的 6 組、2 天前，不是更早那場的 3 組
