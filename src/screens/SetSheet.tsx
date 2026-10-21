@@ -215,10 +215,10 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
   const [askDelete, setAskDelete] = useState(false)
   const [synced, setSynced] = useState(false)
 
-  const patch = (payload: Record<string, unknown>) => {
+  const patch = (payload: Record<string, unknown>, touchesSync = true) => {
     if (!target || !fresh) return
     void run([{ op: 'update', table: 'workout_sets', rowId: target.setId, payload }])
-    setSynced(false)
+    if (touchesSync) setSynced(false) // RPE 不在「同步剩餘組數」複製的欄位裡，改它不該把「已同步 ✓」打回去
   }
 
   const sync = async () => {
@@ -310,7 +310,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
                     type="button"
                     aria-pressed={rpe === v}
                     aria-label={`RPE ${v}`}
-                    onClick={() => rpe !== v && patch({ rpe: v })}
+                    onClick={() => rpe !== v && patch({ rpe: v }, false)}
                   >
                     {v}
                   </button>
@@ -318,7 +318,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               </div>
               <div className="rpe-hint">
                 <span>9＝還能再做 1 下，10＝力竭</span>
-                <button type="button" disabled={rpe === null} onClick={() => patch({ rpe: null })}>
+                <button type="button" disabled={rpe === null} onClick={() => patch({ rpe: null }, false)}>
                   清除
                 </button>
               </div>

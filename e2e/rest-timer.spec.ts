@@ -415,6 +415,32 @@ test('不點就不寫、不追問：條照常倒數，略過收整條；取消�
   expect(await rpeWrites(page), '全程沒有任何 rpe 寫入').toEqual([])
 })
 
+test('問題還在時取消勾、新增一組：問題列都收掉，不會把 RPE 寫到沒做的組', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await expect(ask(page)).toBeVisible()
+  await tick(page, 2) // 直接取消勾（不先按略過）
+  await expect(ask(page)).toHaveCount(0)
+  await tick(page, 2)
+  await expect(ask(page)).toBeVisible()
+  await page.locator('.ex').getByRole('button', { name: '新增一組' }).click()
+  await expect(ask(page), '多了一組沒做的，這個動作不算做完').toHaveCount(0)
+  expect(await rpeWrites(page)).toEqual([])
+})
+
+test('休息條答 9 之後，組編輯 sheet 裡 RPE 9 是高亮的', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await chip(page, '1 下').click()
+  await expect(ask(page)).toHaveCount(0)
+  await page.locator('.ex .set').nth(2).locator('.w').click()
+  const sheet = page.locator('[data-screen="set-sheet"]')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'true')
+})
+
 test('已經有 RPE 的組重勾不再問', async ({ page }) => {
   await prepare(page)
   await openLive(page)
@@ -456,8 +482,10 @@ test('問題列出現時列表底部多留白：最後一張卡捲得到條的�
   await tick(page, 1)
   await tick(page, 2)
   await expect(ask(page)).toBeVisible()
+  await page.waitForTimeout(400) // 問題列展開與列表留白的過渡都跑完再量，量到的才是落定後的值
   const gap = await page.evaluate(() => {
     const sc = document.querySelector('[data-screen="training-session"] .tr-scroll') as HTMLElement
+    if (sc.scrollHeight <= sc.clientHeight) throw new Error('列表沒有長到要捲：這條沒有量到東西')
     const bar = document.querySelector('.tr-rest') as HTMLElement
     sc.scrollTop = sc.scrollHeight
     const lastCard = Array.from(sc.querySelectorAll('.ex')).at(-1) as HTMLElement

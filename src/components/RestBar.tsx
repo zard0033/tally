@@ -8,6 +8,7 @@
    RPE 問題列（spec.md「階段 4 乙」）：一個動作的最後一組勾完時，條長高成兩列——上列問「最後一組還能再做幾下」＋四顆 chip
    （RPE_CHIPS），下列是原本的倒數不動。點 chip＝呼叫端寫入；選中的變白、其餘退淡，呼叫端約 0.6 秒後把 ask 收掉，問題列收起。
    沒點就一直留到條自己收起為止，不追問。 */
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { DUR, REDUCED_FADE_MAX_MS, sec } from '@/lib/durations'
 import { formatRest, overtimeText, REST_ADJUST_SEC, remainingMs } from '@/lib/restTimer'
@@ -22,6 +23,19 @@ export interface RpeAsk {
 
 export default function RestBar({ timer, ask, onPick }: { timer: RestTimer; ask: RpeAsk | null; onPick: (rpe: number) => void }) {
   const reduced = useReducedMotion()
+  const barRef = useRef<HTMLDivElement>(null)
+  // 圓角矩形要撐到問題列收完才還原：ask 一變 null 就拿掉的話，條還有 139px 高就變成大膠囊、把問題那行切掉
+  const [tall, setTall] = useState(false)
+  useEffect(() => {
+    if (ask) setTall(true)
+  }, [ask])
+  // 點了 chip 之後焦點若還在問題列裡（0.6 秒後它就卸載），交給「略過休息」，鍵盤與讀屏使用者不會掉回文件開頭
+  const picked = ask?.picked != null
+  useEffect(() => {
+    if (!picked) return
+    const el = barRef.current
+    if (el?.querySelector('.rest-ask')?.contains(document.activeElement)) el.querySelector<HTMLElement>('.rest-row button[aria-label="略過休息"]')?.focus()
+  }, [picked])
   const { endAt, now } = timer
   const remaining = endAt === null ? 0 : remainingMs(endAt, now)
   const over = endAt !== null && remaining <= 0
@@ -33,14 +47,15 @@ export default function RestBar({ timer, ask, onPick }: { timer: RestTimer; ask:
     <AnimatePresence>
       {endAt !== null && (
         <motion.div
-          className={`tr-rest${over ? ' is-over' : ''}${ask ? ' has-ask' : ''}`}
+          ref={barRef}
+          className={`tr-rest${over ? ' is-over' : ''}${ask || tall ? ' has-ask' : ''}`}
           data-rest={over ? 'over' : 'running'}
           initial={hidden}
           animate={{ opacity: 1, y: 0 }}
           exit={hidden}
           transition={{ duration: sec(reduced ? Math.min(DUR.base, REDUCED_FADE_MAX_MS) : DUR.base), ease: 'easeOut' }}
         >
-          <AnimatePresence initial={false}>
+          <AnimatePresence initial={false} onExitComplete={() => setTall(false)}>
             {ask && (
               <motion.div
                 key="ask"
@@ -60,8 +75,8 @@ export default function RestBar({ timer, ask, onPick }: { timer: RestTimer; ask:
                       type="button"
                       data-rpe={c.rpe}
                       aria-pressed={ask.picked === c.rpe}
-                      disabled={ask.picked !== null}
-                      onClick={() => onPick(c.rpe)}
+                      aria-disabled={ask.picked !== null}
+                      onClick={() => ask.picked === null && onPick(c.rpe)}
                     >
                       {c.label}
                     </button>

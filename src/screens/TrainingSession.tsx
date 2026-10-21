@@ -470,6 +470,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
 
   const removeExercise = async (entryId: string) => {
     setAskRemove(null)
+    setAsk(null) // 問題列問的那一組可能就在這個動作裡
     await run([{ op: 'delete', table: 'workout_exercises', rowId: entryId }])
   }
 
@@ -620,7 +621,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onRemove={() => askRemoveExercise(item)}
                 onToggleAll={() => void toggleAll(item.entry.id)}
-                onAddSet={() => void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))}
+                onAddSet={() => {
+                  if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 多了一組沒做的，這個動作就不算做完了
+                  void run(addSetOps({ db, workoutExerciseId: item.entry.id, newId }))
+                }}
                 onSwipe={(setId, o) => setSwipeId(o ? setId : swipeId === setId ? null : swipeId)}
                 onEditSet={(setId, opener) => {
                   setSwipeId(null)
@@ -630,6 +634,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onToggleSet={(s) => {
                   endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
+                  if (s.done === true && ask?.setId === s.id) setAsk(null) // 取消勾：不再問這一組
                   if (s.done !== true) {
                     rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
                     setAsk(completesExercise(item.sets, s.id) && s.rpe == null ? { setId: s.id, picked: null } : null)
@@ -638,6 +643,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onDeleteSet={(setId) => {
                   setSwipeId(null)
+                  if (ask?.setId === setId) setAsk(null)
                   void run(removeSetOps(detail, setId))
                 }}
               />
@@ -680,6 +686,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         finalFocus={setOpener}
         onSynced={showFlash}
         onDeleted={() => {
+          if (ask?.setId === setTarget?.setId) setAsk(null)
           // 這一組已經不在了：關閉後焦點落到那張卡的名稱鈕
           setOpener.current = document.querySelector<HTMLElement>(`[data-entry-id="${setTarget?.entryId}"] .ex-toggle`)
         }}

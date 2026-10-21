@@ -1313,15 +1313,14 @@ button { -webkit-user-select: none; user-select: none; }
    scroll-padding 同值，Tab 聚焦捲進來的卡不會落在條底下。留白的變化走 transition，條淡出時列表不會突然跳下去。 */
 .tr-rest { position: absolute; left: var(--s-5); right: var(--s-5); bottom: calc(100% + var(--s-2)); z-index: 2;
   display: flex; flex-direction: column; padding: 0 var(--s-2) 0 var(--s-4);
-  border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2);
-  transition: border-radius var(--dur-base) ease-out; }
+  border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2); }
 .tr-rest .rest-row { display: flex; align-items: center; gap: var(--s-1); min-height: var(--rest-h); }
 /* RPE 問題列（spec.md「階段 4 乙」）：條長高成兩列，上列問題＋四顆 chip，下列是原本的倒數。長高後不能再是整顆 pill（半徑會變成橢圓），改圓角矩形。
    深色底上的 chip 不新增 token：未選＝--paper 疊 14%；選中＝--paper 實心、--ink 字（對比最高），其餘退淡。 */
 .tr-rest.has-ask { border-radius: var(--r-tab); }
 .rest-ask { overflow: hidden; }
 .rest-ask .q { display: block; padding-top: var(--s-2); font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; }
-.rpe-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-top: var(--s-2); padding: 0 var(--s-2) var(--s-2) 0;
+.rpe-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-top: var(--s-2); padding: 0 var(--s-2) var(--s-2) var(--s-1);
   border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
 .rpe-chip { min-height: 44px; padding: 0 var(--s-1); border: none; border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--paper) 14%, transparent); color: inherit; font-family: inherit;

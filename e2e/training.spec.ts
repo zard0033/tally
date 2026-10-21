@@ -2510,19 +2510,37 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
   await expect.poll(() => rpeWrites(page)).toEqual([8, 9, null])
 })
 
-test('新增的組不帶 rpe：加一組、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
-  await openApp(page, {}, WITH_WORKOUT)
+test('新增的組不帶 rpe：預填（上次的組有 rpe）、按「新增一組」、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
+  // 上次的兩組都有 RPE 9：新組若是複製舊列就會帶出來
+  await openApp(page, {}, { ...WITH_WORKOUT, workout_sets: WITH_WORKOUT.workout_sets.map((s) => ({ ...s, rpe: 9 })) })
   await openTraining(page)
   await startBlank(page)
   await addExercise(page, '腿推舉')
+  await page.getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
   await tick(page, 0)
-  await expect(stat(page, 'sets')).toHaveText('1/2')
+  await expect(stat(page, 'sets')).toHaveText('1/3')
   const setBodies = () =>
     page.evaluate(() =>
       (window as unknown as { __writes: { table: string; body: unknown }[] }).__writes.filter((w) => w.table === 'workout_sets').map((w) => JSON.stringify(w.body)),
     )
   await expect.poll(async () => (await setBodies()).some((b) => b.includes('"done":true'))).toBe(true) // 勾組的寫入已送出
   const bodies = await setBodies()
-  expect(bodies.length).toBeGreaterThanOrEqual(3) // 預填的兩組＋勾組
+  expect(bodies.length).toBeGreaterThanOrEqual(4) // 預填的兩組＋新增一組＋勾組
   for (const b of bodies) expect(b).not.toContain('rpe')
+})
+
+test('離線時答的 RPE 進佇列，回線後送出（payload 只有 rpe）', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await setOffline(page, true)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await tick(page, 1) // 最後一組：休息條問 RPE
+  await page.locator('.tr-rest [data-rpe-ask] [data-rpe="9"]').click()
+  await setOffline(page, false)
+  await expect
+    .poll(async () => (await trainRows(page, 'workout_sets')).filter((r) => r.rpe === 9).length, { timeout: 15_000 })
+    .toBe(1)
 })

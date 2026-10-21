@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、C、e2e 加速已 push（ecef763）。**D（RPE＋熱身，v2.84）已實作、DDL 已執行（workout_sets.rpe，Tally 專案）**；使用者核可四待決全依建議。vitest 743、e2e 306（全量跑中／待確認）、16 個 mutation 全殺。**未 commit、未 push、未 review**；c04222f（肌群狀態回前景）也未 push。真機未驗：填一次 RPE 確認寫入與讀回。B 未動。
-下一步：①全量 e2e 結果→commit→push 前 review→push ②真機驗 D ③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
+現況（2026-10-21）：階段 4 A、C、e2e 加速已 push。**D（RPE＋熱身，v2.84）與肌群狀態回前景已 commit 並 push**；DDL 已執行（workout_sets.rpe）。vitest 743、e2e 309 全過（600 秒）、review 0 blocking。**真機未驗**：填一次 RPE 確認寫入與讀回、休息條 139px 是否蓋住「新增一組」。B 未動。
+下一步：①真機驗 D ②B（重量建議）。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
