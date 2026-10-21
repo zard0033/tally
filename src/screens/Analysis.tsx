@@ -138,7 +138,7 @@ function RecoveryRow({ r }: { r: MuscleRecovery }) {
     <div className="tr-row" data-group={r.group} data-state={r.state}>
       <span className="grow">
         <span className="nm">{label}</span>
-        {r.state !== 'none' && <span className="sub">{daysAgoText(r.daysAgo!)} · {r.sets} 組</span>}
+        {r.state !== 'none' && <span className="sub">{daysAgoText(r.daysAgo!)} · {r.sets} 組{r.nearFailure ? ' · 近力竭' : ''}</span>}
       </span>
       {r.state === 'recovering' && <span className="an-state">恢復中<small>還需約 {r.remainingHours} 小時</small></span>}
       {r.state === 'ready' && <span className="an-state is-ready">可再練</span>}
@@ -164,7 +164,7 @@ function RecoveryList({ db }: { db: TrainingDb }) {
         {rows.map((r) => <RecoveryRow key={r.group} r={r} />)}
       </div>
       <p className="an-note">
-        依部位與訓練量粗估（下半身 48–72 小時，其餘 24–48 小時），沒有計入練到多累；熱身組也算進組數。
+        依部位與訓練量粗估（下半身 48–72 小時，其餘 24–48 小時）；有一組做到 RPE 9 以上，再加 24 小時。重量不到當天最重一組 60% 的熱身組不計入組數。
       </p>
     </>
   )

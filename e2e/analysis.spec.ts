@@ -231,7 +231,7 @@ const AR = 'bbbbbbbb-0000-4000-8000-000000000006'
 const CO = 'bbbbbbbb-0000-4000-8000-000000000007'
 const OT = 'bbbbbbbb-0000-4000-8000-000000000008'
 
-interface RecWork { id: string; off: number; startedH: number; endedH: number | null; items: { ex: string; n: number; done?: boolean }[] }
+interface RecWork { id: string; off: number; startedH: number; endedH: number | null; items: { ex: string; n: number; done?: boolean; rpe?: number; warm?: number }[] }
 const REC_WORKOUTS: RecWork[] = [
   { id: 'r1', off: -2, startedH: 51, endedH: 50, items: [{ ex: CH, n: 6 }] },
   { id: 'r2', off: -1, startedH: 31, endedH: 30, items: [{ ex: LG1, n: 6 }, { ex: LG2, n: 4 }] },
@@ -251,7 +251,11 @@ function buildRecovery(workoutsIn: RecWork[]): typeof FIX {
     w.items.forEach((it, p) => {
       entries.push({ id: `${w.id}-e${p}`, workout_id: w.id, exercise_id: it.ex, position: p })
       for (let i = 0; i < it.n; i++) {
-        sets.push({ id: `${w.id}-e${p}-s${i}`, workout_exercise_id: `${w.id}-e${p}`, set_no: i + 1, weight_kg: 50, reps: 8, done: it.done ?? true })
+        // rpe 只放在第 1 組；warm 是另外多的熱身組（20 kg，不到 50 kg 的 60%）
+        sets.push({ id: `${w.id}-e${p}-s${i}`, workout_exercise_id: `${w.id}-e${p}`, set_no: i + 1, weight_kg: 50, reps: 8, done: it.done ?? true, ...(i === 0 && it.rpe ? { rpe: it.rpe } : {}) })
+      }
+      for (let i = 0; i < (it.warm ?? 0); i++) {
+        sets.push({ id: `${w.id}-e${p}-w${i}`, workout_exercise_id: `${w.id}-e${p}`, set_no: it.n + i + 1, weight_kg: 20, reps: 10, done: true })
       }
     })
   }
@@ -320,8 +324,8 @@ test('說明小字講清楚這是粗估：部位窗口、沒計入練到多累�
   const note = page.locator('[data-screen="analysis"] .an-note')
   await expect(note).toContainText('下半身 48–72 小時')
   await expect(note).toContainText('其餘 24–48 小時')
-  await expect(note).toContainText('沒有計入練到多累')
-  await expect(note).toContainText('熱身組也算進組數')
+  await expect(note).toContainText('RPE 9 以上，再加 24 小時')
+  await expect(note).toContainText('不到當天最重一組 60% 的熱身組不計入組數')
 })
 
 test('完全沒有訓練：六列都是「沒有紀錄」，不報錯', async ({ page }) => {
@@ -356,3 +360,24 @@ test('連不上伺服器：肌群狀態照常顯示（資料來自本機底）',
   await expect(recRows(page)).toHaveCount(6)
   await expect(recRows(page).nth(2).locator('.an-state')).toContainText('還需約 42 小時')
 })
+
+test('RPE：近力竭（任一組 RPE ≥ 9）窗口加 24 小時並標「近力竭」；RPE 8 與沒填的照舊；熱身組不計入組數', async ({ page }) => {
+  // 下半身：10 組正式＋2 組熱身，第 1 組 RPE 9，昨天、結束 30 小時前 → n=10、窗口 72＋24＝96、剩 66
+  // 胸：6 組、RPE 8，結束 30 小時前 → 窗口 24，已可再練（不近力竭）
+  // 肩：3 組、RPE 10，今天、結束 12 小時前 → 窗口 24＋24＝48、剩 36
+  await openRecovery(page, buildRecovery([
+    { id: 'p1', off: -1, startedH: 31, endedH: 30, items: [{ ex: LG1, n: 10, warm: 2, rpe: 9 }] },
+    { id: 'p2', off: -1, startedH: 31, endedH: 30, items: [{ ex: CH, n: 6, rpe: 8 }] },
+    { id: 'p3', off: 0, startedH: 13, endedH: 12, items: [{ ex: SH, n: 3, rpe: 10 }] },
+  ]))
+  const legs = page.locator('[data-section="recovery-list"] .tr-row[data-group="legs"]')
+  await expect(legs.locator('.sub')).toHaveText('昨天 · 10 組 · 近力竭')
+  await expect(legs.locator('.an-state')).toContainText('還需約 66 小時')
+  const chest = page.locator('[data-section="recovery-list"] .tr-row[data-group="chest"]')
+  await expect(chest.locator('.sub')).toHaveText('昨天 · 6 組')
+  await expect(chest.locator('.an-state')).toHaveText('可再練')
+  const shoulder = page.locator('[data-section="recovery-list"] .tr-row[data-group="shoulder"]')
+  await expect(shoulder.locator('.sub')).toHaveText('今天 · 3 組 · 近力竭')
+  await expect(shoulder.locator('.an-state')).toContainText('還需約 36 小時')
+})
+

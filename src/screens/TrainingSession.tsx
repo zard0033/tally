@@ -16,12 +16,12 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import Flip from '@/components/Flip'
 import GymVisualCredit from '@/components/GymVisualCredit'
-import RestBar from '@/components/RestBar'
+import RestBar, { type RpeAsk } from '@/components/RestBar'
 import { useRestTimer } from '@/components/useRestTimer'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
-import { CASCADE_STEP_MS, DUR, SPRING_CARD, sec } from '@/lib/durations'
+import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
 import { catalogKey } from '@/lib/exerciseCatalog'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
@@ -32,6 +32,7 @@ import {
   addExerciseOps,
   addSetOps,
   allSetsDone,
+  completesExercise,
   exerciseProgress,
   finishWorkoutOps,
   formatKg,
@@ -39,6 +40,7 @@ import {
   removeSetOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
+  setRpeOps,
   setsOfDetail,
   toggleAllDoneOps,
   workoutSummary,
@@ -373,6 +375,14 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const now = useNow(live)
   // 組間休息：只在即時進行中的訓練啟動（補記與已結束的不啟動）；「全部完成」不啟動，只有單點勾組才算「剛做完一組」
   const rest = useRestTimer(String(workout.id), live)
+  // RPE 問題（spec.md「階段 4 乙」）：每次勾組都重設——是這個動作的最後一組才問；picked 之後約 0.6 秒收起
+  const [ask, setAsk] = useState<RpeAsk | null>(null)
+  const askShown = ask !== null && rest.endAt !== null
+  useEffect(() => {
+    if (ask?.picked == null) return
+    const t = setTimeout(() => setAsk(null), RPE_ASK_CLOSE_MS)
+    return () => clearTimeout(t)
+  }, [ask])
 
   const [openEx, setOpenEx] = useState<string | null>(() => exercises[0]?.entry.id ?? null)
   const [tipsOpenIds, setTipsOpenIds] = useState<ReadonlySet<string>>(new Set())
@@ -522,7 +532,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }
 
   return (
-    <div className={`main${rest.endAt !== null ? ' has-rest' : ''}`} data-screen="training-session" data-workout-id={workout.id}>
+    <div className={`main${rest.endAt !== null ? ' has-rest' : ''}${askShown ? ' has-rest-ask' : ''}`} data-screen="training-session" data-workout-id={workout.id}>
       <header className="tr-top">
         <button className="tr-ib" type="button" aria-label={inProgress ? '返回（訓練繼續進行）' : '返回'} onClick={onBack}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -620,7 +630,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 }}
                 onToggleSet={(s) => {
                   endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
-                  if (s.done !== true) rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
+                  if (s.done !== true) {
+                    rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
+                    setAsk(completesExercise(item.sets, s.id) && s.rpe == null ? { setId: s.id, picked: null } : null)
+                  }
                   void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
                 }}
                 onDeleteSet={(setId) => {
@@ -635,7 +648,15 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
       </div>
 
       <div className="tr-bottom">
-        <RestBar timer={rest} />
+        <RestBar
+          timer={rest}
+          ask={askShown ? ask : null}
+          onPick={(rpe) => {
+            if (!ask || ask.picked !== null) return
+            setAsk({ ...ask, picked: rpe })
+            void run(setRpeOps(ask.setId, rpe))
+          }}
+        />
         <button className="tr-secondary" type="button" onClick={() => setPicker(true)}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />

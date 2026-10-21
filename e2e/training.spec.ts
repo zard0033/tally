@@ -2469,3 +2469,60 @@ test('著作權標示：畫面上沒有任何預設動作的圖（全是自建�
   await expect(page.locator('[data-screen="training-session"] img.ex-thumb')).toHaveCount(0)
   await expect(credit(page.locator('[data-screen="training-session"]'))).toHaveCount(0)
 })
+
+/* ── 組編輯 sheet 的 RPE 區（spec.md「階段 4 乙」）──────────────────────────────────────── */
+const rpeWrites = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __writes: { table: string; method: string; body: Record<string, unknown> }[] }).__writes
+      .filter((w) => w.table === 'workout_sets' && w.method === 'PATCH' && w.body && 'rpe' in w.body)
+      .map((w) => w.body.rpe),
+  )
+
+test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換，清除寫 null；沒填時清除不能按', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+
+  // 沒打勾的第 2 組：談不上吃力程度
+  await openSetSheet(page, 1)
+  await expect(setSheet(page).locator('[data-section="rpe"]')).toHaveCount(0)
+  await closeSetSheet(page)
+
+  await openSetSheet(page, 0)
+  const rpe = setSheet(page).locator('[data-section="rpe"]')
+  await expect(rpe.getByRole('button')).toHaveText(['6', '7', '8', '9', '10', '清除'])
+  await expect(rpe.getByRole('button', { name: '清除' })).toBeDisabled()
+  await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
+
+  await rpe.getByRole('button', { name: 'RPE 8' }).click()
+  await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'true')
+  await rpe.getByRole('button', { name: 'RPE 9' }).click()
+  await expect(rpe.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'false')
+  await rpe.getByRole('button', { name: 'RPE 9' }).click() // 再點同一格不取消、不重送
+  await expect.poll(() => rpeWrites(page)).toEqual([8, 9])
+
+  await rpe.getByRole('button', { name: '清除' }).click()
+  await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
+  await expect(rpe.getByRole('button', { name: '清除' })).toBeDisabled()
+  await expect.poll(() => rpeWrites(page)).toEqual([8, 9, null])
+})
+
+test('新增的組不帶 rpe：加一組、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await expect(stat(page, 'sets')).toHaveText('1/2')
+  const setBodies = () =>
+    page.evaluate(() =>
+      (window as unknown as { __writes: { table: string; body: unknown }[] }).__writes.filter((w) => w.table === 'workout_sets').map((w) => JSON.stringify(w.body)),
+    )
+  await expect.poll(async () => (await setBodies()).some((b) => b.includes('"done":true'))).toBe(true) // 勾組的寫入已送出
+  const bodies = await setBodies()
+  expect(bodies.length).toBeGreaterThanOrEqual(3) // 預填的兩組＋勾組
+  for (const b of bodies) expect(b).not.toContain('rpe')
+})

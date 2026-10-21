@@ -3,6 +3,10 @@ import type { QueueEntry } from './queue'
 import { localDate } from './dates'
 import {
   MUSCLE_GROUPS,
+  RPE_CHIPS,
+  RPE_SHEET_VALUES,
+  completesExercise,
+  setRpeOps,
   PRESET_EXERCISES,
   cardioDraft,
   cardioLabel,
@@ -1418,5 +1422,26 @@ describe('formatRoutineTarget', () => {
     expect(formatRoutineTarget(re('x', 'r', 'e', 0, 3, 12))).toBe('沒做過時預設 3 組 × 12')
     expect(formatRoutineTarget(re('x', 'r', 'e', 0, 4, null))).toBe('沒做過時預設 4 組')
     expect(formatRoutineTarget({ id: 'x', target_sets: 2 })).toBe('沒做過時預設 2 組')
+  })
+})
+
+describe('RPE（spec.md「階段 4 乙」）', () => {
+  it('休息條四檔：3 下以上＝7、2 下＝8、1 下＝9、力竭＝10', () => {
+    expect(RPE_CHIPS.map((c) => [c.label, c.rpe])).toEqual([['3 下以上', 7], ['2 下', 8], ['1 下', 9], ['力竭', 10]])
+  })
+  it('組編輯 sheet 五格 6–10，都落在 DDL 的 5–10 之內', () => {
+    expect([...RPE_SHEET_VALUES]).toEqual([6, 7, 8, 9, 10])
+  })
+  it('completesExercise：其餘組都已完成才算這個動作做完；自己不用先打勾；沒有未完成的別組才成立', () => {
+    const set = (id: string, done: boolean): Row => ({ id, done })
+    expect(completesExercise([set('a', true), set('b', true), set('c', false)], 'c')).toBe(true)
+    expect(completesExercise([set('a', true), set('b', false), set('c', false)], 'c')).toBe(false)
+    expect(completesExercise([set('a', false)], 'a')).toBe(true) // 只有一組
+    expect(completesExercise([set('a', true)], 'zz')).toBe(false) // 找不到這組
+    expect(completesExercise([], 'a')).toBe(false)
+  })
+  it('setRpeOps：單筆 update，payload 只有 rpe；null＝清掉', () => {
+    expect(setRpeOps('s1', 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: 9 } }])
+    expect(setRpeOps('s1', null)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: null } }])
   })
 })

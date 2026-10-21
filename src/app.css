@@ -94,6 +94,7 @@
   /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
   --fog-h: 168px; --fog-blur: 9px;
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
+  --rest-ask-h: 88px; /* 條上多一列 RPE 問題時多出來的高度（實測 86.8px：問題＋四顆 chip＋間距），.main.has-rest-ask 的列表留白用；改問題列的版面要重量 */
   --rest-h: 52px; /* 組間休息倒數條（RestBar）的高度；條與 .main.has-rest 的列表底部留白共用，改一處兩邊跟著走 */
   /* 鍵盤升起時 sheet 頂緣與狀態列（safe-area）之間留的空隙（v2.65）；.sheet 與 .sheet-fit 共用 */
   --sheet-top-gap: 12px;
@@ -1311,8 +1312,24 @@ button { -webkit-user-select: none; user-select: none; }
    條出現時 .main.has-rest 給列表多留底部空間（--rest-h ＋ 與底部列的間距），最後一列捲得到條的上方；
    scroll-padding 同值，Tab 聚焦捲進來的卡不會落在條底下。留白的變化走 transition，條淡出時列表不會突然跳下去。 */
 .tr-rest { position: absolute; left: var(--s-5); right: var(--s-5); bottom: calc(100% + var(--s-2)); z-index: 2;
-  display: flex; align-items: center; gap: var(--s-1); min-height: var(--rest-h); padding: 0 var(--s-2) 0 var(--s-4);
-  border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2); }
+  display: flex; flex-direction: column; padding: 0 var(--s-2) 0 var(--s-4);
+  border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2);
+  transition: border-radius var(--dur-base) ease-out; }
+.tr-rest .rest-row { display: flex; align-items: center; gap: var(--s-1); min-height: var(--rest-h); }
+/* RPE 問題列（spec.md「階段 4 乙」）：條長高成兩列，上列問題＋四顆 chip，下列是原本的倒數。長高後不能再是整顆 pill（半徑會變成橢圓），改圓角矩形。
+   深色底上的 chip 不新增 token：未選＝--paper 疊 14%；選中＝--paper 實心、--ink 字（對比最高），其餘退淡。 */
+.tr-rest.has-ask { border-radius: var(--r-tab); }
+.rest-ask { overflow: hidden; }
+.rest-ask .q { display: block; padding-top: var(--s-2); font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; }
+.rpe-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-top: var(--s-2); padding: 0 var(--s-2) var(--s-2) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
+.rpe-chip { min-height: 44px; padding: 0 var(--s-1); border: none; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--paper) 14%, transparent); color: inherit; font-family: inherit;
+  font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.rpe-chip:active { opacity: .6; }
+.rpe-chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+.rpe-chip.is-on { background: var(--paper); color: var(--ink); }
+.rpe-chips.is-picked .rpe-chip:not(.is-on) { opacity: .35; }
 .tr-rest .grow { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
 .tr-rest .lbl { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; }
 .tr-rest .time { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 700; }
@@ -1324,6 +1341,7 @@ button { -webkit-user-select: none; user-select: none; }
 .tr-rest.is-over { background: var(--accent); color: var(--on-accent); }
 .tr-rest.is-over .tr-rest-btn:focus-visible { outline-color: var(--on-accent); }
 .main.has-rest .tr-scroll { padding-bottom: calc(var(--s-4) + var(--rest-h) + var(--s-2)); scroll-padding-bottom: calc(var(--rest-h) + var(--s-2)); }
+.main.has-rest-ask .tr-scroll { padding-bottom: calc(var(--s-4) + var(--rest-h) + var(--rest-ask-h) + var(--s-2)); scroll-padding-bottom: calc(var(--rest-h) + var(--rest-ask-h) + var(--s-2)); }
 button.tr-row { cursor: pointer; -webkit-appearance: none; appearance: none; }
 button.tr-row:active { opacity: .6; }
 button.tr-row:disabled { opacity: .45; cursor: default; }
@@ -1526,6 +1544,18 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
 .step-num.is-input:focus { outline: none; }
 .set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
+/* 組編輯 sheet 的 RPE 區：五格（6–10），沿用 .last-chip 的填色膠囊語言；選中＝淡綠底（同 .last-chip.is-current） */
+.rpe-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-2); }
+.rpe-opt { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.rpe-opt.is-current { background: var(--accent-soft); color: var(--accent); }
+.rpe-opt:active { opacity: .6; }
+.rpe-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rpe-hint { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
+.rpe-hint button { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.rpe-hint button:disabled { color: var(--ink-faint); cursor: default; }
+.rpe-hint button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 要壓過 `.tr-sheet-body .action-btn` 的 margin-top（同權重、排在後面）：三顆鈕才會在同一條線上 */
 .tr-sheet-body .set-acts .action-btn { flex: 1; margin-top: 0; }
 .set-acts .set-sync { flex: 1.3; justify-content: center; padding: 0 var(--s-2); }

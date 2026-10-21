@@ -14,6 +14,7 @@ import SpringSheet from '@/components/SpringSheet'
 import { NUMBER_FLIP_MS } from '@/lib/durations'
 import {
   MUSCLE_GROUP_LABEL,
+  RPE_SHEET_VALUES,
   formatKg,
   lastCompletedSets,
   remainingSetsAfter,
@@ -242,6 +243,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
   const weight = view ? Number(view.set.weight_kg) : 0
   const reps = view ? Number(view.set.reps) : 0
   const done = view?.set.done === true
+  const rpe = view?.set.rpe == null ? null : Number(view.set.rpe)
 
   return (
     <SpringSheet open={open} onClose={onClose} label={label} title={label} screen="set-sheet" fit finalFocus={finalFocus}>
@@ -296,6 +298,32 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               onChange={(v) => patch({ reps: v })}
             />
           </div>
+
+          {done && (
+            <div className="step-block" data-section="rpe">
+              <span className="set-sec">吃力程度 RPE</span>
+              <div className="rpe-row" role="group" aria-label="吃力程度 RPE">
+                {RPE_SHEET_VALUES.map((v) => (
+                  <button
+                    key={v}
+                    className={`rpe-opt${rpe === v ? ' is-current' : ''}`}
+                    type="button"
+                    aria-pressed={rpe === v}
+                    aria-label={`RPE ${v}`}
+                    onClick={() => rpe !== v && patch({ rpe: v })}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <div className="rpe-hint">
+                <span>9＝還能再做 1 下，10＝力竭</span>
+                <button type="button" disabled={rpe === null} onClick={() => patch({ rpe: null })}>
+                  清除
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="set-acts">
             <button

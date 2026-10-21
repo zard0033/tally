@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 階段 4 D RPE（休息條四檔、組編輯 sheet、肌群狀態）</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 980px; line-height: 1.7; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; }
+  .frame-note { font-size: 12px; color: #7A5C44; max-width: 393px; line-height: 1.6; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px;
+    border: 1px solid #D8C9AE; position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .device .tr-scroll { flex: 1; min-height: 0; overflow: hidden; padding: var(--s-3) var(--s-5) var(--s-4); }
+  /* 樣張裡的 sheet 不用 fixed，釘在 .device 底部；背後蓋一層 scrim */
+  .device .scrim { position: absolute; inset: 0; background: rgba(61, 34, 16, .32); }
+  .device .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: auto; }
+
+  /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ──────────────────────────────
+     休息條長高成兩列：上列＝問題＋四顆 chip，下列＝原本的 休息 1:23／−15／＋15／略過（不動）。
+     深色底上的 chip 不新增 token：未選＝--paper 疊 14% 的底；已選＝--paper 實心、--ink 字（對比最高）。 */
+  .tr-rest.has-ask { flex-direction: column; align-items: stretch; gap: 0; padding: var(--s-2) var(--s-2) 0 var(--s-4);
+    border-radius: var(--r-tab); min-height: 0; }
+  .rest-row { display: flex; align-items: center; gap: var(--s-1); min-height: var(--rest-h); }
+  .rest-ask { padding: var(--s-1) var(--s-2) var(--s-2) 0; border-bottom: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); }
+  .rest-ask .q { display: block; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; margin-bottom: var(--s-2); }
+  .rpe-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); }
+  .rpe-chip { min-height: 44px; padding: 0 var(--s-1); border: none; border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--paper) 14%, transparent); color: inherit; font-family: inherit;
+    font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
+  .rpe-chip:active { opacity: .6; }
+  .rpe-chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+  .rpe-chip.is-on { background: var(--paper); color: var(--ink); }
+  .rpe-chips.is-picked .rpe-chip:not(.is-on) { opacity: .35; }
+  .rest-ask.is-done { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; padding-bottom: var(--s-1); }
+  .rest-ask.is-done .q { margin: 0; opacity: .7; }
+  .rest-ask.is-done b { font-size: var(--t-sm); }
+  /* 變體 B：問題另成一顆小 pill，疊在休息 pill 上方，兩顆各自收起 */
+  .tr-ask { position: absolute; left: var(--s-5); right: var(--s-5); bottom: calc(100% + var(--s-2) + var(--rest-h) + var(--s-2)); z-index: 2;
+    padding: var(--s-2) var(--s-4); border-radius: var(--r-tab); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2); }
+  .tr-ask .q { display: block; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; margin-bottom: var(--s-2); }
+  .tr-ask .rpe-chips { padding-right: 0; }
+  /* 組編輯 sheet 的 RPE 區：五格（6–10），沿用 .last-chip 的填色膠囊 */
+  .rpe-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-2); }
+  .rpe-opt { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
+    font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; cursor: pointer;
+    -webkit-appearance: none; appearance: none; }
+  .rpe-opt.is-current { background: var(--accent-soft); color: var(--accent); }
+  .rpe-opt:active { opacity: .6; }
+  .rpe-hint { display: flex; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
+  .rpe-hint button { border: none; background: none; padding: 0; min-height: 28px; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">樣張 — 階段 4 D：RPE（吃力程度）與熱身判斷</h1>
+<p class="harness-sub">
+  RPE 只在<b>一個動作的最後一組勾完</b>時問一次，問題長在休息條上，單點作答；不點＝不知道，休息條照常倒數。
+  要補或改，到組編輯 sheet 的 RPE 區。熱身組<b>沒有新欄位、沒有按鈕</b>，由「重量不到當天該動作最重一組的 60%」判斷，只影響肌群狀態的組數。
+  <b>下面的數字全是示意</b>。② 與 ④ 是同一件事的兩種做法，請選一個。
+</p>
+<div class="frames">
+
+  <!-- ① 現況：不是最後一組，不問 -->
+  <div class="frame-block">
+    <div class="frame-label">① 不是最後一組：休息條不變（現況）</div>
+    <div class="device"><div class="main">
+      <main class="tr-scroll">
+        <section class="tr-card ex">
+          <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身 · 上次 60 kg × 12 × 3</span></span></div>
+          <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+          <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="false" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="false" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+        </section>
+      </main>
+      <div class="tr-bottom">
+        <div class="tr-rest" data-rest="running"><span class="grow"><span class="lbl">休息</span><span class="time">1:23</span></span>
+          <button class="tr-rest-btn" type="button">−15</button><button class="tr-rest-btn" type="button">＋15</button><button class="tr-rest-btn" type="button">略過</button></div>
+        <button class="tr-secondary" type="button">加動作</button><button class="action-btn" type="button">完成訓練</button>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>第 1、2 組勾完</b>都和現在一樣，沒有任何多的東西。判斷「最後一組」＝勾完這一組之後，這個動作<b>已經沒有未完成的組</b>。</div>
+  </div>
+
+  <!-- ② 推薦：同一顆長高成兩列 -->
+  <div class="frame-block">
+    <div class="frame-label">② 最後一組勾完（推薦 A）：休息條長高成兩列</div>
+    <div class="device"><div class="main">
+      <main class="tr-scroll">
+        <section class="tr-card ex">
+          <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身 · 上次 60 kg × 12 × 3</span></span></div>
+          <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+          <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">11</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+        </section>
+      </main>
+      <div class="tr-bottom">
+        <div class="tr-rest has-ask" data-rest="running">
+          <div class="rest-ask">
+            <span class="q">這個動作做完了，最後一組還能再做幾下？</span>
+            <div class="rpe-chips" role="group" aria-label="最後一組還能再做幾下">
+              <button class="rpe-chip" type="button">3 下以上</button><button class="rpe-chip" type="button">2 下</button><button class="rpe-chip" type="button">1 下</button><button class="rpe-chip" type="button">力竭</button>
+            </div>
+          </div>
+          <div class="rest-row"><span class="grow"><span class="lbl">休息</span><span class="time">1:27</span></span>
+            <button class="tr-rest-btn" type="button">−15</button><button class="tr-rest-btn" type="button">＋15</button><button class="tr-rest-btn" type="button">略過</button></div>
+        </div>
+        <button class="tr-secondary" type="button">加動作</button><button class="action-btn" type="button">完成訓練</button>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>一個物件、一個收法</b>：問題和倒數在同一顆深色膠囊裡，按「略過」整顆收掉（＝沒作答）。四顆都 ≥44px，每顆寬約 75px，單手拇指點得到。<b>問題只出現一次</b>：沒點，休息結束條收起，這一組的 RPE 就是「沒填」。列表底部留白要跟著長高（目前 52px → 約 139px），走既有的 <code>--rest-h</code> 過渡。</div>
+  </div>
+
+  <!-- ③ 點選後 -->
+  <div class="frame-block">
+    <div class="frame-label">③ 點了「1 下」：選中那顆變白、其餘退淡，約 0.6 秒後問題列收起</div>
+    <div class="device"><div class="main">
+      <main class="tr-scroll">
+        <section class="tr-card ex">
+          <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身 · 上次 60 kg × 12 × 3</span></span></div>
+          <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+          <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">11</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+        </section>
+      </main>
+      <div class="tr-bottom">
+        <div class="tr-rest has-ask" data-rest="running">
+          <div class="rest-ask">
+            <span class="q">這個動作做完了，最後一組還能再做幾下？</span>
+            <div class="rpe-chips is-picked" role="group" aria-label="最後一組還能再做幾下">
+              <button class="rpe-chip" type="button">3 下以上</button><button class="rpe-chip" type="button">2 下</button><button class="rpe-chip is-on" type="button" aria-pressed="true">1 下</button><button class="rpe-chip" type="button">力竭</button>
+            </div>
+          </div>
+          <div class="rest-row"><span class="grow"><span class="lbl">休息</span><span class="time">1:24</span></span>
+            <button class="tr-rest-btn" type="button">−15</button><button class="tr-rest-btn" type="button">＋15</button><button class="tr-rest-btn" type="button">略過</button></div>
+        </div>
+        <button class="tr-secondary" type="button">加動作</button><button class="action-btn" type="button">完成訓練</button>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>寫入立即送出</b>（同勾組：更新那一組的 <code>rpe</code>＝9），沒有確認鈕。這張是中間態；<b>之後問題列收起</b>，只剩第一張的單列倒數。想改答案：到組編輯 sheet（⑤）。減少動態：不做收起位移，只淡出（≤120ms）。</div>
+  </div>
+
+  <!-- ④ 變體 B：兩顆 pill -->
+  <div class="frame-block">
+    <div class="frame-label">④ 另一種（B）：問題另成一顆 pill 疊在休息條上方</div>
+    <div class="device"><div class="main">
+      <main class="tr-scroll">
+        <section class="tr-card ex">
+          <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身 · 上次 60 kg × 12 × 3</span></span></div>
+          <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+          <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">2</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+          <div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">11</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+        </section>
+      </main>
+      <div class="tr-bottom">
+        <div class="tr-ask">
+          <span class="q">這個動作做完了，最後一組還能再做幾下？</span>
+          <div class="rpe-chips" role="group" aria-label="最後一組還能再做幾下">
+            <button class="rpe-chip" type="button">3 下以上</button><button class="rpe-chip" type="button">2 下</button><button class="rpe-chip" type="button">1 下</button><button class="rpe-chip" type="button">力竭</button>
+          </div>
+        </div>
+        <div class="tr-rest" data-rest="running"><span class="grow"><span class="lbl">休息</span><span class="time">1:27</span></span>
+          <button class="tr-rest-btn" type="button">−15</button><button class="tr-rest-btn" type="button">＋15</button><button class="tr-rest-btn" type="button">略過</button></div>
+        <button class="tr-secondary" type="button">加動作</button><button class="action-btn" type="button">完成訓練</button>
+      </div>
+    </div></div>
+    <div class="frame-note"><b>休息條一個字都不動</b>，問題是另一顆。代價：兩顆疊起來佔的高度一樣（約 139px），但是兩個物件、兩個收法；「略過」只收休息條還是兩顆都收要另外定，且視覺上問題像是獨立的提醒，不像「這組的附屬問題」。我推薦 ②。</div>
+  </div>
+
+  <!-- ⑤ 組編輯 sheet -->
+  <div class="frame-block">
+    <div class="frame-label">⑤ 組編輯 sheet：多一區「吃力程度」，隨時補、改、清掉</div>
+    <div class="device"><div class="main">
+      <main class="tr-scroll">
+        <section class="tr-card ex">
+          <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身 · 上次 60 kg × 12 × 3</span></span></div>
+          <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+          <div class="set done"><span class="no">3</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">11</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+        </section>
+      </main>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="sheet-head"><span class="sheet-title">腿推舉 · 第 3 組</span></div>
+        <div class="tr-sheet-body set-sheet-body">
+          <div class="set-last"><span class="set-sec">上次</span><div class="last-chips"><button class="last-chip" type="button">60 × 12</button><button class="last-chip" type="button">60 × 12</button><button class="last-chip is-current" type="button">60 × 11</button></div></div>
+          <div class="step-block"><span class="set-sec">重量 kg</span>
+            <div class="step-line"><button class="step-b" type="button">−5</button><button class="step-b" type="button">−2.5</button><button class="step-num" type="button">60</button><button class="step-b" type="button">＋2.5</button><button class="step-b" type="button">＋5</button></div></div>
+          <div class="step-block"><span class="set-sec">次數</span>
+            <div class="step-line"><button class="step-b" type="button">−5</button><button class="step-b" type="button">−1</button><button class="step-num" type="button">11</button><button class="step-b" type="button">＋1</button><button class="step-b" type="button">＋5</button></div></div>
+          <div class="step-block"><span class="set-sec">吃力程度 RPE</span>
+            <div class="rpe-row" role="group" aria-label="吃力程度">
+              <button class="rpe-opt" type="button">6</button><button class="rpe-opt" type="button">7</button><button class="rpe-opt" type="button">8</button><button class="rpe-opt is-current" type="button" aria-pressed="true">9</button><button class="rpe-opt" type="button">10</button>
+            </div>
+            <div class="rpe-hint"><span>9＝還能再做 1 下，10＝力竭</span><button type="button">清除</button></div></div>
+          <div class="set-acts"><button class="set-del" type="button" aria-label="刪除這一組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button><button class="action-btn" type="button">完成</button></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="frame-note">休息條點的「1 下」就是這裡的 <b>9</b>；對照：<b>3 下以上＝7、2 下＝8、1 下＝9、力竭＝10</b>。sheet 多 6 和「清除」（回到沒填）。每格 ≥48px，點了立即寫入、高亮（淡綠底），再點一次同一格不取消（取消用「清除」，避免誤觸）。這區只在<b>已完成的組</b>顯示——沒做完的組談不上吃力程度。</div>
+  </div>
+
+  <!-- ⑥ 肌群狀態 -->
+  <div class="frame-block">
+    <div class="frame-label">⑥ 肌群狀態：有近力竭的組，窗口加 24 小時，副標多一個字</div>
+    <div class="device"><div class="main">
+      <div class="seg-wrap" style="margin: var(--s-3) var(--s-3) 0; flex: none;">
+        <div class="seg" role="group"><button type="button" aria-pressed="false">動作進度</button><button type="button" aria-pressed="true">肌群狀態</button></div>
+      </div>
+      <main class="tr-scroll">
+        <div class="tr-card" data-section="recovery-list">
+          <div class="tr-row"><span class="grow"><span class="nm">胸部</span><span class="sub">2 天前 · 6 組</span></span><span class="an-state is-ready">可再練</span></div>
+          <div class="tr-row"><span class="grow"><span class="nm">背部</span></span><span class="an-state is-none">沒有紀錄</span></div>
+          <div class="tr-row"><span class="grow"><span class="nm">下半身</span><span class="sub">昨天 · 10 組 · 近力竭</span></span><span class="an-state">恢復中<small>還需約 66 小時</small></span></div>
+          <div class="tr-row"><span class="grow"><span class="nm">肩膀</span><span class="sub">今天 · 3 組</span></span><span class="an-state">恢復中<small>還需約 12 小時</small></span></div>
+          <div class="tr-row"><span class="grow"><span class="nm">手臂</span><span class="sub">昨天 · 4 組 · 近力竭</span></span><span class="an-state">恢復中<small>還需約 18 小時</small></span></div>
+          <div class="tr-row"><span class="grow"><span class="nm">腹肌</span></span><span class="an-state is-none">沒有紀錄</span></div>
+        </div>
+        <p class="an-note">依部位與訓練量粗估（下半身 48–72 小時，其餘 24–48 小時）；有一組做到 RPE 9 以上，再加 24 小時。重量不到當天最重一組 60% 的熱身組不計入組數。</p>
+      </main>
+    </div></div>
+    <div class="frame-note">算式（手算）：下半身 10 組 → 72 小時，近力竭 +24 → 96，已過 30 小時 → <b>還需約 66</b>。手臂 4 組 → 24，近力竭 +24 → 48，已過 30 → 還需 18。「近力竭」＝那次該肌群有任一組 RPE ≥ 9。沒填 RPE 的，窗口和現在一模一樣。說明小字固定顯示、不隨資料變。</div>
+  </div>
+
+</div>
+</body>
+</html>

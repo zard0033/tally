@@ -523,6 +523,29 @@ export function removeSetOps(detail: WorkoutDetail, setId: string): RowOp[] {
   return [{ op: 'delete', table: 'workout_sets', rowId: setId }]
 }
 
+/* ═══════════ RPE（spec.md「階段 4 乙」） ═══════════ */
+
+/** 休息條問「最後一組還能再做幾下」的四檔，對應 RPE ＝ 10 − 剩餘下數（3 下以上全歸 7）。 */
+export const RPE_CHIPS = [
+  { rpe: 7, label: '3 下以上' },
+  { rpe: 8, label: '2 下' },
+  { rpe: 9, label: '1 下' },
+  { rpe: 10, label: '力竭' },
+] as const
+
+/** 組編輯 sheet 的五格；6 只有這裡有（休息條只問有沒有逼近極限）。DDL 的 check 是 5–10。 */
+export const RPE_SHEET_VALUES = [6, 7, 8, 9, 10] as const
+
+/** 勾完 setId 這一組之後，這個動作還有沒有未完成的組。沒有＝這個動作做完了（休息條該問 RPE）。找不到這組回 false。 */
+export function completesExercise(sets: readonly Row[], setId: string): boolean {
+  return sets.some((s) => s.id === setId) && sets.every((s) => s.id === setId || s.done === true)
+}
+
+/** 寫一組的 RPE；null＝清掉（回到沒填）。 */
+export function setRpeOps(setId: string, rpe: number | null): RowOp[] {
+  return [{ op: 'update', table: 'workout_sets', rowId: setId, payload: { rpe } }]
+}
+
 /** 收合列要看的進度：做完幾組、共幾組、下一組（第一個還沒打勾的）。全部做完 next＝null。 */
 export function exerciseProgress(sets: readonly Row[]): {
   done: number

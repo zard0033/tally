@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recoveryStatus, recoveryWindowHours, RECOVERY_GROUPS } from './recovery'
+import { recoveryStatus, recoveryWindowHours, RECOVERY_GROUPS, warmupSetIds } from './recovery'
 import { emptyTrainingDb, type Row, type TrainingDb, type TrainingTable } from './training'
 
 const db = (p: Partial<Record<TrainingTable, readonly Row[]>> = {}): TrainingDb => ({ ...emptyTrainingDb(), ...p })
@@ -152,12 +152,12 @@ describe('recoveryStatus', () => {
 
   it('徒手（0 kg）與超過 10 下的組也算：恢復看做了多少，不像 e1RM 有次數上限', () => {
     const d = db({
-      exercises: [exercise('ex', 'back')],
+      exercises: [exercise('ex', 'back'), exercise('ex2', 'back')],
       workouts: [workout('w', 2)],
-      workout_exercises: [entry('e', 'w', 'ex')],
+      workout_exercises: [entry('e', 'w', 'ex'), entry('e2', 'w', 'ex2')],
       workout_sets: [
-        { id: 's1', workout_exercise_id: 'e', set_no: 1, weight_kg: 0, reps: 8, done: true },
-        { id: 's2', workout_exercise_id: 'e', set_no: 2, weight_kg: 20, reps: 30, done: true },
+        { id: 's1', workout_exercise_id: 'e', set_no: 1, weight_kg: 0, reps: 8, done: true }, // 徒手動作：整個動作都 0 kg，不判斷熱身
+        { id: 's2', workout_exercise_id: 'e2', set_no: 1, weight_kg: 20, reps: 30, done: true },
       ],
     })
     expect(of(d, 'back').sets).toBe(2)
@@ -234,5 +234,88 @@ describe('recoveryStatus', () => {
       workout_sets: sets('e', 3),
     })
     expect(of(d, 'chest').state).toBe('none')
+  })
+})
+
+/* ── D：RPE 與熱身判斷（spec.md「階段 4 乙」）；預期值全部手算 ── */
+const wset = (id: string, entryId: string, kg: number, opts: { done?: boolean; rpe?: number | null } = {}): Row => ({
+  id, workout_exercise_id: entryId, set_no: 1, weight_kg: kg, reps: 8, done: opts.done ?? true, ...(opts.rpe === undefined ? {} : { rpe: opts.rpe }),
+})
+const withSets = (group: string, h: number, rows: Row[]): TrainingDb =>
+  db({ exercises: [exercise('ex', group)], workouts: [workout('w', h)], workout_exercises: [entry('e', 'w', 'ex')], workout_sets: rows })
+/** n 組 50 kg 的正式組，第 i 組的 RPE 由 rpes[i] 給 */
+const working = (n: number, rpes: Record<number, number | null> = {}): Row[] =>
+  Array.from({ length: n }, (_, i) => wset(`s${i}`, 'e', 50, { rpe: rpes[i] }))
+
+describe('recoveryWindowHours：近力竭加 24 小時', () => {
+  it('下半身：n=10 近力竭 96、n=9 近力竭 72、n=9 沒近力竭 48', () => {
+    expect(recoveryWindowHours('legs', 10, true)).toBe(96)
+    expect(recoveryWindowHours('legs', 9, true)).toBe(72)
+    expect(recoveryWindowHours('legs', 9, false)).toBe(48)
+  })
+  it('其餘：胸 n=6 近力竭 48、n=10 近力竭 72、n=6 沒近力竭 24；不傳旗標＝沒近力竭', () => {
+    expect(recoveryWindowHours('chest', 6, true)).toBe(48)
+    expect(recoveryWindowHours('chest', 10, true)).toBe(72)
+    expect(recoveryWindowHours('chest', 6, false)).toBe(24)
+    expect(recoveryWindowHours('chest', 6)).toBe(24)
+  })
+})
+
+describe('warmupSetIds', () => {
+  it('40、60、100 三組已打勾 → 只有 40 是熱身（60 剛好 60% 不算）', () => {
+    const r = [wset('a', 'e', 40), wset('b', 'e', 60), wset('c', 'e', 100)]
+    expect([...warmupSetIds(r)]).toEqual(['a'])
+  })
+  it('門檻兩側：100 kg 時 59.9 是熱身、60 不是；37.5 時 22.5 剛好 60% 不是熱身（小數不被浮點誤差吃掉）', () => {
+    expect([...warmupSetIds([wset('a', 'e', 59.9), wset('b', 'e', 100)])]).toEqual(['a'])
+    expect([...warmupSetIds([wset('a', 'e', 60), wset('b', 'e', 100)])]).toEqual([])
+    expect([...warmupSetIds([wset('a', 'e', 22.5), wset('b', 'e', 37.5)])]).toEqual([])
+  })
+  it('只有一組、全部 0 kg（徒手）→ 沒有熱身', () => {
+    expect(warmupSetIds([wset('a', 'e', 40)]).size).toBe(0)
+    expect(warmupSetIds([wset('a', 'e', 0), wset('b', 'e', 0)]).size).toBe(0)
+  })
+  it('沒打勾的組不判斷、也不拉高最重：40 已打勾＋100 沒打勾 → 沒有熱身；沒打勾的 20 不是熱身', () => {
+    expect(warmupSetIds([wset('a', 'e', 40), wset('b', 'e', 100, { done: false })]).size).toBe(0)
+    expect(warmupSetIds([wset('a', 'e', 40), wset('b', 'e', 20, { done: false })]).size).toBe(0)
+  })
+})
+
+describe('recoveryStatus：熱身與 RPE', () => {
+  it('腿 12 組已打勾、其中 2 組 20 kg 熱身 → n=10（顯示 10 組）、窗口 72、距今 30 小時剩 42', () => {
+    const rows = [...working(10), wset('w1', 'e', 20), wset('w2', 'e', 20)]
+    expect(of(withSets('legs', 30, rows), 'legs')).toMatchObject({ sets: 10, windowHours: 72, remainingHours: 42, nearFailure: false })
+  })
+  it('同上，其中一組 RPE 9 → 近力竭、窗口 96、剩 66', () => {
+    const rows = [...working(10, { 3: 9 }), wset('w1', 'e', 20), wset('w2', 'e', 20)]
+    expect(of(withSets('legs', 30, rows), 'legs')).toMatchObject({ sets: 10, windowHours: 96, remainingHours: 66, nearFailure: true })
+  })
+  it('RPE 8 不算近力竭；9 與 10 算（胸 6 組、距今 30 小時：24 小時窗口已可再練，48 小時窗口剩 18）', () => {
+    expect(of(withSets('chest', 30, working(6, { 0: 8 })), 'chest')).toMatchObject({ state: 'ready', nearFailure: false, windowHours: 24 })
+    expect(of(withSets('chest', 30, working(6, { 0: 9 })), 'chest')).toMatchObject({ state: 'recovering', nearFailure: true, windowHours: 48, remainingHours: 18 })
+    expect(of(withSets('chest', 30, working(6, { 5: 10 })), 'chest')).toMatchObject({ state: 'recovering', nearFailure: true, remainingHours: 18 })
+  })
+  it('沒打勾的組上的 RPE、null 都不算；沒有 rpe 欄位的舊資料與原本完全一樣', () => {
+    const rows = [...working(5), wset('x', 'e', 50, { done: false, rpe: 10 }), wset('y', 'e', 50, { rpe: null })]
+    expect(of(withSets('chest', 30, rows), 'chest')).toMatchObject({ nearFailure: false, windowHours: 24 })
+    expect(of(one('chest', 6, 30), 'chest')).toMatchObject({ nearFailure: false, windowHours: 24 })
+  })
+  it('同肌群另一個動作的 RPE 9 也算；只看最近一次那場，更早一場的 RPE 10 不算', () => {
+    const d = db({
+      exercises: [exercise('ex', 'chest'), exercise('ex2', 'chest')],
+      workouts: [workout('old', 100), workout('new', 30)],
+      workout_exercises: [entry('eo', 'old', 'ex'), entry('e', 'new', 'ex'), entry('e2', 'new', 'ex2')],
+      workout_sets: [
+        wset('o1', 'eo', 50, { rpe: 10 }), // 更早一場
+        wset('n1', 'e', 50, { rpe: 7 }),
+        wset('n2', 'e2', 50, { rpe: 9 }), // 同場、同肌群的另一個動作
+      ],
+    })
+    expect(of(d, 'chest')).toMatchObject({ nearFailure: true, windowHours: 48 })
+    const onlyOld = { ...d, workouts: [workout('old', 100), workout('new', 30)], workout_sets: [d.workout_sets[0], wset('n1', 'e', 50, { rpe: 7 })] }
+    expect(of(onlyOld, 'chest')).toMatchObject({ nearFailure: false, windowHours: 24 })
+  })
+  it('沒練過 → nearFailure false', () => {
+    expect(of(db(), 'back').nearFailure).toBe(false)
   })
 })

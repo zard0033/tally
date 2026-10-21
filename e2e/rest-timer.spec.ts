@@ -343,3 +343,137 @@ test('建置層：提示音是獨立檔案、進了 precache（離線健身房�
   const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
   expect(sw.match(/assets\/rest-chime-[\w-]+\.wav/g), 'precache 清單有提示音').toHaveLength(1)
 })
+
+/* ── RPE 問題列（spec.md「階段 4 乙」）：一個動作的最後一組勾完，休息條長高成兩列 ───────────────── */
+const ask = (page: Page) => page.locator('.tr-rest [data-rpe-ask]')
+const chip = (page: Page, name: string) => ask(page).getByRole('button', { name, exact: true })
+const rpeWrites = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __writes: { table: string; method: string; body: Record<string, unknown> }[] }).__writes
+      .filter((w) => w.table === 'workout_sets' && w.method === 'PATCH' && w.body && 'rpe' in w.body)
+      .map((w) => w.body.rpe),
+  )
+
+/** 只有一組的進行中訓練。 */
+const ONE_SET: typeof FIX = { ...LIVE, workout_sets: [LIVE.workout_sets[0]] }
+
+test('最後一組勾完才問：前兩組不問；問題與四顆 chip 在條上、倒數照走', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  await tick(page, 0)
+  await expect(bar(page)).toBeVisible()
+  await expect(ask(page), '第 1 組不是最後一組').toHaveCount(0)
+  await tick(page, 2) // 先勾第 3 組：第 2 組還沒做，所以也不是做完
+  await expect(ask(page)).toHaveCount(0)
+  await tick(page, 1) // 這一下做完了整個動作
+  await expect(ask(page)).toBeVisible()
+  await expect(ask(page)).toContainText('最後一組還能再做幾下')
+  await expect(ask(page).getByRole('button')).toHaveText(['3 下以上', '2 下', '1 下', '力竭'])
+  await expect(barText(page), '倒數照常').toHaveText('1:30')
+  await expect(btn(page, '略過休息')).toBeVisible()
+})
+
+for (const [label, value] of [['3 下以上', 7], ['2 下', 8], ['1 下', 9], ['力竭', 10]] as const) {
+  test(`點「${label}」寫入 rpe＝${value}：只寫那一組、選中的標示起來、問題列收起、倒數續跑`, async ({ page }) => {
+    await prepare(page)
+    await openLive(page)
+    await tick(page, 0)
+    await tick(page, 1)
+    await tick(page, 2)
+    await chip(page, label).click()
+    await expect(chip(page, label)).toHaveAttribute('aria-pressed', 'true')
+    await expect.poll(() => rpeWrites(page)).toEqual([value])
+    const patched = await page.evaluate(() =>
+      (window as unknown as { __writes: { table: string; method: string; path: string; body: Record<string, unknown> }[] }).__writes.filter(
+        (w) => w.method === 'PATCH' && w.body && 'rpe' in w.body,
+      ).map((w) => w.path),
+    )
+    expect(patched[0], '寫的是剛勾完的第 3 組').toContain('s-3')
+    await expect(ask(page), '約 0.6 秒後問題列收起').toHaveCount(0)
+    await expect(bar(page)).toBeVisible()
+    await expect(barText(page)).toHaveText('1:30')
+  })
+}
+
+test('不點就不寫、不追問：條照常倒數，略過收整條；取消勾再勾回來會再問', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  await tick(page, 0)
+  await tick(page, 1)
+  await tick(page, 2)
+  await expect(ask(page)).toBeVisible()
+  await jump(page, 20_000)
+  await expect(barText(page)).toHaveText('1:10')
+  await expect(ask(page), '沒點就一直留到條收起').toBeVisible()
+  expect(await rpeWrites(page)).toEqual([])
+  await btn(page, '略過休息').click()
+  await expect(bar(page)).toHaveCount(0)
+
+  await tick(page, 2) // 取消勾
+  await tick(page, 2) // 再勾回來：RPE 仍是空的，再問一次
+  await expect(ask(page)).toBeVisible()
+  expect(await rpeWrites(page), '全程沒有任何 rpe 寫入').toEqual([])
+})
+
+test('已經有 RPE 的組重勾不再問', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  await tick(page, 0)
+  await tick(page, 1)
+  await tick(page, 2)
+  await chip(page, '1 下').click()
+  await expect(ask(page)).toHaveCount(0)
+  await tick(page, 2) // 取消勾
+  await tick(page, 2) // 再勾回來
+  await expect(bar(page)).toBeVisible()
+  await expect(ask(page), '這一組已經有 RPE 9').toHaveCount(0)
+})
+
+test('全部完成不問（沒有「剛做完一組」的語意，也不開倒數）', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  await page.locator('.ex').getByRole('button', { name: '全部完成', exact: true }).click()
+  await expect(page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(bar(page)).toHaveCount(0)
+  await expect(ask(page)).toHaveCount(0)
+})
+
+test('只有一組的動作：勾完就問', async ({ page }) => {
+  await prepare(page)
+  await openApp(page, {}, ONE_SET)
+  await openTraining(page)
+  await page.locator('.tr-row[data-workout-id="w-live"]').click()
+  await expect(page.locator('.ex .set')).toHaveCount(1)
+  await jump(page, 0)
+  await tick(page, 0)
+  await expect(ask(page)).toBeVisible()
+})
+
+test('問題列出現時列表底部多留白：最後一張卡捲得到條的上方', async ({ page }) => {
+  await prepare(page)
+  await openLive(page, true, LONG)
+  await tick(page, 0)
+  await tick(page, 1)
+  await tick(page, 2)
+  await expect(ask(page)).toBeVisible()
+  const gap = await page.evaluate(() => {
+    const sc = document.querySelector('[data-screen="training-session"] .tr-scroll') as HTMLElement
+    const bar = document.querySelector('.tr-rest') as HTMLElement
+    sc.scrollTop = sc.scrollHeight
+    const lastCard = Array.from(sc.querySelectorAll('.ex')).at(-1) as HTMLElement
+    return bar.getBoundingClientRect().top - lastCard.getBoundingClientRect().bottom
+  })
+  expect(gap, '捲到底時最後一張卡在條的上緣之上，不被蓋住').toBeGreaterThanOrEqual(0)
+})
+
+test('減少動態：問題列照出現、點了照寫入，收起只淡出', async ({ page }) => {
+  await prepare(page, { reduced: true })
+  await openLive(page)
+  await tick(page, 0)
+  await tick(page, 1)
+  await tick(page, 2)
+  await expect(ask(page)).toBeVisible()
+  await chip(page, '2 下').click()
+  await expect.poll(() => rpeWrites(page)).toEqual([8])
+  await expect(ask(page)).toHaveCount(0)
+})
