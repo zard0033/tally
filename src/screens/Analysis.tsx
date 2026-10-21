@@ -1,13 +1,15 @@
-/* 訓練分析整頁（階段 4 A，樣張 `_design-sample/analysis.html`）：動作進度——列出有已打勾組的動作，
-   點進單一動作看 e1RM 折線、歷來最佳與逐次明細。肌群狀態（C）之後才加，現在沒有第二段、也不放分段控制。
-   運算在 src/lib/strength.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。
+/* 訓練分析整頁（階段 4）：頂部分段「動作進度｜肌群狀態」。
+   動作進度（A，樣張 `_design-sample/analysis.html`）：列出有已打勾組的動作，點進單一動作看 e1RM 折線、歷來最佳與逐次明細。
+   肌群狀態（C）：六個肌群最近一次練完到現在的恢復狀態，純顯示、不畫圖。
+   運算在 src/lib/strength.ts、src/lib/recovery.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。
    整頁接管畫面（同動作庫、訓練中），進出時 Training 通知 App 收起底部列。 */
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
-import SegmentedControl from '@/components/SegmentedControl'
+import SegmentedControl, { type SegItem } from '@/components/SegmentedControl'
 import { localDate, monthDay } from '@/lib/dates'
+import { recoveryStatus, type MuscleRecovery } from '@/lib/recovery'
 import { bestE1rm, chartPoints, progressList, strengthHistory, type ChartPoint } from '@/lib/strength'
-import { formatKg, type TrainingDb } from '@/lib/training'
+import { formatKg, MUSCLE_GROUP_LABEL, type TrainingDb } from '@/lib/training'
 import { isoOfDay, niceDomain, TREND_RANGES, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
 
 interface AnalysisProps {
@@ -122,7 +124,47 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
   )
 }
 
+type AnalysisTab = 'progress' | 'recovery'
+const TABS: SegItem<AnalysisTab>[] = [
+  { key: 'progress', label: '動作進度' },
+  { key: 'recovery', label: '肌群狀態' },
+]
+
+const daysAgoText = (n: number) => (n === 0 ? '今天' : n === 1 ? '昨天' : `${n} 天前`)
+
+function RecoveryRow({ r }: { r: MuscleRecovery }) {
+  const label = MUSCLE_GROUP_LABEL[r.group]
+  return (
+    <div className="tr-row" data-group={r.group} data-state={r.state}>
+      <span className="grow">
+        <span className="nm">{label}</span>
+        {r.state !== 'none' && <span className="sub">{daysAgoText(r.daysAgo!)} · {r.sets} 組</span>}
+      </span>
+      {r.state === 'recovering' && <span className="an-state">恢復中<small>還需約 {r.remainingHours} 小時</small></span>}
+      {r.state === 'ready' && <span className="an-state is-ready">可再練</span>}
+      {r.state === 'none' && <span className="an-state is-none">沒有紀錄</span>}
+    </div>
+  )
+}
+
+function RecoveryList({ db }: { db: TrainingDb }) {
+  // 開頁當下取一次「現在」；頁面開著不動時剩餘小時不會自己更新（這頁很少停那麼久）
+  const [now] = useState(() => new Date())
+  const rows = useMemo(() => recoveryStatus(db, now), [db, now])
+  return (
+    <>
+      <div className="tr-card" data-section="recovery-list">
+        {rows.map((r) => <RecoveryRow key={r.group} r={r} />)}
+      </div>
+      <p className="an-note">
+        依部位與訓練量粗估（下半身 48–72 小時，其餘 24–48 小時），沒有計入練到多累；熱身組也算進組數。
+      </p>
+    </>
+  )
+}
+
 export default function Analysis({ db, onBack }: AnalysisProps) {
+  const [tab, setTab] = useState<AnalysisTab>('progress')
   const [exerciseId, setExerciseId] = useState<string | null>(null)
   const list = useMemo(() => progressList(db), [db])
   const picked = exerciseId === null ? null : list.find((i) => i.exerciseId === exerciseId) ?? null
@@ -144,7 +186,10 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
         <h1>訓練分析</h1>
       </div>
       <div className="trend-scroll">
-        {list.length === 0 ? (
+        <SegmentedControl label="分析項目" items={TABS} value={tab} onPick={setTab} className="trend-range" />
+        {tab === 'recovery' ? (
+          <RecoveryList db={db} />
+        ) : list.length === 0 ? (
           <p className="trend-empty">還沒有可估算的紀錄。打勾完成的組（10 下以內、重量大於 0）才會列在這裡。</p>
         ) : (
           <>

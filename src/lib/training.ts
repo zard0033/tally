@@ -1083,7 +1083,7 @@ export interface ExerciseFilter {
 }
 
 /** 認得的肌群回它在七類裡的位置；資料異常（不在七類）歸「其他」，才不會被篩選藏起來。 */
-const groupOf = (e: Row): MuscleGroup =>
+export const groupOf = (e: Row): MuscleGroup =>
   (MUSCLE_GROUPS as readonly string[]).includes(String(e.muscle_group)) ? (e.muscle_group as MuscleGroup) : 'other'
 
 /** 搜尋名稱＋肌群條件，依肌群順序再依名稱排。動作庫頁與加動作 sheet 共用。 */

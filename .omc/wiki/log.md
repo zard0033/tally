@@ -72,3 +72,23 @@
 - **Pages:** lesson-recharts-trend-chart-recharts-2026-10-20.md
 - **Summary:** Created new page "lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）"
 
+## [2026-10-20T03:52:27.502Z] ingest
+- **Pages:** session-log-2026-10-20-b467eaf1.md
+- **Summary:** Auto-captured session log for 972c5575-0176-4583-85d4-898f2c8df692 (omc-wiki-capture:cc41fbc1d61cddf4bbfee74e60d1015e1313494830fb74e97d8fed3d5b452bd6)
+
+## [2026-10-20T03:57:24.388Z] ingest
+- **Pages:** session-log-2026-10-20-7de39221.md
+- **Summary:** Auto-captured session log for 3131c70f-9369-444a-9eeb-9a6390e14e72 (omc-wiki-capture:2fe290e8ba4154803eb9b5dbf29a6c5215193b16ba206563b6267bc24f3d89cb)
+
+## [2026-10-20T09:27:33.049Z] ingest
+- **Pages:** session-log-2026-10-20-0854adfe.md
+- **Summary:** Auto-captured session log for 7c993c48-671b-4962-8f1c-113ad668459e (omc-wiki-capture:5f36d43aafcf18212af853cd2f99e87f6d536a873de1b776821f82e15d03215e)
+
+## [2026-10-20T09:50:10.030Z] ingest
+- **Pages:** session-log-2026-10-20-498d8f5d.md
+- **Summary:** Auto-captured session log for c60b25fe-3bd1-49cb-b4e9-4249ace52b2a (omc-wiki-capture:772fd21df475803b7d8bde2aaa371e55b870ca1d3cf71a315bf248b97958ca10)
+
+## [2026-10-21T03:15:48.809Z] ingest
+- **Pages:** lesson-recovery-status-2026-10-21.md
+- **Summary:** Created new page "lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）"
+

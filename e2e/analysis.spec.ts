@@ -208,3 +208,150 @@ test('連不上伺服器：資料來自本機底，列表與單一動作頁照�
   await expect(tableRows(page)).toHaveCount(3)
   await expect(page.locator('[data-screen="analysis-exercise"] .an-hero div').nth(0)).toContainText('116.7')
 })
+
+/* ── 訓練分析 C：肌群狀態（spec.md「階段 4 甲」口徑 4）──────────────────────────────────────
+   時間不接管時鐘：訓練的 ended_at 用「距現在 N 小時前」造，N 都離窗口邊界很遠（邊界由 recovery.test.ts 守），
+   剩餘小時無條件進位，所以測試跑幾秒不會讓預期值漂。performed_on 另外明寫（顯示的「X 天前」吃它，不吃時間點）。
+   固定資料（窗口：下半身 <10 組 48／≥10 組 72，其餘 <10 組 24／≥10 組 48）：
+     胸  2 天前、結束 50 小時前、6 組 → 可再練
+     背  沒有紀錄
+     下半身 昨天、結束 30 小時前、兩個動作共 10 組（6＋4）→ 窗口 72，恢復中，還需約 42 小時
+     肩  今天、結束 12 小時前、3 組 → 窗口 24，恢復中，還需約 12 小時
+     臂  只有沒打勾的組 → 沒有紀錄
+     腹  進行中的訓練（沒有 ended_at）2 小時前開始、2 組 → 窗口 24，恢復中，還需約 22 小時
+     「其他」另有 5 組已打勾，不能出現在清單 */
+const HOUR = 3600_000
+const ago = (h: number) => new Date(Date.now() - h * HOUR).toISOString()
+const CH = 'bbbbbbbb-0000-4000-8000-000000000001'
+const BK = 'bbbbbbbb-0000-4000-8000-000000000002'
+const LG1 = 'bbbbbbbb-0000-4000-8000-000000000003'
+const LG2 = 'bbbbbbbb-0000-4000-8000-000000000004'
+const SH = 'bbbbbbbb-0000-4000-8000-000000000005'
+const AR = 'bbbbbbbb-0000-4000-8000-000000000006'
+const CO = 'bbbbbbbb-0000-4000-8000-000000000007'
+const OT = 'bbbbbbbb-0000-4000-8000-000000000008'
+
+interface RecWork { id: string; off: number; startedH: number; endedH: number | null; items: { ex: string; n: number; done?: boolean }[] }
+const REC_WORKOUTS: RecWork[] = [
+  { id: 'r1', off: -2, startedH: 51, endedH: 50, items: [{ ex: CH, n: 6 }] },
+  { id: 'r2', off: -1, startedH: 31, endedH: 30, items: [{ ex: LG1, n: 6 }, { ex: LG2, n: 4 }] },
+  { id: 'r3', off: 0, startedH: 13, endedH: 12, items: [{ ex: SH, n: 3 }, { ex: AR, n: 4, done: false }] },
+  { id: 'r4', off: 0, startedH: 2, endedH: null, items: [{ ex: CO, n: 2 }, { ex: OT, n: 5 }] },
+]
+
+function buildRecovery(workoutsIn: RecWork[]): typeof FIX {
+  const workouts: Record<string, unknown>[] = []
+  const entries: Record<string, unknown>[] = []
+  const sets: Record<string, unknown>[] = []
+  for (const w of workoutsIn) {
+    workouts.push({
+      id: w.id, performed_on: shiftIso(TODAY, w.off), started_at: ago(w.startedH),
+      ended_at: w.endedH === null ? null : ago(w.endedH), routine_id: null,
+    })
+    w.items.forEach((it, p) => {
+      entries.push({ id: `${w.id}-e${p}`, workout_id: w.id, exercise_id: it.ex, position: p })
+      for (let i = 0; i < it.n; i++) {
+        sets.push({ id: `${w.id}-e${p}-s${i}`, workout_exercise_id: `${w.id}-e${p}`, set_no: i + 1, weight_kg: 50, reps: 8, done: it.done ?? true })
+      }
+    })
+  }
+  return {
+    ...FIX,
+    exercises: [
+      ex(CH, '槓鈴臥推', 'chest'), ex(BK, '滑輪下拉', 'back'), ex(LG1, '槓鈴深蹲', 'legs'), ex(LG2, '腿推舉', 'legs'),
+      ex(SH, '肩推', 'shoulder'), ex(AR, '二頭彎舉', 'arms'), ex(CO, '捲腹', 'core'), ex(OT, '跑步機', 'other'),
+    ],
+    workouts,
+    workout_exercises: entries,
+    workout_sets: sets,
+  }
+}
+
+async function openRecovery(page: Page, fix = buildRecovery(REC_WORKOUTS)) {
+  await openApp(page, {}, fix)
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await page.locator('[data-action="open-analysis"]').click()
+  await expect(page.locator('[data-screen="analysis"]')).toBeVisible()
+  await page.locator('.seg button', { hasText: '肌群狀態' }).click()
+  await expect(page.locator('[data-section="recovery-list"]')).toBeVisible()
+}
+const recRows = (page: Page) => page.locator('[data-section="recovery-list"] .tr-row')
+
+test('分段控制：預設「動作進度」，切到「肌群狀態」出現六列，順序胸、背、下半身、肩、臂、腹，沒有「其他」', async ({ page }) => {
+  await openApp(page, {}, buildRecovery(REC_WORKOUTS))
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await page.locator('[data-action="open-analysis"]').click()
+  const seg = page.locator('[data-screen="analysis"] .seg')
+  await expect(seg.locator('button[aria-pressed="true"]')).toHaveText('動作進度')
+  await seg.locator('button', { hasText: '肌群狀態' }).click()
+  await expect(seg.locator('button[aria-pressed="true"]')).toHaveText('肌群狀態')
+  await expect(recRows(page)).toHaveCount(6)
+  await expect(recRows(page).locator('.nm')).toHaveText(['胸部', '背部', '下半身', '肩膀', '手臂', '腹肌'])
+  await expect(page.locator('[data-screen="analysis"]')).not.toContainText('其他')
+  await expect(page.locator('[data-section="progress-list"]')).toHaveCount(0)
+})
+
+test('各列的狀態、天數、組數與剩餘小時（窗口依部位與組數）', async ({ page }) => {
+  await openRecovery(page)
+  const row = (n: number) => recRows(page).nth(n)
+  // 胸：6 組、窗口 24、已 50 小時 → 可再練
+  await expect(row(0).locator('.sub')).toHaveText('2 天前 · 6 組')
+  await expect(row(0).locator('.an-state')).toHaveText('可再練')
+  await expect(row(0)).toHaveAttribute('data-state', 'ready')
+  // 背：沒有紀錄，沒有副標
+  await expect(row(1).locator('.an-state')).toHaveText('沒有紀錄')
+  await expect(row(1).locator('.sub')).toHaveCount(0)
+  // 下半身：兩個動作共 10 組 → 窗口 72；30 小時前結束 → 還需約 42 小時
+  await expect(row(2).locator('.sub')).toHaveText('昨天 · 10 組')
+  await expect(row(2).locator('.an-state')).toContainText('恢復中')
+  await expect(row(2).locator('.an-state')).toContainText('還需約 42 小時')
+  // 肩：3 組、窗口 24、12 小時前結束 → 還需約 12 小時
+  await expect(row(3).locator('.sub')).toHaveText('今天 · 3 組')
+  await expect(row(3).locator('.an-state')).toContainText('還需約 12 小時')
+  // 臂：只有沒打勾的組 → 沒有紀錄
+  await expect(row(4).locator('.an-state')).toHaveText('沒有紀錄')
+  // 腹：進行中的訓練也算，從開始時間起算：窗口 24 − 2 小時
+  await expect(row(5).locator('.sub')).toHaveText('今天 · 2 組')
+  await expect(row(5).locator('.an-state')).toContainText('還需約 22 小時')
+})
+
+test('說明小字講清楚這是粗估：部位窗口、沒計入練到多累、熱身組算進組數', async ({ page }) => {
+  await openRecovery(page)
+  const note = page.locator('[data-screen="analysis"] .an-note')
+  await expect(note).toContainText('下半身 48–72 小時')
+  await expect(note).toContainText('其餘 24–48 小時')
+  await expect(note).toContainText('沒有計入練到多累')
+  await expect(note).toContainText('熱身組也算進組數')
+})
+
+test('完全沒有訓練：六列都是「沒有紀錄」，不報錯', async ({ page }) => {
+  await openRecovery(page, buildRecovery([]))
+  await expect(recRows(page)).toHaveCount(6)
+  await expect(recRows(page).locator('.an-state')).toHaveText(Array(6).fill('沒有紀錄'))
+  await expect(recRows(page).locator('.sub')).toHaveCount(0)
+})
+
+test('切回「動作進度」列表還在，再切回「肌群狀態」仍是六列，胸取最近一次', async ({ page }) => {
+  await openRecovery(page, buildRecovery([...REC_WORKOUTS, { id: 'r5', off: -3, startedH: 80, endedH: 79, items: [{ ex: CH, n: 3 }] }]))
+  await page.locator('.seg button', { hasText: '動作進度' }).click()
+  await expect(page.locator('[data-section="recovery-list"]')).toHaveCount(0)
+  await page.locator('.seg button', { hasText: '肌群狀態' }).click()
+  await expect(recRows(page)).toHaveCount(6)
+  // 最近一次是 r1 的 6 組、2 天前，不是更早那場的 3 組
+  await expect(recRows(page).nth(0).locator('.sub')).toHaveText('2 天前 · 6 組')
+})
+
+test('連不上伺服器：肌群狀態照常顯示（資料來自本機底）', async ({ page }) => {
+  await openApp(page, {}, buildRecovery(REC_WORKOUTS))
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await expect(page.locator('[data-action="open-analysis"]')).toBeVisible()
+  await page.evaluate(() => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = true
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('連不上伺服器，顯示的是本機資料', { timeout: 15_000 })
+  await page.locator('[data-action="open-analysis"]').click()
+  await page.locator('.seg button', { hasText: '肌群狀態' }).click()
+  await expect(recRows(page)).toHaveCount(6)
+  await expect(recRows(page).nth(2).locator('.an-state')).toContainText('還需約 42 小時')
+})
