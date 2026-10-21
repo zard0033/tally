@@ -4,6 +4,13 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { gotoDate, leg, openApp, shiftIso, slowDrag } from './harness'
 import { FIX, TODAY } from './fixtures'
+import { SEEDED_FIX } from './seeded'
+
+/* 本檔 87 條、約 690 秒，佔整套 e2e 的七成。平行單位預設是「檔案」，它在檔名順序裡排得很後面，
+   前面的檔案先吃掉約 290 秒它才開始跑，最後只剩一個 worker 在做它（整套 981 秒、理想 649 秒）。
+   各條都自己 openApp、不共用狀態（沒有 serial／beforeAll），所以開檔內平行讓兩個 worker 都吃得到。
+   workers 仍是 2（WebKit 的記憶體上限，見 playwright.config.ts），沒有多開瀏覽器。 */
+test.describe.configure({ mode: 'parallel' })
 
 const EX_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -653,17 +660,17 @@ const imgLoaded = async (img: Locator) => {
   await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(180)
 }
 
-/** 第一次開、伺服器沒有動作 → App 預填整份目錄 150 個（帶 user_id），等伺服器真的收到再往下。 */
-async function openSeededLibrary(page: Page) {
-  await openApp(page, {}, { ...FIX, exercises: [] })
+/** 動作庫裡有整份目錄 150 個動作的前置條件。直接給 fixture（`seeded.ts`），不走真的預填——
+ *  150 筆 insert 逐筆上傳每條要約 15 秒。預填本身由「第一次開、伺服器上沒有任何動作」那條守。 */
+async function openCatalogLibrary(page: Page) {
+  await openApp(page, {}, SEEDED_FIX)
   await openTraining(page)
-  await expect(page.locator('[data-action="open-library"]')).toContainText('150 個動作', { timeout: 15_000 })
-  await expect.poll(async () => (await trainRows(page, 'exercises')).length, { timeout: 40_000 }).toBe(150)
+  await expect(page.locator('[data-action="open-library"]')).toContainText('150 個動作')
   await openLibrary(page)
 }
 
 test('動作示意圖：預設動作有照片、自建的動作用肌群單字；動作庫、加動作 sheet、訓練中卡片都有', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   // 自建一個動作（沒有圖）
   await library(page).getByRole('button', { name: '新增動作' }).click()
   await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
@@ -724,7 +731,7 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
 const viewer = (page: Page) => page.locator('[data-screen="exercise-viewer"]')
 
 test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×180 的示意動畫），不會誤開編輯；Esc 關、焦點回縮圖；自建動作沒有放大鈕', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '新增動作' }).click()
   await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
   await editSheet(page).getByRole('button', { name: '儲存' }).click()
@@ -760,7 +767,7 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×18
 })
 
 test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；關掉後 sheet 還在，點名稱才選取', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
@@ -783,7 +790,7 @@ test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；�
 })
 
 test('動作示意圖放大：動畫載不到（離線不進 precache）就退成靜態縮圖並說明，下次開再試', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await page.route('**/assets/*.gif', (route) => route.abort())
   const zoom = library(page).getByRole('button', { name: '放大腿推舉的示意圖' })
   await zoom.click()
@@ -806,7 +813,7 @@ test('動作示意圖放大：動畫載不到（離線不進 precache）就退�
 
 test('動作示意圖放大：減少動態時直接顯示靜態縮圖（GIF 沒辦法暫停）', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   let gifRequests = 0
   await page.route('**/assets/*.gif', (route) => {
     gifRequests++
@@ -821,7 +828,7 @@ test('動作示意圖放大：減少動態時直接顯示靜態縮圖（GIF 沒�
 })
 
 test('動作示意圖放大：除了縮圖本身，整列都還是主按鈕（左內距、自建動作的肌群單字點了照樣開編輯）', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '新增動作' }).click()
   await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
   await editSheet(page).getByRole('button', { name: '儲存' }).click()
@@ -848,7 +855,7 @@ test('動作示意圖放大：除了縮圖本身，整列都還是主按鈕（�
 })
 
 test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，不會開「改預設組次」', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
   await newRoutine(page, '菜單 A')
   await page.locator('[data-action="add-routine-exercise"]').click()
@@ -863,7 +870,7 @@ test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，�
 })
 
 test('動作示意圖放大：訓練中卡片點縮圖只放大，卡片不收合', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
@@ -2417,7 +2424,7 @@ const CREDIT = '© Gym visual — https://gymvisual.com/'
 const credit = (scope: Locator) => scope.locator('[data-credit="gym-visual"]')
 
 test('著作權標示：動作庫、加動作 sheet、訓練中畫面的列表底部都印一行', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await expect(credit(library(page))).toHaveText(CREDIT)
 
   await library(page).getByRole('button', { name: '返回' }).click()
@@ -2431,7 +2438,7 @@ test('著作權標示：動作庫、加動作 sheet、訓練中畫面的列表�
 })
 
 test('著作權標示：課表編輯有預設動作的圖時印一行', async ({ page }) => {
-  await openSeededLibrary(page)
+  await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
   await newRoutine(page, '菜單 A')
   await expect(credit(editor(page)), '還沒有動作，列表上沒有圖').toHaveCount(0)

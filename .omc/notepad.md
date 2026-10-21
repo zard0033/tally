@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-20）：階段 4 A 動作進度頁（v2.82：Analysis.tsx、strength.ts、訓練頁入口、e2e/analysis.spec.ts 10 條）已做完、code-reviewer 0 blocking 且 MEDIUM 已修；vitest 705、e2e 285（全量結果見 push 時）。真機未驗。B（重量建議）、C（肌群狀態）未動。
-下一步：真機看折線觸控與十字線；之後做 B（weightStep 歸類表＋SetSheet 建議行）、C（recovery.ts，並補回「動作進度｜肌群狀態」分段控制）。待確認：健身房有無 1.25 kg 槓片、啞鈴一格 2 或 2.5；進行中的訓練是否計入「N 次訓練」（目前計入）。SW 接手測試本機不穩，原因未查。
+現況（2026-10-21）：階段 4 A（v2.82）已 commit；C 肌群狀態（v2.83）已做完、**未 commit、未 review**：recovery.ts＋22 unit、Analysis 分段控制、e2e +6；vitest 727、e2e 291（290 過，tally.spec 偶發紅，單跑綠）。窗口依文獻改成部位×組數（spec.md 口徑 4 已改）。真機未驗。B 未動。
+下一步：①push 前 review ②D：RPE＋熱身標記另開 spec＋休息條四檔樣張（使用者已同意方向，等寫完核可）③B。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5。todo：加快 e2e（全量 983 秒）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -92,3 +92,9 @@ v2.74 點動作縮圖放大（使用者提出，spec.md 沒寫；DESIGN v2.74 �
 - **待使用者決定**：①存下 Gym visual 的回覆信、補問 public repo 內放圖檔是否涵蓋（圖已進 git 歷史）②~~著作權標示列表畫面沒有~~——v2.81（2026-10-20）已補（動作庫、加動作、課表編輯、訓練中各在列表底部，共用 `GymVisualCredit`）；標示放在列表底部而非每一列是我對條款的解讀，沒向 Gym visual 確認。
 - 同日 push 前 review（規範軸＋意圖軸）修掉：體重趨勢離線誤報「還沒有體重紀錄」（現在說「連不上伺服器」；連線重試約 7 秒才確定，期間是骨架）、載入骨架、CLAUDE.md e2e 條數（260 條、16 個檔）。
 - **OMC notepad 寫入工具（`notepad_write_priority`／`notepad_write_manual`）2026-10-20 兩次回報成功但檔案內容沒變**，原因未查；改用 Edit 直接改 `.omc/notepad.md`，改完要回讀確認。
+### 2026-10-21 12:00
+肌群狀態 C（v2.83）與後續（DESIGN v2.83 有全文）
+- [追加 2026-10-21] 使用者指定先做 C、B 之後；查文獻（PMC11057610）後把恢復窗口改成部位×組數（下半身 48／72、其餘 24／48，n=10 為界）；n=10 與各數字是設計決定、文獻沒給。使用者同意「大抵方向可以」。
+- **[已做] 加快測試速度**（使用者 2026-10-21 提出）：全量 e2e 牆鐘 981→573 秒（−42%）。①`training.spec` 檔內平行（長尾拆掉）②動作庫前置條件改用 `e2e/seeded.ts` 的現成 fixture（10 條各省約 15 秒）。**刻意不做**：離線測試的 7 秒（postgrest-js 重試，繞法會改變測到的失敗路徑）。**新發現的偶發**：`settings-nav`（體重趨勢返回）、`spring-sheet`（點一下把手落定）整套跑才偶發紅，單跑各 20 次全過，原因未查。剩下的長尾：真預填 2 條各約 18–20 秒、`rest-timer`「−15／＋15」14 秒。
+- **D（RPE＋熱身標記）設計方向，使用者同意、spec 與樣張未寫**：每個動作最後一組打勾時，在休息條上問一次「還能做幾下」，四檔（3+／2／1／力竭＝RPE 7／8／9／10），單點即存、不點＝未知；組編輯 sheet 內有同樣四檔可補填；熱身組先用規則推（同動作重量低於當天最大 60%，數字是猜的）不加欄位。要動 schema（`workout_sets.rpe`）→ 影響面升級，先 spec＋plan、等點頭。RPE 進演算法只改 `recoveryWindowHours`（某肌群有任一組 RPE≥9 → 窗口 +24 小時，數字取文獻下緣）。限制：只問最後一組看不到每組趨勢；初學者自評不準。
+- C 的已知限制：熱身組算進組數；沒有 RPE；頁面開著不動時剩餘小時不更新；真機未驗。
