@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-22）：階段 4 A–D、有氧併入動作 v2.89（6e17a1a）、有氧圖示 v2.90（a1e346b）**都已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練，舊表 cardio_sessions 已 drop（備份與還原 SQL 在 .omc/plans/cardio_sessions-*）。**v2.91／v2.92（編輯動作 sheet CTA 釘底＋鍵盤、組列左滑停點、勾的按下回饋）已做完、獨立 review 0 blocking（MEDIUM-1 已修），2026-10-22 推送**；全量 e2e 這幾輪都沒跑（使用者裁決，只跑受影響檔），e2e 共 352 條、vitest 798。**真機未驗**：RPE、重量建議、v2.90 圖示、v2.91／v2.92 三項手感。
-下一步：①真機驗上列（v2.91／v2.92 三項手感最優先） ③有空補一輪全量 e2e。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
+現況（2026-10-22）：階段 4 A–D、有氧併入動作 v2.89（6e17a1a）、有氧圖示 v2.90（a1e346b）**都已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練，舊表 cardio_sessions 已 drop（備份與還原 SQL 在 .omc/plans/cardio_sessions-*）。**v2.91／v2.92（15c2378）與 v2.93（封存從編輯動作 sheet 搬到動作庫列表）已做完、獨立 review 0 blocking，2026-10-22 推送**；全量 e2e 這幾輪都沒跑（使用者裁決，只跑受影響檔），e2e 共 352 條、vitest 798。**真機未驗**：RPE、重量建議、v2.90 圖示、v2.91／v2.92 三項手感。
+下一步：①使用者要調整每日應攝取熱量的計算（新對話；先讀 MANUAL 最後一節）②真機驗 v2.91／v2.92／v2.93（封存無回饋的取捨最先看） ③有空補一輪全量 e2e。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -116,3 +116,8 @@ v2.91／v2.92 push 前 review 留下的 follow-up（0 blocking；MEDIUM-1 手動
 - [LOW-7] v2.91 T1 標題寫「要點寫很長也不必捲」但 textarea 不會長高，那段斷言驗不到東西 → 拿掉或改標題。
 - [LOW-8] app.css 約 1505 註解「圈 .86→1」過時，現為 .88。
 - 既有、不屬本輪：編輯動作 sheet 的 `SpringSheet` 沒傳 `locked`，寫入中仍可 Escape／點 scrim／下滑關閉；`.tr-all` 36×36 低於 44px 下限；`scale(.88)` 縮小點擊區（真機點圓的外緣可能落空，要真機才看得出）。
+### 2026-10-22 17:50
+v2.93（封存搬到動作庫列表）push 前 review 留下的 follow-up（0 blocking；使用者決定先推、真機看過再處理）
+- **[MEDIUM-1／2，最值得先看]** 封存點下去沒有任何回饋，約 150 列的清單裡該列直接消失到最底下的已封存區；列位移後第二下會點到補上來的下一列的封存鈕（可逆但靜默）。處理方向：頂欄下方 `.tr-status`＋`role="status"` 顯示「已封存 X」，或沿用食品庫 `.undo-bar`；也可剛封存的那列先留在原位標「已封存」。
+- [LOW] 移除 › 的理由已改成引課表編輯為先例；主按鈕可補 `aria-label="X，編輯"`；錯誤條只在下一次點封存才清（write 成功後也該 `setError(null)`）；錯誤那條 e2e 的 toBeInViewport 分辨不出位置（清單沒捲動）；ARCHIVE_ICON／RESTORE_ICON 在 FoodLibrary 與 ExerciseLibrary 各一份可抽到 src/components/；食品庫寫「復原 X」、動作庫寫「取消封存 X」用詞不一。
+- 另：使用者之後要「調整計算每日應攝取熱量」，新對話一開場先讀 notepad 與 spec.md「每日目標計算引擎」「實測維持熱量」；2026-10-12 的裁決是不改目標、公式、資料表（TDEE 1956 vs 實測約 1760–1800），運動加成另案、等訓練記錄累積 3–4 週（現已累積約 2 週）。

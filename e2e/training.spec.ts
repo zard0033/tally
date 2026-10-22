@@ -628,7 +628,6 @@ test('新增動作：右上＋、預設肌群「其他」、儲存後進清單�
 
   await library(page).getByRole('button', { name: '新增動作' }).click()
   await expect(editSheet(page).getByRole('combobox', { name: '肌群' })).toHaveValue('other')
-  await expect(editSheet(page).getByRole('button', { name: '封存這個動作' }), '新增時不顯示封存').toHaveCount(0)
   await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('硬舉')
   await editSheet(page).getByRole('combobox', { name: '肌群' }).selectOption('back')
   await editSheet(page).getByRole('button', { name: '儲存' }).click()
@@ -659,16 +658,24 @@ test('名稱空白或與別的動作重複：擋在 sheet 裡說明，不寫入�
   expect(await trainRows(page, 'exercises'), '被擋下的都不該寫入').toHaveLength(3)
 })
 
+/* v2.93：封存／取消封存從編輯 sheet 搬到動作庫每一列尾端的圖示鈕（真機回饋：sheet 裡那顆位置怪）。 */
+const archiveBtn = (page: Page, name: string) => library(page).getByRole('button', { name: `封存 ${name}`, exact: true })
+const unarchiveBtn = (page: Page, name: string) => library(page).getByRole('button', { name: `取消封存 ${name}`, exact: true })
+type ExWrite = { table: string; method: string; body: unknown }
+const exercisePatches = async (page: Page) =>
+  (await page.evaluate(() => (window as unknown as { __writes: ExWrite[] }).__writes))
+    .filter((w) => w.table === 'exercises' && w.method === 'PATCH')
+    .map((w) => w.body)
+
 test('封存：從「加動作」的選單消失；選單也有肌群橫條', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await openLibrary(page)
 
-  await library(page).locator('.tr-row', { hasText: '腿推舉' }).click()
-  await editSheet(page).getByRole('button', { name: '封存這個動作' }).click()
-  await expect(editSheet(page)).toHaveCount(0)
+  await archiveBtn(page, '腿推舉').click()
   await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.archived).toBe(true)
+  expect(await exercisePatches(page), '封存只送 archived 一欄').toEqual([{ archived: true }])
 
   await library(page).getByRole('button', { name: '返回' }).click()
   await startBlank(page)
@@ -687,12 +694,160 @@ test('取消封存：回到清單與選單', async ({ page }) => {
   await openTraining(page)
   await openLibrary(page)
 
-  await library(page).locator('[data-section="archived"] .tr-row', { hasText: '舊的肩推' }).click()
-  await editSheet(page).getByRole('button', { name: '取消封存這個動作' }).click()
-  await expect(editSheet(page)).toHaveCount(0)
+  await unarchiveBtn(page, '舊的肩推').click()
   await expect(library(page).locator('[data-section="archived"]')).toHaveCount(0)
   await expect(library(page).locator('.tr-row', { hasText: '舊的肩推' })).toHaveCount(1)
+  await expect(archiveBtn(page, '舊的肩推'), '回到使用中後，那一列的鈕換成封存').toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
+  expect(await exercisePatches(page), '取消封存只送 archived 一欄').toEqual([{ archived: false }])
+
+  // 回到「加動作」的選單
+  await library(page).getByRole('button', { name: '返回' }).click()
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await expect(page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '舊的肩推' })).toBeVisible()
+})
+
+test('動作庫列的封存鈕：每列一顆、名稱寫在 aria-label、觸控目標 ≥44px；點它不開編輯 sheet、點列主體仍開', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  // 使用中兩列各一顆「封存」、已封存那列一顆「取消封存」；圖示不寫字
+  await expect(library(page).getByRole('button', { name: /^封存 / })).toHaveCount(2)
+  await expect(library(page).getByRole('button', { name: /^取消封存 / })).toHaveCount(1)
+  await expect(library(page).locator('[data-section="archived"]').getByRole('button', { name: '取消封存 舊的肩推', exact: true })).toHaveCount(1)
+  const btn = archiveBtn(page, '腿推舉')
+  await expect(btn).toHaveText('')
+  const box = (await btn.boundingBox())!
+  expect(box.width, '觸控目標寬').toBeGreaterThanOrEqual(44)
+  expect(box.height, '觸控目標高').toBeGreaterThanOrEqual(44)
+
+  /* 主按鈕的 ::before 撐滿整列（讓縮圖以外都算開編輯），封存鈕要疊在它上面——
+     用滑鼠點按鈕中心（不是 locator.click 的 actionability 直達），點到的才是畫面上真正在最上層的那個 */
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
+  await page.waitForTimeout(400) // 沒有事件可等的反向斷言：sheet 若會開，這段時間內已經出現
+  await expect(editSheet(page), '點封存鈕不該開編輯 sheet').toHaveCount(0)
+
+  // 列主體照舊開編輯 sheet（AC 3 同一張）
+  await library(page).locator('.tr-row', { hasText: '坐姿划船' }).locator('.tr-row-main').click()
+  await expect(editSheet(page)).toBeVisible()
+  await expect(editSheet(page).getByRole('textbox', { name: '名稱' })).toHaveValue('坐姿划船')
+})
+
+test('編輯動作 sheet 不再有封存鈕（使用中、已封存、新增三種開法）；已封存的動作點進來仍能改名', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  const noArchiveInSheet = async () => {
+    await expect(editSheet(page)).toBeVisible()
+    await expect(editSheet(page).getByRole('button', { name: '封存這個動作' })).toHaveCount(0)
+    await expect(editSheet(page).getByRole('button', { name: '取消封存這個動作' })).toHaveCount(0)
+    await expect(editSheet(page).getByRole('button', { name: /封存/ }), 'sheet 裡不該有任何封存相關的鈕').toHaveCount(0)
+  }
+
+  await library(page).locator('.tr-row', { hasText: '腿推舉' }).click()
+  await noArchiveInSheet()
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await noArchiveInSheet()
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+
+  await library(page).locator('[data-section="archived"] .tr-row', { hasText: '舊的肩推' }).click()
+  await noArchiveInSheet()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('舊的肩推（停用）')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '舊的肩推（停用）' }), '改名不影響封存').toHaveCount(1)
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID))
+    .toMatchObject({ name: '舊的肩推（停用）', archived: true })
+})
+
+test('離線封存與取消封存：列表立刻換區，回線後上傳', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await setOffline(page, true)
+  await openLibrary(page)
+
+  await archiveBtn(page, '坐姿划船').click()
+  await unarchiveBtn(page, '舊的肩推').click()
+  await expect(library(page).locator('[data-section="archived"] .tr-row')).toHaveText([/坐姿划船/])
+  await expect(library(page).locator('.tr-card:not([data-section]) .tr-row')).toHaveText([/腿推舉/, /舊的肩推/])
+  const server = async () => (await trainRows(page, 'exercises')).map((r) => [r.id, r.archived])
+  expect(await server(), '離線時伺服器還是舊的').toEqual([[LEG_ID, false], [ROW_ID, false], [OLD_ID, true]])
+
+  await setOffline(page, false)
+  await expect.poll(server, { timeout: 15_000 }).toEqual([[LEG_ID, false], [ROW_ID, true], [OLD_ID, false]])
+})
+
+test('封存寫入失敗（本機儲存寫不進去）：頁上說明「這筆沒有存下來」，列留在原區，什麼都沒送', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  // 同有氧 sheet 那條：寫入只在「排進本機佇列」那一步會失敗，讓 IndexedDB 的 put 丟錯
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = () => {
+      throw new DOMException('模擬的容量已滿', 'QuotaExceededError')
+    }
+  })
+  await archiveBtn(page, '腿推舉').click()
+  const alert = library(page).getByRole('alert')
+  await expect(alert).toContainText('這筆沒有存下來')
+  await expect(alert, '說明要在畫面內，不是捲到看不到的地方').toBeInViewport()
+  await expect(library(page).locator('[data-section="archived"] .tr-row'), '沒寫成就不該換區').toHaveText([/舊的肩推/])
+  await expect(archiveBtn(page, '腿推舉')).toHaveCount(1)
+  expect(await exercisePatches(page), '沒有排進佇列，什麼都沒送').toEqual([])
+})
+
+test('動作庫列：長名稱在 393 寬不溢出，名稱截斷、封存鈕完整留在列內', async ({ page }) => {
+  const LONG = '史密斯機器上斜槓鈴臥推（窄握、暫停兩秒、離心三秒）'
+  await openApp(page, {}, {
+    ...LIBRARY_FIX,
+    exercises: [{ ...LIBRARY_FIX.exercises[0], name: LONG }, ...LIBRARY_FIX.exercises.slice(1)],
+  })
+  await openTraining(page)
+  await openLibrary(page)
+
+  const row = library(page).locator('.tr-row', { hasText: LONG })
+  const m = await row.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const btn = el.querySelector('.tr-ib')!.getBoundingClientRect()
+    const nm = el.querySelector('.nm') as HTMLElement
+    const card = el.closest('.tr-card')!.getBoundingClientRect()
+    return {
+      overflow: el.scrollWidth - el.clientWidth,
+      truncated: nm.scrollWidth > nm.clientWidth,
+      btnLeft: btn.left, btnRight: btn.right, btnW: btn.width,
+      nmRight: nm.getBoundingClientRect().right,
+      rowRight: r.right, cardRight: card.right,
+      docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }
+  })
+  expect(m.overflow, '列被撐出水平捲動').toBeLessThanOrEqual(0)
+  expect(m.docOverflow, '整頁出現水平捲動').toBeLessThanOrEqual(0)
+  expect(m.truncated, '長名稱應該被截斷（…），不是撐開列').toBe(true)
+  expect(m.btnW, '封存鈕被擠窄').toBeGreaterThanOrEqual(44)
+  expect(m.btnRight, '封存鈕超出卡片右緣').toBeLessThanOrEqual(m.cardRight + 0.5)
+  expect(m.nmRight, '名稱壓到封存鈕上').toBeLessThanOrEqual(m.btnLeft + 0.5)
+})
+
+test('封存的動作：歷史訓練照樣顯示名稱', async ({ page }) => {
+  // 腿推舉（LEG_ID＝EX_ID）今天有一次已完成的訓練
+  await openApp(page, {}, { ...WITH_WORKOUT, exercises: LIBRARY_FIX.exercises })
+  await openTraining(page)
+  await openLibrary(page)
+  await archiveBtn(page, '腿推舉').click()
+  await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
+  await library(page).getByRole('button', { name: '返回' }).click()
+
+  await page.locator('.tr-row[data-workout-id="w-1"]').click()
+  await expect(page.locator('.ex .nm')).toHaveText(['腿推舉'])
 })
 
 /* v2.91：編輯動作 sheet 改成全站表單 sheet 的版型——可捲的 `.form-wrap` ＋兄弟節點 `.confirm-wrap` 釘底。
@@ -729,7 +884,7 @@ test('編輯動作 sheet 的版型：欄位區可捲、儲存釘在底部；要�
   const footer = sheet.locator('.confirm-wrap')
   const save = sheet.getByRole('button', { name: '儲存' })
 
-  // 結構：欄位區與釘底列是同一個 form 底下的兄弟；儲存在釘底列、封存留在欄位區
+  // 結構：欄位區與釘底列是同一個 form 底下的兄弟；儲存在釘底列（封存 v2.93 起不在這張 sheet，見動作庫那幾條）
   expect(
     await fields.evaluate((el) => {
       const f = el.parentElement!.querySelector(':scope > .confirm-wrap')
@@ -739,7 +894,7 @@ test('編輯動作 sheet 的版型：欄位區可捲、儲存釘在底部；要�
   ).toBe(true)
   await expect(footer.getByRole('button', { name: '儲存' })).toHaveCount(1)
   await expect(fields.getByRole('button', { name: '儲存' }), '儲存不該在捲動內容裡').toHaveCount(0)
-  await expect(fields.getByRole('button', { name: '封存這個動作' }), '封存是次要動作，留在欄位區').toHaveCount(1)
+  await expect(sheet.getByRole('button', { name: '封存這個動作' }), '封存搬到動作庫列表了（v2.93）').toHaveCount(0)
 
   const tips = Array.from({ length: 40 }, (_, i) => `第 ${i + 1} 行：背貼緊椅背，膝蓋對腳尖`).join('\n')
   await sheet.getByRole('textbox', { name: '要點' }).fill(tips)

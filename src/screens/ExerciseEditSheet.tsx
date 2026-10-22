@@ -1,4 +1,5 @@
-/* 編輯動作 sheet（樣張 ⑦b）：名稱 → 肌群（下拉）→ 要點，封存是欄位區底下的文字鈕；儲存釘在底部（v2.91）。
+/* 編輯動作 sheet（樣張 ⑦b）：名稱 → 肌群（下拉）→ 要點；儲存釘在底部（v2.91）。
+   封存／取消封存不在這裡，在動作庫每一列的圖示鈕（v2.93）；已封存的動作點進來一樣能改這三欄。
    動作庫頁與訓練中點要點塊的筆圖示開的是**同一張**（AC 3）；exercise 為 null＝新增。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
    欄位狀態放在 ExerciseForm、以動作 id 當 key：每次打開都是一份新的草稿，不會殘留上一次打到一半的字。 */
@@ -10,7 +11,6 @@ import {
   MUSCLE_GROUP_LABEL,
   checkExercise,
   createExerciseOps,
-  setExerciseArchivedOps,
   updateExerciseOps,
   type Row,
   type RowOp,
@@ -72,7 +72,6 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
     )
   }
 
-  const archived = exercise?.archived === true
   // 鍵盤升起後把聚焦欄位（多半是最下面的要點）捲進欄位區，理由見 hook 檔頭
   const scrollRef = useRef<HTMLDivElement | null>(null)
   useScrollFocusedIntoView(scrollRef)
@@ -111,18 +110,6 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
           </span>
           <textarea value={tips} aria-label="要點" rows={4} onChange={(e) => setTips(e.target.value)} />
         </label>
-
-        {/* 次要動作留在欄位區最底、不釘底：釘底列只放主要 CTA */}
-        {exercise && (
-          <button
-            className="tr-text-btn is-quiet tr-text-btn-center"
-            type="button"
-            disabled={busy}
-            onClick={() => void run(setExerciseArchivedOps({ id: exercise.id, archived: !archived }))}
-          >
-            {archived ? '取消封存這個動作' : '封存這個動作'}
-          </button>
-        )}
       </div>
       <div className="confirm-wrap">
         {/* 錯誤放在釘底列、儲存鈕上方（同食品庫新增）：鍵盤升起時欄位區只剩一小截，放在欄位區裡會被捲走 */}
