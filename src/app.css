@@ -1488,7 +1488,6 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   cursor: pointer; -webkit-appearance: none; appearance: none;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 200ms cubic-bezier(.23, 1, .32, 1); }
 .tr-all svg { width: 20px; height: 20px; stroke-width: 2.2; }
-.tr-all:active { transform: scale(.9); }
 .tr-all.is-on { background: var(--accent); color: var(--on-accent); }
 .tr-all:disabled { opacity: .4; cursor: default; }
 .tr-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1508,15 +1507,26 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   color: var(--ink-faint); display: flex; align-items: center; justify-content: center; cursor: pointer;
   -webkit-appearance: none; appearance: none; justify-self: center;
   transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 200ms cubic-bezier(.23, 1, .32, 1); }
-.tr-check:active { transform: scale(.9); }
 .tr-check svg { width: 22px; height: 22px; stroke-width: 2.2; }
 .set.done .tr-check { background: var(--accent); color: var(--on-accent); }
 .tr-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 勾與雙勾的按下回饋（v2.92）：縮小＋底色深一階。標記由 usePressed 的 [data-pressed] 給（iOS 在可捲容器裡的 :active 靠不住），
+   :active 留著給鍵盤空白鍵。只縮放的話手指蓋住圓心就看不到——圓周縮進才 3px；底色變深在指縫與圓周露出來的地方看得到。
+   未勾 --fill → --rule（1.19:1，與 --fill 對 --card 同一級差；--rule-subtle 只有 1.05:1 看不出來）、已勾 --accent → --accent-dark。
+   顏色沿用上面 transition 清單的 160ms，不另開。 */
+.tr-all:active, .tr-all[data-pressed], .tr-check:active, .tr-check[data-pressed] { transform: scale(.88); background: var(--rule); }
+.tr-all.is-on:active, .tr-all.is-on[data-pressed],
+.set.done .tr-check:active, .set.done .tr-check[data-pressed] { background: var(--accent-dark); }
 /* 全部完成：資料一次換完，這一輪被換的列依序延後（--cascade-delay 由元件內聯給，間隔 CASCADE_STEP_MS＝60ms）。
    只延後顏色；transform（按下縮放）維持 0，回饋在按下的當下發生。逐項的順序要與上面各自的 transition 清單一致：
    .tr-check＝background-color／color／transform，.tr-val＝transform／color */
 .set.is-cascade .tr-check { transition-delay: var(--cascade-delay, 0ms), var(--cascade-delay, 0ms), 0ms; }
 .set.is-cascade .tr-val { transition-delay: 0ms, var(--cascade-delay, 0ms); }
+/* 減少動態（v2.88）：按下只留底色變深、不縮放。寫在這裡而不是檔案前面那個 reduced-motion 區塊：
+   選擇器權重相同，要排在上面的按下規則之後才壓得過 */
+@media (prefers-reduced-motion: reduce) {
+  .tr-all:active, .tr-all[data-pressed], .tr-check:active, .tr-check[data-pressed] { transform: none; }
+}
 /* 同步剩餘組數：被改到的列淡綠閃一下（逐列錯開 50ms，延遲由元件內聯給） */
 .set.is-synced { animation: set-flash 700ms var(--ease) both; }
 @keyframes set-flash { 0%, 100% { background-color: transparent; } 20% { background-color: var(--accent-soft); } }
@@ -1614,6 +1624,10 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-sheet-body .muted { color: var(--ink-muted); margin: var(--s-3) 0 0; }
 .tr-sheet-body .action-btn { margin-top: var(--s-4); }
 .tr-form-error { color: var(--over); font-size: var(--t-sm); margin: var(--s-2) 0; }
+/* 編輯動作 sheet（v2.91）：form 包住可捲的 `.form-wrap` 與釘底的 `.confirm-wrap`，自己要是撐滿 sheet 的 flex column。
+   兩層的 `min-height: 0` 都不可省——sheet 是 `.sheet-fit`（只有 max-height），少一層欄位區就不會縮，
+   鍵盤升起（max-height 扣掉 --kb）時儲存鈕被擠出 sheet 外，正是這輪要修的症狀。 */
+.tr-edit-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 /* 未同步 sheet：一段一句白話，被拒絕的逐條列在卡片裡 */
 .sync-line { margin: var(--s-3) 0 0; font-size: var(--t-sm); color: var(--ink); line-height: 1.6; }
 .sync-body .tr-card { margin-top: var(--s-2); }

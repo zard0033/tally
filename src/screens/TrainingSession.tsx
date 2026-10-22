@@ -21,6 +21,7 @@ import Flip from '@/components/Flip'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import RestBar, { type RpeAsk } from '@/components/RestBar'
 import { useRestTimer } from '@/components/useRestTimer'
+import { usePressed } from '@/components/usePressed'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
@@ -190,6 +191,7 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
   const weight = Number(set.weight_kg)
   const reps = Number(set.reps)
   const done = set.done === true
+  const checkPress = usePressed()
   const rowStyle: CSSProperties = {}
   if (flashIndex !== null) rowStyle.animationDelay = `${flashIndex * 50}ms`
   if (cascadeIndex !== null) (rowStyle as Record<string, string>)['--cascade-delay'] = `${cascadeIndex * CASCADE_STEP_MS}ms`
@@ -212,7 +214,7 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
         <button className="tr-val r" type="button" aria-label={`第 ${no} 組次數 ${reps}，調整`} onClick={(e) => onEdit(e.currentTarget)}>
           {reps}
         </button>
-        <button className="tr-check" type="button" aria-pressed={done} aria-label={`第 ${no} 組完成`} onClick={onToggle}>
+        <button className="tr-check" type="button" aria-pressed={done} aria-label={`第 ${no} 組完成`} onClick={onToggle} {...checkPress}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
@@ -255,6 +257,7 @@ function ExerciseCard(p: ExerciseCardProps) {
   const { item, index, sorting } = p
   const { entry, exercise, sets } = item
   const reduced = useReducedMotion()
+  const allPress = usePressed()
   const name = exercise ? String(exercise.name) : '（已刪除的動作）'
   const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
   const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
@@ -414,6 +417,7 @@ function ExerciseCard(p: ExerciseCardProps) {
                     aria-label={allDone ? '取消全部完成' : '全部完成'}
                     disabled={sets.length === 0}
                     onClick={p.onToggleAll}
+                    {...allPress}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />

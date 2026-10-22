@@ -6,7 +6,7 @@
    門檻讀「這一列實際位移了多少」（x 這個 motion value），不讀指標原始位移：dragDirectionLock 判成縱向捲動時
    列不會動、offset.x 照樣累積，讀後者會在垂直捲動帶點左偏時靜默吃進「開啟」。 */
 import { useRef, type ReactNode } from 'react'
-import { motion, useMotionValue, useReducedMotion, type PanInfo } from 'motion/react'
+import { animate, motion, useMotionValue, useReducedMotion, type PanInfo } from 'motion/react'
 import { SETTLE_SPRING } from '@/lib/durations'
 
 const REVEAL = 56
@@ -40,7 +40,18 @@ export default function SwipeDelete({ open, onOpenChange, onDelete, deleteLabel,
     const moved = x.get()
     // 速度也要配 moved < 0 把關：縱向甩動時的 velocity.x 雜訊不該被判成開啟
     const flung = info.velocity.x < -320 && moved < 0
-    onOpenChange(moved < -OPEN_AT || flung)
+    const next = moved < -OPEN_AT || flung
+    onOpenChange(next)
+    /* `animate` prop 只在 `open` 真的變了才會重跑：列本來就開著、使用者又往左多拉一截（或沒過門檻的小幅拖動）時 `next === open`，
+       沒有任何東西把列吸回去，就停在拖到的位置、與紅鈕隔一段距離（真機回報）。這種情形自己接手吸附到該停的位置；
+       `open` 有變的由 prop 那條路負責，不在這裡重複跑。 */
+    if (next === open) {
+      const target = next ? -REVEAL : 0
+      // 減少動態用 jump 不用 set：放手當下 motion 自己已起了一段拉回拖曳範圍的回彈，set 停不掉它、jump 會（e2e 實測 set 留下 -72→-56 的十幾格）
+      if (reduced) x.jump(target)
+      // 吸附距離只有十幾 px，放手速度沒有意義：往左的速度配上在右邊的目標，spring 會先往左衝最多約 37px 才折回（獨立 review 算出來的）
+      else animate(x, target, { ...SETTLE_SPRING, velocity: 0 })
+    }
   }
 
   return (
@@ -63,7 +74,7 @@ export default function SwipeDelete({ open, onOpenChange, onDelete, deleteLabel,
         drag="x"
         dragDirectionLock
         dragMomentum={false}
-        dragConstraints={{ left: -REVEAL * 2, right: 0 }}
+        dragConstraints={{ left: -REVEAL, right: 0 }}
         dragElastic={{ left: 0.4, right: 0 }}
         animate={{ x: open ? -REVEAL : 0 }}
         // 速度只在「往左開啟」交棒，收合一律從靜止起跑（理由同 Today.tsx：被打斷的收合不該帶殘留速度）

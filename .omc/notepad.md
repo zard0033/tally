@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-22）：階段 4 A–D 與**有氧併入動作（v2.89，commit 6e17a1a）已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練（舊表 cardio_sessions 已於 2026-10-22 真機驗過後 drop；備份與還原 SQL 在 .omc/plans/cardio_sessions-backup.json／-restore.sql；文件敘述已同步）。v2.90 有氧圖示（健走用資料集圖 3666、拳擊自繪手套圖示）已做完、review 0 blocking，**等使用者確認「準備 push」**（全量 e2e 未跑，使用者裁決，只跑受影響 4 檔）。vitest 798、e2e 342 條。**真機未驗**：RPE、重量建議、圖示。
-下一步：①push v2.90 ②真機驗 D、B、圖示 待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
+現況（2026-10-22）：階段 4 A–D、有氧併入動作 v2.89（6e17a1a）、有氧圖示 v2.90（a1e346b）**都已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練，舊表 cardio_sessions 已 drop（備份與還原 SQL 在 .omc/plans/cardio_sessions-*）。**v2.91／v2.92（編輯動作 sheet CTA 釘底＋鍵盤、組列左滑停點、勾的按下回饋）已做完、獨立 review 0 blocking（MEDIUM-1 已修），2026-10-22 推送**；全量 e2e 這幾輪都沒跑（使用者裁決，只跑受影響檔），e2e 共 352 條、vitest 798。**真機未驗**：RPE、重量建議、v2.90 圖示、v2.91／v2.92 三項手感。
+下一步：①真機驗上列（v2.91／v2.92 三項手感最優先） ③有空補一輪全量 e2e。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -104,3 +104,15 @@ v2.74 點動作縮圖放大（使用者提出，spec.md 沒寫；DESIGN v2.74 �
 - **部署後待辦（還沒做）**：開一次 App 讓它自動補出兩個有氧動作 → 遷移 3 筆舊 `cardio_sessions`（健走 2、拳擊 1，10/12–10/15）成 3 次獨立訓練。遷移 SQL **還沒寫**：明寫 `user_id`、用 (user_id, kind) 找動作、started_at＝當天 12:00 台北時間、ended_at＝起點＋分鐘，寫入前先列清單給使用者確認，驗筆數與分鐘總和（55）。push 前確認 App 的未同步佇列是空的（舊版離線殘留的 `cardio_sessions` 條目新版送不出去；使用者裁決不加相容層）。舊表保留不動，真機驗過後另一輪再 drop。
 - 已知小問題未修：寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」（程式推論，QueueStorageError 已含前綴）；`soloCardio` 對「有組的有氧卡」仍列成有氧摘要；只做有氧的補記要填兩次分鐘；e2e `recovery-foreground` 全量偶發紅一次（單跑 6/6 過、沒驗乾淨基線）。
 - 待使用者：健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住；真機驗有氧卡與有氧 sheet。
+### 2026-10-22 16:50
+v2.91／v2.92 push 前 review 留下的 follow-up（0 blocking；MEDIUM-1 手動吸附帶速度已改 velocity 0 並重跑左滑 5 條×3 次全過；其餘未修，等真機驗完再一起處理）
+- **[MEDIUM-2]** `.tr-check:active`／`.tr-all:active` 與 `[data-pressed]` 並存：拖曳超過 10px 後標記被清掉，但 `:active` 還在（桌面一定如此），勾在左滑整段保持縮小變深，與 DESIGN 新增那條「開始左滑就清掉」不一致。修法：`:active` 只留給鍵盤（`:focus-visible:active`），觸控與滑鼠只走 `[data-pressed]`，並把 training.spec 約 1835 那條改斷 transform／背景色。
+- [LOW-1] 列開著時按勾會出現按下回饋、放開卻只是關列沒打勾（`SwipeDelete` 的 onClickCapture 吞 click）→ `SetRow` 在 swipeOpen 時不掛 `checkPress`。
+- [LOW-2] 從勾上起手往上捲清單，勾會先閃一下按下（pointerdown 當下就掛標記）→ 可延遲 60–80ms 掛，或接受並記在 DESIGN。
+- [LOW-3] 按住時切 App／下拉控制中心／ctrl-click，沒有 pointerup 也沒有 pointercancel 會卡在按下 → 按下期間加 window blur 與 visibilitychange 清除。
+- [LOW-4] 「全部完成」逐組換色期間，按下的底色變深也被 `--cascade-delay` 延後 → `.set.is-cascade .tr-check[data-pressed]` 的顏色 transition-delay 設回 0。
+- [LOW-5] training.spec 約 1737 減少動態左滑那條用 `v > -71.5 && v < -56.5` 的 0.5px 數值窗，機器忙時可能假紅 → 改斷「兩端之間的寫入 ≤ 1 筆」。
+- [LOW-6] `.set.done .tr-check[data-pressed]`、`.tr-all.is-on[data-pressed]`（iOS 走的路）沒有測試守，刪掉任何 e2e 都不紅 → 在「不靠 :active」那條先勾起一組與全勾再派 pointerdown，斷 accent-dark。
+- [LOW-7] v2.91 T1 標題寫「要點寫很長也不必捲」但 textarea 不會長高，那段斷言驗不到東西 → 拿掉或改標題。
+- [LOW-8] app.css 約 1505 註解「圈 .86→1」過時，現為 .88。
+- 既有、不屬本輪：編輯動作 sheet 的 `SpringSheet` 沒傳 `locked`，寫入中仍可 Escape／點 scrim／下滑關閉；`.tr-all` 36×36 低於 44px 下限；`scale(.88)` 縮小點擊區（真機點圓的外緣可能落空，要真機才看得出）。

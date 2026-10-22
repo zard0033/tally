@@ -695,6 +695,122 @@ test('取消封存：回到清單與選單', async ({ page }) => {
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
 })
 
+/* v2.91：編輯動作 sheet 改成全站表單 sheet 的版型——可捲的 `.form-wrap` ＋兄弟節點 `.confirm-wrap` 釘底。
+   真機回報：點要點叫出鍵盤後，儲存（原本是捲動內容的最後一個子節點）被鍵盤蓋住。
+   **鍵盤桌面產不出來**，這幾條守的是版型與「`--kb` 接上之後」的結果，iOS 真實鍵盤行為只有真機能驗。
+   `--kb` 設在 sheet 元素身上、不設在 documentElement：App.tsx 的 `sync()` 每次 visualViewport 事件
+   都會把 root 的 `--kb` 蓋回 0px，而第三條正好要派發那個事件（理由同 food-library.spec 的 `--kb` 那條）。 */
+
+/** 等 sheet 的開啟 spring 落定（translateY 連續兩次讀到同一個值）；JS 動畫，`getAnimations()` 看不到。 */
+async function sheetSettled(sheet: Locator) {
+  const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
+  await expect
+    .poll(async () => {
+      const a = await ty()
+      await sheet.page().waitForTimeout(80)
+      return Math.abs((await ty()) - a) < 0.1 ? a : NaN
+    })
+    .not.toBeNaN()
+}
+
+async function openLegEdit(page: Page) {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  await library(page).locator('.tr-row', { hasText: '腿推舉' }).click()
+  await expect(editSheet(page)).toBeVisible()
+  await sheetSettled(editSheet(page))
+}
+
+test('編輯動作 sheet 的版型：欄位區可捲、儲存釘在底部；要點寫很長也不必捲就點得到儲存', async ({ page }) => {
+  await openLegEdit(page)
+  const sheet = editSheet(page)
+  const fields = sheet.locator('.form-wrap')
+  const footer = sheet.locator('.confirm-wrap')
+  const save = sheet.getByRole('button', { name: '儲存' })
+
+  // 結構：欄位區與釘底列是同一個 form 底下的兄弟；儲存在釘底列、封存留在欄位區
+  expect(
+    await fields.evaluate((el) => {
+      const f = el.parentElement!.querySelector(':scope > .confirm-wrap')
+      return el.parentElement!.tagName === 'FORM' && !!f && !el.contains(f)
+    }),
+    '釘底列要是欄位區的兄弟節點，不能在捲動容器裡',
+  ).toBe(true)
+  await expect(footer.getByRole('button', { name: '儲存' })).toHaveCount(1)
+  await expect(fields.getByRole('button', { name: '儲存' }), '儲存不該在捲動內容裡').toHaveCount(0)
+  await expect(fields.getByRole('button', { name: '封存這個動作' }), '封存是次要動作，留在欄位區').toHaveCount(1)
+
+  const tips = Array.from({ length: 40 }, (_, i) => `第 ${i + 1} 行：背貼緊椅背，膝蓋對腳尖`).join('\n')
+  await sheet.getByRole('textbox', { name: '要點' }).fill(tips)
+  const s = (await sheet.boundingBox())!
+  const b = (await save.boundingBox())!
+  expect(b.y, '儲存跑到 sheet 上緣之外').toBeGreaterThanOrEqual(s.y)
+  expect(b.y + b.height, '儲存被擠出 sheet 了').toBeLessThanOrEqual(s.y + s.height + 1)
+  expect(b.y + b.height, '儲存超出視窗').toBeLessThanOrEqual(page.viewportSize()!.height)
+})
+
+test('編輯動作 sheet 吃 --kb（模擬鍵盤 336px）：底緣上移、欄位區變矮可捲、儲存與錯誤訊息浮在鍵盤上方', async ({ page }) => {
+  await openLegEdit(page)
+  const sheet = editSheet(page)
+  const fields = sheet.locator('.form-wrap')
+  const save = sheet.getByRole('button', { name: '儲存' })
+  const fieldsBefore = (await fields.boundingBox())!.height
+
+  const KB = 336
+  await sheet.evaluate((el, kb) => el.style.setProperty('--kb', `${kb}px`), KB)
+  const vh = page.viewportSize()!.height
+  const s = (await sheet.boundingBox())!
+  expect(s.y + s.height, 'sheet 底緣沒有吃到 --kb，會落在鍵盤底下').toBeLessThanOrEqual(vh - KB + 1)
+
+  const area = await fields.evaluate((el) => ({ h: el.getBoundingClientRect().height, sh: el.scrollHeight, ch: el.clientHeight }))
+  expect(area.h, '鍵盤升起時欄位區沒有變矮').toBeLessThan(fieldsBefore)
+  expect(area.sh, '欄位區變矮之後要捲得動，底下的欄位才到得了').toBeGreaterThan(area.ch)
+
+  const b = (await save.boundingBox())!
+  expect(b.y, '儲存跑到 sheet 上緣之外').toBeGreaterThanOrEqual(s.y)
+  expect(b.y + b.height, '儲存被擠出 sheet（落到鍵盤底下）').toBeLessThanOrEqual(s.y + s.height + 1)
+  // 捲欄位區不會帶著儲存跑：它不在捲動容器裡
+  await fields.evaluate((el) => { el.scrollTop = el.scrollHeight })
+  expect(Math.round((await save.boundingBox())!.y), '捲欄位區時儲存跟著動了——它還在捲動內容裡').toBe(Math.round(b.y))
+
+  // 錯誤訊息在釘底列：鍵盤升起時也看得到（欄位區捲到哪都一樣）
+  await sheet.getByRole('textbox', { name: '名稱' }).fill('')
+  await save.click()
+  const alert = sheet.getByRole('alert')
+  await expect(alert).toContainText('名稱不能是空的')
+  await fields.evaluate((el) => { el.scrollTop = 0 })
+  const a = (await alert.boundingBox())!
+  const s2 = (await sheet.boundingBox())!
+  expect(a.y, '錯誤訊息被捲出可視範圍').toBeGreaterThanOrEqual(s2.y)
+  expect(a.y + a.height, '錯誤訊息落到鍵盤底下').toBeLessThanOrEqual(s2.y + s2.height + 1)
+  const b2 = (await save.boundingBox())!
+  expect(b2.y + b2.height, '多了錯誤訊息之後儲存被擠出 sheet').toBeLessThanOrEqual(s2.y + s2.height + 1)
+})
+
+test('編輯動作 sheet：鍵盤在焦點之後才升起，聚焦中的要點欄會被捲回欄位區可視範圍', async ({ page }) => {
+  await openLegEdit(page)
+  const sheet = editSheet(page)
+  const fields = sheet.locator('.form-wrap')
+  const tips = sheet.getByRole('textbox', { name: '要點' })
+
+  /* `preventScroll: true`：桌面 WebKit 的 focus() 自己會捲，不關掉就量到瀏覽器內建行為（food-library.spec 同一條理由）。
+     順序模擬真機：先點要點（此時還沒鍵盤、它在框內），鍵盤升起後 sheet 縮短，它被擠到欄位區下緣之外。 */
+  await tips.evaluate((el: HTMLElement) => el.focus({ preventScroll: true }))
+  await sheet.evaluate((el) => el.style.setProperty('--kb', '336px'))
+  await fields.evaluate((el) => { el.scrollTop = 0 })
+  const visibleBottom = async () => (await fields.boundingBox())!.y + (await fields.evaluate((el) => el.clientHeight))
+  const before = (await tips.boundingBox())!
+  expect(before.y + before.height, '前提不成立：要點欄本來就在欄位區可視範圍內，這條測不到東西').toBeGreaterThan(await visibleBottom() + 1)
+
+  // 鍵盤升起時 iOS 發的是 visualViewport 的 resize；桌面沒有鍵盤，直接派發這個事件驅動 hook
+  await page.evaluate(() => window.visualViewport?.dispatchEvent(new Event('resize')))
+  const after = (await tips.boundingBox())!
+  expect(after.y + after.height, '鍵盤升起後沒有把聚焦中的要點欄捲回可視範圍').toBeLessThanOrEqual(await visibleBottom() + 1)
+  expect(after.y, '捲過頭，要點欄上緣跑出欄位區').toBeGreaterThanOrEqual((await fields.boundingBox())!.y - 1)
+  await expect(tips).toBeFocused()
+})
+
 /* ═══════════ 動作示意圖與自動補預設動作 ═══════════ */
 
 /** 圖已載入且是 180 寬（Gym visual 的縮圖與動畫都是 180×180；lazy 圖要在視窗內才會載，所以用 poll）。 */
@@ -1507,6 +1623,240 @@ test('組列左滑露出紅鈕，點紅鈕才刪；開著時點內容只關掉�
   await expect(page.locator('.ex .swipe-delete')).toHaveCount(0)
   await swipeLeft(page, page.locator('.ex .swipe-row').first(), 70)
   await expect(page.locator('.ex .swipe-row.is-open')).toHaveCount(0)
+})
+
+/* ── 組列左滑放手後停在哪（v2.92，真機回報「拉到底會停在左邊、與紅鈕隔一段」）──
+   預期值由 SwipeDelete 的常數手算：REVEAL＝56（露出紅鈕的位移）、OPEN_AT＝24（放手時超過才算開）、
+   往左超過 -56 的部分只走 0.4（dragElastic.left）。紅鈕盒子 44px、貼列右緣內縮 --s-2（8px），
+   所以列停在 -56 時列右緣與紅鈕左緣之間是 56 − 8 − 44 ＝ 4px 的設計留白，不是越拉越大的縫。 */
+
+/** 位移層相對列的位移（px）：位移層右緣減列右緣。收合＝0，露出紅鈕＝-56。 */
+const slideOffset = (row: Locator) =>
+  row.evaluate((r) => r.querySelector('.swipe-slide')!.getBoundingClientRect().right - r.getBoundingClientRect().right)
+
+/** 按住往橫向拖 dx（負＝往左）、**不放手**，讓呼叫端在拖曳中讀位置；放手由呼叫端 `page.mouse.up()`。
+ *  逐點移動＋每點停 16ms 同 harness 的 slowDrag（冷頁面上 `mouse.move({ steps })` 起不了 motion 的 drag）。 */
+async function holdDrag(page: Page, row: Locator, dx: number) {
+  const box = (await row.boundingBox())!
+  const from = { x: box.x + 30, y: box.y + box.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  for (const p of leg(from, { x: from.x + dx, y: from.y })) {
+    await page.mouse.move(p.x, p.y)
+    await page.waitForTimeout(16)
+  }
+}
+
+test('組列左滑拉過頭：拖曳中有橡皮筋，放手一律彈回剛好露出紅鈕（收合時拉、開著再拉都一樣）', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const row = page.locator('.ex .swipe-row').nth(1)
+  await expect(row).toBeVisible()
+
+  // a. 收合時往左拉 140：最多拉到 -56，多出的 84 只走 0.4 → -56 − 33.6 ＝ -89.6（拖曳中）
+  await holdDrag(page, row, -140)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中：超過露出紅鈕的部分有橡皮筋' }).toBeCloseTo(-89.6, 0)
+  await page.mouse.up()
+  await expect(row).toHaveClass(/is-open/)
+  await expect.poll(() => slideOffset(row), { message: '放手：彈回剛好露出紅鈕，不是停在 -140 或 -112' }).toBeCloseTo(-56, 0)
+  const gap = await row.evaluate(
+    (r) => r.querySelector('.swipe-delete')!.getBoundingClientRect().left - r.querySelector('.swipe-slide')!.getBoundingClientRect().right,
+  )
+  expect(gap, '列右緣與紅鈕之間只剩設計留白 4px').toBeCloseTo(4, 0)
+
+  // b. 已經開著再往左多拉 40（真機回報的情形）：拖曳中 -56 − 40×0.4 ＝ -72，放手回到 -56
+  await holdDrag(page, row, -40)
+  await expect.poll(() => slideOffset(row), { message: '開著再拉：拖曳中同樣有橡皮筋' }).toBeCloseTo(-72, 0)
+  await page.mouse.up()
+  await expect.poll(() => slideOffset(row), { message: '開著再拉放手：回到剛好露出紅鈕' }).toBeCloseTo(-56, 0)
+  await expect(row).toHaveClass(/is-open/)
+})
+
+test('組列沒過門檻的拖動放手會吸回原位；開著往右拖到底照樣收合', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const row = page.locator('.ex .swipe-row').nth(1)
+  await expect(row).toBeVisible()
+
+  // c. 收合時往左拖 20（過了方向鎖的 10px、沒過開啟門檻 24）：拖曳中真的有動，放手吸回 0
+  await holdDrag(page, row, -20)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中列跟著手走（確認 drag 真的起手了）' }).toBeLessThan(-15)
+  await page.mouse.up()
+  await expect.poll(() => slideOffset(row), { message: '沒過門檻：放手吸回收合' }).toBeCloseTo(0, 0)
+  await expect(row).not.toHaveClass(/is-open/)
+
+  // 開著時往右拖 14：-56 + 14 ＝ -42，仍超過門檻（-24），放手吸回 -56，不停在 -42
+  await swipeLeft(page, row, 70)
+  await expect(row).toHaveClass(/is-open/)
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+  await holdDrag(page, row, 14)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中列往右跟著手走' }).toBeGreaterThan(-50)
+  await page.mouse.up()
+  await expect.poll(() => slideOffset(row), { message: '開著小幅往右：放手吸回剛好露出紅鈕' }).toBeCloseTo(-56, 0)
+  await expect(row).toHaveClass(/is-open/)
+
+  // d. 開著時往右拖 70（拖過 0 被夾住）：放手收合
+  await holdDrag(page, row, 70)
+  await page.mouse.up()
+  await expect(row).not.toHaveClass(/is-open/)
+  await expect.poll(() => slideOffset(row), { message: '往右拖回：收合到 0' }).toBeCloseTo(0, 0)
+})
+
+test('組列左滑：減少動態下開著再往左拉，放手直接回到露出紅鈕、沒有回彈過程', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const row = page.locator('.ex .swipe-row').nth(1)
+  await swipeLeft(page, row, 70)
+  await expect(row).toHaveClass(/is-open/)
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+
+  await holdDrag(page, row, -40)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中：-56 − 40×0.4' }).toBeCloseTo(-72, 0)
+  // 不逐幀取樣：MutationObserver 記下放手後位移層每一次寫入的 translateX，有沒有中間值與幀數無關
+  await row.locator('.swipe-slide').evaluate((n) => {
+    const w = window as unknown as { __xs: number[] }
+    w.__xs = []
+    new MutationObserver(() => {
+      const m = /translateX\((-?[\d.]+)px\)/.exec((n as HTMLElement).style.transform)
+      if (m) w.__xs.push(Number(m[1]))
+    }).observe(n, { attributes: true, attributeFilter: ['style'] })
+  })
+  await page.mouse.up()
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+  await page.waitForTimeout(500) // 讓可能還在跑的回彈有時間寫出中間值
+  const xs = await page.evaluate(() => (window as unknown as { __xs: number[] }).__xs)
+  expect(xs.at(-1), '最後一次寫入是 -56').toBeCloseTo(-56, 0)
+  // motion 的放手回彈在 onDragEnd 之前已先寫了一格（≈ 拖曳中的 -72，肉眼等於沒動），所以只抓兩端之間的中間值
+  expect(xs.filter((v) => v > -71.5 && v < -56.5), '沒有 -72 → -56 的中間過程').toEqual([])
+})
+
+/* ── 勾與雙勾的按下回饋（v2.92，真機回報按住沒有「被壓下去」的感覺）──
+   預期值由 DESIGN.md 的 token 換算，不讀頁面算出來的值：--fill #F1E6D2、--rule #E0D3BD、--accent #1C7059、--accent-dark #155747；
+   按下縮放 .88。桌面只能證明「標記會掛上、樣式吃得到標記」，iOS 真機的 :active 與手指遮蔽無法在這裡驗。 */
+const RGB = {
+  fill: 'rgb(241, 230, 210)',
+  rule: 'rgb(224, 211, 189)',
+  accent: 'rgb(28, 112, 89)',
+  accentDark: 'rgb(21, 87, 71)',
+}
+const PRESSED_SCALE = 'matrix(0.88, 0, 0, 0.88, 0, 0)'
+const look = (el: Locator) =>
+  el.evaluate((n) => {
+    const s = getComputedStyle(n)
+    return { transform: s.transform, bg: s.backgroundColor, pressed: n.hasAttribute('data-pressed'), active: n.matches(':active') }
+  })
+
+/** 滑鼠移到元素中心按下（不放）。 */
+async function pressAt(page: Page, el: Locator) {
+  const box = (await el.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+}
+
+test('勾與全部完成雙勾：按住縮小、底色深一階（未勾 → --rule、已勾 → --accent-dark），放開回復', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const check = page.locator('.ex .set').first().locator('.tr-check')
+  const all = page.locator('.ex .tr-all')
+
+  expect(await look(check)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+  await pressAt(page, check)
+  await expect.poll(() => look(check)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.rule, pressed: true })
+  await page.mouse.up() // 放開＝點了一下：這一組打勾
+  await expect.poll(() => look(check)).toMatchObject({ transform: 'none', bg: RGB.accent, pressed: false })
+
+  await pressAt(page, check)
+  await expect.poll(() => look(check), { message: '已勾的綠圓按住變深綠' }).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.accentDark, pressed: true })
+  await page.mouse.up()
+  await expect.poll(() => look(check)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+
+  expect(await look(all)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+  await pressAt(page, all)
+  await expect.poll(() => look(all)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.rule, pressed: true })
+  await page.mouse.up() // 全部打勾
+  await expect.poll(() => look(all)).toMatchObject({ transform: 'none', bg: RGB.accent, pressed: false })
+  await pressAt(page, all)
+  await expect.poll(() => look(all)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.accentDark, pressed: true })
+  await page.mouse.up()
+  await expect.poll(() => look(all)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+})
+
+test('勾的按下回饋不靠 :active：觸控的 pointerdown 就進入按下狀態，pointerup／pointercancel 清掉', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const releaseWith = (type: 'pointerup' | 'pointercancel') =>
+    page.evaluate((t) => window.dispatchEvent(new PointerEvent(t, { pointerType: 'touch' })), type)
+
+  for (const el of [page.locator('.ex .set').first().locator('.tr-check'), page.locator('.ex .tr-all')]) {
+    await el.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 })
+    await expect.poll(() => look(el), { message: '只派 pointerdown（沒有 :active）也縮小、變深' }).toMatchObject({
+      transform: PRESSED_SCALE,
+      bg: RGB.rule,
+      pressed: true,
+      active: false,
+    })
+    await releaseWith('pointerup')
+    await expect.poll(() => look(el)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+
+    await el.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 })
+    await expect.poll(() => look(el)).toMatchObject({ pressed: true })
+    await releaseWith('pointercancel') // 縱向捲動接手時瀏覽器發的
+    await expect.poll(() => look(el)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
+  }
+})
+
+test('在組列的勾上按下後開始左滑：按下狀態在拖曳中就清掉，列照樣滑開、不打勾', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const row = page.locator('.ex .swipe-row').nth(1)
+  const check = row.locator('.tr-check')
+  const box = (await check.boundingBox())!
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await expect.poll(() => look(check)).toMatchObject({ pressed: true })
+  for (const p of leg(from, { x: from.x - 70, y: from.y })) {
+    await page.mouse.move(p.x, p.y)
+    await page.waitForTimeout(16)
+  }
+  await expect.poll(() => look(check), { message: '手指還按著、但已經在拖：不再是按下' }).toMatchObject({ pressed: false })
+  await page.mouse.up()
+  await expect(row, '拖曳真的發生了').toHaveClass(/is-open/)
+  await expect(page.locator('.ex .set.done')).toHaveCount(0)
+})
+
+test('勾與雙勾：減少動態下按住不縮放、底色照樣變深', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const check = page.locator('.ex .set').first().locator('.tr-check')
+  const all = page.locator('.ex .tr-all')
+
+  await check.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 })
+  await expect.poll(() => look(check)).toMatchObject({ pressed: true, bg: RGB.rule })
+  expect((await look(check)).transform, '標記路徑：不縮放').toBe('none')
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup')))
+
+  await pressAt(page, all) // 滑鼠按住：:active 與標記兩條都在
+  await expect.poll(() => look(all)).toMatchObject({ pressed: true, active: true, bg: RGB.rule })
+  expect((await look(all)).transform, ':active 路徑：不縮放').toBe('none')
+  await page.mouse.move(0, 0) // 移開再放，不觸發全部完成
+  await page.mouse.up()
 })
 
 /* ── 動效取樣（舊量法，僅剩兩種用法還安全）：在 DOM 變動當下起每幀量 computed style ──
