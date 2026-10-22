@@ -1412,6 +1412,13 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-toggle .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
+/* 有氧卡（spec「有氧併入動作」，樣張 cardio-card.html）：沒有組列，永遠是收合的外觀，名稱鈕點了開有氧 sheet。
+   第二行是摘要（.cardio-sum，同 .sub 的灰字）；沒填時「點一下填寫」字較深較粗（同 RPE 的「還沒填」，不加顏色）。 */
+.ex.is-cardio .sub .cardio-sum { color: var(--ink-muted); }
+/* 393 寬下名稱欄只剩約 150px，健走三欄的摘要會折成兩行、卡片多約 18px 高：允許折行。
+   一行截斷會把坡度的數值截掉，而摘要正是這張卡唯一的內容（v2.89） */
+.ex.is-cardio .sub > span { min-width: 0; overflow-wrap: anywhere; }
+.ex.is-cardio .sub .is-missing { color: var(--ink); font-weight: 700; }
 /* 動作示意縮圖（ExerciseThumb）：正方形（Gym visual 的圖是 180×180、白底 3D 人形標出肌群）、尺寸固定、底色先鋪，
    圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字。1px 內描邊讓白底圖在米色卡片上有個邊。
    52px：列的 min-height 是 56，縮圖與放大鈕都 ≤ 55，有圖與沒圖（肌群單字）的列才一樣高。 */
@@ -1626,6 +1633,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field input { width: 100%; min-height: 48px; padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-md); color: var(--ink); -webkit-appearance: none; appearance: none; }
 .tr-field input.is-text, .tr-field textarea { font-family: var(--font-body); font-variant-numeric: normal; }
+/* placeholder 也是文字（有氧 sheet 的「上次 30」、預設組次的「1–20」），要過 4.5:1：--ink-muted 對 --fill 4.94:1，--ink-faint 只有 2.54:1 */
+.tr-field input::placeholder { color: var(--ink-muted); opacity: 1; }
 .tr-field select { --line: var(--rule-field); width: 100%; min-height: 48px; border: none; border-radius: var(--r-tab);
   background-color: var(--fill); padding: 0 40px 0 var(--s-3); font-family: var(--font-body); font-size: var(--t-md);
   color: var(--ink); -webkit-appearance: none; appearance: none;
@@ -1638,11 +1647,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field .hint { display: block; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-1); line-height: 1.5; }
 .tr-field .hint.is-error { color: var(--over); }
 
-/* 有氧 sheet（樣張 ④）：類型分段控制器＋依類型兩欄或三欄的數字欄。
-   .seg 本身是 flex:1（為了與兄弟元素並排），這裡獨佔一行，給它整寬。 */
-.tr-start-cardio { margin-top: var(--s-3); }
-.tr-sheet-body .muted.tr-cardio-date { margin: 0 0 var(--s-3); font-size: var(--t-sm); }
-.tr-cardio-kind { flex: none; width: 100%; }
+/* 兩欄或三欄並排的數字欄：有氧 sheet（依動作：健走三欄、拳擊兩欄）與課表的預設組次 sheet 共用 */
 .tr-cardio-grid { display: grid; gap: var(--s-3); margin-top: var(--s-1); }
 .tr-cardio-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tr-cardio-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1659,6 +1664,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   text-align: left; font-family: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column;
   justify-content: center; }
 .tr-row-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 不能點的主欄（課表編輯裡的有氧動作：沒有預設組次可改） */
+.tr-row-main.is-static { cursor: default; }
 /* 縮圖（放大鈕）與主按鈕並排的列（動作庫、加動作）：主按鈕的 ::before 撐滿整列，所以左內距、縮圖與文字之間的間隙、
    自建動作的肌群單字（沒有放大鈕、只是個 span）點了都算主按鈕——整列除了縮圖本身都還是「選取／開編輯」。
    放大鈕疊在上面（z-index 1）。按下時只有文字淡一階（縮圖不跟著淡，它是另一顆鈕）。 */

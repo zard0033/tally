@@ -1,5 +1,5 @@
-/* 開始訓練 sheet（樣張 ②）：課表（最上面）、空白開始，以及「記一筆有氧」入口（有氧不屬於「一次訓練」，
-   所以不開訓練、另開有氧 sheet）。封存的課表不進這張選單。
+/* 開始訓練 sheet（樣張 ②）：課表（最上面）與空白開始。封存的課表不進這張選單。
+   沒有「記一筆有氧」：有氧是動作（spec「有氧併入動作」D4），單獨記一筆也是空白開始→加有氧動作。
    走自製的 SpringSheet（全站精緻度改版 B0 的試點之一；沒有輸入欄、貼合內容高度）。 */
 import SpringSheet from '@/components/SpringSheet'
 import { monthDay } from '@/lib/dates'
@@ -18,7 +18,6 @@ interface StartSheetProps {
   onClose: () => void
   onBlank: () => void
   onRoutine: (routineId: string) => void
-  onCardio: () => void
 }
 
 export default function StartSheet({
@@ -31,7 +30,6 @@ export default function StartSheet({
   onClose,
   onBlank,
   onRoutine,
-  onCardio,
 }: StartSheetProps) {
   return (
     <SpringSheet open={open} onClose={onClose} label="開始訓練" title="開始訓練" screen="start-sheet" fit>
@@ -63,17 +61,6 @@ export default function StartSheet({
               <span className="sub">
                 {backfill ? `補記 ${dateLabel}，不計時，完成時填時長` : '一個一個加動作'}
               </span>
-            </span>
-            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-          </button>
-        </div>
-        <div className="tr-card tr-start-cardio">
-          <button className="tr-row" type="button" disabled={busy} onClick={onCardio} data-action="start-cardio">
-            <span className="grow">
-              <span className="nm">記一筆有氧</span>
-              <span className="sub">跑步機、拳擊…不用開始訓練</span>
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M9 6l6 6-6 6" />

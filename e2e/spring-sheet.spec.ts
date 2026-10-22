@@ -219,7 +219,9 @@ test('開著時背景對輔助技術是藏起來的、焦點留在 sheet 裡', a
       .toBe(true)
     seen.add(await page.evaluate(() => (document.activeElement as HTMLElement).getAttribute('aria-label') ?? (document.activeElement as HTMLElement).textContent?.trim().slice(0, 12) ?? ''))
   }
-  expect(seen.size, `6 次 Tab 應在 sheet 內的多個元素間循環，實際只走過 ${[...seen].join('、')}`).toBeGreaterThan(2)
+  // FIX 沒有課表：sheet 裡可聚焦的只有「空白開始」與「關閉」兩個（v2.89 拿掉「記一筆有氧」前是三個）。
+  // 6 次 Tab 兩個都走過＝在 sheet 內循環；卡在原地只會有一個
+  expect([...seen].sort(), `6 次 Tab 應在 sheet 內的元素間循環，實際只走過 ${[...seen].join('、')}`).toEqual(['空白開始一個一個加動作', '關閉'].sort())
   // Base UI 為了保留 aria-live 區域（讓讀屏仍念得出狀態變化），不會把 #root 整個藏起來，而是逐層往下藏沒有 live region 的兄弟；
   // 所以要驗的是「背景裡真正可操作的東西」（分頁按鈕）在輔助技術眼裡被藏起來，不是 #root 本身
   const bgHidden = await page.evaluate(() => {

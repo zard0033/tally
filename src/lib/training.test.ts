@@ -10,16 +10,18 @@ import {
   setExerciseRpeOps,
   setRpeOps,
   PRESET_EXERCISES,
-  cardioDraft,
-  cardioLabel,
-  cardioOn,
+  cardioEntryDraft,
+  cardioLastMinutes,
+  cardioPrefill,
+  cardioRecorded,
   cardioSummary,
   checkCardio,
-  createCardioOps,
-  deleteCardioOps,
   describeEntry,
-  updateCardioOps,
+  exerciseKind,
+  isCardioExercise,
+  updateCardioEntryOps,
   type CardioDraft,
+  type RowOp,
   addExerciseOps,
   addRoutineExerciseOps,
   addSetOps,
@@ -149,7 +151,6 @@ describe('parentRefs', () => {
 
   it('沒有外鍵的表回空陣列', () => {
     expect(parentRefs('exercises', { name: 'x' })).toEqual([])
-    expect(parentRefs('cardio_sessions', { minutes: 30 })).toEqual([])
   })
 })
 
@@ -175,15 +176,14 @@ describe('describeEntry', () => {
     ['insert', 'workout_sets', '記一組'],
     ['update', 'workout_sets', '改一組'],
     ['delete', 'workout_sets', '刪一組'],
-    ['insert', 'cardio_sessions', '新增有氧'],
-    ['update', 'cardio_sessions', '改有氧'],
-    ['delete', 'cardio_sessions', '刪有氧'],
   ] as const)('%s %s → %s', (op, table, label) => {
     expect(describeEntry(entry(1, op, table, 'a-uuid'))).toBe(label)
   })
 
   it('不認得的表回保底「變更」；標籤不出現 rowId', () => {
     expect(describeEntry(entry(1, 'insert', 'mystery', 'row-123'))).toBe('變更')
+    // 有氧併入動作後不再讀寫舊表：舊版 App 留在佇列裡的條目落到保底（sender 也會以「不認得的表」拒絕）
+    expect(describeEntry(entry(1, 'insert', 'cardio_sessions', 'row-123'))).toBe('變更')
     for (const t of ['exercises', 'workout_sets']) {
       expect(describeEntry(entry(1, 'update', t, 'row-123'))).not.toContain('row-123')
     }
@@ -408,16 +408,23 @@ describe('workoutSummary', () => {
 /* ═══════════ 訓練頁的資料 ═══════════ */
 
 describe('trainingDates', () => {
-  it('重訓與有氧的日子都算，同一天只算一次', () => {
+  it('訓練的日子都算，同一天只算一次', () => {
     const d = db({
       workouts: [workout('w1', '2026-10-10'), workout('w2', '2026-10-10'), workout('w3', '2026-10-12')],
-      cardio_sessions: [{ id: 'c1', performed_on: '2026-10-11' }, { id: 'c2', performed_on: '2026-10-12' }],
     })
-    expect([...trainingDates(d)].sort()).toEqual(['2026-10-10', '2026-10-11', '2026-10-12'])
+    expect([...trainingDates(d)].sort()).toEqual(['2026-10-10', '2026-10-12'])
   })
 
   it('沒有任何訓練＝空集合', () => {
     expect(trainingDates(db()).size).toBe(0)
+  })
+
+  it('只有一張有氧卡、沒有任何組的訓練也算（有氧併入動作後，有氧日就是 workouts 的日子）', () => {
+    const d = db({
+      workouts: [workout('wc', '2026-10-15')],
+      workout_exercises: [{ ...we('c1', 'wc', 'walk'), minutes: 30 }],
+    })
+    expect([...trainingDates(d)]).toEqual(['2026-10-15'])
   })
 })
 
@@ -1024,88 +1031,12 @@ describe('checkCardio', () => {
   })
 })
 
-describe('有氧的寫入組裝', () => {
-  it('新增：記在選的那天，帶全部欄位（不屬於該類型的是 null）', () => {
-    const check = checkCardio(boxDraft())
-    if (!check.ok) throw new Error('fixture')
-    expect(createCardioOps({ id: 'c1', date: '2026-10-13', value: check.value })).toEqual([
-      {
-        op: 'insert',
-        table: 'cardio_sessions',
-        rowId: 'c1',
-        payload: { performed_on: '2026-10-13', kind: 'boxing', minutes: 36, speed_kmh: null, incline_pct: null, est_kcal: 121 },
-      },
-    ])
-  })
-
-  it('更新只帶有變的欄位；全沒變回空陣列', () => {
-    const current = cardio('c1', '2026-10-13', { minutes: '30.0', speed_kmh: '5.5', incline_pct: 8 })
-    const same = checkCardio(walkDraft())
-    if (!same.ok) throw new Error('fixture')
-    expect(updateCardioOps({ current, value: same.value }), '伺服器回字串型數字也算沒變').toEqual([])
-    const changed = checkCardio(walkDraft({ minutes: '45' }))
-    if (!changed.ok) throw new Error('fixture')
-    expect(updateCardioOps({ current, value: changed.value })).toEqual([
-      { op: 'update', table: 'cardio_sessions', rowId: 'c1', payload: { minutes: 45 } },
-    ])
-  })
-
-  it('沒填 → 填 0 是變更（Number(null) 是 0，不能拿來比）', () => {
-    const current = cardio('c1', '2026-10-13', { kind: 'boxing', minutes: 36, est_kcal: null })
-    const v = checkCardio(boxDraft({ est_kcal: '0' }))
-    if (!v.ok) throw new Error('fixture')
-    expect(updateCardioOps({ current, value: v.value })[0].payload).toEqual({ est_kcal: 0 })
-  })
-
-  it('換類型：舊類型的欄位清成 null、新類型的欄位帶上', () => {
-    const current = cardio('c1', '2026-10-13', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 })
-    const v = checkCardio(boxDraft({ minutes: '30', est_kcal: '100' }))
-    if (!v.ok) throw new Error('fixture')
-    expect(updateCardioOps({ current, value: v.value })[0].payload).toEqual({
-      kind: 'boxing', speed_kmh: null, incline_pct: null, est_kcal: 100,
-    })
-  })
-
-  it('刪除是一條 delete', () => {
-    expect(deleteCardioOps('c1')).toEqual([{ op: 'delete', table: 'cardio_sessions', rowId: 'c1' }])
-  })
-
-  it('cardioDraft：既有那筆轉回表單字串；null 欄位是空字串；新增預設走路', () => {
-    expect(cardioDraft(cardio('c1', 'x', { kind: 'boxing', minutes: '36.0', est_kcal: 121 }))).toEqual({
-      kind: 'boxing', minutes: '36', speed_kmh: '', incline_pct: '', est_kcal: '121',
-    })
-    expect(cardioDraft(null)).toEqual({ kind: 'incline_walk', minutes: '', speed_kmh: '', incline_pct: '', est_kcal: '' })
-  })
-
-  it('cardioDraft：不認得的類型原樣保留，checkCardio 擋下（不悄悄改成走路、清掉欄位）', () => {
-    const d = cardioDraft(cardio('c1', 'x', { kind: 'swim', est_kcal: 150 }))
-    expect(d.kind).toBe('swim')
-    expect(checkCardio(d)).toEqual({ ok: false, error: '請選有氧類型' })
-  })
-})
-
 describe('有氧的顯示', () => {
   it('cardioSummary 只列有填的欄位；預估熱量不稱「消耗」', () => {
     expect(cardioSummary(cardio('c', 'x', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }))).toBe('30 分 · 5.5 km/h · 坡度 8%')
     expect(cardioSummary(cardio('c', 'x', { kind: 'boxing', minutes: 36, est_kcal: 1210 }))).toBe('36 分 · 預估 1,210 kcal')
     expect(cardioSummary(cardio('c', 'x', { minutes: '30.0' }))).toBe('30 分')
     expect(cardioSummary(cardio('c', 'x', { incline_pct: 0 })), '坡度 0 是有填').toBe('30 分 · 坡度 0%')
-  })
-
-  it('cardioLabel：認得的顯示中文，不認得的原樣顯示', () => {
-    expect(cardioLabel(cardio('c', 'x', { kind: 'boxing' }))).toBe('有氧拳擊')
-    expect(cardioLabel(cardio('c', 'x', { kind: 'swim' }))).toBe('swim')
-  })
-
-  it('cardioOn：只取那天；依 created_at 排，還在佇列裡（沒有 created_at）的排最後、彼此維持順序', () => {
-    const rows = [
-      cardio('q1', '2026-10-13'),
-      cardio('late', '2026-10-13', { created_at: '2026-10-13T12:00:00Z' }),
-      cardio('other', '2026-10-12', { created_at: '2026-10-12T08:00:00Z' }),
-      cardio('q2', '2026-10-13'),
-      cardio('early', '2026-10-13', { created_at: '2026-10-13T08:00:00Z' }),
-    ]
-    expect(cardioOn(db({ cardio_sessions: rows }), '2026-10-13').map((r) => r.id)).toEqual(['early', 'late', 'q1', 'q2'])
   })
 })
 
@@ -1461,5 +1392,427 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
   it('setRpeOps：單筆 update，payload 只有 rpe；null＝清掉', () => {
     expect(setRpeOps('s1', 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: 9 } }])
     expect(setRpeOps('s1', null)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: null } }])
+  })
+})
+
+/* ═══════════ 有氧併入動作（spec「有氧併入動作」AC 1–7） ═══════════ */
+
+const walkEx: Row = { id: 'walk', name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk', tips: null, archived: false }
+const boxEx: Row = { id: 'box', name: '有氧拳擊', muscle_group: 'other', kind: 'boxing', tips: null, archived: false }
+/** 一張有氧卡（workout_exercises 一列）；有氧欄位預設全空＝還沒填。 */
+const card = (id: string, workout_id: string, exercise_id: string, fields: Record<string, unknown> = {}, position = 0): Row => ({
+  id, workout_id, exercise_id, position, minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null, ...fields,
+})
+
+describe('exerciseKind／isCardioExercise／cardioRecorded', () => {
+  it('kind 是兩種有氧之一才算有氧', () => {
+    expect(exerciseKind(walkEx)).toBe('incline_walk')
+    expect(exerciseKind(boxEx)).toBe('boxing')
+    expect(isCardioExercise(walkEx)).toBe(true)
+    expect(isCardioExercise(boxEx)).toBe(true)
+  })
+
+  it('strength、欄位缺（舊快取）、不認得的值、空字串、null、找不到那列：一律當重訓', () => {
+    for (const row of [{ id: 'x', kind: 'strength' }, { id: 'x' }, { id: 'x', kind: 'swim' }, { id: 'x', kind: '' }, { id: 'x', kind: null }]) {
+      expect(exerciseKind(row)).toBe('strength')
+      expect(isCardioExercise(row)).toBe(false)
+    }
+    expect(exerciseKind(null)).toBe('strength')
+    expect(exerciseKind(undefined)).toBe('strength')
+    expect(isCardioExercise(null)).toBe(false)
+  })
+
+  it('cardioRecorded：分鐘有值才算有記錄（D5：有氧卡沒有勾）', () => {
+    expect(cardioRecorded(card('c', 'w', 'walk', { minutes: 30 }))).toBe(true)
+    expect(cardioRecorded(card('c', 'w', 'walk', { minutes: '30.0' }))).toBe(true)
+    expect(cardioRecorded(card('c', 'w', 'walk'))).toBe(false)
+    expect(cardioRecorded(card('c', 'w', 'walk', { minutes: '' }))).toBe(false)
+    expect(cardioRecorded({ id: 'c' }), '欄位整個缺（佇列疊上的列）').toBe(false)
+  })
+})
+
+describe('自建動作不能是有氧（AC 2）', () => {
+  it('新增動作的寫入不帶 kind（伺服器 default strength）', () => {
+    const [op] = createExerciseOps({ id: 'n1', value: { name: '跳繩', muscle_group: 'other', tips: null } })
+    expect(op.payload).not.toHaveProperty('kind')
+  })
+
+  it('編輯動作（含兩個有氧動作）只帶改了的欄位，不動 kind', () => {
+    expect(updateExerciseOps({ current: walkEx, value: { name: '坡度健走', muscle_group: 'other', tips: '扶手不抓' } })).toEqual([
+      { op: 'update', table: 'exercises', rowId: 'walk', payload: { name: '坡度健走', tips: '扶手不抓' } },
+    ])
+  })
+})
+
+describe('addExerciseOps：有氧動作（AC 3）', () => {
+  const hist = db({
+    exercises: [walkEx, boxEx, exercise('e1')],
+    workouts: [workout('old', '2026-10-01'), workout('prev', '2026-10-08')],
+    workout_exercises: [
+      card('c-old', 'old', 'walk', { minutes: 20, speed_kmh: 5, incline_pct: 3 }),
+      // 伺服器的 numeric 欄位以字串回來
+      card('c-prev', 'prev', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: '8.0' }),
+    ],
+  })
+  const add = (d: TrainingDb, exerciseId: string, extra: { target?: { target_sets: number; target_reps: number } } = {}) =>
+    addExerciseOps({ db: d, workoutId: 'w', exerciseId, newId: idGen(), ...extra })
+
+  it('沒有歷史：只寫一列 workout_exercises，四個有氧欄位都是 null，沒有任何組（課表目標也不產組）', () => {
+    expect(add(db({ exercises: [walkEx] }), 'walk', { target: { target_sets: 5, target_reps: 10 } })).toEqual([
+      {
+        op: 'insert',
+        table: 'workout_exercises',
+        rowId: 'n1',
+        payload: { workout_id: 'w', exercise_id: 'walk', position: 0, minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null },
+      },
+    ])
+  })
+
+  it('有歷史（上次 30 分、5.5 km/h、坡度 8%）：速度與坡度預填、轉成數字；分鐘留空，所以這張卡還不算記錄、摘要是空字串', () => {
+    const ops = add(hist, 'walk')
+    expect(ops).toHaveLength(1)
+    // 分鐘不預填（2026-10-22 裁決）：預填了就分不出「做了」與「帶出來但沒做」，沒做的那天會留下假記錄
+    expect(ops[0].payload).toEqual({
+      workout_id: 'w', exercise_id: 'walk', position: 0, minutes: null, speed_kmh: 5.5, incline_pct: 8, est_kcal: null,
+    })
+    expect(cardioRecorded({ id: ops[0].rowId, ...ops[0].payload })).toBe(false)
+    expect(cardioSummary({ id: ops[0].rowId, ...ops[0].payload }), '卡片顯示「點一下填寫」').toBe('')
+  })
+
+  it('進行中的這一次自己的有氧卡不算「上次」；沒填分鐘的卡不算記錄，往更早找', () => {
+    const d = db({
+      ...hist,
+      workouts: [...hist.workouts, workout('later', '2026-10-10'), workout('w', '2026-10-14')],
+      workout_exercises: [
+        ...hist.workout_exercises,
+        card('c-empty', 'later', 'walk', { speed_kmh: 7, incline_pct: 12 }), // 10/10 加了卡、速度坡度有值，但沒填分鐘
+        card('c-now', 'w', 'walk', { minutes: 99, speed_kmh: 9, incline_pct: 9 }),
+      ],
+    })
+    const [op] = add(d, 'walk')
+    expect(op.payload).toMatchObject({ position: 1, minutes: null, speed_kmh: 5.5, incline_pct: 8, est_kcal: null })
+  })
+
+  it('同一天兩次：開始時間較晚的為準；訓練已不在（孤兒卡）不算', () => {
+    const d = db({
+      exercises: [walkEx],
+      workouts: [workout('a', '2026-10-10', '2026-10-10T01:00:00.000Z'), workout('b', '2026-10-10', '2026-10-10T09:00:00.000Z')],
+      workout_exercises: [
+        card('ca', 'a', 'walk', { minutes: 40, speed_kmh: 4 }),
+        card('cb', 'b', 'walk', { minutes: 25, speed_kmh: 6 }),
+        card('cx', 'gone', 'walk', { minutes: 99, speed_kmh: 9 }),
+      ],
+    })
+    expect(add(d, 'walk')[0].payload?.speed_kmh).toBe(6)
+    expect(cardioLastMinutes(d, 'walk')).toBe(25)
+  })
+
+  it('拳擊：預估熱量預填、分鐘留空；歷史上不屬於拳擊的欄位（髒資料）一律 null', () => {
+    const d = db({
+      ...hist,
+      workout_exercises: [...hist.workout_exercises, card('c-box', 'old', 'box', { minutes: 36, speed_kmh: 6, incline_pct: 2, est_kcal: '121.0' })],
+    })
+    expect(add(d, 'box')[0].payload).toMatchObject({ minutes: null, speed_kmh: null, incline_pct: null, est_kcal: 121 })
+  })
+
+  it('別的有氧動作的歷史不混進來：拳擊沒歷史就全空，即使健走有', () => {
+    expect(add(hist, 'box')[0].payload).toMatchObject({ minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null })
+  })
+
+  it('cardioPrefill 直接呼叫：分鐘一律 null；健走的預估熱量即使歷史有值也是 null；空字串視為沒填', () => {
+    const d = db({
+      workouts: [workout('o', '2026-10-01')],
+      workout_exercises: [card('c', 'o', 'walk', { minutes: 30, speed_kmh: '', incline_pct: 0, est_kcal: 200 })],
+    })
+    expect(cardioPrefill(d, 'walk', 'incline_walk')).toEqual({ minutes: null, speed_kmh: null, incline_pct: 0, est_kcal: null })
+    expect(cardioPrefill(d, 'walk', 'incline_walk', 'o')).toEqual({ minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null })
+  })
+
+  describe('cardioLastMinutes（有氧 sheet 分鐘欄的「上次 N」）', () => {
+    it('沒有歷史：null', () => {
+      expect(cardioLastMinutes(db({ exercises: [walkEx] }), 'walk')).toBeNull()
+    })
+
+    it('有歷史：最近一張有記錄的卡的分鐘，伺服器回的字串轉成數字（10/08 的 "30.0"，不是 10/01 的 20）', () => {
+      expect(cardioLastMinutes(hist, 'walk')).toBe(30)
+    })
+
+    it('排除這一次：這次的卡（99）不算，回上一次的 30；只有這次有卡就是 null', () => {
+      const d = db({
+        ...hist,
+        workouts: [...hist.workouts, workout('w', '2026-10-14')],
+        workout_exercises: [...hist.workout_exercises, card('c-now', 'w', 'walk', { minutes: 99 })],
+      })
+      expect(cardioLastMinutes(d, 'walk', 'w')).toBe(30)
+      expect(cardioLastMinutes(d, 'walk'), '不排除時這次就是最新的').toBe(99)
+      const only = db({ workouts: [workout('w', '2026-10-14')], workout_exercises: [card('c-now', 'w', 'walk', { minutes: 99 })] })
+      expect(cardioLastMinutes(only, 'walk', 'w')).toBeNull()
+    })
+
+    it('跳過沒填分鐘的卡：10/10 那張只有速度，往前找到 10/08 的 30', () => {
+      const d = db({
+        ...hist,
+        workouts: [...hist.workouts, workout('later', '2026-10-10')],
+        workout_exercises: [...hist.workout_exercises, card('c-empty', 'later', 'walk', { speed_kmh: 7 }), card('c-blank', 'later', 'walk', { minutes: '' }, 1)],
+      })
+      expect(cardioLastMinutes(d, 'walk')).toBe(30)
+    })
+
+    it('別的動作不混：拳擊沒歷史就是 null，即使健走有；拳擊有歷史回自己的 36', () => {
+      expect(cardioLastMinutes(hist, 'box')).toBeNull()
+      const d = db({ ...hist, workout_exercises: [...hist.workout_exercises, card('c-box', 'old', 'box', { minutes: 36 })] })
+      expect(cardioLastMinutes(d, 'box')).toBe(36)
+      expect(cardioLastMinutes(d, 'walk'), '健走仍是自己的 30').toBe(30)
+    })
+  })
+
+  it('動作庫找不到那列、或 kind 不認得：當重訓（3 組 0×0）——沒有資訊可判，不悄悄變成沒有組的卡', () => {
+    expect(add(db(), 'walk').filter((o) => o.table === 'workout_sets')).toHaveLength(3)
+    const odd = db({ exercises: [{ ...walkEx, kind: 'swim' }] })
+    const ops = add(odd, 'walk')
+    expect(ops.filter((o) => o.table === 'workout_sets')).toHaveLength(3)
+    expect(ops[0].payload).toEqual({ workout_id: 'w', exercise_id: 'walk', position: 0 })
+  })
+
+  it('重訓動作的寫入不變：workout_exercises 不帶有氧欄位', () => {
+    expect(add(hist, 'e1')[0].payload).toEqual({ workout_id: 'w', exercise_id: 'e1', position: 0 })
+  })
+})
+
+describe('startWorkoutFromRoutineOps：課表裡的有氧動作（AC 7）', () => {
+  const now = new Date(2026, 9, 14, 10, 30, 0)
+  const d = db({
+    exercises: [exercise('e1'), walkEx],
+    routines: [routine('r', '腿日')],
+    // 有氧那列的目標 5 組 × 15 對有氧沒有意義，不能變成 5 組
+    routine_exercises: [re('x1', 'r', 'e1', 0, 3, 12), re('x2', 'r', 'walk', 1, 5, 15)],
+    workouts: [workout('prev', '2026-10-08')],
+    workout_exercises: [card('c-prev', 'prev', 'walk', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 })],
+  })
+
+  it('帶出有氧卡、速度與坡度預填上次的值、分鐘留空（同加動作）；組只有重訓動作的，target 對有氧不用', () => {
+    const ops = startWorkoutFromRoutineOps({ db: d, routineId: 'r', workoutId: 'w', date: '2026-10-14', now, newId: idGen() })
+    // n1＝腿推舉那列、n2–n4＝它的三組、n5＝有氧卡
+    expect(ops).toHaveLength(6)
+    expect(ops.filter((o) => o.table === 'workout_sets').map((o) => o.payload?.workout_exercise_id)).toEqual(['n1', 'n1', 'n1'])
+    expect(ops[5]).toEqual({
+      op: 'insert',
+      table: 'workout_exercises',
+      rowId: 'n5',
+      payload: { workout_id: 'w', exercise_id: 'walk', position: 1, minutes: null, speed_kmh: 5.5, incline_pct: 8, est_kcal: null },
+    })
+  })
+})
+
+describe('有氧卡的編輯（AC 4）', () => {
+  it('cardioEntryDraft：類型來自動作；數字轉回表單字串，空欄位是空字串', () => {
+    expect(cardioEntryDraft(card('c1', 'w', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: 8 }), walkEx)).toEqual({
+      kind: 'incline_walk', minutes: '30', speed_kmh: '5.5', incline_pct: '8', est_kcal: '',
+    })
+    expect(cardioEntryDraft(card('c2', 'w', 'box'), boxEx)).toEqual({ kind: 'boxing', minutes: '', speed_kmh: '', incline_pct: '', est_kcal: '' })
+  })
+
+  it('還沒填就存：分鐘必填', () => {
+    expect(checkCardio(cardioEntryDraft(card('c2', 'w', 'box'), boxEx))).toEqual({ ok: false, error: '分鐘要填' })
+  })
+
+  it('動作找不到或不是有氧：kind 是 strength，checkCardio 擋下（那不是能填有氧的卡）', () => {
+    const filled = card('c1', 'w', 'walk', { minutes: 30 })
+    expect(cardioEntryDraft(filled, null).kind).toBe('strength')
+    expect(checkCardio(cardioEntryDraft(filled, null))).toEqual({ ok: false, error: '請選有氧類型' })
+    expect(checkCardio(cardioEntryDraft(filled, exercise('e1')))).toEqual({ ok: false, error: '請選有氧類型' })
+  })
+
+  it('範圍外擋下並說明：分鐘 0、速度 41、坡度 41、熱量 10001、超過一位小數', () => {
+    const walk = cardioEntryDraft(card('c1', 'w', 'walk', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }), walkEx)
+    const box = cardioEntryDraft(card('c2', 'w', 'box', { minutes: 36, est_kcal: 121 }), boxEx)
+    expect(checkCardio({ ...walk, minutes: '0' })).toEqual({ ok: false, error: '分鐘要大於 0、最多 1440' })
+    expect(checkCardio({ ...walk, speed_kmh: '41' })).toEqual({ ok: false, error: '速度要大於 0、最多 40 km/h' })
+    expect(checkCardio({ ...walk, incline_pct: '41' })).toEqual({ ok: false, error: '坡度要在 0–40% 之間' })
+    expect(checkCardio({ ...box, est_kcal: '10001' })).toEqual({ ok: false, error: '預估熱量要在 0–10000 kcal 之間' })
+    expect(checkCardio({ ...walk, speed_kmh: '5.55' })).toEqual({ ok: false, error: '速度最多一位小數' })
+    expect(checkCardio(walk)).toEqual({ ok: true, value: { kind: 'incline_walk', minutes: 30, speed_kmh: 5.5, incline_pct: 8, est_kcal: null } })
+  })
+
+  it('updateCardioEntryOps：只帶有變的欄位、全沒變回空陣列，寫的是 workout_exercises', () => {
+    const current = card('c1', 'w', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: 8 })
+    const same = checkCardio(walkDraft())
+    if (!same.ok) throw new Error('fixture')
+    expect(updateCardioEntryOps({ current, value: same.value }), '伺服器回字串型數字也算沒變').toEqual([])
+    const changed = checkCardio(walkDraft({ minutes: '45' }))
+    if (!changed.ok) throw new Error('fixture')
+    expect(updateCardioEntryOps({ current, value: changed.value })).toEqual([
+      { op: 'update', table: 'workout_exercises', rowId: 'c1', payload: { minutes: 45 } },
+    ])
+  })
+
+  it('updateCardioEntryOps：不帶 kind（workout_exercises 沒有這欄，帶了伺服器整筆拒絕）；第一次填就帶齊該類型的欄位', () => {
+    const v = checkCardio(boxDraft())
+    if (!v.ok) throw new Error('fixture')
+    expect(updateCardioEntryOps({ current: card('c2', 'w', 'box'), value: v.value })).toEqual([
+      { op: 'update', table: 'workout_exercises', rowId: 'c2', payload: { minutes: 36, est_kcal: 121 } },
+    ])
+  })
+
+  it('updateCardioEntryOps：沒填 → 填 0 是變更；有值 → 清空寫 null', () => {
+    const zero = checkCardio(boxDraft({ est_kcal: '0' }))
+    if (!zero.ok) throw new Error('fixture')
+    expect(updateCardioEntryOps({ current: card('c2', 'w', 'box', { minutes: 36 }), value: zero.value })[0].payload).toEqual({ est_kcal: 0 })
+    const cleared = checkCardio(walkDraft({ speed_kmh: '' }))
+    if (!cleared.ok) throw new Error('fixture')
+    expect(updateCardioEntryOps({ current: card('c1', 'w', 'walk', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }), value: cleared.value })[0].payload).toEqual({
+      speed_kmh: null,
+    })
+  })
+
+  it('cardioSummary 對有氧卡同樣適用；還沒填分鐘回空字串（畫面顯示「點一下填寫」，不寫成「0 分」）', () => {
+    expect(cardioSummary(card('c1', 'w', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: '8.0' }))).toBe('30 分 · 5.5 km/h · 坡度 8%')
+    expect(cardioSummary(card('c2', 'w', 'box', { minutes: 36, est_kcal: 121 }))).toBe('36 分 · 預估 121 kcal')
+    expect(cardioSummary(card('c3', 'w', 'walk'))).toBe('')
+    expect(cardioSummary(card('c4', 'w', 'walk', { speed_kmh: 5.5 })), '只有速度沒有分鐘＝還沒記').toBe('')
+  })
+})
+
+describe('有氧卡走離線佇列（AC 5）', () => {
+  it('離線加有氧動作、填寫、結束訓練：疊上佇列後是一次已結束的訓練、一張填好的有氧卡、沒有任何組', () => {
+    const base = db({ exercises: [walkEx] })
+    const start = new Date(2026, 9, 14, 10, 30, 0)
+    const end = new Date(2026, 9, 14, 11, 10, 0)
+    const toEntries = (ops: readonly RowOp[], from: number) => ops.map((o, i) => entry(from + i, o.op, o.table, o.rowId, o.payload ?? null))
+
+    const added = toEntries(
+      [
+        ...startWorkoutOps({ workoutId: 'w1', date: '2026-10-14', now: start }),
+        ...addExerciseOps({ db: base, workoutId: 'w1', exerciseId: 'walk', newId: () => 'c1' }),
+      ],
+      1,
+    )
+    const mid = applyQueue(base, added, 'u1')
+    const filled = checkCardio({ ...cardioEntryDraft(mid.workout_exercises[0], walkEx), minutes: '30', speed_kmh: '5.5', incline_pct: '8' })
+    if (!filled.ok) throw new Error('fixture')
+    const all = [
+      ...added,
+      ...toEntries(
+        [
+          ...updateCardioEntryOps({ current: mid.workout_exercises[0], value: filled.value }),
+          ...finishWorkoutOps({ workout: mid.workouts[0], now: end, minutes: null }),
+        ],
+        3,
+      ),
+    ]
+
+    const view = applyQueue(base, all, 'u1')
+    expect(view.workouts).toEqual([
+      { id: 'w1', performed_on: '2026-10-14', started_at: start.toISOString(), ended_at: end.toISOString(), routine_id: null },
+    ])
+    expect(view.workout_exercises).toEqual([
+      { id: 'c1', workout_id: 'w1', exercise_id: 'walk', position: 0, minutes: 30, speed_kmh: 5.5, incline_pct: 8, est_kcal: null },
+    ])
+    expect(view.workout_sets).toEqual([])
+    expect(all.map((e) => describeEntry(e))).toEqual(['新增訓練', '訓練加動作', '改訓練的動作', '改訓練'])
+    // 有氧卡的 insert 要等訓練與動作先上傳（佇列的父列依賴）
+    expect(parentRefs('workout_exercises', all[1].payload ?? {}).map((p) => [p.table, p.rowId, p.onDelete])).toEqual([
+      ['workouts', 'w1', 'cascade'],
+      ['exercises', 'walk', 'restrict'],
+    ])
+  })
+})
+
+describe('有氧卡不影響其他功能（AC 6）', () => {
+  const now = new Date('2026-10-14T12:00:00.000Z')
+  const d = db({
+    exercises: [exercise('e1', '腿推舉'), walkEx],
+    workouts: [
+      { ...workout('w', '2026-10-14', '2026-10-14T01:00:00.000Z'), ended_at: '2026-10-14T01:36:00.000Z' },
+      { ...workout('wc', '2026-10-14', '2026-10-14T09:00:00.000Z'), ended_at: '2026-10-14T09:30:00.000Z' },
+    ],
+    workout_exercises: [
+      we('we1', 'w', 'e1', 0),
+      card('c1', 'w', 'walk', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }, 1),
+      card('c2', 'wc', 'walk', { minutes: 20 }),
+    ],
+    workout_sets: [set('s1', 'we1', 1, 60, 12), set('s2', 'we1', 2, 60, 12)],
+  })
+
+  it('workoutsOn：有氧卡算一個動作，但組數、訓練量是 0；只有有氧的訓練時長照起訖', () => {
+    expect(workoutsOn(d, '2026-10-14', now)).toEqual([
+      { id: 'w', startedAt: '2026-10-14T01:00:00.000Z', endedAt: '2026-10-14T01:36:00.000Z', inProgress: false, exerciseCount: 2, volume: 1440, doneSets: 2, totalSets: 2, minutes: 36, soloCardio: null },
+      { id: 'wc', startedAt: '2026-10-14T09:00:00.000Z', endedAt: '2026-10-14T09:30:00.000Z', inProgress: false, exerciseCount: 1, volume: 0, doneSets: 0, totalSets: 0, minutes: 30, soloCardio: { name: '跑步機坡度健走', summary: '20 分' } },
+    ])
+  })
+
+  it('workoutDetail：有氧卡的 sets 是空陣列、帶出動作庫那列；攤平的組只有重訓的', () => {
+    const detail = workoutDetail(d, 'w')!
+    expect(detail.exercises.map((e) => [e.entry.id, e.exercise?.id, e.sets.length])).toEqual([['we1', 'e1', 2], ['c1', 'walk', 0]])
+    expect(setsOfDetail(detail)).toEqual([
+      { weight_kg: 60, reps: 12, done: true },
+      { weight_kg: 60, reps: 12, done: true },
+    ])
+  })
+
+  it('沒有組的卡：進度 0/0 沒有下一組、不算全部完成、RPE 不算做完、全部完成鈕不寫任何東西', () => {
+    const detail = workoutDetail(d, 'w')!
+    expect(exerciseProgress([])).toEqual({ done: 0, total: 0, next: null })
+    expect(allSetsDone([])).toBe(false)
+    expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
+    expect(completesExercise([], 'c1')).toBe(false)
+    expect(toggleAllDoneOps(detail, 'c1')).toEqual([])
+  })
+
+  it('重量預填看不到有氧卡；重訓動作的上次照舊', () => {
+    expect(lastCompletedSets(d, 'walk')).toEqual([])
+    expect(lastCompletedSets(d, 'e1')).toEqual([
+      { weight_kg: 60, reps: 12 },
+      { weight_kg: 60, reps: 12 },
+    ])
+  })
+
+  it('排序：有氧卡和其他動作一樣排', () => {
+    const entries = workoutDetail(d, 'w')!.exercises.map((e) => e.entry)
+    expect(reorderWorkoutExercisesOps({ entries, orderedIds: ['c1', 'we1'] })).toEqual([
+      { op: 'update', table: 'workout_exercises', rowId: 'c1', payload: { position: 0 } },
+      { op: 'update', table: 'workout_exercises', rowId: 'we1', payload: { position: 1 } },
+    ])
+  })
+
+  it('存成課表：有氧動作照預設存 3 組、次數不設（D1：用不到的 target_sets）', () => {
+    const ops = routineFromWorkoutOps({ db: d, workoutId: 'w', name: '腿日', newId: idGen() })
+    expect(ops.slice(1).map((o) => [o.payload?.exercise_id, o.payload?.target_sets, o.payload?.target_reps])).toEqual([
+      ['e1', 2, 12],
+      ['walk', 3, null],
+    ])
+  })
+})
+
+describe('workoutsOn：只有一張有氧卡的訓練（AC 9：已完成列表以動作名稱與有氧摘要列出）', () => {
+  const now = new Date('2026-10-15T12:00:00.000Z')
+  const at = (id: string, hour: string): Row => ({
+    ...workout(id, '2026-10-15', `2026-10-15T${hour}:00:00.000Z`),
+    ended_at: `2026-10-15T${hour}:30:00.000Z`,
+  })
+  const d = db({
+    exercises: [exercise('e1', '腿推舉'), walkEx, boxEx],
+    workouts: [at('walk-only', '01'), at('box-empty', '02'), at('mixed', '03'), at('two-cardio', '04'), at('strength', '05'), at('none', '06'), at('ghost', '07')],
+    workout_exercises: [
+      card('c1', 'walk-only', 'walk', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }),
+      card('c2', 'box-empty', 'box'),
+      we('we1', 'mixed', 'e1', 0),
+      card('c3', 'mixed', 'walk', { minutes: 20 }, 1),
+      card('c4', 'two-cardio', 'walk', { minutes: 15 }, 0),
+      card('c5', 'two-cardio', 'box', { minutes: 10 }, 1),
+      we('we2', 'strength', 'e1', 0),
+      card('c6', 'ghost', 'gone', { minutes: 30 }),
+    ],
+    workout_sets: [set('s1', 'we1', 1, 60, 12), set('s2', 'we2', 1, 60, 12)],
+  })
+  const solo = Object.fromEntries(workoutsOn(d, '2026-10-15', now).map((c) => [c.id, c.soloCardio]))
+
+  it('只有一張有氧卡：動作名稱＋有氧摘要；還沒填分鐘的摘要是空字串', () => {
+    expect(solo['walk-only']).toEqual({ name: '跑步機坡度健走', summary: '30 分 · 5.5 km/h · 坡度 8%' })
+    expect(solo['box-empty']).toEqual({ name: '有氧拳擊', summary: '' })
+  })
+
+  it('混了重訓、兩張有氧卡、只有重訓、沒有動作、動作庫找不到那列：都不是（照舊顯示動作數與組數）', () => {
+    expect([solo.mixed, solo['two-cardio'], solo.strength, solo.none, solo.ghost]).toEqual([null, null, null, null, null])
   })
 })

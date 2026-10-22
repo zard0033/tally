@@ -960,6 +960,110 @@ RLS 不用動（`owner_all` 是整列的政策）。**部署順序不能反**：
 #### ★ 核可後的順序
 ① 你執行 DDL（④）→ ② 純邏輯＋unit（含 mutation）：`isWarmup`、窗口、旗標、chip 對應、最後一組判斷 → ③ `recovery.ts` 接上、肌群狀態列副標與說明 → ④ 組編輯 sheet RPE 區＋e2e → ⑤ 休息條問題列＋e2e → ⑥ vitest／build／lint／e2e 全量、DESIGN.md 回寫、notepad → ⑦ push 前 review → ⑧ 真機：填一次 RPE，確認寫入、讀回、肌群狀態數字。
 
+### 有氧併入動作（2026-10-15 使用者回報第 1 點；2026-10-22 起草，**使用者同日核可：D1–D5 採建議、樣張核可；DDL ① 已執行；已實作（vitest 793、e2e 338）；push 前 review 修正後 vitest 798、e2e 340，待 push**）
+
+**來源與推翻的決定**：使用者 2026-10-15 回報「有氧應作為動作跟其他動作放一起（肌群＝其他），不是獨立入口」。推翻 2026-10-13 的有氧獨立模型——`cardio_sessions` 自成一張表（階段 2 spec 設計說明⑦，理由是「沒有組、沒有重量」）加開始訓練 sheet 的「記一筆有氧」入口。**這次不推翻**的：有氧只有兩種、不做新類型入口、沒有備註欄、預估熱量只存不算（2026-10-13 裁決①②③）。
+
+**範圍**：有氧變成「動作」——動作庫裡有兩個、加動作 sheet 選得到、課表放得進去、訓練中是一張卡、歷史跟著訓練一起列；舊的 `cardio_sessions` 資料搬進新模型；拿掉獨立入口與獨立列表。**不含**：新的有氧類型、有氧的趨勢或分析、有氧進熱量計算、有氧進肌群恢復（肌群＝其他本來就不算）。
+
+#### 設計決定（請確認 D1–D5）
+
+| # | 決定 | 理由 ／ 取捨 |
+| --- | --- | --- |
+| D1 | **有氧欄位放在 `workout_exercises`（一張有氧卡＝一列，沒有 `workout_sets`）**，`exercises` 加 `kind`（`strength`／`incline_walk`／`boxing`） | 有氧沒有組、沒有重量，硬塞進 `workout_sets` 要放寬 `weight_kg`／`reps` 的 not null，而且 RPE、1RM、重量建議、組間休息、恢復、動作進度全都以 `workout_sets` 為準，要逐一加「排除有氧」的判斷。放在 `workout_exercises` 則這些功能**預期**看不到有氧、不用改（**推論，未逐一讀過**：凡是走 `workout_exercises` 而不是 `workout_sets` 的路徑——卡片進度、課表開訓、排序、預填、`totalSets`——實作前要逐一確認，AC 6 的回歸是驗收）。代價：`workout_exercises` 多四個大多為空的欄位，「有氧欄位只有有氧才填、sets 只有重訓才有」DB 管不到，由客戶端守；課表裡的有氧動作會存一個用不到的 `target_sets = 3` |
+| D2 | **只有兩個內建有氧動作，使用者不能自建有氧動作**（`kind` 只有預設動作會是非 `strength`） | 沿用「不做新類型入口」。自建動作一律 `strength`，建立動作的 sheet 不加類型選項 |
+| D3 | **一筆舊有氧資料變成一次獨立的訓練**（`workouts` 一列＋`workout_exercises` 一列），不併進同一天已有的重訓 | 併進去會動到真正的重訓紀錄，而且分不清這筆有氧當時是不是同一趟。時間照補記的算法：當天 12:00（台北時間）起、加分鐘數為結束。歷史上看得出差別：它們是「只有一個動作的訓練」 |
+| D4 | **單獨記一筆有氧也要先開始一次訓練**（空白開始→加有氧動作），不再有「記一筆有氧」捷徑 | 這就是「併入」的意思。代價：在家打拳擊多兩步（開始訓練→加動作）。補記過去的日子走既有的補記流程。**使用者 2026-10-22 確認：有氧多半接在重訓後，所以不留捷徑**（單獨做的情境是少數，代價接受） |
+| D5 | **有氧卡沒有勾選**：分鐘有值＝有記錄。結束訓練的規則不變（沿用現有的「沒填完的組怎麼處理」）。**預填不含分鐘，所以剛加的卡不算記錄**（使用者 2026-10-22 裁決，見「畫面」的預填） | 有氧只有一個動作量，多一個勾沒有資訊。實作前要先讀 `finish` 流程確認空白有氧卡結束時的行為（見風險）。沒有勾，「預填」與「做了」就分不開：分鐘也預填的話，課表帶出「30 分 · 5.5 km/h · 坡度 8%」那天沒去跑，結束訓練就留下一筆假記錄，下次又被當成「上次」往下傳——所以分鐘留空 |
+
+**已考慮、不採用**：① 有氧欄位放進 `workout_sets`（要放寬 `weight_kg`／`reps` 的 not null，且每個吃 sets 的功能都要排除有氧）；② 另開 `workout_cardio` 子表（比 D1 乾淨，但多一張表要進佇列、RLS、讀取清單，對單人 app 不值得）；③ **便宜方案**：`cardio_sessions` 加可空 `workout_id`，訓練中「加有氧」把那筆掛在這次訓練底下——不搬資料、不動 `exercises`，工作量約三分之一，但兩處儲存永遠並存、有氧不會真的進動作庫與課表，與使用者要的「有氧作為動作」不符，所以不採用（2026-10-22 使用者確認多半接在重訓後，併入的收益成立）。
+
+#### 資料表（**動 schema＝先核可**；DDL 由使用者授權的 CLI 流程執行，我提供回滾 SQL）
+
+```sql
+-- ① 加欄位（相容舊版 app：舊版不認得這些欄位，不會壞）
+alter table exercises
+  add column kind text not null default 'strength'
+    check (length(btrim(kind)) > 0);   -- 'strength'／'incline_walk'／'boxing'；意義由客戶端 CARDIO_KINDS 定（同舊 cardio_sessions.kind），加第三種不必動 DDL
+alter table workout_exercises
+  add column minutes     numeric(5,1) check (minutes is null or (minutes > 0 and minutes <= 1440)),
+  add column speed_kmh   numeric(4,1) check (speed_kmh is null or (speed_kmh > 0 and speed_kmh <= 40)),
+  add column incline_pct numeric(3,1) check (incline_pct is null or (incline_pct >= 0 and incline_pct <= 40)),
+  add column est_kcal    numeric(6,1) check (est_kcal is null or (est_kcal >= 0 and est_kcal <= 10000));
+-- 範圍與 cardio_sessions 的 check 完全一致。「只有該類型才填」由客戶端的 checkCardio 守，DB 不加（同 cardio_sessions 的現況）
+
+-- ② 資料遷移（單一交易、可重跑）。**兩個有氧動作不在 SQL 裡建**：部署新版後開一次 App，
+--    由 v2.72 的自動補預設動作建出來（id 由客戶端的 presetExerciseId 算，SQL 完全不碰 uuid v5）；
+--    SQL 只用 (user_id, kind) 去找它們。找不到（App 還沒開過）→ raise exception、整筆回滾，不會寫出半套。
+begin;
+  -- 檢查：每個有舊有氧資料的 user，兩個動作都要在，否則 raise exception
+
+  -- workouts：id＝uuid v5(任取一個本遷移專用的 namespace, '<cardio.id>:workout')（只用於這次遷移的冪等，與客戶端無關）；
+  --   started_at＝當天 12:00 台北時間，ended_at＝起點＋分鐘；on conflict (id) do nothing
+  -- workout_exercises：id＝uuid v5(…, '<cardio.id>:we')；position 0；exercise_id＝(user_id, kind) 找到的那列；欄位原樣搬
+  -- （完整 SQL 在核可後寫進回滾腳本旁，並附 dry-run：只 select 不寫入，列出將建立的筆數與每筆的前後對照）
+  -- 驗證（交易內，不符就 raise exception 回滾）：新舊筆數相等；分鐘總和相等；速度／坡度／預估熱量各欄的非空筆數相等
+commit;
+-- ③ 舊表 cardio_sessions 不動、不 rename（保留當回滾依據；新版 app 不再讀寫它）；真機驗過後另一輪再 drop
+```
+
+**回滾**：還原前端 commit；`delete from workouts where id in (遷移產生的確定性 id)`（`workout_exercises` cascade）；`delete from exercises where kind <> 'strength'`；drop 新欄位。舊表沒動，所以資料不會丟。
+
+**順序**：①加欄位 → ②部署新版 app → ②′開一次 App（自動補出兩個有氧動作）→ ③跑資料遷移 → ④真機驗證。②到③之間舊有氧紀錄暫時看不到（只有使用者一人，避開這段時間不記就好）；iOS 主畫面 App 若停在舊版（舊 SW）會繼續寫已不讀的 `cardio_sessions`，要重新加入主畫面（見 reference_ios_pwa_stale_sw）。
+
+#### 畫面（**要先出樣張 `_design-sample/cardio-card.html` 核可才寫 UI**）
+
+- **有氧卡**（訓練中）：卡片頭同其他動作（名稱、⋯ 選單；沒有示意圖，退成「其他」單字，同現況）。卡片內不是組列，是摘要「30 分 · 5.5 km/h · 坡度 8%」（393 寬放不下時折成兩行、不截斷；沒填時「點一下填寫」），點開**有氧 sheet**。沒有圓點與 d/n 組；列表與完成訓練 sheet 裡沒填寫「還沒填」。沒有「新增一組」、沒有「全部完成」、沒有 RPE 頁尾、沒有休息條。
+- **有氧 sheet**＝現有 `CardioSheet` 改綁到一列 `workout_exercises`：拿掉類型選擇與日期（類型由動作決定、日期由訓練決定），欄位依 `kind` 顯示（健走＝分鐘＋速度＋坡度；拳擊＝分鐘＋預估熱量），範圍檢查沿用 `checkCardio`。刪除改成卡片 ⋯ 選單的「移除這個動作」（既有行為）。
+- **預填**：沿用規則⑨——加有氧動作時，速度／坡度／預估熱量預填這個動作上次的值（有歷史才填）；**分鐘留空**（使用者 2026-10-22 裁決，推翻原本的「分鐘也預填」；理由見 D5：預填的分鐘會變成假記錄並傳給下次預填）。所以剛加進來的卡永遠是「點一下填寫」；有氧 sheet 裡分鐘欄是空的，有歷史時 placeholder 寫「上次 N」（N＝上次那張有記錄的卡的分鐘，開 sheet 當下取、排除這次訓練；沒有歷史不放 placeholder）。
+- **課表**：有氧動作可以放進課表；`target_sets`／`target_reps` 對有氧無意義，**課表編輯的目標列對有氧不顯示**，值照預設存（`target_sets` 3，不使用）。
+- **開始訓練 sheet**：移除「記一筆有氧」。**訓練頁**：移除獨立的有氧列與 `CardioSheet` 入口，已完成的列表只剩訓練；有氧訓練的那張卡摘要行顯示動作名稱與有氧摘要。
+- **歷史／統計**：有氧不計訓練量與組數（本來就沒有組）；訓練時長照 `started_at`／`ended_at`。日期小點只看 `workouts`（`trainingDates` 不再讀 `cardio_sessions`）。
+
+#### AC（＝將來的測試；預期值全部手算、不呼叫被測函式）
+
+1. **動作庫**：預設目錄多兩個動作——跑步機坡度健走、有氧拳擊（肌群＝其他，`kind` 分別為 `incline_walk`／`boxing`）；目錄共 152 個。既有帳號開 App 自動補這兩個（沿用 v2.72 的補法：同名不補、自建庫不補）；新帳號預填整份目錄時一併帶 `kind`。
+2. **自建動作**不能選有氧類型；建立／編輯動作的寫入不帶 `kind`（伺服器 default `strength`）。
+3. **加動作**：在訓練中加「跑步機坡度健走」→ 寫入一列 `workout_exercises`，**沒有任何 `workout_sets`**；卡片顯示「點一下填寫」。有歷史時（上次 30 分、5.5 km/h、坡度 8%）速度與坡度預填（寫入的 `minutes` 是 null），卡片**仍顯示「點一下填寫」**；開有氧 sheet 看到速度 5.5、坡度 8，分鐘空白、placeholder「上次 30」。（2026-10-22 改：原本是三欄都預填、卡片直接顯示摘要，見 D5。）
+4. **有氧 sheet**：健走顯示分鐘／速度／坡度三欄、拳擊顯示分鐘／預估熱量兩欄；分鐘必填；範圍外（分鐘 0、速度 41、坡度 41、熱量 10001、超過一位小數）擋下並說明，沿用 `checkCardio` 現有的檢查與訊息；存檔只送有變的欄位（`updateCardioOps` 的邏輯搬到 `workout_exercises`）。
+5. **離線**：飛航模式加有氧動作、填寫、結束訓練，回線後完整上傳（同其他寫入走佇列）。
+6. **無副作用**：有氧卡不出現休息條、RPE 頁尾、重量建議、「全部完成」；`recovery`、`strength`、動作進度的結果與沒有有氧時完全相同（各加一條「資料裡混了有氧卡」的回歸）。
+7. **課表**：有氧動作可加進課表、從課表開始訓練時帶出有氧卡（欄位預填同 3：分鐘留空）；課表編輯的目標列對有氧不顯示。
+8. **移除獨立入口**：開始訓練 sheet 沒有「記一筆有氧」；訓練頁沒有獨立的有氧列；`cardio_sessions` 不再出現在離線佇列的表清單與讀取清單。
+9. **歷史**：有氧訓練（只有一張有氧卡）在已完成列表以動作名稱與有氧摘要列出，點進可編輯、可刪除（刪除＝刪掉那次訓練，沿用現有刪除確認）；日期小點只看 `workouts`。
+10. **遷移**（SQL，不在 e2e）：dry-run 列出每筆「舊→新」對照；執行後新舊筆數相等、分鐘總和相等、速度／坡度／預估熱量非空筆數相等；重跑一次不產生新列（冪等）；App 還沒補出有氧動作時執行會整筆回滾（raise exception），不留半套。
+11. **減少動態**、離線取捨、既有 AC 對有氧以外的行為一律不變。
+
+#### 要改的檔
+
+- `src/lib/training.ts`：`TrainingTable` 與表清單拿掉 `cardio_sessions`；`ExerciseKind`、卡的有氧欄位；`addExerciseOps` 對有氧不產 sets、改帶預填欄位；舊的 `createCardioOps`／`updateCardioOps`／`deleteCardioOps`／`cardioOn`／`cardioDraft`／`cardioLabel` 刪除，換成 `updateCardioEntryOps`／`cardioEntryDraft`／`cardioPrefill`／`cardioLastMinutes`（刪除併入移除動作）；`trainingDates` 的 `cardio_sessions` 分支刪除；`PRESET_EXERCISES`／`exerciseCatalog.ts` 加兩個動作與 `kind`；`training.test.ts`（現有 84 處有氧相關，大半改寫）、`exerciseCatalog.test.ts`（150→152）、`recovery.test.ts` 加回歸。
+- `src/screens/CardioSheet.tsx`（改綁）、`TrainingSession.tsx`（有氧卡）、`Training.tsx`（拿掉獨立列與狀態）、`StartSheet.tsx`（拿掉入口）、`RoutineTargetSheet.tsx`／課表編輯（有氧不顯示目標列）、加動作 sheet（顯示有氧動作，不需改動則免）。
+- `app.css`（有氧卡）、`DESIGN.md`（元件規則＋版本紀錄）、`CLAUDE.md`（e2e 條數、動作數 150→152）、`e2e/training.spec.ts`（84 處有氧相關，重寫）、`e2e/stub.ts`／`fixtures.ts`（stub 的表清單）。
+- 新增：`_design-sample/cardio-card.html`（樣張）、遷移 SQL 與回滾 SQL（放 `.omc/plans/`，不進 repo 公開區；內含 user_id 的部分不寫死）。
+
+#### 風險
+
+- **線上實際資料（2026-10-22 用 `.env.local` 的 secret key 唯讀查過）**：`cardio_sessions` 共 **3 筆**（跑步機坡度健走 2 筆、有氧拳擊 1 筆，2026-10-12 至 10-15，分鐘總和 55；速度與坡度各 2 筆有值、預估熱量 1 筆有值），只有一個 user；`workouts` 共 2 筆（10-12、10-15，都已結束）。所以 D3「一筆一次訓練」成立，不會洗版。**遷移因此可以簡化**：3 筆直接寫 3 組明碼 INSERT（固定 id、明寫 `user_id`）比通用冪等腳本好 review；dry-run 仍先列對照。
+- **自動補動作的路徑確認走得通**：這個 user 的 `exercises` 有 150 列，16 個原始預設動作 id 全在（所以 `autoSeedOps` 走情形②，會補上新增的有氧動作），名稱裡沒有含「有氧／跑步機／拳擊／健走」的（不會被同名判斷擋掉）。
+- **DDL ① 已於 2026-10-22 執行並驗證**：`exercises.kind` 與 `workout_exercises` 四個有氧欄位都在線上（SQL 與回滾腳本在 `.omc/plans/cardio-merge-ddl1*.sql`，本機不進 git）。
+- **DDL 與資料遷移怎麼跑**：已用 scoop 裝 supabase CLI 2.121.0 並 link Tally（登入狀態沿用），DDL 用 `supabase db query --linked -f` 跑。資料遷移的 INSERT 要明寫 `user_id`（`default auth.uid()` 在 service key 下是 null），寫入前照使用者先前裁決列清單確認。
+- **遷移依賴「App 先開過一次」**：兩個有氧動作由客戶端補、SQL 只查不建（避開 SQL 與 app 兩邊各算一次 uuid v5 的對不上風險）；沒補出來時 SQL 會整筆回滾，不會寫錯。
+- **時機**：RPE 頁尾與重量建議（v2.84–v2.87）還沒真機驗過，這案要大改 `TrainingSession` 與 schema；建議先把那兩項真機驗完，不然出問題分不清是哪一層。
+- **空白有氧卡結束時的行為（已決定＝現行行為）**：不擋結束（`finishWorkoutOps` 不看組）；完成訓練 sheet 寫「還沒填」，空的那列留在歷史（列表也寫「還沒填」）。
+- **`training.spec` 重寫量大**（84 處）；全量 e2e 要重跑，條數以實測為準。
+- 同日可能存在舊版 app（主畫面 PWA 停在舊 SW）仍寫 `cardio_sessions`：遷移後那幾筆會留在舊表，要手動補搬或接受遺失（個人使用，風險低）。
+- **已決定：舊版 App 離線殘留在佇列裡的 `cardio_sessions` 條目，新版送不出去**（sender 以「不認得的表」拒絕，未同步清單標成「變更」）——**不加相容層**（單人專案），改成 **push 前確認未同步佇列為空**（舊版 App 上的離線記錄先上傳完再換版）。
+- **已知限制、未處理：只做有氧的補記要填兩次分鐘**——補記訓練的完成 sheet 另問訓練分鐘（決定 `ended_at`），有氧卡上又要填有氧分鐘；完成 sheet 的訓練分鐘若略過，那次訓練的時長是 0。
+- **有氧動作卻有組的卡**（舊版 App 把有氧當重訓加進來；照課表開訓時動作還沒載到本機底，`addExerciseOps` 當重訓產了組）：訓練中整張卡退回重訓的畫法（組看得到、刪得掉、打過勾的組移除前先問），不會變成看不到組也刪不掉的有氧卡。
+
+#### 明確不做
+
+新的有氧類型與自建有氧動作；有氧的趨勢圖、分析、進熱量計算；`cardio_sessions` 的 drop（真機驗過後另一輪）；把有氧併進同一天既有的重訓。
+
+#### ★ 核可後的順序
+
+0. （建議）先真機驗完 RPE 頁尾與重量建議。1. 你確認 D1–D5。2. 查線上 `cardio_sessions` 筆數（需要有 CLI 的機器，或你在 Dashboard 跑一句 `select kind, count(*), min(performed_on), max(performed_on) from cardio_sessions group by kind`），必要時回頭改 D3。3. 出樣張 `cardio-card.html`，你核可。4. DDL ①（加欄位）。5. lib＋vitest＋mutation。6. UI。7. e2e 重寫、全量跑、WebKit 393×745 截圖。8. DESIGN／CLAUDE.md／notepad 回寫，push 前 review。9. 部署後跑遷移 dry-run → 你看過對照 → 執行 → 驗證 → 真機。
+
 ### 資料模型草案（**已由上方「階段 2 spec」定案**，這裡保留當初草案；以上方為準）
 
 `exercises`（名稱、肌群、是否封存）／`workouts`（日期、起訖時間）／`workout_exercises`（所屬訓練、動作、順序）／`workout_sets`（所屬動作項、第幾組、重量、次數、是否完成）。全部走與既有四表相同的 `owner_all` RLS。主鍵由客戶端產 UUID（為了離線寫入冪等）。**不做**：存 Gymwork 歷史（使用者 10/12 才開始試用，只有一次紀錄，不需搬）。

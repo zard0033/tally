@@ -1,6 +1,7 @@
 /* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
  * 以及「開始訓練 sheet → 訓練中整頁」這條主流程；課表下方的「動作庫」入口進整頁的動作庫。
- * 有氧從開始訓練 sheet 進、記完回到這頁，列在「已完成」裡（點了編輯）。課表區在已完成之後、動作庫之前：
+ * 有氧是動作（spec「有氧併入動作」）：在訓練中加，沒有獨立的入口與列表；只有一張有氧卡的訓練在列表上以動作名稱與有氧摘要列出。
+ * 課表區在已完成之後、動作庫之前：
  * 點一份進課表編輯整頁，「＋ 新課表」先問名稱；開始訓練 sheet 裡選課表會照它開一次訓練。
  *
  * 日期由 App 持有、經 props 傳進來：主 CTA 在 App 的底部列裡，要知道「選到哪天、能不能開始」。
@@ -14,9 +15,6 @@ import { localDate, monthDay, weekdayDate } from '@/lib/dates'
 import { progressList } from '@/lib/strength'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import {
-  cardioLabel,
-  cardioOn,
-  cardioSummary,
   routineDetail,
   routineList,
   startWorkoutFromRoutineOps,
@@ -24,12 +22,10 @@ import {
   trainingDates,
   workoutDetail,
   workoutsOn,
-  type Row,
   type RoutineCard,
   type RowOp,
   type WorkoutCard,
 } from '@/lib/training'
-import CardioSheet from './CardioSheet'
 import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import RoutineNameSheet from './RoutineNameSheet'
@@ -71,27 +67,17 @@ function statusText(view: TrainingView): string | null {
 }
 
 function WorkoutRow({ card, onOpen }: { card: WorkoutCard; onOpen: () => void }) {
-  const title = `${card.exerciseCount} 個動作`
-  const detail = `${card.doneSets}/${card.totalSets} 組 · ${card.volume.toLocaleString('en-US')} kg · ${card.minutes} 分`
+  // 只有一張有氧卡的訓練（AC 9）：動作名稱＋有氧摘要，不寫「0/0 組 · 0 kg」；還沒填分鐘的寫「還沒填」
+  const solo = card.soloCardio
+  const title = solo ? solo.name : `${card.exerciseCount} 個動作`
+  const detail = solo
+    ? solo.summary || '還沒填'
+    : `${card.doneSets}/${card.totalSets} 組 · ${card.volume.toLocaleString('en-US')} kg · ${card.minutes} 分`
   return (
     <button className="tr-row" type="button" data-workout-id={card.id} onClick={onOpen}>
       <span className="grow">
         <span className="nm">{title}</span>
         <span className="sub">{detail}</span>
-      </span>
-      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </button>
-  )
-}
-
-function CardioRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
-  return (
-    <button className="tr-row" type="button" data-cardio-id={row.id} onClick={onOpen}>
-      <span className="grow">
-        <span className="nm">{cardioLabel(row)}</span>
-        <span className="sub">{cardioSummary(row)}</span>
       </span>
       <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M9 6l6 6-6 6" />
@@ -138,19 +124,9 @@ export default function Training({
   const [nameOpen, setNameOpen] = useState(false)
   const [startBusy, setStartBusy] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
-  // 開關與目標分開（同動作庫）：關閉動畫期間目標還在，標題不會從「編輯」閃成「記一筆」
-  const [cardioTarget, setCardioTarget] = useState<Row | null>(null)
-  const [cardioOpen, setCardioOpen] = useState(false)
-  const [cardioSession, setCardioSession] = useState(0)
-  const openCardio = (row: Row | null) => {
-    setCardioTarget(row)
-    setCardioSession((n) => n + 1)
-    setCardioOpen(true)
-  }
 
   const marked = useMemo(() => (view ? trainingDates(view.db) : new Set<string>()), [view])
   const cards = useMemo(() => (view ? workoutsOn(view.db, date, new Date()) : []), [view, date])
-  const cardios = useMemo(() => (view ? cardioOn(view.db, date) : []), [view, date])
   // 這次訓練被刪了（別的裝置、或自己在整頁裡刪掉）：detail 變 null，自然退回清單
   const detail = view && sessionId ? workoutDetail(view.db, sessionId) : null
   const routines = useMemo(() => (view ? routineList(view.db) : { active: [], archived: [] }), [view])
@@ -292,7 +268,7 @@ export default function Training({
       <div className="tr-scroll">
         {view === null ? (
           <p className="muted">載入中…</p>
-        ) : cards.length === 0 && cardios.length === 0 ? (
+        ) : cards.length === 0 ? (
           <p className="muted">這天沒有訓練紀錄</p>
         ) : (
           <>
@@ -307,15 +283,12 @@ export default function Training({
                 </div>
               </>
             )}
-            {(finished.length > 0 || cardios.length > 0) && (
+            {finished.length > 0 && (
               <>
                 <div className="tr-sec">已完成</div>
                 <div className="tr-card">
                   {finished.map((c) => (
                     <WorkoutRow key={c.id} card={c} onOpen={() => setSessionId(c.id)} />
-                  ))}
-                  {cardios.map((r) => (
-                    <CardioRow key={r.id} row={r} onOpen={() => openCardio(r)} />
                   ))}
                 </div>
               </>
@@ -401,11 +374,6 @@ export default function Training({
         }}
         onBlank={() => void startBlank()}
         onRoutine={(id) => void startFromRoutine(id)}
-        onCardio={() => {
-          setStartError(null)
-          onStartOpenChange(false)
-          openCardio(null)
-        }}
       />
 
       <RoutineNameSheet
@@ -429,16 +397,6 @@ export default function Training({
           onRetry={onRetry}
         />
       )}
-
-      <CardioSheet
-        open={cardioOpen}
-        row={cardioTarget}
-        session={cardioSession}
-        date={date}
-        dateNote={date === localDate() ? null : weekdayDate(date)}
-        onClose={() => setCardioOpen(false)}
-        onWrite={onWrite}
-      />
     </div>
   )
 }

@@ -12,7 +12,7 @@ import {
   WEIGHT_STEP_KEYS,
   weightStep,
 } from './exerciseCatalog'
-import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
+import { CARDIO_KIND_LABEL, MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
 const images = import.meta.glob<string>('../assets/exercises/*.jpg', { eager: true, query: '?inline', import: 'default' })
@@ -53,9 +53,9 @@ describe('動作目錄', () => {
     expect(EXERCISE_CATALOG.slice(0, 16)).toEqual(PRESET_EXERCISES)
   })
 
-  it('150 個：key 是 kebab-case 且不重複、名稱不重複、肌群都在七類且每類都有', () => {
-    expect(EXERCISE_CATALOG).toHaveLength(150)
-    expect(EXTRA_EXERCISES).toHaveLength(134)
+  it('152 個：key 是 kebab-case 且不重複、名稱不重複、肌群都在七類且每類都有', () => {
+    expect(EXERCISE_CATALOG).toHaveLength(152)
+    expect(EXTRA_EXERCISES).toHaveLength(136)
     const keys = EXERCISE_CATALOG.map((p) => p.key)
     expect(new Set(keys).size).toBe(keys.length)
     for (const k of keys) expect(k).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
@@ -69,6 +69,15 @@ describe('動作目錄', () => {
   it('要點一律留空：目錄不替使用者寫動作要領', () => {
     for (const r of catalogToAdd('u1', [])) expect(r.tips).toBeNull()
   })
+
+  it('有氧動作只有兩個、接在最後：跑步機坡度健走、有氧拳擊，肌群＝其他，名稱與 CARDIO_KIND_LABEL 一致', () => {
+    expect(EXERCISE_CATALOG.filter((p) => p.kind !== undefined)).toEqual([
+      { key: 'incline-walk', name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk' },
+      { key: 'boxing-cardio', name: '有氧拳擊', muscle_group: 'other', kind: 'boxing' },
+    ])
+    expect(EXERCISE_CATALOG.slice(150).map((p) => p.key)).toEqual(['incline-walk', 'boxing-cardio'])
+    expect(CARDIO_KIND_LABEL).toEqual({ incline_walk: '跑步機坡度健走', boxing: '有氧拳擊' })
+  })
 })
 
 describe('示意圖檔案', () => {
@@ -76,8 +85,9 @@ describe('示意圖檔案', () => {
     const keys = EXERCISE_CATALOG.map((p) => p.key).sort()
     // 資料集沒有對應的兩個（退回肌群單字）；要新增例外得連這條一起改，不會悄悄多出沒圖的動作
     expect(noImage.slice().sort()).toEqual(['bodyweight-squat', 'box-squat'])
-    expect([...NO_IMAGE_KEYS].sort()).toEqual(noImage.slice().sort())
-    expect([...Object.keys(imageMap), ...noImage].sort()).toEqual(keys)
+    // 有氧動作刻意不配圖（不在對照表、也不在 noImage）：NO_IMAGE_KEYS＝noImage＋兩個有氧
+    expect([...NO_IMAGE_KEYS].sort()).toEqual(['bodyweight-squat', 'box-squat', 'boxing-cardio', 'incline-walk'])
+    expect([...Object.keys(imageMap), ...noImage, 'incline-walk', 'boxing-cardio'].sort()).toEqual(keys)
     expect(Object.keys(images).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
     expect(Object.keys(gifs).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
   })
@@ -130,10 +140,12 @@ describe('catalogKey（由列反推是哪個預設動作）', () => {
     expect(catalogKey({ id: presetExerciseId('u1', 'leg-press'), user_id: 'u2', name: 'x' })).toBeNull()
   })
 
-  it('hasCatalogImage：有圖的預設動作才算；沒有對應圖的兩個預設動作與自建動作都不算', () => {
+  it('hasCatalogImage：有圖的預設動作才算；沒有對應圖的兩個預設動作、兩個有氧動作與自建動作都不算', () => {
     expect(hasCatalogImage(row('u1', 'leg-press'))).toBe(true)
     expect(hasCatalogImage(row('u1', 'bodyweight-squat'))).toBe(false)
     expect(hasCatalogImage(row('u1', 'box-squat'))).toBe(false)
+    expect(hasCatalogImage(row('u1', 'incline-walk'))).toBe(false)
+    expect(hasCatalogImage(row('u1', 'boxing-cardio'))).toBe(false)
     expect(hasCatalogImage({ id: '11111111-1111-4111-8111-111111111111', user_id: 'u1', name: '自建' })).toBe(false)
   })
 
@@ -146,24 +158,34 @@ describe('catalogKey（由列反推是哪個預設動作）', () => {
     expect(catalogKey({ id: 'b560053d-4662-5165-9b70-01896120fc1e', user_id: u, name: 'x' })).toBe('leg-press')
   })
 
-  it('目錄裡 150 個 id 對同一個帳號都不撞', () => {
+  it('目錄裡 152 個 id 對同一個帳號都不撞', () => {
     const ids = EXERCISE_CATALOG.map((p) => presetExerciseId('u1', p.key))
-    expect(new Set(ids).size).toBe(150)
+    expect(new Set(ids).size).toBe(152)
   })
 })
 
 describe('catalogToAdd（補齊預設動作）', () => {
-  it('一個都沒有：補全部 150 個，且內容與目錄一致', () => {
+  it('一個都沒有：補全部 152 個，且內容與目錄一致', () => {
     const rows = catalogToAdd('u1', [])
-    expect(rows).toHaveLength(150)
+    expect(rows).toHaveLength(152)
     expect(rows[0]).toMatchObject({ name: '腿推舉', muscle_group: 'legs', user_id: 'u1', archived: false })
     expect(rows.map((r) => r.id)).toEqual(EXERCISE_CATALOG.map((p) => presetExerciseId('u1', p.key)))
   })
 
-  it('已經預填過 16 個：只補其餘 134 個', () => {
+  it('每列都帶 kind：重訓的 150 個寫 strength（同伺服器 default），兩個有氧寫各自的類型', () => {
+    const rows = catalogToAdd('u1', [])
+    expect(rows.filter((r) => r.kind === 'strength')).toHaveLength(150)
+    expect(rows.filter((r) => r.kind !== 'strength').map((r) => [r.name, r.muscle_group, r.kind])).toEqual([
+      ['跑步機坡度健走', 'other', 'incline_walk'],
+      ['有氧拳擊', 'other', 'boxing'],
+    ])
+    expect(rows[0].kind).toBe('strength')
+  })
+
+  it('已經預填過 16 個：只補其餘 136 個', () => {
     const have = coreRows('u1')
     const rows = catalogToAdd('u1', have)
-    expect(rows).toHaveLength(134)
+    expect(rows).toHaveLength(136)
     expect(rows.map((r) => r.id)).toEqual(EXTRA_EXERCISES.map((p) => presetExerciseId('u1', p.key)))
   })
 
@@ -171,20 +193,20 @@ describe('catalogToAdd（補齊預設動作）', () => {
     const edited: Row = { id: presetExerciseId('u1', 'leg-press'), user_id: 'u1', name: '我的腿推', archived: true }
     const rows = catalogToAdd('u1', [edited])
     expect(rows.map((r) => r.id)).not.toContain(edited.id)
-    expect(rows).toHaveLength(149)
+    expect(rows).toHaveLength(151)
   })
 
   it('補完再補一次是空的（冪等）；自建的、名稱不撞的動作不影響補齊', () => {
     const custom: Row = { id: 'custom-1', user_id: 'u1', name: '我的自建動作' }
     const first = catalogToAdd('u1', [custom])
-    expect(first).toHaveLength(150)
+    expect(first).toHaveLength(152)
     expect(catalogToAdd('u1', [custom, ...first])).toEqual([])
   })
 
   it('名稱與既有動作重複的不補（checkExercise 禁止同名，補進去之後兩列都存不了，而且動作不能真刪）', () => {
     const custom: Row = { id: 'custom-1', user_id: 'u1', name: '槓鈴臥推' }
     const rows = catalogToAdd('u1', [custom])
-    expect(rows).toHaveLength(149)
+    expect(rows).toHaveLength(151)
     expect(rows.map((r) => r.name)).not.toContain('槓鈴臥推')
     // 比對規則同 checkExercise：全形半形、大小寫、空白不同也算同名
     expect(catalogToAdd('u1', [{ id: 'c2', user_id: 'u1', name: '  ｅｚ  槓彎舉 ' }]).map((r) => r.name)).not.toContain('EZ 槓彎舉')
@@ -197,27 +219,28 @@ describe('catalogToAdd（補齊預設動作）', () => {
     const names = catalogToAdd('u1', [renamed]).map((r) => r.name)
     expect(names).not.toContain('槓鈴深蹲') // 名稱被佔了
     expect(names).not.toContain('腿推舉') // 它自己的 id 已在
-    expect(names).toHaveLength(148)
+    expect(names).toHaveLength(150)
   })
 
   it('id 含 userId：兩個帳號補出來的 id 完全不撞', () => {
     const a = catalogToAdd('u1', []).map((r) => r.id)
     const b = catalogToAdd('u2', []).map((r) => r.id)
-    expect(new Set([...a, ...b]).size).toBe(300)
+    expect(new Set([...a, ...b]).size).toBe(304)
   })
 })
 
 describe('catalogInsertOps', () => {
   it('每個缺的一筆 insert 進 exercises，一律 ignoreDuplicates（本機底過期時不能蓋掉伺服器上改過的列）', () => {
     const ops = catalogInsertOps('u1', coreRows('u1'))
-    expect(ops).toHaveLength(134)
+    expect(ops).toHaveLength(136)
     for (const o of ops) {
       expect(o.op).toBe('insert')
       expect(o.table).toBe('exercises')
       expect(o.ignoreDuplicates).toBe(true)
       expect(o.payload).toMatchObject({ id: o.rowId, user_id: 'u1', tips: null, archived: false })
+      expect(typeof o.payload?.kind).toBe('string')
     }
-    expect(new Set(ops.map((o) => o.rowId)).size).toBe(134)
+    expect(new Set(ops.map((o) => o.rowId)).size).toBe(136)
   })
 
   it('沒有缺的就是空陣列', () => {
@@ -228,14 +251,14 @@ describe('catalogInsertOps', () => {
 describe('autoSeedOps（開 App 載入完自動補）', () => {
   const U = 'u1'
 
-  it('空庫（新帳號）：補整份 150 個，離線也補（沒有從伺服器載到也一樣）', () => {
-    expect(autoSeedOps(U, [], true)).toHaveLength(150)
-    expect(autoSeedOps(U, [], false)).toHaveLength(150)
+  it('空庫（新帳號）：補整份 152 個，離線也補（沒有從伺服器載到也一樣）', () => {
+    expect(autoSeedOps(U, [], true)).toHaveLength(152)
+    expect(autoSeedOps(U, [], false)).toHaveLength(152)
   })
 
-  it('已有全部 16 個原始預設動作、且是從伺服器載到的：補其餘 134 個', () => {
+  it('已有全部 16 個原始預設動作、且是從伺服器載到的：補其餘 136 個', () => {
     const ops = autoSeedOps(U, coreRows(U), true)
-    expect(ops).toHaveLength(134)
+    expect(ops).toHaveLength(136)
     expect(ops.map((o) => o.rowId)).toEqual(EXTRA_EXERCISES.map((p) => presetExerciseId(U, p.key)))
     for (const o of ops) expect(o.ignoreDuplicates).toBe(true)
   })
@@ -248,7 +271,7 @@ describe('autoSeedOps（開 App 載入完自動補）', () => {
     expect(autoSeedOps(U, coreRows(U).slice(1), true)).toEqual([])
   })
 
-  it('從零自建、沒有任何預設動作：不補（那是他刻意建的庫，不該突然多 150 個）', () => {
+  it('從零自建、沒有任何預設動作：不補（那是他刻意建的庫，不該突然多 152 個）', () => {
     expect(autoSeedOps(U, [{ id: 'c1', user_id: U, name: '我的動作' }], true)).toEqual([])
   })
 
@@ -262,7 +285,28 @@ describe('autoSeedOps（開 App 載入完自動補）', () => {
     rows.push({ id: 'c1', user_id: U, name: '槓鈴臥推' })
     const ops = autoSeedOps(U, rows, true)
     expect(ops.map((o) => o.rowId)).not.toContain(rows[0].id)
-    expect(ops).toHaveLength(133) // 134 個裡「槓鈴臥推」撞名
+    expect(ops).toHaveLength(135) // 136 個裡「槓鈴臥推」撞名
+  })
+
+  /** 已經補過舊目錄 150 個的帳號（線上那個帳號的現況）；伺服器回的列帶 kind（DDL 之後 default strength）。 */
+  const old150 = (u: string): Row[] =>
+    EXERCISE_CATALOG.slice(0, 150).map((p) => ({
+      id: presetExerciseId(u, p.key), user_id: u, name: p.name, muscle_group: p.muscle_group, kind: 'strength', tips: null, archived: false,
+    }))
+
+  it('既有帳號（已有舊目錄 150 個）開 App：只補兩個有氧動作，帶 kind 與肌群其他（AC 1）', () => {
+    const ops = autoSeedOps(U, old150(U), true)
+    expect(ops.map((o) => o.rowId)).toEqual([presetExerciseId(U, 'incline-walk'), presetExerciseId(U, 'boxing-cardio')])
+    expect(ops.map((o) => o.payload)).toEqual([
+      { id: presetExerciseId(U, 'incline-walk'), user_id: U, name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk', tips: null, archived: false },
+      { id: presetExerciseId(U, 'boxing-cardio'), user_id: U, name: '有氧拳擊', muscle_group: 'other', kind: 'boxing', tips: null, archived: false },
+    ])
+    for (const o of ops) expect(o.ignoreDuplicates).toBe(true)
+  })
+
+  it('既有帳號自建過同名的「有氧拳擊」：那個不補，只補健走', () => {
+    const rows = [...old150(U), { id: 'c1', user_id: U, name: ' 有氧拳擊 ' }]
+    expect(autoSeedOps(U, rows, true).map((o) => o.payload?.name)).toEqual(['跑步機坡度健走'])
   })
 
   it('補完再載入一次是空的（冪等）：不會每次開 App 都寫', () => {
@@ -274,11 +318,11 @@ describe('autoSeedOps（開 App 載入完自動補）', () => {
 })
 
 describe('weightStep（加重幅度）', () => {
-  it('歸類表與目錄逐一對上：150 個 key 各出現一次，不多不少', () => {
+  it('歸類表與目錄逐一對上：152 個 key 各出現一次，不多不少', () => {
     const keys = EXERCISE_CATALOG.map((p) => p.key)
     expect(new Set(WEIGHT_STEP_KEYS).size).toBe(WEIGHT_STEP_KEYS.length) // 沒有重複歸類
     expect([...WEIGHT_STEP_KEYS].sort()).toEqual([...keys].sort())
-    expect(keys).toHaveLength(150)
+    expect(keys).toHaveLength(152)
   })
 
   it('不同器材不同幅度：槓鈴深蹲 5、史密斯 5、EZ 槓 5、啞鈴臥推 2.5、腿推舉 2.5、滑輪下拉 2.5、壺鈴 4', () => {
@@ -291,8 +335,10 @@ describe('weightStep（加重幅度）', () => {
     expect(weightStep('kettlebell-swing')).toBe(4)
   })
 
-  it('徒手動作回 null（不給建議）；自建動作（沒有 key）2.5', () => {
+  it('徒手與有氧動作回 null（不給建議）；自建動作（沒有 key）2.5', () => {
     for (const k of ['pushup', 'pullup', 'dips', 'plank', 'crunch', 'sit-up', 'bodyweight-squat']) expect(weightStep(k)).toBeNull()
+    expect(weightStep('incline-walk')).toBeNull()
+    expect(weightStep('boxing-cardio')).toBeNull()
     expect(weightStep(null)).toBe(2.5)
   })
 

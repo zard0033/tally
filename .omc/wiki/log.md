@@ -100,3 +100,15 @@
 - **Pages:** session-log-2026-10-21-537aa75a.md
 - **Summary:** Auto-captured session log for 67435544-360a-4221-bd8c-a1a2b964804d (omc-wiki-capture:6ae8887e4496aef7897ce56903f55eb4f3135a2fe743c04c0f9a1bb83161b2e5)
 
+## [2026-10-22T03:20:48.432Z] ingest
+- **Pages:** session-log-2026-10-22-ab471733.md
+- **Summary:** Auto-captured session log for 31f1f7b6-a812-467c-9418-a188ee397d6d (omc-wiki-capture:366214f526dd28a26a973dc984c1ce5b1cb1a04aee94fe484c77455ae74b6fc5)
+
+## [2026-10-22T05:56:49.435Z] query
+- **Pages:** lesson-exercise-images-2026-10-17.md, phase2-round1-log-2-2026-10-13-14.md, lesson-sw-precache-size-sw-activating-2026-10-19.md, lesson-rpe-and-ddl-rpe-ddl-2026-10-21.md, lesson-sync-sheet-review-sheet-2026-10-15.md, lesson-overlay-and-mutation-mutation-2026-10-14.md, open-failures.md, verified-testing-e2e-mutation.md, lesson-field-controls-2026-10-16.md, status-facts-edge-function.md, verified-platform-rls-a11y-supabase-pwa.md, lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md, lesson-pointers.md, lesson-recharts-trend-chart-recharts-2026-10-20.md, lesson-recovery-status-2026-10-21.md, lesson-spring-sheet-spring-sheet-2026-10-16.md
+- **Summary:** Query "有氧 cardio_sessions 併入動作" → 16 results (of 16 total)
+
+## [2026-10-22T06:45:58.211Z] ingest
+- **Pages:** lesson-cardio-merge-2026-10-22.md
+- **Summary:** Created new page "lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）"
+

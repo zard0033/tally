@@ -60,13 +60,12 @@ export const FIX = {
       created_at: '2026-10-01T00:00:00.000Z',
     },
   ] as Record<string, unknown>[],
-  // 其餘六張訓練表預設為空；要驗「已有訓練」的測試自己展開 FIX 覆寫。
+  // 其餘五張訓練表預設為空；要驗「已有訓練」的測試自己展開 FIX 覆寫。
   routines: [] as Record<string, unknown>[],
   routine_exercises: [] as Record<string, unknown>[],
   workouts: [] as Record<string, unknown>[],
   workout_exercises: [] as Record<string, unknown>[],
   workout_sets: [] as Record<string, unknown>[],
-  cardio_sessions: [] as Record<string, unknown>[],
   // listIntakeKcal（實測維持熱量卡）的回應；預設空＝資料不足。要驗有結果的測試自己展開 FIX 覆寫。
   kcalWindow: [] as { eaten_on: string; qty: number; kcal: number }[],
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。

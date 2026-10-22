@@ -1,35 +1,32 @@
-/* 有氧 sheet（樣張 ④a／④b，AC 10–12）：新增與編輯同一張；row 為 null＝新增，記在畫面選的那天。
-   類型二選一用 `SegmentedControl`（會改資料值的互斥選擇，DESIGN.md「餐別分段控制器」條），
-   **類型決定欄位**：走路＝分鐘＋速度＋坡度，拳擊＝分鐘＋預估熱量。沒有備註、沒有「新類型」入口。
-   寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。刪除不可逆，先問（DESIGN.md「確認對話框」條）。
-   欄位狀態放在 CardioForm、以列 id 當 key：每次打開都是一份新的草稿。 */
+/* 有氧 sheet（spec「有氧併入動作」，樣張 `_design-sample/cardio-card.html` ③④）：編輯訓練中的一張有氧卡
+   （workout_exercises 一列）。從有氧卡的標頭進；沒有「新增」——加有氧動作就是加動作（addExerciseOps 寫入那一列）。
+   **沒有類型切換與日期**：類型由動作決定（`exerciseKind`），日期由這次訓練決定。**動作決定欄位**：健走＝分鐘＋速度＋坡度，
+   拳擊＝分鐘＋預估熱量。**分鐘欄是空的**（加卡時不預填分鐘，填了才算有記錄），有歷史時 placeholder 寫「上次 N」。沒有備註、沒有「刪除這筆」——移除走卡片 ⋯ 選單的「移除這個動作」（同其他動作）。
+   呼叫端只能拿有氧動作的卡來開（`isCardioExercise` 先守門）：checkCardio 對非有氧回「請選有氧類型」，這張沒有類型可選。
+   寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
+   欄位狀態放在 CardioForm、以 session 當 key：每次打開都是一份新的草稿。 */
 import { useEffect, useState } from 'react'
-import ConfirmDialog from '@/components/ConfirmDialog'
-import SegmentedControl from '@/components/SegmentedControl'
 import SpringSheet from '@/components/SpringSheet'
 import {
   CARDIO_FIELDS,
-  CARDIO_KINDS,
-  CARDIO_KIND_LABEL,
-  cardioDraft,
+  cardioEntryDraft,
   checkCardio,
-  createCardioOps,
-  deleteCardioOps,
-  updateCardioOps,
+  updateCardioEntryOps,
   type CardioDraft,
+  type CardioKind,
   type Row,
   type RowOp,
 } from '@/lib/training'
 
 interface CardioSheetProps {
   open: boolean
-  /** null＝新增。 */
-  row: Row | null
-  /** 新增時記在哪一天。 */
-  date: string
-  /** 「週一 10/12」；選到的不是今天才顯示，告訴使用者這筆會記在哪天。 */
-  dateNote: string | null
-  /** 每次打開加一：當表單的 key。用列 id 當 key 不夠——關閉動畫還沒跑完就再打開「新增」，會沿用上一份草稿。 */
+  /** 有氧卡那一列（workout_exercises）；null＝找不到了（被移除），sheet 裡不畫表單。 */
+  entry: Row | null
+  /** 這張卡的動作（動作庫那一列），決定標題與欄位。 */
+  exercise: Row | null
+  /** 這個動作上次的分鐘（`cardioLastMinutes`，呼叫端在開 sheet 當下取）；null＝沒有歷史，分鐘欄不放提示。 */
+  lastMinutes: number | null
+  /** 每次打開加一：當表單的 key。用列 id 當 key 不夠——關閉動畫還沒跑完就再打開同一張卡，會沿用上一份草稿。 */
   session: number
   onClose: () => void
   onWrite: (ops: RowOp[]) => Promise<void>
@@ -43,29 +40,40 @@ const FIELD_LABEL: Readonly<Record<'speed_kmh' | 'incline_pct' | 'est_kcal', str
   est_kcal: '預估熱量 kcal',
 }
 
-interface FormProps extends Omit<CardioSheetProps, 'open' | 'session'> {
+interface FormProps {
+  entry: Row
+  exercise: Row | null
+  lastMinutes: number | null
+  onClose: () => void
+  onWrite: (ops: RowOp[]) => Promise<void>
   /** 寫入中：sheet 據此鎖住關閉（Escape、點 scrim、下滑、X；寫入失敗的說明要有地方出現，AC 20）。 */
   onBusy: (busy: boolean) => void
 }
 
-function CardioForm({ row, date, dateNote, onClose, onWrite, onBusy }: FormProps) {
-  const [draft, setDraft] = useState<CardioDraft>(() => cardioDraft(row))
+function CardioForm({ entry, exercise, lastMinutes, onClose, onWrite, onBusy }: FormProps) {
+  const [draft, setDraft] = useState<CardioDraft>(() => cardioEntryDraft(entry, exercise))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [askDelete, setAskDelete] = useState(false)
-  // 這份表單新增時用的 id 固定一個：就算連按兩次送出，第二次也只是同一列的 upsert，不會多一筆
-  const [newId] = useState(() => crypto.randomUUID())
 
   useEffect(() => onBusy(busy), [busy, onBusy])
+  // 寫入途中這張卡被移除（別的裝置）時表單會卸載：不放開的話 sheet 會一直鎖著關不掉
+  useEffect(() => () => onBusy(false), [onBusy])
 
   const set = (k: keyof CardioDraft, v: string) => {
     setDraft((d) => ({ ...d, [k]: v }))
-    setError(null) // 改了欄位（或換了類型、那一欄已經不在）就不再講上一次的錯
+    setError(null) // 改了欄位就不再講上一次的錯
   }
-  const kind = draft.kind as (typeof CARDIO_KINDS)[number]
-  const optional = CARDIO_FIELDS[kind] ?? []
+  const optional = CARDIO_FIELDS[draft.kind as CardioKind] ?? []
 
-  const run = async (ops: RowOp[]) => {
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const check = checkCardio(draft)
+    if (!check.ok) {
+      setError(check.error)
+      return
+    }
+    // 什麼都沒改＝直接關；update 只帶有變的欄位，連按兩次第二次也只是同樣的值再送一次
+    const ops = updateCardioEntryOps({ current: entry, value: check.value })
     if (ops.length === 0) {
       onClose()
       return
@@ -76,36 +84,14 @@ function CardioForm({ row, date, dateNote, onClose, onWrite, onBusy }: FormProps
       await onWrite(ops)
       // 成功後 busy 不放回去：sheet 關閉動畫期間表單還在，放回去的話第二次 Enter 會再送一次（同 LogSheet）
       onClose()
-    } catch (e) {
-      setError(`這筆沒有存下來：${errText(e)}`)
+    } catch (err) {
+      setError(`這筆沒有存下來：${errText(err)}`)
       setBusy(false)
     }
   }
 
-  const save = (e: React.FormEvent) => {
-    e.preventDefault()
-    const check = checkCardio(draft)
-    if (!check.ok) {
-      setError(check.error)
-      return
-    }
-    void run(
-      row
-        ? updateCardioOps({ current: row, value: check.value })
-        : createCardioOps({ id: newId, date, value: check.value }),
-    )
-  }
-
   return (
-    <form className="tr-sheet-body tr-sheet-scroll" onSubmit={save} noValidate>
-      {dateNote && <p className="muted tr-cardio-date">記在 {dateNote}</p>}
-      <SegmentedControl
-        className="tr-cardio-kind"
-        label="有氧類型"
-        items={CARDIO_KINDS.map((k) => ({ key: k, label: CARDIO_KIND_LABEL[k] }))}
-        value={kind}
-        onPick={(k) => set('kind', k)}
-      />
+    <form className="tr-sheet-body tr-sheet-scroll" onSubmit={(e) => void save(e)} noValidate>
       <div className={`tr-cardio-grid cols-${1 + optional.length}`}>
         <label className="tr-field">
           <span className="lb">分鐘</span>
@@ -113,6 +99,8 @@ function CardioForm({ row, date, dateNote, onClose, onWrite, onBusy }: FormProps
             inputMode="decimal"
             value={draft.minutes}
             aria-label="分鐘"
+            // 分鐘不預填（填了才算有記錄，D5）：上次的值只當提示，欄位是空的
+            placeholder={lastMinutes === null ? undefined : `上次 ${lastMinutes}`}
             autoComplete="off"
             onChange={(e) => set('minutes', e.target.value)}
           />
@@ -140,46 +128,29 @@ function CardioForm({ row, date, dateNote, onClose, onWrite, onBusy }: FormProps
         </p>
       )}
       <button className="action-btn" type="submit" disabled={busy}>
-        {row ? '儲存' : '存下這筆'}
+        儲存
       </button>
-      {row && (
-        <button
-          className="tr-text-btn is-quiet tr-text-btn-center"
-          type="button"
-          disabled={busy}
-          onClick={() => setAskDelete(true)}
-        >
-          刪除這筆
-        </button>
-      )}
-
-      {row && (
-        <ConfirmDialog
-          open={askDelete}
-          title="刪除這筆有氧？"
-          cancelLabel="先不要"
-          confirmLabel="刪除"
-          danger
-          onCancel={() => setAskDelete(false)}
-          onConfirm={() => {
-            setAskDelete(false)
-            void run(deleteCardioOps(row.id))
-          }}
-        >
-          <p>刪掉就找不回來。</p>
-        </ConfirmDialog>
-      )}
     </form>
   )
 }
 
-export default function CardioSheet({ open, row, date, dateNote, session, onClose, onWrite }: CardioSheetProps) {
+export default function CardioSheet({ open, entry, exercise, lastMinutes, session, onClose, onWrite }: CardioSheetProps) {
   const [busy, setBusy] = useState(false)
-  const title = row ? '編輯有氧' : '記一筆有氧'
+  const title = exercise ? String(exercise.name) : '有氧'
 
   return (
     <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="cardio-sheet" fit locked={busy}>
-      <CardioForm key={session} row={row} date={date} dateNote={dateNote} onClose={onClose} onWrite={onWrite} onBusy={setBusy} />
+      {entry && (
+        <CardioForm
+          key={session}
+          entry={entry}
+          exercise={exercise}
+          lastMinutes={lastMinutes}
+          onClose={onClose}
+          onWrite={onWrite}
+          onBusy={setBusy}
+        />
+      )}
     </SpringSheet>
   )
 }

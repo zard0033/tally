@@ -32,7 +32,6 @@ export const TRAINING_TABLES = [
   'routine_exercises',
   'workout_exercises',
   'workout_sets',
-  'cardio_sessions',
 ] as const
 export type TrainingTable = (typeof TRAINING_TABLES)[number]
 
@@ -68,7 +67,6 @@ const FOREIGN_KEYS: Readonly<Record<TrainingTable, readonly ForeignKey[]>> = {
     { column: 'exercise_id', parent: 'exercises', onDelete: 'restrict' },
   ],
   workout_sets: [{ column: 'workout_exercise_id', parent: 'workout_exercises', onDelete: 'cascade' }],
-  cardio_sessions: [],
 }
 
 /** 一列 insert／update 的 payload 該帶哪些 `parents`（佇列的父列依賴，AC 16）。
@@ -89,7 +87,6 @@ const ENTRY_LABEL: Readonly<Record<TrainingTable, Readonly<Record<QueueEntry['op
   routine_exercises: { insert: '課表加動作', update: '改課表的動作', delete: '課表移除動作' },
   workout_exercises: { insert: '訓練加動作', update: '改訓練的動作', delete: '訓練移除動作' },
   workout_sets: { insert: '記一組', update: '改一組', delete: '刪一組' },
-  cardio_sessions: { insert: '新增有氧', update: '改有氧', delete: '刪有氧' },
 }
 
 export function describeEntry(entry: Pick<QueueEntry, 'op' | 'table'>): string {
@@ -298,11 +295,10 @@ export function workoutSummary(
 
 /* ═══════════ 訓練頁的資料（日期小點、當天的訓練卡） ═══════════ */
 
-/** 有訓練（重訓或有氧）的日子，給日期元件的小點用。 */
+/** 有訓練的日子，給日期元件的小點用。有氧併入動作後只看 workouts（只有一張有氧卡的訓練也是一次訓練）。 */
 export function trainingDates(db: TrainingDb): Set<string> {
   const out = new Set<string>()
   for (const w of db.workouts) if (typeof w.performed_on === 'string') out.add(w.performed_on)
-  for (const c of db.cardio_sessions) if (typeof c.performed_on === 'string') out.add(c.performed_on)
   return out
 }
 
@@ -313,10 +309,14 @@ export interface WorkoutCard extends WorkoutSummary {
   readonly endedAt: string | null
   readonly inProgress: boolean
   readonly exerciseCount: number
+  /** 這次訓練只有一張有氧卡（spec「有氧併入動作」AC 9：舊的單筆有氧搬過來、或單獨記一筆有氧）：列表以動作名稱與
+   *  有氧摘要列出，不寫「1 個動作 · 0/0 組 · 0 kg」。summary 是 `cardioSummary`，還沒填分鐘是空字串。其他情形 null。 */
+  readonly soloCardio: { readonly name: string; readonly summary: string } | null
 }
 
-/** 某一天的重訓，依開始時間由早到晚。一天可以有多次（AC 9）。 */
+/** 某一天的訓練，依開始時間由早到晚。一天可以有多次（AC 9）。 */
 export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard[] {
+  const exerciseById = new Map(db.exercises.map((e) => [e.id, e]))
   const exercisesOf = new Map<string, Row[]>()
   for (const we of db.workout_exercises) {
     const key = String(we.workout_id)
@@ -340,6 +340,7 @@ export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard
         endedAt,
         now,
       )
+      const only = exercises.length === 1 ? exerciseById.get(String(exercises[0].exercise_id)) : undefined
       return {
         ...summary,
         id: w.id,
@@ -347,6 +348,7 @@ export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard
         endedAt,
         inProgress: endedAt === null,
         exerciseCount: exercises.length,
+        soloCardio: only && isCardioExercise(only) ? { name: String(only.name), summary: cardioSummary(exercises[0]) } : null,
       }
     })
 }
@@ -432,7 +434,9 @@ export function startWorkoutOps(args: { workoutId: string; date: string; now: Da
   ]
 }
 
-/** 把一個動作加進這次訓練：一列 workout_exercises ＋ 預填的各組（有歷史就取上次實際完成的值）。 */
+/** 把一個動作加進這次訓練：一列 workout_exercises ＋ 預填的各組（有歷史就取上次實際完成的值）。
+ *  有氧動作（spec「有氧併入動作」D1）只有那一列、沒有任何組，有氧欄位預填上次的值、分鐘留空（`cardioPrefill`），`target` 不用。
+ *  動作是不是有氧看 db.exercises 的那列；找不到那列（本機底還沒載到）當重訓——沒有資訊可判。 */
 export function addExerciseOps(args: {
   db: TrainingDb
   workoutId: string
@@ -446,6 +450,17 @@ export function addExerciseOps(args: {
   const taken = db.workout_exercises.filter((we) => we.workout_id === workoutId).map((we) => Number(we.position))
   const position = args.position ?? (taken.length === 0 ? 0 : Math.max(...taken) + 1)
   const entryId = newId()
+  const kind = exerciseKind(db.exercises.find((e) => e.id === exerciseId))
+  if (kind !== 'strength') {
+    return [
+      {
+        op: 'insert',
+        table: 'workout_exercises',
+        rowId: entryId,
+        payload: { workout_id: workoutId, exercise_id: exerciseId, position, ...cardioPrefill(db, exerciseId, kind, workoutId) },
+      },
+    ]
+  }
   const prefilled = prefillSets(db, exerciseId, target, workoutId)
   return [
     {
@@ -952,7 +967,8 @@ export function routineFromWorkoutOps(args: { db: TrainingDb; workoutId: string;
 }
 
 /** 照課表開始一次訓練：訓練記下 routine_id（AC 4b），課表的動作依序帶入，各組一律預填上次實際完成的值，
- *  沒歷史才用課表的預設組次（addExerciseOps → prefillSets）。找不到課表回空陣列，不悄悄變成空白開始。 */
+ *  沒歷史才用課表的預設組次（addExerciseOps → prefillSets）。有氧動作帶出一張有氧卡、欄位預填上次的值，
+ *  課表的 target_sets／target_reps 對它沒意義、不用。找不到課表回空陣列，不悄悄變成空白開始。 */
 export function startWorkoutFromRoutineOps(args: {
   db: TrainingDb
   routineId: string
@@ -1029,6 +1045,99 @@ export type CardioCheck = { ok: true; value: CardioValue } | { ok: false; error:
 
 const isCardioKind = (k: unknown): k is CardioKind => (CARDIO_KINDS as readonly string[]).includes(String(k))
 
+/* ─── 有氧併入動作（spec「有氧併入動作」D1、D2）：動作庫的 kind 決定這個動作是不是有氧，
+       有氧欄位放在 workout_exercises 那一列（一張有氧卡＝一列，沒有組）。 ─── */
+
+/** 動作的類型。DDL 是 `exercises.kind text not null default 'strength'`。 */
+export type ExerciseKind = 'strength' | CardioKind
+
+/** 動作庫那一列的類型：kind 是 CARDIO_KINDS 之一才算有氧，其他一律當重訓——欄位缺（舊快取、還沒跑 DDL）、
+ *  不認得的值、找不到那列都一樣。寧可把怪資料當重訓（多出幾組可刪），也不讓它變成沒有組、也填不了的卡。 */
+export function exerciseKind(row: Row | null | undefined): ExerciseKind {
+  return row && isCardioKind(row.kind) ? row.kind : 'strength'
+}
+
+export const isCardioExercise = (row: Row | null | undefined): boolean => exerciseKind(row) !== 'strength'
+
+/** 這張有氧卡記了沒（D5：有氧卡沒有勾，分鐘有值＝有記錄）。 */
+export const cardioRecorded = (entry: Row): boolean => entry.minutes !== null && entry.minutes !== undefined && entry.minutes !== ''
+
+/** workout_exercises 上的四個有氧欄位（類型在動作上，不在這一列）。 */
+export interface CardioFields {
+  minutes: number | null
+  speed_kmh: number | null
+  incline_pct: number | null
+  est_kcal: number | null
+}
+
+/** 這個動作「上次」那張有記錄的有氧卡。「上次」的規則同 prefillSets（completedSessions）：排除進行中的這一次、
+ *  依 performed_on → started_at → position 由新到舊取第一張；沒填分鐘的卡不算記錄，跳過往更早找（同「整次沒打勾就跳過」）；
+ *  訓練已不在的孤兒卡不算。 */
+function lastCardioEntry(db: TrainingDb, exerciseId: string, excludeWorkoutId?: string): Row | undefined {
+  const workouts = new Map(db.workouts.map((w) => [w.id, w]))
+  return db.workout_exercises
+    .filter((we) => we.exercise_id === exerciseId && we.workout_id !== excludeWorkoutId && cardioRecorded(we))
+    .flatMap((we) => {
+      const workout = workouts.get(String(we.workout_id))
+      return workout ? [{ we, workout }] : []
+    })
+    .sort(
+      (a, b) =>
+        String(b.workout.performed_on).localeCompare(String(a.workout.performed_on)) ||
+        startedMs(b.workout) - startedMs(a.workout) ||
+        Number(b.we.position) - Number(a.we.position),
+    )[0]?.we
+}
+
+/** 加有氧動作時預填的欄位：上次那張有記錄的有氧卡（`lastCardioEntry`）的速度／坡度／預估熱量。
+ *  **分鐘一律 null**（使用者 2026-10-22 裁決）：有氧卡沒有勾，D5「分鐘有值＝有記錄」——分鐘也預填的話，帶出來那天沒做，
+ *  結束訓練就留下一筆假記錄，下次又被當成「上次」往下傳。上次的分鐘改由 `cardioLastMinutes` 給有氧 sheet 當提示。
+ *  不屬於該類型的欄位一律 null；沒有歷史就四個都是 null。四個鍵永遠都在。 */
+export function cardioPrefill(db: TrainingDb, exerciseId: string, kind: CardioKind, excludeWorkoutId?: string): CardioFields {
+  const last = lastCardioEntry(db, exerciseId, excludeWorkoutId)
+  const out: CardioFields = { minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null }
+  for (const f of CARDIO_FIELDS[kind]) out[f] = optNum(last?.[f] === '' ? null : last?.[f])
+  return out
+}
+
+/** 上次那張有記錄的有氧卡的分鐘（有氧 sheet 分鐘欄的「上次 N」提示）；沒有歷史回 null。挑法同 cardioPrefill。 */
+export function cardioLastMinutes(db: TrainingDb, exerciseId: string, excludeWorkoutId?: string): number | null {
+  return optNum(lastCardioEntry(db, exerciseId, excludeWorkoutId)?.minutes)
+}
+
+/** 一張有氧卡 → 有氧 sheet 的草稿。類型取自動作（`exerciseKind`）：動作找不到或不是有氧時 kind 是 'strength'，
+ *  checkCardio 會擋下來——那不是能填有氧的卡。 */
+export function cardioEntryDraft(entry: Row, exercise: Row | null): CardioDraft {
+  return {
+    kind: exerciseKind(exercise),
+    minutes: draftNum(entry.minutes),
+    speed_kmh: draftNum(entry.speed_kmh),
+    incline_pct: draftNum(entry.incline_pct),
+    est_kcal: draftNum(entry.est_kcal),
+  }
+}
+
+/** 有氧卡存檔：只帶有變的欄位、全沒變回空陣列；**不帶 kind**——workout_exercises 沒有這欄，
+ *  帶了 PostgREST 會整筆拒絕。 */
+export function updateCardioEntryOps(args: { current: Row; value: CardioValue }): RowOp[] {
+  const { current, value } = args
+  const { minutes, speed_kmh, incline_pct, est_kcal } = value
+  const payload = changedCardioFields(current, { minutes, speed_kmh, incline_pct, est_kcal })
+  return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'workout_exercises', rowId: current.id, payload }]
+}
+
+/** 有氧欄位與現有那列比，回傳有變的。 */
+function changedCardioFields(current: Row, value: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value)) {
+    const cur = current[k] === undefined || current[k] === '' ? null : current[k]
+    // 不能直接 Number(cur)：Number(null) 是 0，「沒填 → 填 0」會被當成沒變
+    const same = v === null || cur === null ? v === cur : Number(cur) === v
+    if (!same) payload[k] = v
+  }
+  return payload
+}
+
 /** 一個欄位的字串 → 數字。空白回 null（選填的「沒填」）；看不懂、超出範圍、超過一位小數回錯誤訊息。
  *  NFKC 讓全形數字與全形小數點也認得（手機中文鍵盤切出來的常是全形）。 */
 function parseCardioField(field: keyof typeof CARDIO_RULES, raw: string): number | null | { error: string } {
@@ -1062,70 +1171,16 @@ export function checkCardio(draft: CardioDraft): CardioCheck {
 /** 數字欄 → 表單字串（編輯既有那筆時的初始值）。 */
 const draftNum = (v: unknown): string => (v === null || v === undefined || v === '' ? '' : String(Number(v)))
 
-/** 一筆既有的有氧 → 編輯表單的草稿；null＝新增，預設跑步機坡度健走。
- *  不認得的類型原樣保留：退成「走路」的話，什麼都沒改按儲存也會把那筆改成走路、清掉它的欄位；
- *  保留下來，checkCardio 會擋下來要使用者自己選。 */
-export function cardioDraft(row: Row | null): CardioDraft {
-  return {
-    kind: row ? String(row.kind) : 'incline_walk',
-    minutes: draftNum(row?.minutes),
-    speed_kmh: draftNum(row?.speed_kmh),
-    incline_pct: draftNum(row?.incline_pct),
-    est_kcal: draftNum(row?.est_kcal),
-  }
-}
-
-/** 新增一筆有氧，記在畫面選的那一天。不帶 user_id（伺服器 default auth.uid()）。 */
-export function createCardioOps(args: { id: string; date: string; value: CardioValue }): RowOp[] {
-  const { id, date, value } = args
-  return [{ op: 'insert', table: 'cardio_sessions', rowId: id, payload: { performed_on: date, ...value } }]
-}
-
-/** 只帶有變的欄位；全沒變回空陣列。換類型時舊類型的欄位會一起變成 null（checkCardio 已經清掉）。 */
-export function updateCardioOps(args: { current: Row; value: CardioValue }): RowOp[] {
-  const { current, value } = args
-  const payload: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(value)) {
-    const cur = current[k] === undefined || current[k] === '' ? null : current[k]
-    // 不能直接 Number(cur)：Number(null) 是 0，「沒填 → 填 0」會被當成沒變
-    const same = v === null || cur === null ? v === cur : k === 'kind' ? cur === v : Number(cur) === v
-    if (!same) payload[k] = v
-  }
-  return Object.keys(payload).length === 0 ? [] : [{ op: 'update', table: 'cardio_sessions', rowId: current.id, payload }]
-}
-
-export function deleteCardioOps(id: string): RowOp[] {
-  return [{ op: 'delete', table: 'cardio_sessions', rowId: id }]
-}
-
-/** 列表上那一筆的名稱：認得的類型顯示中文；不認得（未來的類型、資料異常）原樣顯示，不藏起來。 */
-export const cardioLabel = (row: Row): string => (isCardioKind(row.kind) ? CARDIO_KIND_LABEL[row.kind] : String(row.kind))
-
-/** 「30 分 · 5.5 km/h · 坡度 8%」／「36 分 · 預估 121 kcal」。只列有填的欄位；預估熱量不稱「消耗」（AC 11）。 */
+/** 一張有氧卡（workout_exercises）的摘要：「30 分 · 5.5 km/h · 坡度 8%」／「36 分 · 預估 121 kcal」。只列有填的欄位；
+ *  預估熱量不稱「消耗」（AC 11）。還沒填分鐘回空字串（不然 Number(null) 會寫成「0 分」），畫面看到空字串顯示「點一下填寫」。 */
 export function cardioSummary(row: Row): string {
   const has = (v: unknown) => v !== null && v !== undefined && v !== ''
+  if (!cardioRecorded(row)) return ''
   const parts = [`${Number(row.minutes)} 分`]
   if (has(row.speed_kmh)) parts.push(`${Number(row.speed_kmh)} km/h`)
   if (has(row.incline_pct)) parts.push(`坡度 ${Number(row.incline_pct)}%`)
   if (has(row.est_kcal)) parts.push(`預估 ${Number(row.est_kcal).toLocaleString('en-US')} kcal`)
   return parts.join(' · ')
-}
-
-/** 某一天的有氧，依建立時間排。剛記、還在佇列裡的那筆沒有 created_at（伺服器才給），排在最後——
- *  它就是最新的。同樣沒有的維持原順序（佇列重放的順序＝記的順序）。 */
-export function cardioOn(db: TrainingDb, date: string): Row[] {
-  const at = (r: Row) => (typeof r.created_at === 'string' ? r.created_at : null)
-  return db.cardio_sessions
-    .filter((c) => c.performed_on === date)
-    .map((row, i) => ({ row, i }))
-    .sort((a, b) => {
-      const x = at(a.row)
-      const y = at(b.row)
-      if (x !== null && y !== null) return x.localeCompare(y) || a.i - b.i
-      if (x === null && y === null) return a.i - b.i
-      return x === null ? 1 : -1
-    })
-    .map(({ row }) => row)
 }
 
 export interface ExerciseFilter {

@@ -1,19 +1,32 @@
-/* 動作庫的預設目錄：既有 16 個預填動作（`PRESET_EXERCISES`，新帳號首次預填）加上 134 個常見動作，共 150 個。
+/* 動作庫的預設目錄：既有 16 個預填動作（`PRESET_EXERCISES`，新帳號首次預填）加上 134 個常見動作與 2 個有氧動作，共 152 個。
    每個動作有一張縮圖 `src/assets/exercises/<key>.jpg` 與一個示意動畫 `src/assets/exercise-gifs/<key>.gif`
    （Gym visual 的圖；來源與授權見 `scripts/build-exercise-images.mjs` 與 `NOTICE.md`，key→資料集 id 的對照在
-   `scripts/exercise-images.json`；徒手深蹲、箱式深蹲資料集沒有對應，列在該檔的 `noImage`，退回肌群單字）。
+   `scripts/exercise-images.json`；徒手深蹲、箱式深蹲資料集沒有對應，列在該檔的 `noImage`，退回肌群單字；
+   兩個有氧動作刻意不配圖，同樣退回肌群單字，見 `NO_IMAGE_KEYS`）。
+   **有氧動作**（spec「有氧併入動作」D1、D2）：`kind` 是 CARDIO_KINDS 之一，只有這兩個預設動作會是有氧，使用者自建的一律重訓。
 
    **id 與圖的對應不靠 schema**：預設動作的列 id 是確定性的（`presetExerciseId`：userId＋key 的 uuid v5），
    所以拿列上的 `user_id` 與 `id` 重算一次就知道它是哪個預設動作、該用哪張圖——使用者改名、封存、寫要點都不影響。
    使用者自己新增的動作 id 不在表裡，沒有圖。
    **開 App 載入完自動補**（`autoSeedOps`，不用按按鈕）：空庫補整份、已有 16 個原始預設動作的帳號補其餘缺的、從零自建的不補；
    insert-ignore，不動使用者改過或封存的列；**名稱與既有動作重複的不補**（`checkExercise` 的規則：名稱不能重複，含已封存的）。 */
-import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type MuscleGroup, type Row, type RowOp } from './training'
+import {
+  MUSCLE_GROUPS,
+  PRESET_EXERCISES,
+  foldName,
+  presetExerciseId,
+  type CardioKind,
+  type MuscleGroup,
+  type Row,
+  type RowOp,
+} from './training'
 
 export interface CatalogExercise {
   readonly key: string
   readonly name: string
   readonly muscle_group: MuscleGroup
+  /** 有氧動作才有；沒有＝重訓。 */
+  readonly kind?: CardioKind
 }
 
 export const EXTRA_EXERCISES: readonly CatalogExercise[] = [
@@ -151,6 +164,9 @@ export const EXTRA_EXERCISES: readonly CatalogExercise[] = [
   { key: 'power-clean', name: '爆發式高翻', muscle_group: 'other' },
   { key: 'turkish-get-up', name: '土耳其起立', muscle_group: 'other' },
   { key: 'kettlebell-swing', name: '單臂壺鈴擺盪', muscle_group: 'other' },
+  // 有氧：名稱與 CARDIO_KIND_LABEL 一致（單元測試鎖住）；接在最後，前面 150 個的順序不動
+  { key: 'incline-walk', name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk' },
+  { key: 'boxing-cardio', name: '有氧拳擊', muscle_group: 'other', kind: 'boxing' },
 ]
 
 export const EXERCISE_CATALOG: readonly CatalogExercise[] = [...PRESET_EXERCISES, ...EXTRA_EXERCISES]
@@ -164,7 +180,7 @@ interface UserIndex {
 
 const indexes = new Map<string, UserIndex>()
 
-/** 該帳號的 id 對照。算 150 次 uuid v5，每個帳號只算一次（搜尋框每打一個字都會重新渲染，不能每次重算）。 */
+/** 該帳號的 id 對照。算 152 次 uuid v5，每個帳號只算一次（搜尋框每打一個字都會重新渲染，不能每次重算）。 */
 function indexOf(userId: string): UserIndex {
   let ix = indexes.get(userId)
   if (!ix) {
@@ -180,8 +196,13 @@ export function catalogKey(row: Row): string | null {
   return typeof row.user_id === 'string' ? (indexOf(row.user_id).idToKey.get(row.id) ?? null) : null
 }
 
-/** 資料集沒有對應圖的預設動作（退回肌群單字）；與 `scripts/exercise-images.json` 的 `noImage` 一致（單元測試鎖住）。 */
-export const NO_IMAGE_KEYS: ReadonlySet<string> = new Set(['bodyweight-squat', 'box-squat'])
+/** 沒有圖的預設動作（退回肌群單字）：資料集沒有對應的兩個（＝`scripts/exercise-images.json` 的 `noImage`），
+ *  加上刻意不配圖的有氧動作（spec「有氧併入動作」：有氧卡沒有示意圖）。單元測試鎖住。 */
+export const NO_IMAGE_KEYS: ReadonlySet<string> = new Set([
+  'bodyweight-squat',
+  'box-squat',
+  ...EXERCISE_CATALOG.flatMap((p) => (p.kind ? [p.key] : [])),
+])
 
 /** 畫面上這一列會不會出現示意圖：是預設動作、而且有圖。著作權標示（GymVisualCredit）用它決定要不要印。 */
 export function hasCatalogImage(row: Row): boolean {
@@ -189,7 +210,8 @@ export function hasCatalogImage(row: Row): boolean {
   return key !== null && !NO_IMAGE_KEYS.has(key)
 }
 
-/** 動作庫「補齊預設動作」要寫的列：目錄裡、這個帳號還沒有的。「已有」有兩種：
+/** 動作庫「補齊預設動作」要寫的列：目錄裡、這個帳號還沒有的。每列都帶 `kind`（重訓的寫 'strength'，與伺服器 default 相同；
+ *  一律帶才不會同一個函式產出兩種形狀的列，本機疊上佇列時也看得到類型）。「已有」有兩種：
  *  ① 確定性 id 已在（含已封存的、改過名的預設動作）；
  *  ② **名稱與既有任何動作重複**（`foldName`：全形半形、大小寫、空白都視為同名；含已封存的）——
  *  `checkExercise` 規定動作名稱不能重複，補進同名列之後兩列都存不了（改要點也會被名稱檢查擋下），
@@ -202,7 +224,7 @@ export function catalogToAdd(userId: string, existing: readonly Row[]): Row[] {
   return EXERCISE_CATALOG.flatMap((p, i): Row[] =>
     haveId.has(ids[i]) || haveName.has(foldName(p.name))
       ? []
-      : [{ id: ids[i], user_id: userId, name: p.name, muscle_group: p.muscle_group, tips: null, archived: false }],
+      : [{ id: ids[i], user_id: userId, name: p.name, muscle_group: p.muscle_group, kind: p.kind ?? 'strength', tips: null, archived: false }],
   )
 }
 
@@ -219,10 +241,10 @@ export function catalogInsertOps(userId: string, existing: readonly Row[]): RowO
 }
 
 /** 開 App 載入完之後要自動補的預設動作（使用者 2026-10-17：「自動補動作，不用按按鈕」）。三種情形：
- *  ① **動作庫是空的**（新帳號）：補整份目錄 150 個。離線也補（排進佇列、insert-ignore，回線才上傳）。
+ *  ① **動作庫是空的**（新帳號）：補整份目錄 152 個。離線也補（排進佇列、insert-ignore，回線才上傳）。
  *  ② **已有全部 16 個原始預設動作**（App 自己預填過的帳號）且**這份動作是從伺服器載到的**：補其餘缺的。
  *     只認伺服器載到的：本機快取可能比伺服器舊，拿舊清單算「缺什麼」會把同名判斷也算歪。
- *  ③ 其他（使用者從零自建、沒有預設動作）：**不補**——那是他刻意建的庫，不該突然多 150 個。
+ *  ③ 其他（使用者從零自建、沒有預設動作）：**不補**——那是他刻意建的庫，不該突然多 152 個。
  *  補的內容由 `catalogToAdd` 決定：id 已在、名稱重複的都不補，所以補完再載入一次不會再寫（冪等）。 */
 export function autoSeedOps(userId: string, existing: readonly Row[], loadedFromServer: boolean): RowOp[] {
   if (existing.length === 0) return catalogInsertOps(userId, existing)
@@ -234,7 +256,7 @@ export function autoSeedOps(userId: string, existing: readonly Row[], loadedFrom
 
 /* ═══════════ 加重幅度（重量建議用；spec.md「階段 4 甲」口徑 3）═══════════
    依器材歸類，不給使用者調：槓鈴／EZ 槓／史密斯 5 kg（兩邊各加最小 2.5 kg 槓片）、啞鈴與器械滑輪 2.5 kg、壺鈴 4 kg；
-   徒手動作不給重量建議；使用者自建的動作沒有 key，一律 2.5 kg。這是依常見做法的假設，健身房實際跳格不同時改這張表。 */
+   徒手與有氧動作不給重量建議；使用者自建的動作沒有 key，一律 2.5 kg。這是依常見做法的假設，健身房實際跳格不同時改這張表。 */
 const BARBELL_KEYS = [
   'barbell-bench-press', 'incline-barbell-bench-press', 'decline-barbell-bench-press', 'smith-bench-press', 'smith-incline-bench-press',
   'barbell-row', 'reverse-grip-barbell-row', 't-bar-row', 'smith-bent-over-row',
@@ -281,6 +303,9 @@ const BODYWEIGHT_KEYS = [
   'crunch', 'decline-crunch', 'reverse-crunch', 'sit-up', 'bench-leg-raise', 'russian-twist', 'plank', 'side-plank', 'ab-rollout', 'dead-bug',
 ] as const
 
+/** 有氧：沒有組、沒有重量（spec「有氧併入動作」D1），不給重量建議。 */
+const CARDIO_KEYS = ['incline-walk', 'boxing-cardio'] as const
+
 export const CUSTOM_WEIGHT_STEP = 2.5
 
 const STEP_BY_KEY: ReadonlyMap<string, number | null> = new Map<string, number | null>([
@@ -289,9 +314,10 @@ const STEP_BY_KEY: ReadonlyMap<string, number | null> = new Map<string, number |
   ...MACHINE_KEYS.map((k): [string, number | null] => [k, 2.5]),
   ...KETTLEBELL_KEYS.map((k): [string, number | null] => [k, 4]),
   ...BODYWEIGHT_KEYS.map((k): [string, number | null] => [k, null]),
+  ...CARDIO_KEYS.map((k): [string, number | null] => [k, null]),
 ])
 
-/** 該動作建議加重時一次加多少 kg；徒手動作回 null（不給建議）。`key` 是 `catalogKey` 的結果，自建動作（null）用 2.5。 */
+/** 該動作建議加重時一次加多少 kg；徒手與有氧動作回 null（不給建議）。`key` 是 `catalogKey` 的結果，自建動作（null）用 2.5。 */
 export function weightStep(key: string | null): number | null {
   // 不能用 `??`：徒手動作的值本身就是 null，會被當成「沒有這個 key」而變成 2.5
   return key !== null && STEP_BY_KEY.has(key) ? STEP_BY_KEY.get(key)! : CUSTOM_WEIGHT_STEP
@@ -299,7 +325,7 @@ export function weightStep(key: string | null): number | null {
 
 /** 歸類表涵蓋的 key（單元測試用：必須與 `EXERCISE_CATALOG` 逐一對上，不多不少、不重複）。 */
 export const WEIGHT_STEP_KEYS: readonly string[] = [
-  ...BARBELL_KEYS, ...DUMBBELL_KEYS, ...MACHINE_KEYS, ...KETTLEBELL_KEYS, ...BODYWEIGHT_KEYS,
+  ...BARBELL_KEYS, ...DUMBBELL_KEYS, ...MACHINE_KEYS, ...KETTLEBELL_KEYS, ...BODYWEIGHT_KEYS, ...CARDIO_KEYS,
 ]
 
 /** 肌群的單字（沒有圖的動作用它當縮圖）。 */

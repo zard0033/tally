@@ -109,12 +109,11 @@ export async function seedFetchStub(
         'workouts',
         'workout_exercises',
         'workout_sets',
-        'cardio_sessions',
       ]
       const json = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
-      /* 訓練七張表的假資料庫：由 fix 起頭，寫入真的落地、之後的 GET 讀得回來（不像 intake 的 stub
+      /* 訓練六張表的假資料庫：由 fix 起頭，寫入真的落地、之後的 GET 讀得回來（不像 intake 的 stub
          不落地）。離線記錄 → 回線同步 → 重新載入這條鏈，要寫入落地才驗得出「沒有重複、沒有消失」。
          語意只做到這份 App 用到的：POST＝upsert（Prefer 帶 ignore-duplicates 時已存在就略過），
          回傳實際動到的列（`.select('id')` 要靠它數筆數）；PATCH／DELETE 以 `id=eq.` 定位；

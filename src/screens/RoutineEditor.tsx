@@ -1,4 +1,4 @@
-/* 課表編輯整頁（樣張 ⑤）：名稱就地改、動作依序列出、加動作、點一列改預設組次、移除、複製、封存。
+/* 課表編輯整頁（樣張 ⑤）：名稱就地改、動作依序列出、加動作、點一列改預設組次（有氧動作沒有這列）、移除、複製、封存。
    整頁而非 sheet：長清單、有自己的導覽（容器原則，DESIGN v2.54）。進出時 Training 通知 App 收起底部列。
    每個修改當下就存，沒有儲存鈕；名稱用草稿（失焦或 Enter 才寫），不合法就放回原值並說明。
    寫入全走 onWrite；失敗留在頁面上說「這筆沒有存下來」。
@@ -19,6 +19,7 @@ import {
   checkRoutineName,
   copyRoutineOps,
   formatRoutineTarget,
+  isCardioExercise,
   removeRoutineExerciseOps,
   renameRoutineOps,
   reorderRoutineExercisesOps,
@@ -67,10 +68,17 @@ function SortableRow({ item, index, label, onEdit, onRemove }: SortableRowProps)
         </svg>
       </button>
       <ExerciseThumb exercise={item.exercise} zoom />
-      <button className="tr-row-main" type="button" aria-label={`${label}，改預設組次`} onClick={onEdit}>
-        <span className="nm">{label}</span>
-        <span className="sub">{formatRoutineTarget(entry)}</span>
-      </button>
+      {isCardioExercise(item.exercise) ? (
+        // 有氧動作沒有組：不顯示預設組次、也不能開那張 sheet（target_sets 照預設存，不使用；spec「有氧併入動作」D1）
+        <span className="tr-row-main is-static">
+          <span className="nm">{label}</span>
+        </span>
+      ) : (
+        <button className="tr-row-main" type="button" aria-label={`${label}，改預設組次`} onClick={onEdit}>
+          <span className="nm">{label}</span>
+          <span className="sub">{formatRoutineTarget(entry)}</span>
+        </button>
+      )}
       <button className="tr-ib tr-row-end" type="button" aria-label={`移除${label}`} onClick={onRemove}>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" />

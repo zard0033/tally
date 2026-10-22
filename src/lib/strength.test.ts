@@ -296,3 +296,37 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
     expect(suggestWeight(base(sets), 'sq', 2.5, 'cur')).toMatchObject({ reason: '上次11組都做到 12 下' })
   })
 })
+
+describe('資料裡混了有氧卡（spec「有氧併入動作」AC 6）', () => {
+  // 有氧卡＝workout_exercises 一列、有氧欄位有值、沒有任何組；同場與只有有氧的訓練都放
+  const card = (id: string, workout_id: string): Row => ({ ...entry(id, workout_id, 'walk'), minutes: 30, speed_kmh: 5.5, incline_pct: 8 })
+  const d = db({
+    exercises: [{ id: 'sq', name: '深蹲' }, { id: 'walk', name: '跑步機坡度健走', kind: 'incline_walk' }],
+    workouts: [workout('w1', '2026-10-10'), workout('wc1', '2026-10-11'), workout('wc2', '2026-10-12')],
+    workout_exercises: [entry('e1', 'w1', 'sq'), card('c0', 'w1'), card('c1', 'wc1'), card('c2', 'wc2')],
+    workout_sets: [set('s1', 'e1', 100, 5)],
+  })
+
+  it('strengthHistory／progressList：有氧動作沒有點、不列；重訓動作的點不變（100×5 → 116.7）', () => {
+    expect(strengthHistory(d, 'walk')).toEqual([])
+    expect(strengthHistory(d, 'sq')).toEqual([{ workoutId: 'w1', date: '2026-10-10', e1rm: 116.7, topSet: { weight_kg: 100, reps: 5 } }])
+    expect(progressList(d)).toEqual([{ exerciseId: 'sq', name: '深蹲', sessions: 1, best: 116.7, lastDate: '2026-10-10' }])
+  })
+
+  it('suggestWeight：有氧動作兩次只有有氧的訓練也是資料不足；重訓動作的建議不受同場有氧卡影響', () => {
+    expect(suggestWeight(d, 'walk', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
+    // 同 suggestWeight 那組的 base([[60, 12] × 3])，h2 與進行中的 cur 各多一張有氧卡
+    const mixed = db({
+      exercises: [{ id: 'walk', name: '跑步機坡度健走', kind: 'incline_walk' }],
+      workouts: [workout('h1', '2026-10-05'), workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
+      workout_exercises: [entry('e1', 'h1', 'sq'), entry('e2', 'h2', 'sq'), entry('e3', 'cur', 'sq'), card('ch2', 'h2'), card('ccur', 'cur')],
+      workout_sets: [
+        set('a1', 'e1', 55, 12),
+        { ...set('b0', 'e2', 60, 12), set_no: 1 },
+        { ...set('b1', 'e2', 60, 12), set_no: 2 },
+        { ...set('b2', 'e2', 60, 12), set_no: 3 },
+      ],
+    })
+    expect(suggestWeight(mixed, 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下' })
+  })
+})

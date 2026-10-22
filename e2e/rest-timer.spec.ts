@@ -9,6 +9,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { FIX, TODAY } from './fixtures'
 import { openApp } from './harness'
+import { SEEDED_FIX } from './seeded'
 
 const EX_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -620,4 +621,50 @@ test('問題還在時：亂序勾完後取消勾別組、取消全部完成，�
   await page.locator('.ex').getByRole('button', { name: '取消全部完成', exact: true }).click()
   await expect(ask(page)).toHaveCount(0)
   expect(await rpeWrites(page)).toEqual([])
+})
+
+/* ── 有氧卡（spec「有氧併入動作」AC 6）：沒有組，所以休息條、RPE（頁尾與條上的問題）、重量建議、全部完成、新增一組都碰不到 ── */
+const WALK = (() => {
+  const row = SEEDED_FIX.exercises.find((e) => e.name === '跑步機坡度健走')
+  if (!row) throw new Error('目錄裡沒有「跑步機坡度健走」')
+  return row as Record<string, unknown> & { id: string }
+})()
+
+/** 進行中的訓練：腿推舉三組（同 LIVE）＋一張還沒填的坡度健走卡。 */
+const WITH_CARDIO: typeof FIX = {
+  ...LIVE,
+  exercises: [...FIX.exercises, WALK],
+  workout_exercises: [
+    ...LIVE.workout_exercises,
+    { id: 'we-walk', workout_id: 'w-live', exercise_id: WALK.id, position: 1, minutes: null, speed_kmh: null, incline_pct: null, est_kcal: null },
+  ],
+}
+
+test('有氧卡：沒有組、全部完成、新增一組、RPE 頁尾；點它開的是有氧 sheet（沒有重量建議），存檔不開休息條', async ({ page }) => {
+  await prepare(page)
+  await openLive(page, true, WITH_CARDIO)
+  const cardio = page.locator('.ex.is-cardio')
+  await expect(cardio).toHaveCount(1)
+  await expect(cardio.locator('.set')).toHaveCount(0)
+  await expect(cardio.getByRole('button', { name: '全部完成', exact: true })).toHaveCount(0)
+  await expect(cardio.getByRole('button', { name: '新增一組' })).toHaveCount(0)
+  await expect(cardio.locator('[data-section="ex-rpe"]')).toHaveCount(0)
+
+  await cardio.locator('.ex-toggle').click()
+  const sheet = page.locator('[data-screen="cardio-sheet"]')
+  await expect(sheet).toBeVisible()
+  await expect(page.locator('[data-screen="set-sheet"]'), '不是組編輯 sheet').toHaveCount(0)
+  await expect(page.locator('[data-section="suggest"]'), '沒有重量建議').toHaveCount(0)
+  await sheet.getByRole('textbox', { name: '分鐘', exact: true }).fill('30')
+  await sheet.getByRole('button', { name: '儲存' }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(cardio.locator('.cardio-sum')).toHaveText('30 分')
+  await expect(bar(page), '記了有氧不開休息條').toHaveCount(0)
+  await expect(cardio.locator('[data-section="ex-rpe"]'), '填了分鐘也不問 RPE').toHaveCount(0)
+
+  // 對照：同一頁的重訓卡勾組照常開休息條、三組勾完照常長頁尾——這頁的休息條與頁尾是活的，上面的「沒有」才有意義
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await expect(bar(page)).toBeVisible()
+  await expect(page.locator('.ex', { hasText: '腿推舉' }).locator('[data-section="ex-rpe"]')).toBeVisible()
+  await expect(cardio.locator('[data-section="ex-rpe"]')).toHaveCount(0)
 })

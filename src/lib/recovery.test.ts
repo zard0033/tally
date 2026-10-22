@@ -319,3 +319,22 @@ describe('recoveryStatus：熱身與 RPE', () => {
     expect(of(db(), 'back').nearFailure).toBe(false)
   })
 })
+
+describe('recoveryStatus：資料裡混了有氧卡（spec「有氧併入動作」AC 6）', () => {
+  // 有氧卡＝workout_exercises 一列、沒有任何組。肌群被使用者改成下半身的有氧動作也一樣不算：恢復只看已打勾的組
+  const card = (id: string, workout_id: string, exercise_id: string): Row => ({ ...entry(id, workout_id, exercise_id), minutes: 30 })
+
+  it('下半身 10 組 48 小時前 ＋ 同場一張有氧卡 ＋ 2 小時前只有有氧的一場 → 與沒有有氧時相同：恢復中、窗口 72、剩 24', () => {
+    const d = db({
+      exercises: [exercise('ex', 'legs'), { ...exercise('walk', 'other'), kind: 'incline_walk' }, { ...exercise('box', 'legs'), kind: 'boxing' }],
+      workouts: [workout('w', 48), workout('wc', 2)],
+      workout_exercises: [entry('e', 'w', 'ex'), card('c0', 'w', 'walk'), card('c1', 'wc', 'walk'), card('c2', 'wc', 'box')],
+      workout_sets: sets('e', 10),
+    })
+    // w 在 49 小時前開始（本機 2026-10-19 11:00）、48 小時前結束
+    expect(of(d, 'legs')).toEqual({
+      group: 'legs', state: 'recovering', sets: 10, lastDate: '2026-10-19', daysAgo: 2, windowHours: 72, nearFailure: false, remainingHours: 24,
+    })
+    for (const g of ['chest', 'back', 'shoulder', 'arms', 'core']) expect(of(d, g).state).toBe('none')
+  })
+})

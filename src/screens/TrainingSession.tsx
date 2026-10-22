@@ -5,6 +5,9 @@
    列上只有兩顆數字鈕與一顆勾；整列可左滑露出紅鈕刪除。卡片頭固定四件事：握把、名稱（點了收合／展開）、
    ⓘ 要點（點了在卡片內展開面板）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群。
    欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
+   有氧動作的卡（spec「有氧併入動作」）沒有組：永遠是收合的外觀，名稱鈕點了開有氧 sheet（CardioSheet），第二行是摘要或「點一下填寫」；
+   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、ⓘ、⋯ 與其他卡相同。
+   有氧動作卻有組的卡退回重訓的畫法（`isCardioCard`）。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
@@ -22,7 +25,8 @@ import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
 import { CASCADE_STEP_MS, DUR, REDUCED_FADE_MAX_MS, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
-import { catalogKey } from '@/lib/exerciseCatalog'
+import { hasCatalogImage } from '@/lib/exerciseCatalog'
+import CardioSheet from './CardioSheet'
 import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
@@ -32,12 +36,16 @@ import {
   addExerciseOps,
   addSetOps,
   allSetsDone,
+  cardioLastMinutes,
+  cardioRecorded,
+  cardioSummary,
   completesExercise,
   exerciseProgress,
   exerciseRpe,
   finishWorkoutOps,
   formatKg,
   isBackfilled,
+  isCardioExercise,
   removeSetOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
@@ -63,6 +71,10 @@ interface TrainingSessionProps {
 
 const newId = () => crypto.randomUUID()
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/** 這張卡用有氧的畫法：有氧動作、而且沒有組。有氧動作卻有組的卡（舊版 App 把有氧當重訓加進來；照課表開訓時
+ *  動作還沒載到本機底、addExerciseOps 當重訓產了組）退回重訓的畫法——組看得到、刪得掉、打過勾的組移除前照樣先問。 */
+const isCardioCard = (item: WorkoutExerciseDetail) => isCardioExercise(item.exercise) && item.sets.length === 0
 
 /** m:ss；超過一小時就繼續累加分鐘（75:12），不換成時:分:秒——掃一眼看的是「大概多久」。 */
 function clock(ms: number): string {
@@ -225,6 +237,8 @@ interface ExerciseCardProps {
   flash: readonly string[]
   cascade: readonly string[]
   onToggleOpen: () => void
+  /** 有氧卡的名稱鈕：開有氧 sheet（有氧卡不展開）。 */
+  onOpenCardio: () => void
   onToggleTips: () => void
   onEditTips: () => void
   onRemove: () => void
@@ -244,10 +258,12 @@ function ExerciseCard(p: ExerciseCardProps) {
   const name = exercise ? String(exercise.name) : '（已刪除的動作）'
   const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
   const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
-  // 有照片的動作（目錄裡的預設動作，圖檔齊全由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；
-  // 沒照片的（自建、已刪除）肌群單字留在 ex-toggle 裡，點它仍是展開／收合，不留點不到的死區
-  const photo = exercise != null && catalogKey(exercise) !== null
-  const open = p.open && !sorting
+  // 有圖的動作（目錄裡有圖的預設動作，由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
+  // 資料集沒有對應的兩個預設動作、有氧動作）肌群單字留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
+  const photo = exercise != null && hasCatalogImage(exercise)
+  // 有氧卡沒有組：永遠收合，名稱鈕改開有氧 sheet
+  const cardio = isCardioCard(item)
+  const open = !cardio && p.open && !sorting
   const tipsOpen = p.tipsOpen
   const { ref, handleRef, isDragging } = useSortable({ id: entry.id, index, data: { name } })
   const spring = reduced ? { duration: 0.01 } : { height: SPRING_CARD, opacity: { duration: 0.16 } }
@@ -270,7 +286,7 @@ function ExerciseCard(p: ExerciseCardProps) {
   return (
     <section
       ref={ref}
-      className={`tr-card ex${open ? '' : ' collapsed'}${isDragging ? ' is-dragging' : ''}`}
+      className={`tr-card ex${cardio ? ' is-cardio' : ''}${open ? '' : ' collapsed'}${isDragging ? ' is-dragging' : ''}`}
       aria-label={name}
       data-entry-id={entry.id}
     >
@@ -282,19 +298,39 @@ function ExerciseCard(p: ExerciseCardProps) {
         </button>
         {/* 縮圖是獨立的放大鈕，不能包在展開／收合的按鈕裡：與 ex-toggle 並排 */}
         {photo ? <ExerciseThumb exercise={exercise} zoom /> : null}
-        <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
-          {photo ? null : <ExerciseThumb exercise={exercise} />}
-          <span className="grow">
-            <span className="nm">{name}</span>
-            {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
-            <span className="sub" key={open ? 'group' : 'progress'}>
-              {open ? group : <Progress sets={sets} />}
+        {cardio ? (
+          // 有氧卡：整條名稱鈕開 sheet，不是展開（沒有 aria-expanded）；右側 › 在這裡表示「點進去」
+          <button className="ex-toggle" type="button" aria-haspopup="dialog" onClick={p.onOpenCardio}>
+            <ExerciseThumb exercise={exercise} />
+            <span className="grow">
+              <span className="nm">{name}</span>
+              <span className="sub">
+                {cardioRecorded(entry) ? (
+                  <span className="cardio-sum">{cardioSummary(entry)}</span>
+                ) : (
+                  <span className="is-missing">點一下填寫</span>
+                )}
+              </span>
             </span>
-          </span>
-          <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </button>
+            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        ) : (
+          <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
+            {photo ? null : <ExerciseThumb exercise={exercise} />}
+            <span className="grow">
+              <span className="nm">{name}</span>
+              {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
+              <span className="sub" key={open ? 'group' : 'progress'}>
+                {open ? group : <Progress sets={sets} />}
+              </span>
+            </span>
+            <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        )}
         {/* 每張卡都有 ⓘ（沒寫過要點的是淡色，不隱藏）：隱藏會讓箭頭、ⓘ、⋯ 在各卡上對不齊 */}
         <button
           className={`tr-ib ex-info${tips ? '' : ' is-empty'}`}
@@ -411,7 +447,8 @@ function ExerciseCard(p: ExerciseCardProps) {
               </motion.div>
             )}
           </AnimatePresence>
-          <RpeFooter name={name} sets={sets} show={p.showRpe} onPick={p.onPickRpe} />
+          {/* 有氧卡沒有組，也就沒有「最後一組」可問；明確不掛，不靠 exerciseRpe([]) 剛好回「沒做完」 */}
+          {!cardio && <RpeFooter name={name} sets={sets} show={p.showRpe} onPick={p.onPickRpe} />}
         </>
       )}
     </section>
@@ -437,7 +474,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     return () => clearTimeout(t)
   }, [ask])
 
-  const [openEx, setOpenEx] = useState<string | null>(() => exercises[0]?.entry.id ?? null)
+  // 一進來展開第一張重訓卡（有氧卡不展開）
+  const [openEx, setOpenEx] = useState<string | null>(() => exercises.find((e) => !isCardioCard(e))?.entry.id ?? null)
   const [tipsOpenIds, setTipsOpenIds] = useState<ReadonlySet<string>>(new Set())
   const [swipeId, setSwipeId] = useState<string | null>(null)
   const [picker, setPicker] = useState(false)
@@ -447,9 +485,17 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const setOpener = useRef<HTMLElement | null>(null)
   const [tipsTarget, setTipsTarget] = useState<Row | null>(null)
   const [tipsOpen, setTipsOpen] = useState(false)
+  // 有氧 sheet：記卡的 id、每次 render 從 detail 取那一列（存檔後卡片與下次打開都是新值）；session 當表單 key
+  const [cardioId, setCardioId] = useState<string | null>(null)
+  const [cardioOpen, setCardioOpen] = useState(false)
+  const [cardioSession, setCardioSession] = useState(0)
+  // 分鐘欄的「上次 N」：開 sheet 當下取一次（排除這次訓練），sheet 開著時不隨寫入變
+  const [cardioLast, setCardioLast] = useState<number | null>(null)
   const [finish, setFinish] = useState(false)
   const [askDelete, setAskDelete] = useState(false)
   const [askRemove, setAskRemove] = useState<string | null>(null)
+  // 移除確認的內文跟著問的當下記住：關閉時 askRemove 先清掉，照 removing 算的話收起途中會跳成重訓的文案
+  const [removeCardio, setRemoveCardio] = useState(false)
   const [flash, setFlash] = useState<readonly string[]>([])
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reduced = useReducedMotion()
@@ -500,9 +546,20 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     const ops = addExerciseOps({ db, workoutId: workout.id, exerciseId, newId })
     if (await run(ops)) {
       setPicker(false)
-      setOpenEx(ops[0].rowId)
+      // 有氧卡不展開：剛加的是有氧就維持目前展開的那張，不把它收起來
+      if (!isCardioExercise(db.exercises.find((e) => e.id === exerciseId))) setOpenEx(ops[0].rowId)
     }
   }
+
+  // 只有有氧動作的卡能開：checkCardio 對非有氧回「請選有氧類型」，而這張 sheet 沒有類型可選
+  const openCardio = (item: WorkoutExerciseDetail) => {
+    if (!isCardioCard(item)) return
+    setCardioId(item.entry.id)
+    setCardioLast(cardioLastMinutes(db, String(item.entry.exercise_id), workout.id))
+    setCardioSession((n) => n + 1)
+    setCardioOpen(true)
+  }
+  const cardioItem = cardioId ? exercises.find((e) => e.entry.id === cardioId) : undefined
 
   const finishNow = async (minutes: number | null) => {
     let ops: RowOp[]
@@ -568,21 +625,29 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     cascadeTimer.current = setTimeout(() => setCascade([]), DUR.base + 200 + ops.length * CASCADE_STEP_MS)
   }
 
-  const finishLines: FinishLine[] = exercises.map(({ exercise, sets }) => ({
-    name: exercise ? String(exercise.name) : '（已刪除的動作）',
-    text: sets
-      .filter((s) => s.done === true)
-      .map((s) => `${formatKg(Number(s.weight_kg))} × ${Number(s.reps)}`)
-      .join(' · '),
+  const finishLines: FinishLine[] = exercises.map((item) => ({
+    name: item.exercise ? String(item.exercise.name) : '（已刪除的動作）',
+    // 有氧卡沒有組：列有氧摘要；沒填分鐘時給「還沒填」，不落到 FinishSheet 的「沒有打勾的組」
+    text: isCardioCard(item)
+      ? cardioSummary(item.entry) || '還沒填'
+      : item.sets
+          .filter((s) => s.done === true)
+          .map((s) => `${formatKg(Number(s.weight_kg))} × ${Number(s.reps)}`)
+          .join(' · '),
   }))
 
   const pickable = db.exercises.filter((e) => e.archived !== true)
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
   const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
+  // 會丟掉已記的東西才先問：重訓是打過勾的組，有氧是填過的分鐘
   const askRemoveExercise = (item: WorkoutExerciseDetail) => {
-    if (item.sets.some((s) => s.done === true)) setAskRemove(item.entry.id)
-    else void removeExercise(item.entry.id)
+    const cardio = isCardioCard(item)
+    const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
+    if (recorded) {
+      setRemoveCardio(cardio)
+      setAskRemove(item.entry.id)
+    } else void removeExercise(item.entry.id)
   }
 
   return (
@@ -659,6 +724,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 onToggleOpen={() => {
                   setOpenEx(openEx === item.entry.id ? null : item.entry.id)
                   setSwipeId(null)
+                }}
+                onOpenCardio={() => {
+                  setSwipeId(null)
+                  openCardio(item)
                 }}
                 onToggleTips={() =>
                   setTipsOpenIds((cur) => {
@@ -755,6 +824,16 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         }}
       />
 
+      <CardioSheet
+        open={cardioOpen}
+        entry={cardioItem?.entry ?? null}
+        exercise={cardioItem?.exercise ?? null}
+        lastMinutes={cardioLast}
+        session={cardioSession}
+        onClose={() => setCardioOpen(false)}
+        onWrite={onWrite}
+      />
+
       <ExerciseEditSheet
         open={tipsOpen}
         exercise={tipsTarget}
@@ -803,7 +882,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         onCancel={() => setAskRemove(null)}
         onConfirm={() => removing && void removeExercise(removing.entry.id)}
       >
-        <p>這個動作已經打勾的組會一起刪掉。</p>
+        <p>{removeCardio ? '這張卡記下的有氧會一起刪掉。' : '這個動作已經打勾的組會一起刪掉。'}</p>
       </ConfirmDialog>
     </div>
   )

@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 22 pages | Last updated: 2026-10-21T06:32:47.630Z
+> 25 pages | Last updated: 2026-10-22T06:45:58.325Z
 
 ## debugging
 
@@ -15,6 +15,7 @@
 ## pattern
 
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
+- [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
@@ -38,3 +39,5 @@
 - [Session Log 2026-10-20](session-log-2026-10-20-498d8f5d.md) — # Session Log 2026-10-20
 - [Session Log 2026-10-20](session-log-2026-10-20-7de39221.md) — # Session Log 2026-10-20
 - [Session Log 2026-10-20](session-log-2026-10-20-b467eaf1.md) — # Session Log 2026-10-20
+- [Session Log 2026-10-21](session-log-2026-10-21-537aa75a.md) — # Session Log 2026-10-21
+- [Session Log 2026-10-22](session-log-2026-10-22-ab471733.md) — # Session Log 2026-10-22

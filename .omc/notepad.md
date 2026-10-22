@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-21）：階段 4 A、B（v2.87 重量建議）、C、D 都做完；v2.86 以前已 push，B 已 push（review 0 blocking；review 修正後沒重跑 e2e，使用者裁決）。vitest 765、e2e 上次全量 325 全過。**真機未驗**：RPE 填寫與頁尾、重量建議行。
-下一步：①真機驗 D 與 B（順便把 weight-suggest.spec 重跑一次）。待確認：健身房 1.25 kg 槓片、啞鈴一格 2 或 2.5（只改 exerciseCatalog.ts 的歸類表）。
+現況（2026-10-22）：階段 4 A–D 已 push。**有氧併入動作已實作完、未 commit**：DDL ① 已執行（SQL 與回滾在 .omc/plans/cardio-merge-ddl1*.sql）、lib／UI／e2e 重寫完；vitest 798、e2e 340（338 過，2 條偶發：food-library 焦點＝已知、recovery-foreground＝新紀錄，單跑都過）；獨立 review 已做（0 blocking，HIGH＝預填分鐘已改留空）；**等使用者確認「準備 push」**。supabase CLI 已 scoop 裝好並 link Tally。**真機未驗**：RPE、重量建議、有氧卡。
+下一步：①review 修完→等使用者說「準備 push」→部署→開一次 App 補出有氧動作→遷移 3 筆舊有氧（寫入前列清單確認，spec 有說明）→真機 ②待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -73,7 +73,7 @@ D 段 push 前 review（opus code-reviewer，0 blocking）留下的 non-blocking
 - 背景縮小約 95.5%（modal sheet 開著時）：0 號實驗結論「不需要解法」（DESIGN v2.61），但**縮放本身沒實作**；要做時只在掛在 body 的 SpringSheet 開著時啟用、原點 `50% 0`，真機驗 iOS 工具列收合與動畫掉幀。
 ### 2026-10-19 17:30
 v2.73 push 前 review 後的待決與已知狀況（全文在 DESIGN.md v2.73「已知限制」）
-- **減少動態下 `.tr-check`／`.tr-val` 的顏色過渡要不要降到 0.01ms**：DESIGN「互動與動效」寫「全部降到 0.01ms」、spec AC 10 寫「位移與縮放改 ≤120ms 淡入淡出」，兩份文件互相不一致，需要裁決以哪份為準；收進 app.css 的 reduced-motion 清單會連帶動到「減少動態不錯開」那條 e2e（它讀 background-color 過渡的 delay）。`.tr-check` 是舊缺口，`.tr-val` 是本輪新加的 160ms 顏色過渡。
+- **[已裁決 2026-10-22] 減少動態以 spec AC 10 為準**：位移、縮放、無限循環關掉或改 ≤120ms 淡入；純顏色／透明度過渡不受影響，所以 `.tr-check`／`.tr-val` 的 160ms 顏色過渡不收進 app.css 清單，code 與 e2e 不動。DESIGN 第 284 行已改寫、版本紀錄 v2.88。使用者一度想整個拆掉，討論後決定繼續遵守。
 - **`tally.spec.ts` 偶發紅（今日頁 `.undo-bar` 一族）**：基線 `ddb5292` 也會紅（單跑 10 次紅 2 次），使用者裁決先當已知偶發、不擋 push；原因未查。單跑重複的過濾字串用 `tally.spec`，寫 `tally` 會把整套跑進去。
 - **SW「新版 SW 裝好就接手」**：2026-10-19 查到與 precache 項數有關（全進 460 項單跑只過 3/6、基線與 311 項都穩），v2.74 已改成放大圖只預快取起始姿勢，詳見下方 v2.74 一節與 wiki `lesson-sw-precache-size`；根因仍未查。該 spec 不能用 `--repeat-each`。
 - **排序收合動畫**：2026-10-19 評估過，touch 起手有 250ms 按住可以做，但建議等真機看過再決定（沒有裁決）。
@@ -98,3 +98,9 @@ v2.74 點動作縮圖放大（使用者提出，spec.md 沒寫；DESIGN v2.74 �
 - **[已做] 加快測試速度**（使用者 2026-10-21 提出）：全量 e2e 牆鐘 981→573 秒（−42%）。①`training.spec` 檔內平行（長尾拆掉）②動作庫前置條件改用 `e2e/seeded.ts` 的現成 fixture（10 條各省約 15 秒）。**刻意不做**：離線測試的 7 秒（postgrest-js 重試，繞法會改變測到的失敗路徑）。**新發現的偶發**：`settings-nav`（體重趨勢返回）、`spring-sheet`（點一下把手落定）整套跑才偶發紅，單跑各 20 次全過，原因未查。剩下的長尾：真預填 2 條各約 18–20 秒、`rest-timer`「−15／＋15」14 秒。
 - **D（RPE＋熱身標記）設計方向，使用者同意、spec 與樣張未寫**：每個動作最後一組打勾時，在休息條上問一次「還能做幾下」，四檔（3+／2／1／力竭＝RPE 7／8／9／10），單點即存、不點＝未知；組編輯 sheet 內有同樣四檔可補填；熱身組先用規則推（同動作重量低於當天最大 60%，數字是猜的）不加欄位。要動 schema（`workout_sets.rpe`）→ 影響面升級，先 spec＋plan、等點頭。RPE 進演算法只改 `recoveryWindowHours`（某肌群有任一組 RPE≥9 → 窗口 +24 小時，數字取文獻下緣）。限制：只問最後一組看不到每組趨勢；初學者自評不準。
 - C 的已知限制：熱身組算進組數；沒有 RPE；頁面開著不動時剩餘小時不更新；真機未驗。
+### 2026-10-22 15:00
+有氧併入動作（spec.md 同名節、DESIGN v2.89；DDL ① 已執行，code 已實作、待 push）
+- [追加 2026-10-22] spec 外追加：①有氧預填分鐘留空、有氧 sheet 分鐘欄 placeholder「上次 N」（push 前 review 的 HIGH，使用者裁決，理由＝有氧卡沒有勾，預填會變成假記錄）②有組的有氧卡退回重訓畫法（`isCardioCard`）③`.tr-field input::placeholder` 改 `--ink-muted`，**全站 `.tr-field` 的 placeholder 都受影響**（原為瀏覽器預設灰；對比 4.94:1）。
+- **部署後待辦（還沒做）**：開一次 App 讓它自動補出兩個有氧動作 → 遷移 3 筆舊 `cardio_sessions`（健走 2、拳擊 1，10/12–10/15）成 3 次獨立訓練。遷移 SQL **還沒寫**：明寫 `user_id`、用 (user_id, kind) 找動作、started_at＝當天 12:00 台北時間、ended_at＝起點＋分鐘，寫入前先列清單給使用者確認，驗筆數與分鐘總和（55）。push 前確認 App 的未同步佇列是空的（舊版離線殘留的 `cardio_sessions` 條目新版送不出去；使用者裁決不加相容層）。舊表保留不動，真機驗過後另一輪再 drop。
+- 已知小問題未修：寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」（程式推論，QueueStorageError 已含前綴）；`soloCardio` 對「有組的有氧卡」仍列成有氧摘要；只做有氧的補記要填兩次分鐘；e2e `recovery-foreground` 全量偶發紅一次（單跑 6/6 過、沒驗乾淨基線）。
+- 待使用者：健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住；真機驗有氧卡與有氧 sheet。
