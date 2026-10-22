@@ -764,10 +764,10 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
   }
   const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
   const precached = new Set(sw.match(/assets\/[\w-]+\.jpg/g) ?? [])
-  // 148 個有圖的動作＝147 個不同的檔案（腿屈伸與單腿腿屈伸共用同一張圖，內容相同所以檔名雜湊也相同）進 precache，
+  // 149 個有圖的動作（v2.90 多了坡度健走）＝148 個不同的檔案（腿屈伸與單腿腿屈伸共用同一張圖，內容相同所以檔名雜湊也相同）進 precache，
   // 離線健身房看得到。動畫（gif，共約 14MB）不進：項數與體積太大時新版 SW 會偶發卡在 activating，見 vite.config.ts；
   // 這兩個斷言一起鎖住「縮圖都在、動畫都不在」
-  expect(precached.size, 'service worker 的 precache 清單：縮圖').toBe(147)
+  expect(precached.size, 'service worker 的 precache 清單：縮圖').toBe(148)
   expect(sw.match(/\.gif/g), 'gif 動畫不該進 precache').toBeNull()
 })
 
@@ -2380,7 +2380,7 @@ test('補記的訓練沒有 RPE 頁尾，也沒有休息條（與休息條同一
    有氧是動作：動作庫裡兩個（跑步機坡度健走、有氧拳擊，`exercises.kind`），訓練中一張有氧卡＝workout_exercises 一列、沒有組，
    點卡開有氧 sheet。舊的獨立入口（開始訓練 sheet 的「記一筆有氧」、訓練頁的有氧列、cardio_sessions）已拆，這裡驗新模型。
    運算（預填、摘要、只送有變的欄位、範圍）由 training.test.ts 守，這裡驗使用者看得到的與真正送出去的；預期值全部手算。
-   兩個有氧動作取目錄裡的整列（id 是預設動作的確定性 id，catalogKey 對得上——「有氧沒有示意圖」要用真的 id 才驗得到）。 */
+   兩個有氧動作取目錄裡的整列（id 是預設動作的確定性 id，catalogKey 對得上——「健走有圖、拳擊是手套圖示」要用真的 id 才驗得到）。 */
 
 const catalogRow = (name: string) => {
   const row = SEEDED_FIX.exercises.find((e) => e.name === name)
@@ -2873,40 +2873,121 @@ test('移除有氧卡：分鐘填過的先問（「這張卡記下的有氧會�
   await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(0)
 })
 
-test('有氧卡沒有示意圖：肌群單字「他」、沒有放大鈕、只有它時不印著作權標示；徒手深蹲照舊單字、槓鈴臥推照舊有圖', async ({ page }) => {
-  await openApp(page, {}, { ...FIX, exercises: [...FIX.exercises, WALK, catalogRow('徒手深蹲'), catalogRow('槓鈴臥推')] })
+/** 拳擊手套圖示：縮圖方塊裡一個 svg、沒有字、讀屏不念（DESIGN v2.90）。 */
+async function expectGloveIcon(scope: Locator, label: string) {
+  const thumb = scope.locator('.ex-thumb')
+  await expect(thumb, `${label}：只有一個縮圖`).toHaveCount(1)
+  await expect(thumb, `${label}：是圖示方塊`).toHaveClass(/\bis-icon\b/)
+  await expect(thumb.locator('svg'), `${label}：方塊裡是線稿圖示`).toHaveCount(1)
+  await expect(thumb, `${label}：不是肌群單字`).toHaveText('')
+  await expect(thumb).toHaveAttribute('aria-hidden', 'true')
+  await expect(scope.locator('.ex-zoom'), `${label}：自繪圖示不能放大`).toHaveCount(0)
+  await expect(scope.locator('img'), `${label}：沒有照片`).toHaveCount(0)
+}
+
+test('有氧動作的縮圖：拳擊是手套圖示（不能放大、不印著作權標示），坡度健走有圖、能放大、印標示；徒手深蹲照舊單字', async ({ page }) => {
+  await openApp(page, {}, { ...FIX, exercises: [...FIX.exercises, WALK, BOX, catalogRow('徒手深蹲')] })
   await openTraining(page)
+
+  // 動作庫：兩個有氧動作的列
+  await openLibrary(page)
+  const libRow = (name: string) => library(page).locator('.tr-row').filter({ has: page.getByText(name, { exact: true }) })
+  await expectGloveIcon(libRow('有氧拳擊'), '動作庫 有氧拳擊')
+  await expect(libRow('跑步機坡度健走').getByRole('button', { name: '放大跑步機坡度健走的示意圖' })).toHaveCount(1)
+  await imgLoaded(libRow('跑步機坡度健走').locator('img.ex-thumb'))
+  const glove = (await libRow('有氧拳擊').locator('.ex-thumb').boundingBox())!
+  const walkImg = (await libRow('跑步機坡度健走').locator('img.ex-thumb').boundingBox())!
+  expect([glove.width, glove.height], '圖示方塊與照片縮圖同尺寸（列表 52px）').toEqual([walkImg.width, walkImg.height])
+  const svg = (await libRow('有氧拳擊').locator('.ex-thumb svg').boundingBox())!
+  expect(Math.abs(svg.x + svg.width / 2 - (glove.x + glove.width / 2)), '圖示水平置中').toBeLessThan(1)
+  expect(Math.abs(svg.y + svg.height / 2 - (glove.y + glove.height / 2)), '圖示垂直置中').toBeLessThan(1)
+  await library(page).getByRole('button', { name: '返回' }).click()
+
   await startBlank(page)
   const session = page.locator('[data-screen="training-session"]')
 
-  // 加動作 sheet 裡：有氧那列是單字、沒有放大鈕
+  // 加動作 sheet：拳擊是圖示、健走是放大鈕
   await page.locator('.tr-bottom .tr-secondary').click()
-  const pickRow = page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '跑步機坡度健走' })
-  await expect(pickRow.locator('.ex-thumb.is-glyph')).toHaveText('他')
-  await expect(pickRow.locator('.ex-zoom')).toHaveCount(0)
-  await pickRow.click()
+  const pickRow = (name: string) => page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: name })
+  await expectGloveIcon(pickRow('有氧拳擊'), '加動作 有氧拳擊')
+  await expect(pickRow('跑步機坡度健走').locator('.ex-zoom img.ex-thumb')).toHaveCount(1)
+  await pickRow('有氧拳擊').click()
   await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
 
-  const walk = cardioCard(page, '跑步機坡度健走')
-  await expect(walk.locator('.ex-thumb'), '只有一個縮圖（不是放大鈕外一個、名稱鈕裡又一個）').toHaveCount(1)
-  await expect(walk.locator('.ex-toggle .ex-thumb.is-glyph')).toHaveText('他')
-  await expect(walk.locator('.ex-zoom')).toHaveCount(0)
-  await expect(walk.locator('img')).toHaveCount(0)
-  await expect(credit(session), '畫面上沒有任何圖就不印').toHaveCount(0)
+  // 訓練中的有氧卡：手套在名稱鈕裡（點它＝開有氧 sheet），畫面上沒有任何 Gym visual 的圖就不印標示
+  const box = cardioCard(page, '有氧拳擊')
+  await expect(box).toBeVisible()
+  await expectGloveIcon(box, '有氧卡 有氧拳擊')
+  await expect(box.locator('.ex-toggle .ex-thumb.is-icon')).toHaveCount(1)
+  const cardGlove = (await box.locator('.ex-thumb').boundingBox())!
+  expect([cardGlove.width, cardGlove.height], '卡片頭縮圖 40px').toEqual([40, 40])
+  const cardSvg = (await box.locator('.ex-thumb svg').boundingBox())!
+  expect([cardSvg.width, cardSvg.height], '圖示占方塊 60%（40px 裡 24px）').toEqual([24, 24])
+  await expect(credit(session), '自繪圖示不是 Gym visual 的圖，不印').toHaveCount(0)
 
-  // 資料集沒有對應圖的預設動作：同樣是名稱鈕裡的單字、沒有放大鈕
+  // 資料集沒有對應圖的重訓預設動作：照舊是名稱鈕裡的肌群單字
   await addExercise(page, '徒手深蹲')
   const squat = page.locator('.ex', { hasText: '徒手深蹲' })
   await expect(squat.locator('.ex-thumb')).toHaveCount(1)
-  await expect(squat.locator('.ex-toggle .ex-thumb.is-glyph')).toHaveCount(1)
+  await expect(squat.locator('.ex-toggle .ex-thumb.is-glyph')).toHaveText('腿')
+  await expect(squat.locator('.ex-toggle .ex-thumb svg')).toHaveCount(0)
   await expect(squat.locator('.ex-zoom')).toHaveCount(0)
   await expect(credit(session)).toHaveCount(0)
 
-  // 有圖的預設動作：放大鈕照舊，著作權標示這時才出現
-  await addExercise(page, '槓鈴臥推')
-  const bench = page.locator('.ex', { hasText: '槓鈴臥推' })
-  await expect(bench.locator('.ex-zoom img.ex-thumb')).toHaveCount(1)
+  // 坡度健走：縮圖是名稱鈕外的放大鈕（只有一個縮圖，名稱鈕裡沒有第二個），著作權標示這時才出現
+  await addCardio(page, '跑步機坡度健走')
+  const walk = cardioCard(page, '跑步機坡度健走')
+  await expect(walk.locator('.ex-thumb'), '只有一個縮圖（不是放大鈕外一個、名稱鈕裡又一個）').toHaveCount(1)
+  await expect(walk.locator('.ex-head > .ex-zoom img.ex-thumb')).toHaveCount(1)
+  await expect(walk.locator('.ex-toggle .ex-thumb')).toHaveCount(0)
+  expect(await walk.locator('img.ex-thumb').getAttribute('src')).toMatch(/\/assets\/incline-walk-[\w-]+\.jpg$/)
+  await imgLoaded(walk.locator('img.ex-thumb'))
   await expect(credit(session)).toHaveText(CREDIT)
+
+  // 點縮圖只放大（Gym visual 的動畫），不開有氧 sheet
+  const zoom = walk.getByRole('button', { name: '放大跑步機坡度健走的示意圖' })
+  await zoom.click()
+  await expect(viewer(page)).toBeVisible()
+  await expect(cardioSheet(page), '點縮圖不該同時開有氧 sheet').toHaveCount(0)
+  const gif = viewer(page).locator('img')
+  expect(await gif.getAttribute('src')).toMatch(/\/assets\/incline-walk-[\w-]+\.gif$/)
+  expect(await gif.getAttribute('alt')).toBe('跑步機坡度健走示意動畫')
+  await expect.poll(() => gif.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 }).toBe(180)
+  await expect(viewer(page).locator('.ex-viewer-credit')).toHaveText(CREDIT)
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(zoom).toBeFocused()
+})
+
+test('課表編輯的有氧動作：拳擊是手套圖示、健走的縮圖能放大', async ({ page }) => {
+  await openApp(page, {}, { ...CARDIO_LIB, exercises: [WALK, BOX] })
+  await openTraining(page)
+  await newRoutine(page, '有氧日')
+  for (const name of ['有氧拳擊', '跑步機坡度健走']) {
+    await page.locator('[data-action="add-routine-exercise"]').click()
+    await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: name }).click()
+    await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  }
+  const rows = editor(page).locator('[data-section="routine-exercises"] li.tr-row')
+  await expect(rows).toHaveCount(2)
+  await expectGloveIcon(rows.nth(0), '課表 有氧拳擊')
+  await expect(credit(editor(page)), '健走有圖，標示照印').toHaveText(CREDIT)
+  await rows.nth(1).getByRole('button', { name: '放大跑步機坡度健走的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(targetSheet(page)).toHaveCount(0)
+})
+
+test('只有有氧拳擊的課表：自繪圖示不算 Gym visual 的圖，課表編輯不印著作權標示', async ({ page }) => {
+  await openApp(page, {}, { ...CARDIO_LIB, exercises: [BOX] })
+  await openTraining(page)
+  await newRoutine(page, '拳擊日')
+  await page.locator('[data-action="add-routine-exercise"]').click()
+  await page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '有氧拳擊' }).click()
+  await expect(page.locator('[data-screen="exercise-picker"]')).toHaveCount(0)
+  await expectGloveIcon(editor(page).locator('[data-section="routine-exercises"] li.tr-row'), '課表 有氧拳擊')
+  await expect(credit(editor(page))).toHaveCount(0)
 })
 
 test('393 寬：健走摘要放不下一行時折行、不截斷——全文都在、沒有省略號、卡片頭不橫向溢出', async ({ page }) => {

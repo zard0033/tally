@@ -1,8 +1,8 @@
 /* 動作庫的預設目錄：既有 16 個預填動作（`PRESET_EXERCISES`，新帳號首次預填）加上 134 個常見動作與 2 個有氧動作，共 152 個。
    每個動作有一張縮圖 `src/assets/exercises/<key>.jpg` 與一個示意動畫 `src/assets/exercise-gifs/<key>.gif`
    （Gym visual 的圖；來源與授權見 `scripts/build-exercise-images.mjs` 與 `NOTICE.md`，key→資料集 id 的對照在
-   `scripts/exercise-images.json`；徒手深蹲、箱式深蹲資料集沒有對應，列在該檔的 `noImage`，退回肌群單字；
-   兩個有氧動作刻意不配圖，同樣退回肌群單字，見 `NO_IMAGE_KEYS`）。
+   `scripts/exercise-images.json`；徒手深蹲、箱式深蹲、有氧拳擊資料集沒有對應，列在該檔的 `noImage`，見 `NO_IMAGE_KEYS`——
+   前兩個退回肌群單字，有氧拳擊由 `ExerciseThumb` 依 kind 畫拳擊手套圖示；跑步機坡度健走有資料集的圖）。
    **有氧動作**（spec「有氧併入動作」D1、D2）：`kind` 是 CARDIO_KINDS 之一，只有這兩個預設動作會是有氧，使用者自建的一律重訓。
 
    **id 與圖的對應不靠 schema**：預設動作的列 id 是確定性的（`presetExerciseId`：userId＋key 的 uuid v5），
@@ -196,13 +196,9 @@ export function catalogKey(row: Row): string | null {
   return typeof row.user_id === 'string' ? (indexOf(row.user_id).idToKey.get(row.id) ?? null) : null
 }
 
-/** 沒有圖的預設動作（退回肌群單字）：資料集沒有對應的兩個（＝`scripts/exercise-images.json` 的 `noImage`），
- *  加上刻意不配圖的有氧動作（spec「有氧併入動作」：有氧卡沒有示意圖）。單元測試鎖住。 */
-export const NO_IMAGE_KEYS: ReadonlySet<string> = new Set([
-  'bodyweight-squat',
-  'box-squat',
-  ...EXERCISE_CATALOG.flatMap((p) => (p.kind ? [p.key] : [])),
-])
+/** 資料集沒有對應圖的預設動作；與 `scripts/exercise-images.json` 的 `noImage` 一致（單元測試鎖住）。
+ *  只由對照表決定、不從 kind 推：有氧也可能有圖（坡度健走用資料集的圖，v2.90）。 */
+export const NO_IMAGE_KEYS: ReadonlySet<string> = new Set(['bodyweight-squat', 'box-squat', 'boxing-cardio'])
 
 /** 畫面上這一列會不會出現示意圖：是預設動作、而且有圖。著作權標示（GymVisualCredit）用它決定要不要印。 */
 export function hasCatalogImage(row: Row): boolean {

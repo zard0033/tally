@@ -1,5 +1,5 @@
 {
-  "_comment": "動作 key → exercises-dataset 的動作 id（來源與授權見 scripts/build-exercise-images.mjs 與 NOTICE.md）。noImage 是資料集沒有對應的動作，退回肌群單字。",
+  "_comment": "動作 key → exercises-dataset 的動作 id（來源與授權見 scripts/build-exercise-images.mjs 與 NOTICE.md）。noImage 是資料集沒有對應的動作，退回肌群單字（有氧拳擊例外：畫面用自繪的拳擊手套圖示，見 ExerciseThumb）。",
   "map": {
     "leg-press": "1463",
     "leg-extension": "0585",
@@ -148,10 +148,12 @@
     "dead-bug": "0276",
     "power-clean": "0648",
     "turkish-get-up": "0551",
-    "kettlebell-swing": "0549"
+    "kettlebell-swing": "0549",
+    "incline-walk": "3666"
   },
   "noImage": [
     "bodyweight-squat",
-    "box-squat"
+    "box-squat",
+    "boxing-cardio"
   ]
 }

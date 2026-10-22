@@ -41,6 +41,9 @@
     font-family: inherit; color: inherit; padding: 0; min-height: 56px; }
   .tr-thumb-ph { width: 40px; height: 40px; border-radius: var(--r-tab); background: var(--fill); color: var(--ink-muted); display: inline-flex;
     align-items: center; justify-content: center; font-size: var(--t-xs); font-weight: 600; flex: none; }
+  /* v2.90：健走有資料集的圖、拳擊是自繪手套圖示（產品裡的規則見 DESIGN「動作示意圖」條與樣張 cardio-icon.html） */
+  img.tr-thumb-ph { object-fit: cover; outline: 1px solid var(--rule-subtle); outline-offset: -1px; }
+  .tr-thumb-ph svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 </style>
 </head>
 <body>
@@ -49,28 +52,28 @@
   有氧變成「動作」：跟重訓動作一起在加動作 sheet 選、一起排在這次訓練裡。有氧沒有組、沒有重量，所以<b>卡片不展開，點一下直接開有氧 sheet</b>；
   卡片上只有一行摘要。沒有勾選、沒有「新增一組」、沒有休息條、沒有 RPE 頁尾。
   有氧 sheet 是現有的「記一筆有氧」sheet 改過來：<b>拿掉類型切換與日期</b>（類型由動作決定、日期由這次訓練決定），欄位依動作而定。
-  卡片頭省略了拖曳把手與縮圖（沒有示意圖的動作本來就退成肌群字「其他」，這裡用灰底小方塊代表）。<b>數字都是示意</b>。
-</p>
+  卡片頭省略了拖曳把手（縮圖 v2.90 更新：健走用資料集的圖、拳擊是自繪的拳擊手套圖示，見 cardio-icon.html；重訓卡的灰底小方塊是示意）。<b>數字都是示意</b>。
+ <b>注意</b>：健走的縮圖在實作裡是名稱鈕外面的放大鈕（點它是放大、不是開 sheet；按鈕裡不能再包按鈕），這份樣張為了簡化畫在名稱鈕裡；照片是 Gym visual 的圖，實際畫面的列表底部會印 © Gym visual 標示。</p>
 <div class="frames">
 
 <div class="frame-block"><div class="frame-label">① 剛加進來、還沒填：跟重訓卡排在一起</div>
 <div class="device"><div class="main"><main class="tr-scroll">
   <section class="tr-card ex collapsed"><div class="ex-head"><button class="ex-toggle" type="button" aria-expanded="false"><span class="tr-thumb-ph" aria-hidden="true">腿</span><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="腿推舉 的要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="腿推舉 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
   <section class="tr-card ex collapsed"><div class="ex-head"><button class="ex-toggle" type="button" aria-expanded="false"><span class="tr-thumb-ph" aria-hidden="true">背</span><span class="grow"><span class="nm">滑輪下拉</span><span class="sub"><span class="dots"><i class="dot is-done"></i><i class="dot is-done"></i><i class="dot is-done"></i></span>全部完成</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="滑輪下拉 的要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="滑輪下拉 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><img class="tr-thumb-ph" src="../src/assets/exercises/incline-walk.jpg" alt="" /><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
 </main></div></div>
 <div class="frame-note">重訓做完接跑步機的典型畫面。有氧卡的第二行是「<b>點一下填寫</b>」（較深較粗，不加顏色），沒有圓點進度。點卡片任何地方就開有氧 sheet。<b>⋯ 選單裡有「移除這個動作」</b>，沿用現有行為。</div></div>
 
 <div class="frame-block"><div class="frame-label">② 做過的動作剛加進來：仍是「點一下填寫」（分鐘不預填）</div>
 <div class="device"><div class="main"><main class="tr-scroll">
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">有氧拳擊</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="有氧拳擊 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="有氧拳擊 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><img class="tr-thumb-ph" src="../src/assets/exercises/incline-walk.jpg" alt="" /><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="跑步機坡度健走 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 15C7.3 14.1 6.5 12.7 6.5 11V8c0-2.8 2.2-5 5-5h1.5c2.8 0 5 2.2 5 5v3.5c0 1.6-.8 2.8-2 3.5"/><path d="M6.5 9.5c1.9 0 3.5 1.3 3.5 3.5"/><path d="M8 15h8v4.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z"/></svg></span><span class="grow"><span class="nm">有氧拳擊</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button><button class="tr-ib" type="button" aria-label="有氧拳擊 還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button><button class="tr-ib" type="button" aria-label="有氧拳擊 的更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button></div></section>
 </main></div></div>
 <div class="frame-note"><b>2026-10-22 改</b>（原本是「上次的值預填」、卡片直接顯示摘要）：有氧卡沒有勾，分鐘一預填就分不出「做了」與「帶出來但沒做」——課表帶出來那天沒去跑，結束訓練也會留下一筆記錄，下次又被當成「上次」。所以加動作時<b>速度、坡度、預估熱量帶上次的值，分鐘留空</b>，卡片照樣是「點一下填寫」（較深較粗），填了分鐘才換成摘要。</div></div>
 
 <div class="frame-block"><div class="frame-label">②′ 點開來：速度、坡度已預填，分鐘空白帶「上次 30」</div>
 <div class="device"><div class="main"><main class="tr-scroll">
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><img class="tr-thumb-ph" src="../src/assets/exercises/incline-walk.jpg" alt="" /><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
 </main></div>
 <div class="scrim"></div>
 <div class="sheet"><div class="sheet-head"><span class="sheet-title">跑步機坡度健走</span></div>
@@ -86,7 +89,7 @@
 
 <div class="frame-block"><div class="frame-label">③ 有氧 sheet：跑步機坡度健走（三欄，填好之後再打開）</div>
 <div class="device"><div class="main"><main class="tr-scroll">
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="cardio-sum">30 分 · 5.5 km/h · 坡度 8%</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><img class="tr-thumb-ph" src="../src/assets/exercises/incline-walk.jpg" alt="" /><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="cardio-sum">30 分 · 5.5 km/h · 坡度 8%</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
 </main></div>
 <div class="scrim"></div>
 <div class="sheet"><div class="sheet-head"><span class="sheet-title">跑步機坡度健走</span></div>
@@ -102,7 +105,7 @@
 
 <div class="frame-block"><div class="frame-label">④ 有氧 sheet：有氧拳擊（兩欄）</div>
 <div class="device"><div class="main"><main class="tr-scroll">
-  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true">其他</span><span class="grow"><span class="nm">有氧拳擊</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head"><button class="ex-toggle" type="button"><span class="tr-thumb-ph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 15C7.3 14.1 6.5 12.7 6.5 11V8c0-2.8 2.2-5 5-5h1.5c2.8 0 5 2.2 5 5v3.5c0 1.6-.8 2.8-2 3.5"/><path d="M6.5 9.5c1.9 0 3.5 1.3 3.5 3.5"/><path d="M8 15h8v4.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z"/></svg></span><span class="grow"><span class="nm">有氧拳擊</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div></section>
 </main></div>
 <div class="scrim"></div>
 <div class="sheet"><div class="sheet-head"><span class="sheet-title">有氧拳擊</span></div>

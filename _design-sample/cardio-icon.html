@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 有氧動作的縮圖：健走用資料集的圖、拳擊用自繪手套</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 980px; line-height: 1.7; }
+  .harness-sub b { color: #3D2210; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; max-width: 393px; }
+  .frame-note { font-size: 12px; color: #7A5C44; max-width: 393px; line-height: 1.6; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; overflow: hidden; border-radius: 28px;
+    border: 1px solid #D8C9AE; position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device .tr-scroll { padding: var(--s-3) var(--s-5) var(--s-4); }
+  /* 產品裡 .screen svg／.sheet svg 給的線稿預設（描邊 1.6、圓端圓角），樣張沒有 .screen 外層，這裡補上同一組 */
+  .device svg { stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ──────────────────────────
+     沒有圖、但這個動作的類型有圖示時（目前只有有氧拳擊）：同一個肌群單字方塊（.ex-thumb.is-glyph，--fill 底、--ink-muted），
+     裡面放線稿圖示代替單字。圖示占方塊 60%：卡片頭 40px → 24px、列表 52px → 31px（線寬隨 viewBox 縮放，與單字的視覺重量相近）。 */
+  .ex-thumb.is-icon svg { width: 60%; height: 60%; }
+
+  /* 放大兩倍看線條：方塊 80px、圖示 48px（線寬 1.6 也跟著放大成 3.2px） */
+  .zoom2 { display: flex; gap: var(--s-4); align-items: center; padding: var(--s-4) var(--s-5); }
+  .zoom2 .ex-thumb { width: 80px; height: 80px; border-radius: 16px; }
+  .zoom2 img.ex-thumb { width: 80px; height: 80px; }
+  .zoom2 .cap { font-size: var(--t-xs); color: var(--ink-muted); text-align: center; margin-top: var(--s-1); }
+
+  /* 候選造型並排（2x），只在樣張比較用 */
+  .cands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); padding: var(--s-4) var(--s-5); }
+  .cands .ex-thumb { width: 80px; height: 80px; border-radius: 16px; margin: 0 auto; }
+  .cands .small { display: flex; gap: var(--s-2); justify-content: center; margin-top: var(--s-2); }
+  .cands .small .ex-thumb { width: 40px; height: 40px; border-radius: 8px; margin: 0; }
+  .cands .cap { font-size: var(--t-xs); color: var(--ink-muted); text-align: center; margin-top: var(--s-1); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- A：指示裡給的起點（側面、拳頭朝上，拇指一橫、袖口一橫） -->
+    <symbol id="glove-a" viewBox="0 0 24 24">
+      <path d="M7 10c0-3 2-5 5-5h2.5c2.5 0 4 1.8 4 4v3.5c0 2.2-1.3 3.7-3 4.2V19H8.5v-3.3C7.6 14.7 7 13 7 11.5z" />
+      <path d="M7 11h3.5" />
+      <path d="M8.5 17.5h7" />
+    </symbol>
+    <!-- B：正面直立，拳頭圓頂、左側拇指貼在拳面、底下一段袖口 -->
+    <symbol id="glove-b" viewBox="0 0 24 24">
+      <path d="M8.5 15C7.3 14.1 6.5 12.7 6.5 11V8c0-2.8 2.2-5 5-5h1.5c2.8 0 5 2.2 5 5v3.5c0 1.6-.8 2.8-2 3.5" />
+      <path d="M6.5 9.5c1.9 0 3.5 1.3 3.5 3.5" />
+      <path d="M8 15h8v4.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z" />
+    </symbol>
+    <!-- C：側面、拳頭朝右（出拳方向），袖口在左 -->
+    <symbol id="glove-c" viewBox="0 0 24 24">
+      <path d="M8 8.5C9 6.4 11 5 13.5 5h1c3.6 0 6.5 2.9 6.5 6.5S18.1 18 14.5 18H8" />
+      <path d="M10 13h4.5c1.1 0 2-.9 2-2" />
+      <path d="M3.5 8.5H8V18H3.5a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1z" />
+    </symbol>
+    <!-- D：直立，拇指是一塊從左側鼓出、橫過拳面下緣的圓瓣；袖口一段 -->
+    <symbol id="glove-d" viewBox="0 0 24 24">
+      <path d="M8.5 9V7.5C8.5 5 10.5 3 13 3h1c2.5 0 4.5 2 4.5 4.5V12c0 1.4-.7 2.4-1.8 3" />
+      <path d="M8.5 8.5C6.8 8.5 5.5 9.8 5.5 11.5S6.8 14.5 8.5 14.5H11a1.5 1.5 0 0 0 0-3H8.5" />
+      <path d="M8.5 15h9v4.5a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5z" />
+    </symbol>
+    <!-- F：D 改——拇指外緣直接收進袖口，拳面上只留一條拇指上緣的短線（線條少一段、不打結） -->
+    <symbol id="glove-f" viewBox="0 0 24 24">
+      <path d="M8.5 12.5v-5C8.5 5 10.5 3 13 3h1c2.5 0 4.5 2 4.5 4.5V12c0 1.4-.7 2.4-1.8 3" />
+      <path d="M8.5 9C6.8 9 5.5 10.3 5.5 12s1.3 3 3 3" />
+      <path d="M8.5 12.5h3" />
+      <path d="M8.5 15h9v4.5a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5z" />
+    </symbol>
+    <!-- E：側面出拳（C 改），拇指改成拳頭上緣一塊圓瓣，袖口加一條綁帶 -->
+    <symbol id="glove-e" viewBox="0 0 24 24">
+      <path d="M8 8C9.2 6.1 11.2 5 13.5 5h1c3.6 0 6.5 2.9 6.5 6.5S18.1 18 14.5 18H8" />
+      <path d="M8.5 11.5h5a2 2 0 0 0 0-4H11" />
+      <path d="M3.5 8H8v10H3.5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+      <path d="M5.2 8v10" />
+    </symbol>
+  </defs>
+</svg>
+
+<h1 class="harness-title">樣張 — 有氧動作的縮圖</h1>
+<p class="harness-sub">
+  <b>跑步機坡度健走</b>用資料集（Gym visual）的圖，跟其他預設動作一樣可以點開放大；<b>有氧拳擊</b>資料集沒有對應的圖，
+  在同一個方塊裡畫一隻線稿拳擊手套（描邊 1.6、圓端，與卡片的 ⓘ、⋯、› 同一套），不能點、沒有放大。其他沒有圖的動作照舊是肌群單字。
+</p>
+<div class="frames">
+
+<div class="frame-block"><div class="frame-label">① 訓練中的卡片頭（縮圖 40px）</div>
+<div class="device"><main class="tr-scroll">
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head">
+    <button class="tr-grip" type="button" aria-label="拖曳排序"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></button>
+    <button class="ex-zoom" type="button" aria-label="放大跑步機坡度健走的示意圖"><img class="ex-thumb" src="../src/assets/exercises/incline-walk.jpg" alt="" width="52" height="52" /><svg class="ex-zoom-badge" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></button>
+    <button class="ex-toggle" type="button"><span class="grow"><span class="nm">跑步機坡度健走</span><span class="sub"><span class="cardio-sum">30 分 · 5.5 km/h · 坡度 8%</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="tr-ib ex-info is-empty" type="button" aria-label="還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
+    <button class="tr-ib" type="button" aria-label="更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h.01M12 12h.01M18 12h.01"/></svg></button>
+  </div></section>
+  <section class="tr-card ex is-cardio collapsed"><div class="ex-head">
+    <button class="tr-grip" type="button" aria-label="拖曳排序"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></button>
+    <button class="ex-toggle" type="button"><span class="ex-thumb is-glyph is-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><use href="#glove-b"/></svg></span><span class="grow"><span class="nm">有氧拳擊</span><span class="sub"><span class="is-missing">點一下填寫</span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="tr-ib ex-info is-empty" type="button" aria-label="還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
+    <button class="tr-ib" type="button" aria-label="更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h.01M12 12h.01M18 12h.01"/></svg></button>
+  </div></section>
+  <section class="tr-card ex collapsed"><div class="ex-head">
+    <button class="tr-grip" type="button" aria-label="拖曳排序"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></button>
+    <button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">他</span><span class="grow"><span class="nm">我的伸展（自建）</span><span class="sub"><span class="prog"><span class="dots"><i class="dot is-done"></i><i class="dot"></i></span><span>下一組 0 kg × 10</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="tr-ib ex-info is-empty" type="button" aria-label="還沒有要點"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
+    <button class="tr-ib" type="button" aria-label="更多操作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h.01M12 12h.01M18 12h.01"/></svg></button>
+  </div></section>
+  <div class="zoom2">
+    <div><img class="ex-thumb" src="../src/assets/exercises/incline-walk.jpg" alt="" /><div class="cap">健走（照片）</div></div>
+    <div><span class="ex-thumb is-glyph is-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><use href="#glove-b"/></svg></span><div class="cap">拳擊 ×2</div></div>
+    <div><span class="ex-thumb is-glyph" aria-hidden="true">他</span><div class="cap">單字</div></div>
+  </div>
+</main></div>
+<div class="frame-note">卡片頭裡健走的縮圖是放大鈕（右下放大鏡角標），拳擊的手套與「他」一樣在名稱鈕裡、不能單獨點。下排是放大兩倍看線條。</div>
+</div>
+
+<div class="frame-block"><div class="frame-label">② 考慮過的造型（2x 與實際 40px）：使用者 2026-10-22 定 B</div>
+<div class="device"><main class="tr-scroll">
+  <div class="cands">
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-a"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-a"/></svg></span></div><div class="cap">A 指示的起點</div></div>
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-b"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-b"/></svg></span></div><div class="cap">B 正面直立</div></div>
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-c"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-c"/></svg></span></div><div class="cap">C 側面出拳</div></div>
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-d"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-d"/></svg></span></div><div class="cap">D 拇指圓瓣</div></div>
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-f"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-f"/></svg></span></div><div class="cap">F 拇指收進袖口</div></div>
+    <div><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-e"/></svg></span><div class="small"><span class="ex-thumb is-glyph is-icon"><svg viewBox="0 0 24 24"><use href="#glove-e"/></svg></span></div><div class="cap">E 側面＋綁帶</div></div>
+  </div>
+</main></div>
+</div>
+
+</div>
+</body>
+</html>

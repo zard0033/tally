@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-22）：階段 4 A–D 已 push。**有氧併入動作已實作完、未 commit**：DDL ① 已執行（SQL 與回滾在 .omc/plans/cardio-merge-ddl1*.sql）、lib／UI／e2e 重寫完；vitest 798、e2e 340（338 過，2 條偶發：food-library 焦點＝已知、recovery-foreground＝新紀錄，單跑都過）；獨立 review 已做（0 blocking，HIGH＝預填分鐘已改留空）；**等使用者確認「準備 push」**。supabase CLI 已 scoop 裝好並 link Tally。**真機未驗**：RPE、重量建議、有氧卡。
-下一步：①review 修完→等使用者說「準備 push」→部署→開一次 App 補出有氧動作→遷移 3 筆舊有氧（寫入前列清單確認，spec 有說明）→真機 ②待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
+現況（2026-10-22）：階段 4 A–D 與**有氧併入動作（v2.89，commit 6e17a1a）已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練（舊表 cardio_sessions 已於 2026-10-22 真機驗過後 drop；備份與還原 SQL 在 .omc/plans/cardio_sessions-backup.json／-restore.sql；文件敘述已同步）。v2.90 有氧圖示（健走用資料集圖 3666、拳擊自繪手套圖示）已做完、review 0 blocking，**等使用者確認「準備 push」**（全量 e2e 未跑，使用者裁決，只跑受影響 4 檔）。vitest 798、e2e 342 條。**真機未驗**：RPE、重量建議、圖示。
+下一步：①push v2.90 ②真機驗 D、B、圖示 待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

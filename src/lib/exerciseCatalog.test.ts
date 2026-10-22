@@ -83,11 +83,14 @@ describe('動作目錄', () => {
 describe('示意圖檔案', () => {
   it('目錄裡每個動作不是有圖就是明列在 noImage；縮圖與動畫都和對照表一一對應，沒有多餘的檔案', () => {
     const keys = EXERCISE_CATALOG.map((p) => p.key).sort()
-    // 資料集沒有對應的兩個（退回肌群單字）；要新增例外得連這條一起改，不會悄悄多出沒圖的動作
-    expect(noImage.slice().sort()).toEqual(['bodyweight-squat', 'box-squat'])
-    // 有氧動作刻意不配圖（不在對照表、也不在 noImage）：NO_IMAGE_KEYS＝noImage＋兩個有氧
-    expect([...NO_IMAGE_KEYS].sort()).toEqual(['bodyweight-squat', 'box-squat', 'boxing-cardio', 'incline-walk'])
-    expect([...Object.keys(imageMap), ...noImage, 'incline-walk', 'boxing-cardio'].sort()).toEqual(keys)
+    // 資料集沒有對應的三個（徒手深蹲、箱式深蹲退回肌群單字；有氧拳擊畫手套圖示）；要新增例外得連這條一起改，不會悄悄多出沒圖的動作
+    expect(noImage.slice().sort()).toEqual(['bodyweight-squat', 'box-squat', 'boxing-cardio'])
+    // NO_IMAGE_KEYS 只由 noImage 決定（不從 kind 推：坡度健走是有氧、但有圖）
+    expect([...NO_IMAGE_KEYS].sort()).toEqual(['bodyweight-squat', 'box-squat', 'boxing-cardio'])
+    // 有圖 149（含坡度健走）＋無圖 3＝152，每個 key 剛好落在一邊
+    expect(Object.keys(imageMap)).toHaveLength(149)
+    expect(imageMap['incline-walk'], '坡度健走用資料集的 walking on incline treadmill').toBe('3666')
+    expect([...Object.keys(imageMap), ...noImage].sort()).toEqual(keys)
     expect(Object.keys(images).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
     expect(Object.keys(gifs).map(fileKey).sort()).toEqual(Object.keys(imageMap).sort())
   })
@@ -140,17 +143,17 @@ describe('catalogKey（由列反推是哪個預設動作）', () => {
     expect(catalogKey({ id: presetExerciseId('u1', 'leg-press'), user_id: 'u2', name: 'x' })).toBeNull()
   })
 
-  it('hasCatalogImage：有圖的預設動作才算；沒有對應圖的兩個預設動作、兩個有氧動作與自建動作都不算', () => {
+  it('hasCatalogImage：有圖的預設動作才算（含有氧的坡度健走）；沒有對應圖的三個預設動作（含有氧拳擊）與自建動作都不算', () => {
     expect(hasCatalogImage(row('u1', 'leg-press'))).toBe(true)
+    expect(hasCatalogImage(row('u1', 'incline-walk'))).toBe(true)
     expect(hasCatalogImage(row('u1', 'bodyweight-squat'))).toBe(false)
     expect(hasCatalogImage(row('u1', 'box-squat'))).toBe(false)
-    expect(hasCatalogImage(row('u1', 'incline-walk'))).toBe(false)
     expect(hasCatalogImage(row('u1', 'boxing-cardio'))).toBe(false)
     expect(hasCatalogImage({ id: '11111111-1111-4111-8111-111111111111', user_id: 'u1', name: '自建' })).toBe(false)
   })
 
   it('id 的演算法鎖死：字面值取自 Python 的 uuid.uuid5（獨立實作），namespace 或組字格式一改就紅', () => {
-    // 這串 id 同時決定「預填會不會重複」與「圖對不對得上」：改了它，既有帳號的 150 張圖會悄悄退成肌群單字
+    // 這串 id 同時決定「預填會不會重複」與「圖對不對得上」：改了它，既有帳號的 149 張圖會悄悄退成肌群單字
     const u = '00000000-0000-0000-0000-000000000001'
     expect(presetExerciseId(u, 'leg-press')).toBe('b560053d-4662-5165-9b70-01896120fc1e')
     expect(presetExerciseId(u, 'barbell-squat')).toBe('54a8d7cc-c000-5491-a958-7c4747688023')

@@ -258,8 +258,8 @@ function ExerciseCard(p: ExerciseCardProps) {
   const name = exercise ? String(exercise.name) : '（已刪除的動作）'
   const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
   const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
-  // 有圖的動作（目錄裡有圖的預設動作，由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
-  // 資料集沒有對應的兩個預設動作、有氧動作）肌群單字留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
+  // 有圖的動作（目錄裡有圖的預設動作，含有氧的坡度健走；由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
+  // 資料集沒有對應的三個預設動作）肌群單字或類型圖示留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
   const photo = exercise != null && hasCatalogImage(exercise)
   // 有氧卡沒有組：永遠收合，名稱鈕改開有氧 sheet
   const cardio = isCardioCard(item)
@@ -301,7 +301,8 @@ function ExerciseCard(p: ExerciseCardProps) {
         {cardio ? (
           // 有氧卡：整條名稱鈕開 sheet，不是展開（沒有 aria-expanded）；右側 › 在這裡表示「點進去」
           <button className="ex-toggle" type="button" aria-haspopup="dialog" onClick={p.onOpenCardio}>
-            <ExerciseThumb exercise={exercise} />
+            {/* 坡度健走有圖：縮圖已是外面的放大鈕，這裡不能再放一個 */}
+            {photo ? null : <ExerciseThumb exercise={exercise} />}
             <span className="grow">
               <span className="nm">{name}</span>
               <span className="sub">

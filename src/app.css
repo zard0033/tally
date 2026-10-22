@@ -1428,6 +1428,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-head .ex-thumb { width: 40px; height: 40px; }
 .ex-thumb.is-glyph { display: flex; align-items: center; justify-content: center; font-size: var(--t-md); font-weight: 600;
   color: var(--ink-muted); outline: none; }
+/* 沒有圖、但類型有自己的線稿圖示（有氧拳擊的手套，v2.90）：同一個單字方塊，圖示占 60%——卡片頭 40px 裡 24px、列表 52px 裡約 31px；
+   描邊 1.6 跟著 viewBox 縮放，視覺重量與旁邊的肌群單字相近（樣張 cardio-icon.html） */
+.ex-thumb.is-icon svg { width: 60%; height: 60%; }
 /* 點縮圖放大（ExerciseThumb zoom）：外包一顆鈕（≥ 44px 觸控下限），與圖同大；
    圖右下角疊一顆放大鏡角標——使用者 2026-10-20 回報「點圖看大圖很難觸發、看不出能點」，角標就是那個提示。
    按下時圖淡一階，與其他列按鈕的 :active 同語言 */

@@ -51,8 +51,8 @@ export default defineConfig({
        - injectRegister false：註冊由 src/registerSW.ts 自己呼叫，dev 與 e2e 不註冊。
        - manifest false：沿用 public/manifest.webmanifest。
        - 只 precache 同源外殼，沒有 runtime route，Supabase 請求不被攔。
-       - woff2 要列進來，否則離線掉字型；jpg 是動作示意縮圖（148 張約 1MB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
-       - **gif（動作示意動畫，148 個共約 14MB）刻意不在 globPatterns 裡、不進 precache**：項數與體積太大時新版 SW 會偶發卡在
+       - woff2 要列進來，否則離線掉字型；jpg 是動作示意縮圖（149 張約 1MB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
+       - **gif（動作示意動畫，149 個共約 14MB）刻意不在 globPatterns 裡、不進 precache**：項數與體積太大時新版 SW 會偶發卡在
          activating（2026-10-19 實測：460 項／7.1MB 單跑 6 次只過 3 次，311 項／4.5MB 單跑 5/5 過）。離線時檢視器退回靜態縮圖（ExerciseViewer）。
        - wav 只有一個：組間休息的提示音（src/assets/rest-chime.wav，約 15KB），離線健身房也要響，所以進 precache。
        - reset.html（救援頁）要「不進 precache」**且**「列入 denylist」，缺一不可：不進 precache 才走
