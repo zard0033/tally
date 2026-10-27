@@ -1379,7 +1379,7 @@ test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一�
   expect((await exPatches(page))[1]).toEqual({ tips: null })
 })
 
-test('要點條：離線也能寫，畫面立刻是新的，回線後上傳；改的是動作，另一次訓練裡同一個動作也看得到', async ({ page }) => {
+test('要點條：離線也能寫，畫面立刻是新的，回線後上傳', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1675,7 +1675,7 @@ test('課表編輯的「加動作」也有「新增動作」：建好直接進�
     .toEqual([created.id])
 })
 
-test('離線新增動作並加進訓練：畫面立刻有，回線後新動作先到、訓練的那一列才跟上', async ({ page }) => {
+test('離線新增動作並加進訓練：畫面立刻有，回線後新動作與訓練的那一列都上傳', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)

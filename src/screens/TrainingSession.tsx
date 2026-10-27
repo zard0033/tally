@@ -529,8 +529,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [picker, setPicker] = useState(false)
   // 替換：要換的那張卡（entry id）。跟 picker 的開關分開，關閉動畫期間標題與清單不能跳回「加動作」
   const [replacing, setReplacing] = useState<string | null>(null)
+  // 被換掉的那個動作（exercise id）：舊卡寫入成功後就不在 exercises 裡了，picker 收起的那段時間清單還要把它排除
+  const [replacingExercise, setReplacingExercise] = useState<string | null>(null)
   // 舊動作有記下的東西時，先問再開 picker（取消不花任何東西）；cardio 決定內文
-  const [askReplace, setAskReplace] = useState<{ entryId: string; cardio: boolean } | null>(null)
+  const [askReplace, setAskReplace] = useState<{ entryId: string; exerciseId: string } | null>(null)
+  // 確認框的內文跟著問的當下記住（同 removeCardio）：關閉時 askReplace 先清掉，照它算會在收起途中跳成重訓的文案
+  const [replaceCardio, setReplaceCardio] = useState(false)
   // 目標與開關分開：關閉動畫期間表單不能跳成別的目標
   const [setTarget, setSetTarget] = useState<SetTarget | null>(null)
   const [setOpen, setSetOpen] = useState(false)
@@ -629,11 +633,15 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     const cardio = isCardioCard(item)
     const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
     setSwipeId(null)
-    if (recorded) setAskReplace({ entryId: item.entry.id, cardio })
-    else openReplacePicker(item.entry.id)
+    const exerciseId = String(item.entry.exercise_id)
+    if (recorded) {
+      setReplaceCardio(cardio)
+      setAskReplace({ entryId: item.entry.id, exerciseId })
+    } else openReplacePicker(item.entry.id, exerciseId)
   }
-  const openReplacePicker = (entryId: string) => {
+  const openReplacePicker = (entryId: string, exerciseId: string) => {
     setReplacing(entryId)
+    setReplacingExercise(exerciseId)
     setPicker(true)
   }
 
@@ -723,9 +731,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }))
 
   const pickable = db.exercises.filter((e) => e.archived !== true)
-  const replaceItem = replacing ? exercises.find((e) => e.entry.id === replacing) : undefined
   // 替換時清單不放目前這個動作（換成自己沒有意義）
-  const replacePickable = replaceItem ? pickable.filter((e) => e.id !== replaceItem.entry.exercise_id) : pickable
+  const replacePickable = replacing ? pickable.filter((e) => e.id !== replacingExercise) : pickable
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
   const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
@@ -966,10 +973,10 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         onConfirm={() => {
           const target = askReplace
           setAskReplace(null)
-          if (target) openReplacePicker(target.entryId)
+          if (target) openReplacePicker(target.entryId, target.exerciseId)
         }}
       >
-        <p>{askReplace?.cardio ? '換掉之後，這張卡記下的有氧會一起刪掉。' : '換掉之後，這個動作已經打勾的組會一起刪掉。'}</p>
+        <p>{replaceCardio ? '換掉之後，這張卡記下的有氧會一起刪掉。' : '換掉之後，這個動作已經打勾的組會一起刪掉。'}</p>
       </ConfirmDialog>
 
       <ConfirmDialog
