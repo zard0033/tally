@@ -276,9 +276,9 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
   return (
     <textarea
       ref={area}
-      className="ex-tips-input"
+      className={`ex-tips-input${tips ? '' : ' is-fresh'}`}
       aria-label={`${name} 的要點`}
-      rows={2}
+      rows={1}
       value={draft}
       onChange={(e) => {
         setDraft(e.target.value)
@@ -411,11 +411,11 @@ function ExerciseCard(p: ExerciseCardProps) {
             <path d="M7 7h11l-3-3M17 17H6l3 3" />
           </svg>
         </button>
-        {/* v2.99 拆掉 ⋯ 選單（只剩移除一項）、直接放 ✕：不用垃圾桶，頂欄右上的垃圾桶是「放棄整場訓練」，兩個意思不能長得一樣。
-            一律先跳確認框，所以像有氧卡的名稱鈕一樣標 aria-haspopup */}
-        <button className="tr-ib ex-remove" type="button" aria-haspopup="dialog" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
+        {/* v2.99 拆掉 ⋯ 選單（只剩移除一項）、直接放移除鈕；v2.101 圖示從 ✕ 改成紅色垃圾桶（使用者要求，頂欄的「刪除這次訓練」也跟著紅）。
+            兩顆長得一樣、範圍不同，靠各自確認框的標題與內文分開。一律先跳確認框，所以像有氧卡的名稱鈕一樣標 aria-haspopup */}
+        <button className="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" />
+            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
           </svg>
         </button>
       </div>
@@ -740,7 +740,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
           </svg>
         </button>
         <h1>{inProgress ? '訓練中' : '訓練紀錄'}</h1>
-        <button className="tr-ib" type="button" aria-label="刪除這次訓練" onClick={() => setAskDelete(true)}>
+        <button className="tr-ib is-danger" type="button" aria-label="刪除這次訓練" onClick={() => setAskDelete(true)}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
           </svg>

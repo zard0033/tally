@@ -47,17 +47,23 @@ export async function currentIso(page: Page): Promise<string> {
   return iso
 }
 
-/** 切到某天：週列裡有就直接點，沒有就展開月曆（必要時翻月）再點。 */
+/** 切到某天：週列裡有就直接點，沒有就展開月曆（必要時翻月）再點，點完把月曆收回週列。
+ *  v2.101 起月曆開著時選日期不會自己收合，所以這裡自己收：後面的測試都假設日期元件是週列的樣子。 */
 export async function gotoDate(page: Page, iso: string) {
   const day = page.locator(`${LIVE} [data-date="${iso}"]`)
+  let openedMonth = false
   if ((await day.count()) === 0) {
-    if ((await page.locator(`${LIVE} .datectl-month`).count()) === 0) await page.locator('.datectl-title').click()
+    if ((await page.locator(`${LIVE} .datectl-month`).count()) === 0) {
+      await page.locator('.datectl-title').click()
+      openedMonth = true
+    }
     for (let i = 0; i < 24 && (await day.count()) === 0; i++) {
       const shown = await page.locator(`${LIVE} .datectl-month`).getAttribute('data-month')
       await page.getByRole('button', { name: iso.slice(0, 7) < shown! ? '上個月' : '下個月' }).click()
     }
   }
   await day.click()
+  if (openedMonth) await page.locator('.datectl-title').click()
   // 月曆收合有動畫：退場中的月曆走完才卸載。這之前週列還在長高、位置會動，接著量週列座標（滑動手勢）會量到半路的值
   await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
 }

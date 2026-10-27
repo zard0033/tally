@@ -584,15 +584,15 @@ export default function LogSheet(props: LogSheetProps) {
                     >
                       <span aria-hidden="true">
                         蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}
-                        <span className="add">+{Math.round(totals.protein)}</span>
+                        <span className="add">(+{Math.round(totals.protein)})</span>
                       </span>
                       <span className={fatOver ? 'over' : undefined} aria-hidden="true">
                         脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}
-                        <span className="add">+{Math.round(totals.fat)}</span>
+                        <span className="add">(+{Math.round(totals.fat)})</span>
                       </span>
                       <span className={carbOver ? 'over' : undefined} aria-hidden="true">
                         碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}
-                        <span className="add">+{Math.round(totals.carb)}</span>
+                        <span className="add">(+{Math.round(totals.carb)})</span>
                       </span>
                     </div>
                   )

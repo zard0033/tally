@@ -121,11 +121,12 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
     else rootRef.current?.querySelector<HTMLElement>(':scope > :not([data-leaving]) .datectl-day[aria-pressed="true"]')?.focus({ preventScroll: true })
   }, [date, open])
 
+  /* v2.101：月曆開著時選日期**不收合**（使用者：點其他日期時不需要主動收起來，連續看幾天比較順），收合只走標題、Escape、「回今天」。
+     被點的那顆格子不會卸載（同一個月的格子沒有換 key），焦點本來就在它身上，所以不用 refocus；週列選日期照舊（週列換週時選中那顆是新元素）。 */
   const pick = (iso: string) => {
     if (iso > max) return
-    if (!open && iso === date) return
-    refocus.current = open ? 'title' : 'day'
-    setOpen(false)
+    if (iso === date) return
+    if (!open) refocus.current = 'day'
     onSelect(iso)
   }
 

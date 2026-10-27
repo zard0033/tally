@@ -1396,6 +1396,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   align-items: center; justify-content: center; border-radius: var(--r-pill); cursor: pointer;
   -webkit-appearance: none; appearance: none; flex-shrink: 0; }
 .tr-ib:active { opacity: .6; }
+/* 刪除類的圖示鈕（訓練中頂欄的「刪除這次訓練」、動作卡的移除）：用 --over（對 paper 6.06:1）。v2.101 */
+.tr-ib.is-danger { color: var(--over); }
 .tr-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tr-ib svg { width: 20px; height: 20px; }
 .tr-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 var(--s-5) var(--s-3);
@@ -1411,10 +1413,11 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-scroll.is-sorting { margin-top: -14px; padding-top: calc(var(--s-1) + 14px); }
 .ex.is-dragging { position: relative; z-index: 2; scale: 1.02; box-shadow: var(--shadow-2); }
 /* 卡片頭：握把｜名稱（點了收合／展開）｜箭頭｜替換｜移除。每張卡一模一樣、上下對齊。
-   右側三個圖示等距（中心相隔 44px：箭頭放進 44px 寬的格子、替換與移除貼著排），最右一個的中心落在 .set 勾那一欄的中心
-   （距卡片右緣 16＋26＝42px），欄頭雙勾、每組的勾、移除鈕上下成一直線。 */
+   右側三個圖示等距（中心相隔 44px：箭頭放進 44px 寬的格子、替換與移除貼著排）。v2.101：右內距 20→8px（使用者嫌右邊空隙大）——
+   最右圖示的外緣距卡片 8＋12＝20px，與握把圖示距左緣 20px 對稱，也與每組勾的圓外緣（44px 圓、中心距右 42px）同一條線；
+   不再是「中心對齊勾那一欄」（中心對齊要 20px 內距）。 */
 .ex-head { display: flex; align-items: center; gap: var(--s-1); min-height: 60px;
-  padding: var(--s-2) var(--s-5) var(--s-2) var(--s-4); }
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); }
 .ex-head > .ex-swap, .ex-head > .ex-remove { margin-left: calc(var(--s-1) * -1); }
 /* 握把圖示的中心（距卡片 30px）與 .set 的組號欄中心同一條線（16＋28/2） */
 .ex-head > .tr-grip { margin-left: calc(var(--s-2) * -1); }
@@ -1501,6 +1504,11 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ex-tips-input { display: block; min-height: 44px; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
   outline: 2px solid var(--accent); outline-offset: -2px; }
+/* v2.101：從「加要點」（沒有底色的一行字）點進去時，輸入框長得一樣——同一條 36px 高、文字從同一個位置開始、沒有底色，
+   只多一條 accent 底線表示正在輸入（inset 陰影不佔高度）。免得點一下整條跳成有底色的大方塊（使用者回報「跳來跳去」）。
+   已經有要點的，點進去仍是同樣的底色塊，本來就沒有跳。 */
+.ex-tips-input.is-fresh { min-height: 36px; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: calc(100% - var(--s-3) * 3);
+  padding: var(--s-2) 0; background: none; border-radius: 0; outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
 /* 一組一列：組｜重量｜次數｜勾。欄頭最後一格是「全部完成」雙勾 */
 .ex-body { padding-bottom: var(--s-1); }
 .set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;

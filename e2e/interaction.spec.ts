@@ -372,19 +372,35 @@ test('v2.47 ① 往未來只開一天：今天可以往前走，明天就是上�
 
 /* v2.53：原本這裡是「鍵盤按『後一天』到上界，焦點要被容器接住」——那顆鈕不存在了，焦點流失的
    風險換了個形狀：月曆收合時被點的那格會卸載。同一個要守的事（鍵盤使用者不掉回 body）。 */
-test('v2.53 ①b 鍵盤在月曆選日期後收合，焦點回到標題，不是掉回 body', async ({ page }) => {
+test('v2.101 月曆開著時選日期不收合：連選兩天都還開著、焦點留在被點的那格；Escape 才收，焦點回標題，不是掉回 body', async ({ page }) => {
   await openApp(page)
   const title = page.locator('.datectl-title')
   await title.focus()
   await title.press('Enter')
   await expect(title).toHaveAttribute('aria-expanded', 'true')
-  const cell = page.locator(`.datectl-month [data-date="${TODAY}"]`)
-  await cell.focus()
-  await cell.press('Enter')
+  // 今天以外、同一個月裡點得到的兩天（今天是 1 號時只有今天與明天，所以從「今天以外」的格子裡挑）
+  const cells = page.locator('.datectl-month .datectl-day:not([disabled]):not([aria-pressed="true"])')
+  const first = cells.first()
+  const firstIso = (await first.getAttribute('data-date'))!
+  await first.focus()
+  await first.press('Enter')
+  await expect.poll(() => currentIso(page), '選了月曆裡的一天，日期要跟著變').toBe(firstIso)
+  await expect(title, '選完日期月曆不該收').toHaveAttribute('aria-expanded', 'true')
+  check(
+    await page.evaluate((iso) => document.activeElement?.getAttribute('data-date') === iso, firstIso),
+    '選完日期後焦點沒有留在被點的那格（月曆沒收，格子也沒卸載，焦點不該動）',
+  )
+  const second = page.locator('.datectl-month .datectl-day:not([disabled]):not([aria-pressed="true"])').first()
+  const secondIso = (await second.getAttribute('data-date'))!
+  await second.click()
+  await expect.poll(() => currentIso(page)).toBe(secondIso)
+  await expect(title, '連選第二天月曆仍開著').toHaveAttribute('aria-expanded', 'true')
+
+  await page.keyboard.press('Escape')
   await expect(title).toHaveAttribute('aria-expanded', 'false')
   check(
     await page.evaluate(() => document.activeElement?.classList.contains('datectl-title') ?? false),
-    '選完日期、月曆收合後焦點沒有回到標題（掉回 body 或別處，鍵盤使用者失去位置）',
+    'Escape 收合月曆後焦點沒有回到標題（掉回 body 或別處，鍵盤使用者失去位置）',
   )
 })
 

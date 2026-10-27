@@ -169,7 +169,7 @@ test('確認列每格接「+這次」：蛋白/脂/碳各是勾選品項的加�
   const expected = async () => {
     const soy = await qtyOf('無糖豆漿')
     const egg = await qtyOf('溫泉蛋')
-    return [`+${Math.round(8 * soy + 7 * egg)}`, `+${Math.round(4 * soy + 5 * egg)}`, `+${Math.round(5 * soy + 1 * egg)}`]
+    return [`(+${Math.round(8 * soy + 7 * egg)})`, `(+${Math.round(4 * soy + 5 * egg)})`, `(+${Math.round(5 * soy + 1 * egg)})`]
   }
   expect(await adds()).toEqual(await expected())
 

@@ -1329,7 +1329,7 @@ test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「�
   await expect(legs.getByRole('button', { name: '腿推舉：移除動作' })).toBeVisible()
 })
 
-test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與組列的勾同一條線；握把與組號同一條線；沒寫過的要點條只有一行高、文字左緣與「組」字對齊、不蓋到全部完成鈕', async ({ page }) => {
+test('卡片頭右側：箭頭、替換、移除的中心等距，移除圖示與握把圖示距卡片左右緣相同；握把與組號同一條線；沒寫過的要點條只有一行高、文字左緣與「組」字對齊、不蓋到全部完成鈕', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1346,7 +1346,12 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與�
   expect(Math.abs(swap - chev - (remove - swap)), '三個圖示中心等距').toBeLessThanOrEqual(1)
   expect(Math.abs(remove - swap - 44), '間距是 44px（兩顆 44px 鈕貼著排）').toBeLessThanOrEqual(1)
   const check = await cx(card.locator('.set').first().locator('.tr-check'))
-  expect(Math.abs(remove - check), '移除鈕與每組的勾同一條線').toBeLessThanOrEqual(1)
+  // v2.101：右內距縮到 8px（使用者嫌右邊空隙大），移除圖示的外緣距卡片右緣 20px，與握把圖示距左緣 20px 對稱
+  const cardBox0 = (await card.boundingBox())!
+  const removeSvg = (await card.locator('.ex-remove svg').boundingBox())!
+  const gripSvg = (await card.locator('.tr-grip svg').boundingBox())!
+  expect(Math.abs(cardBox0.x + cardBox0.width - (removeSvg.x + removeSvg.width) - 20), '移除圖示外緣距卡片右緣 20px').toBeLessThanOrEqual(1)
+  expect(Math.abs(gripSvg.x - cardBox0.x - 20), '握把圖示外緣距卡片左緣 20px（與右側對稱）').toBeLessThanOrEqual(1)
   expect(Math.abs((await cx(card.locator('.tr-all'))) - check), '欄頭雙勾與每組的勾同一條線').toBeLessThanOrEqual(1)
   const grip = await cx(card.locator('.tr-grip'))
   const setNo = await cx(card.locator('.set').first().locator(':scope > :first-child'))
@@ -1364,6 +1369,36 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與�
   await all.click({ position: { x: allBox.width / 2, y: 2 } })
   await expect(all).toHaveAttribute('aria-pressed', 'true')
   await expect(card.locator('.ex-tips-input')).toHaveCount(0)
+})
+
+test('加要點點進去：輸入框與原本那一行同位置同高、一樣沒有底色，不跳；已有要點的點進去維持同樣的底色塊', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉') // 有要點
+  await addExercise(page, '坐姿划船') // 沒寫過；最後加的是展開的
+  const row = page.locator('.ex', { hasText: '坐姿划船' })
+  const strip = row.locator('.ex-tips.is-empty')
+  const before = (await strip.boundingBox())!
+  await strip.click()
+  const input = row.locator('.ex-tips-input')
+  await expect(input).toBeVisible()
+  const after = (await input.boundingBox())!
+  expect(Math.abs(after.x - before.x), '左緣不動').toBeLessThanOrEqual(1)
+  expect(Math.abs(after.y - before.y), '上緣不動').toBeLessThanOrEqual(1)
+  expect(Math.abs(after.height - before.height), '高度不變（點進去前後同高，下面的組列不被推動）').toBeLessThanOrEqual(1)
+  expect(await input.evaluate((el) => getComputedStyle(el).backgroundColor), '沒有底色').toBe('rgba(0, 0, 0, 0)')
+  await input.press('Escape')
+
+  // 已有要點的：展開那張（腿推舉）點進去，一樣是底色塊、位置不動
+  await page.locator('.ex', { hasText: '腿推舉' }).locator('.ex-toggle').click()
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const filled = legs.locator('.ex-tips')
+  const fb = (await filled.boundingBox())!
+  await filled.click()
+  const fi = (await legs.locator('.ex-tips-input').boundingBox())!
+  expect(Math.abs(fi.x - fb.x) + Math.abs(fi.y - fb.y), '有要點的點進去位置不動').toBeLessThanOrEqual(2)
+  expect(await legs.locator('.ex-tips-input').evaluate((el) => getComputedStyle(el).backgroundColor), '有要點的維持底色塊').not.toBe('rgba(0, 0, 0, 0)')
 })
 
 test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一欄）；清空存 null；Esc 與沒改都不寫', async ({ page }) => {
