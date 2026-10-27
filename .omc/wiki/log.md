@@ -112,3 +112,11 @@
 - **Pages:** lesson-cardio-merge-2026-10-22.md
 - **Summary:** Created new page "lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）"
 
+## [2026-10-22T09:43:00.063Z] ingest
+- **Pages:** session-log-2026-10-22-418f2a9c.md
+- **Summary:** Auto-captured session log for 4f1942b1-0d4e-4d48-a032-efebde04e897 (omc-wiki-capture:f015809c09f64304c01a202440b4c40f949bb4696e30231d95f1a8f7c69b8ccc)
+
+## [2026-10-27T04:54:13.487Z] ingest
+- **Pages:** lesson-presence-animation-mutation-2026-10-27.md
+- **Summary:** Created new page "lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）"
+

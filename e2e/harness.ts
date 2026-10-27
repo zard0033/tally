@@ -35,24 +35,31 @@ export function shiftIso(iso: string, days: number): string {
   return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
 }
 
+/* 展開收合有動畫（DateStrip 的 Panel）：退場中的那一份還在 DOM 裡，裡面也有同樣的 data-date、aria-pressed。
+   它被標成 data-leaving（同時 inert），所以下面所有「找日期格」的選擇器都只看**不在退場**的那份——
+   `.datectl > :not([data-leaving])` 是 .datectl 的直接子層（週列／月曆的外殼）。 */
+const LIVE = '.datectl > :not([data-leaving])'
+
 /** 目前選中的日期（週列或月曆裡 aria-pressed 的那一格）。 */
 export async function currentIso(page: Page): Promise<string> {
-  const iso = await page.locator('.datectl .datectl-day[aria-pressed="true"]').getAttribute('data-date')
+  const iso = await page.locator(`${LIVE} .datectl-day[aria-pressed="true"]`).getAttribute('data-date')
   if (!iso) throw new Error('日期元件裡找不到選中的日期')
   return iso
 }
 
 /** 切到某天：週列裡有就直接點，沒有就展開月曆（必要時翻月）再點。 */
 export async function gotoDate(page: Page, iso: string) {
-  const day = page.locator(`.datectl [data-date="${iso}"]`)
+  const day = page.locator(`${LIVE} [data-date="${iso}"]`)
   if ((await day.count()) === 0) {
-    if ((await page.locator('.datectl-month').count()) === 0) await page.locator('.datectl-title').click()
+    if ((await page.locator(`${LIVE} .datectl-month`).count()) === 0) await page.locator('.datectl-title').click()
     for (let i = 0; i < 24 && (await day.count()) === 0; i++) {
-      const shown = await page.locator('.datectl-month').getAttribute('data-month')
+      const shown = await page.locator(`${LIVE} .datectl-month`).getAttribute('data-month')
       await page.getByRole('button', { name: iso.slice(0, 7) < shown! ? '上個月' : '下個月' }).click()
     }
   }
   await day.click()
+  // 月曆收合有動畫：退場中的月曆走完才卸載。這之前週列還在長高、位置會動，接著量週列座標（滑動手勢）會量到半路的值
+  await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
 }
 
 export async function prevDay(page: Page) {

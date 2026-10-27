@@ -489,6 +489,157 @@ test('v2.53 Escape 關閉月曆，焦點回標題', async ({ page }) => {
   )
 })
 
+/* ═══ 日期元件展開收合動效（spec「日期元件展開收合動效」，DESIGN v2.98） ═══
+   高度由 motion 逐幀寫 inline style，錯開與換月是 CSS 動畫。**不逐幀取樣**（機器忙時幀間隔會拖到 40–100ms，
+   短動畫取不到中間幀）：高度用 MutationObserver 記 style 寫入，CSS 動畫讀 getAnimations() 的 delay 與 keyframes。 */
+
+type DateWin = { __h: string[] }
+/** 記下月曆外殼（含 .datectl-month 的那個 .datectl-panel）的 inline height 寫入；每次寫入都記，不取樣。 */
+async function watchMonthHeights(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as DateWin
+    w.__h = []
+    const root = document.querySelector('.datectl')!
+    new MutationObserver(() => {
+      const panel = root.querySelector<HTMLElement>(':scope > .datectl-panel:has(.datectl-month)')
+      if (panel) w.__h.push(panel.style.height)
+    }).observe(root, { subtree: true, attributes: true, attributeFilter: ['style'], childList: true })
+  })
+}
+const monthHeights = (page: Page) => page.evaluate(() => (window as unknown as DateWin).__h)
+
+test('日期元件展開：月曆高度從 0 長到內容高度（寫了中間值），落定後週列不在 DOM、月曆高度 auto', async ({ page }) => {
+  await openApp(page)
+  await watchMonthHeights(page)
+  await page.locator('.datectl-title').click()
+  await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1) // 退場的週列走完才卸載
+  const hs = await monthHeights(page)
+  const px = hs.map((h) => parseFloat(h)).filter((n) => Number.isFinite(n))
+  check(px.length >= 2, `展開時高度沒有逐步寫入（只有 ${JSON.stringify(hs)}）`)
+  check(px.some((n) => n > 0), '高度從沒離開 0')
+  check(hs.at(-1) === 'auto', `落定後高度應是 auto，實際 ${hs.at(-1)}`)
+  await expect(page.locator('.datectl-week')).toHaveCount(0)
+  const month = page.locator('.datectl-month')
+  const panelH = await month.evaluate((el) => el.parentElement!.getBoundingClientRect().height)
+  const innerH = await month.evaluate((el) => el.getBoundingClientRect().height)
+  check(Math.abs(panelH - innerH) < 1, `落定後外殼高度（${panelH}）該等於月曆內容高度（${innerH}）`)
+})
+
+test('日期元件收合：週列長回來、月曆走完才卸載；展開途中再點能反向，最後收合，焦點在標題', async ({ page }) => {
+  await openApp(page)
+  const title = page.locator('.datectl-title')
+  await title.focus()
+  await title.press('Enter') // 展開
+  await title.press('Enter') // 展開還沒走完就收：不等，直接反向
+  await expect(title).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.locator('.datectl-month')).toHaveCount(0)
+  await expect(page.locator('.datectl-week')).toHaveCount(1)
+  await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
+  check(
+    await page.evaluate(() => document.activeElement?.classList.contains('datectl-title') ?? false),
+    '來回切換之後焦點不在標題',
+  )
+  // 再展開收合一輪，狀態沒有殘留
+  await title.press('Enter')
+  await expect(page.locator('.datectl-month')).toHaveCount(1)
+  await expect(page.locator('.datectl-week')).toHaveCount(0)
+})
+
+test('日期元件展開途中：退場的週列是 inert＋aria-hidden＋data-leaving，點得到的永遠是月曆；選日期不受影響', async ({ page }) => {
+  await openApp(page)
+  const info = await page.evaluate(async () => {
+    const title = document.querySelector<HTMLElement>('.datectl-title')!
+    title.click()
+    await new Promise((r) => requestAnimationFrame(() => r(null))) // 等一幀：React 掛上月曆、週列轉成退場中
+    const leaving = document.querySelector<HTMLElement>('.datectl > [data-leaving]')
+    if (!leaving) return null
+    const day = leaving.querySelector<HTMLElement>('.datectl-day')!
+    const r = day.getBoundingClientRect()
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+    return {
+      inert: leaving.hasAttribute('inert'),
+      hidden: leaving.getAttribute('aria-hidden'),
+      hitInsideLeaving: hit ? leaving.contains(hit) : false,
+      livePanels: document.querySelectorAll('.datectl > :not([data-leaving])').length - 1, // 扣掉標題列
+    }
+  })
+  check(info !== null, '點標題的當下沒有退場中的週列（動畫被跳過了？）')
+  check(info.inert, '退場的週列沒有 inert')
+  check(info.hidden === 'true', '退場的週列沒有 aria-hidden')
+  check(!info.hitInsideLeaving, '退場的週列還接得到點擊（elementFromPoint 落在它裡面）')
+  check(info.livePanels === 1, `不在退場的外殼應只有月曆一份，實際 ${info.livePanels}`)
+  // 走完之後 helper 照常選得到日期（currentIso／gotoDate 都排除退場那份）
+  await gotoDate(page, shiftIso(TODAY, -3))
+  check((await currentIso(page)) === shiftIso(TODAY, -3), '展開動畫之後選日期失敗')
+})
+
+/** 點標題展開，等一幀讓 React 掛上月曆，讀每格的 CSS 動畫（在同一個 evaluate 裡讀：播完就從 getAnimations 消失）。 */
+const readCellAnimations = (p: Page) =>
+  p.evaluate(async () => {
+    document.querySelector<HTMLElement>('.datectl-title')!.click()
+    await new Promise((r) => requestAnimationFrame(() => r(null)))
+    const cells = [...document.querySelectorAll<HTMLElement>('.datectl-month .datectl-grid > [style*="--r"]')]
+    return cells.map((el) => {
+      const a = el.getAnimations()[0]
+      const t = a?.effect?.getTiming()
+      const frames = (a?.effect as KeyframeEffect | undefined)?.getKeyframes() ?? []
+      return {
+        row: Number(el.style.getPropertyValue('--r')),
+        delay: Number(t?.delay ?? -1),
+        duration: Number(t?.duration ?? -1),
+        moves: frames.some((f) => f.transform && f.transform !== 'none'),
+      }
+    })
+  })
+
+test('日期元件展開：月曆各格依列錯開 25ms 淡入＋由下方 6px 歸位', async ({ page }) => {
+  await openApp(page)
+  const cells = await readCellAnimations(page)
+  check(cells.length >= 28, `月曆格子數不對（${cells.length}）`)
+  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => a - b)
+  check(rows[0] === 0 && rows.length >= 5, `列號應從 0（星期標題）起且至少 5 列，實際 ${rows}`)
+  for (const c of cells) {
+    check(c.delay === c.row * 25, `第 ${c.row} 列的延遲應是 ${c.row * 25}ms，實際 ${c.delay}`)
+    check(c.moves, `第 ${c.row} 列沒有位移動畫`)
+  }
+  check(Math.max(...rows) * 25 <= 150, '總錯開超過 150ms')
+})
+
+test('日期元件展開（減少動態）：不錯開、沒有位移、也不動高度，只留 ≤120ms 的淡入', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page)
+  await watchMonthHeights(page)
+  const cells = await readCellAnimations(page)
+  check(cells.length >= 28, '減少動態：月曆格子數不對')
+  for (const c of cells) {
+    check(c.delay === 0, `減少動態不該錯開（第 ${c.row} 列延遲 ${c.delay}）`)
+    check(!c.moves, '減少動態不該有位移')
+    check(c.duration > 0 && c.duration <= 120, `減少動態的淡入該 ≤120ms，實際 ${c.duration}`)
+  }
+  await expect(page.locator('.datectl-week')).toHaveCount(0) // 退場立刻消失
+  const heights = (await monthHeights(page)).filter((h) => h !== '')
+  check(heights.length === 0, `減少動態不該寫高度動畫，實際寫了 ${JSON.stringify(heights)}`)
+})
+
+test('日期元件換月：格子往對應方向滑一下（下個月從右、上個月從左）', async ({ page }) => {
+  await openApp(page)
+  await page.locator('.datectl-title').click()
+  await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
+  const slide = (name: string) =>
+    page.evaluate(async (label) => {
+      document.querySelector<HTMLElement>(`.datectl-mnav[aria-label="${label}"]`)!.click()
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+      const grid = document.querySelector<HTMLElement>('.datectl-month .datectl-grid')!
+      const a = grid.getAnimations()[0]
+      const frames = (a?.effect as KeyframeEffect | undefined)?.getKeyframes() ?? []
+      return { dir: grid.dataset.anim, from: String(frames[0]?.transform ?? '') }
+    }, name)
+  const prev = await slide('上個月')
+  check(prev.dir === 'prev' && /translate(X)?\(-12px/.test(prev.from), `上個月應從左滑入，實際 ${JSON.stringify(prev)}`)
+  const next = await slide('下個月')
+  check(next.dir === 'next' && /translate(X)?\(12px/.test(next.from), `下個月應從右滑入，實際 ${JSON.stringify(next)}`)
+})
+
 test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明天則不動', async ({ page }) => {
   await openApp(page)
   const box = await page.locator('.datectl-week').boundingBox()
@@ -513,6 +664,8 @@ test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明�
   )
   await title.press('Enter') // 收回週列，接下來的往右滑才有週列可滑
   await expect(title).toHaveAttribute('aria-expanded', 'false')
+  // 月曆收合有動畫：走完才卸載。展開已經落定時，退場中的月曆會留在原位把週列擠到下面，這時用原座標滑會落在 inert 的月曆上
+  await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
 
   await slowDrag(page, left, leg(left, right, 8)) // 往右滑＝前一週
   await expect.poll(() => currentIso(page), '往右滑應回到前一週同一個星期').toBe(shiftIso(TODAY, -7))

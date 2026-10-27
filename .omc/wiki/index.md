@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 25 pages | Last updated: 2026-10-22T06:45:58.325Z
+> 27 pages | Last updated: 2026-10-27T04:54:13.636Z
 
 ## debugging
 
@@ -19,6 +19,7 @@
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
+- [lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）](lesson-presence-animation-mutation-2026-10-27.md) — # lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）
 - [lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）](lesson-recharts-trend-chart-recharts-2026-10-20.md) — # lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）
 - [lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）](lesson-recovery-status-2026-10-21.md) — # lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）
 - [lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）](lesson-rpe-and-ddl-rpe-ddl-2026-10-21.md) — # lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）
@@ -40,4 +41,5 @@
 - [Session Log 2026-10-20](session-log-2026-10-20-7de39221.md) — # Session Log 2026-10-20
 - [Session Log 2026-10-20](session-log-2026-10-20-b467eaf1.md) — # Session Log 2026-10-20
 - [Session Log 2026-10-21](session-log-2026-10-21-537aa75a.md) — # Session Log 2026-10-21
+- [Session Log 2026-10-22](session-log-2026-10-22-418f2a9c.md) — # Session Log 2026-10-22
 - [Session Log 2026-10-22](session-log-2026-10-22-ab471733.md) — # Session Log 2026-10-22

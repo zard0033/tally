@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-22）：階段 4 A–D、有氧併入動作 v2.89（6e17a1a）、有氧圖示 v2.90（a1e346b）**都已 push 並部署**；舊有氧 3 筆已遷移成 3 次獨立訓練，舊表 cardio_sessions 已 drop（備份與還原 SQL 在 .omc/plans/cardio_sessions-*）。**v2.91／v2.92（15c2378）與 v2.93（封存從編輯動作 sheet 搬到動作庫列表）已做完、獨立 review 0 blocking，2026-10-22 推送**；全量 e2e 這幾輪都沒跑（使用者裁決，只跑受影響檔），e2e 共 352 條、vitest 798。**真機未驗**：RPE、重量建議、v2.90 圖示、v2.91／v2.92 三項手感。
-下一步：①使用者要調整每日應攝取熱量的計算（新對話；先讀 MANUAL 最後一節）②真機驗 v2.91／v2.92／v2.93（封存無回饋的取捨最先看） ③有空補一輪全量 e2e。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5；健走摘要折行點（「坡度」與「8%」被拆開）要不要黏住。
+現況（2026-10-27）：v2.93 以前已 push 並部署。**待 push 的 5 個版本**：替換動作 v2.94、要點條 v2.95、Picker 新增動作 v2.96、動作庫管理搬到設定頁 v2.97、月曆展開收合動效 v2.98。vitest 803；e2e 全量 375 條跑 373 過（2 紅：spring-sheet 已知偶發＋已修的日期元件 gotoDate）。**真機未驗**：v2.91–v2.98（尤其要點條的 iOS 鍵盤、月曆 height 掉幀、新增 sheet 疊在 picker）、RPE、重量建議。
+下一步：①push 後真機驗 ②使用者要調整每日應攝取熱量的計算（新對話；先讀 MANUAL 最後一節）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

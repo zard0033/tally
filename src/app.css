@@ -814,6 +814,25 @@ button { -webkit-user-select: none; user-select: none; }
   -webkit-appearance: none; appearance: none; }
 .datectl-mnav svg { width: 18px; height: 18px; }
 .datectl-mnav:disabled { opacity: .3; cursor: default; }
+/* 展開收合的動效（spec「日期元件展開收合動效」）。外殼 .datectl-panel 的高度與淡入由 motion 驅動（DateStrip.tsx 的 Panel，
+   SPRING_CARD）；overflow hidden 是為了高度從 0 長出來時不露出內容。聚焦外框都畫在內側（outline-offset: -2px），不會被裁。
+   下面兩組是 CSS 動畫，因為一張月曆有 40 多顆按鈕，不值得逐顆掛 motion：
+   · 展開（anim-open）：每一格依 --r（第幾列，星期標題是 0）錯開 25ms，淡入並由下方 6px 歸位；最多 7 列，總錯開 150ms。
+   · 換月（anim-next／anim-prev）：整張格子往對應方向 12px 淡入歸位，160ms。
+   fill-mode 用 backwards：延遲期間先停在起點，播完不留下殘留的 transform。
+   退場中的那一份（[data-leaving]）已 inert，不再收任何點擊。 */
+.datectl-panel { overflow: hidden; }
+@keyframes datectl-row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes datectl-slide-next { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@keyframes datectl-slide-prev { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes datectl-fade { from { opacity: 0; } to { opacity: 1; } }
+.datectl-grid.anim-open > * { animation: datectl-row-in var(--dur-base) ease-out backwards; animation-delay: calc(var(--r, 0) * 25ms); }
+.datectl-grid.anim-next { animation: datectl-slide-next var(--dur-base) ease-out backwards; }
+.datectl-grid.anim-prev { animation: datectl-slide-prev var(--dur-base) ease-out backwards; }
+/* 減少動態（spec AC 10）：位移與錯開全關，只留 ≤120ms 的淡入 */
+@media (prefers-reduced-motion: reduce) {
+  .datectl-grid.anim-open > *, .datectl-grid.anim-next, .datectl-grid.anim-prev { animation: datectl-fade 120ms linear backwards; animation-delay: 0s; }
+}
 
 /* ═══════════ 記一筆 sheet ═══════════ */
 /* v2.38：壓暗之外再加一層模糊。前綴不可省（同「區塊分隔」的 mask-image，舊 iOS Safari
