@@ -1430,7 +1430,7 @@ test('要點條：離線也能寫，畫面立刻是新的，回線後上傳', as
     .toBe('離線時寫的')
 })
 
-test('移除動作鈕：沒打勾直接移除、有打勾先確認', async ({ page }) => {
+test('移除動作鈕：一律先確認（沒打勾也問，內文只說會移除；有打勾的內文提到會刪組），取消不寫任何東西', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1443,12 +1443,21 @@ test('移除動作鈕：沒打勾直接移除、有打勾先確認', async ({ pa
   await legs.locator('.set').first().locator('.tr-check').click()
   await legs.getByRole('button', { name: '腿推舉：移除動作' }).click()
   const dialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
-  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('.tr-dialog-body')).toHaveText('這個動作已經打勾的組會一起刪掉。')
   await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(dialog).toHaveCount(0)
   await expect(page.locator('.ex')).toHaveCount(2)
 
-  // 沒打勾的動作：直接移除
+  // 沒打勾的動作：也要先問（✕ 常駐、移除沒有 undo），內文不提「打勾的組」
   await row.getByRole('button', { name: '坐姿划船：移除動作' }).click()
+  await expect(dialog.locator('.tr-dialog-body')).toHaveText('這個動作會從這次訓練移除。')
+  await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('.ex'), '按先不要什麼都沒動').toHaveCount(2)
+  expect(await trainRows(page, 'workout_exercises'), '取消不寫入').toHaveLength(2)
+
+  await row.getByRole('button', { name: '坐姿划船：移除動作' }).click()
+  await dialog.getByRole('button', { name: '移除', exact: true }).click()
   await expect(page.locator('.ex')).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
 })
@@ -3713,7 +3722,7 @@ test('有氧卡也能用握把排序（鍵盤）：順序換了，位置落到�
   await expect.poll(() => storedExerciseOrder(page)).toEqual([WALK.id, EX_ID])
 })
 
-test('移除有氧卡：分鐘填過的先問（「這張卡記下的有氧會一起刪掉。」，收起途中內文不跳），沒填的直接移除', async ({ page }) => {
+test('移除有氧卡：一律先問——分鐘填過的內文是「這張卡記下的有氧會一起刪掉。」（收起途中內文不跳），沒填的只說會移除', async ({ page }) => {
   await openApp(page, {}, CARDIO_LIB)
   await openTraining(page)
   await startBlank(page)
@@ -3724,7 +3733,10 @@ test('移除有氧卡：分鐘填過的先問（「這張卡記下的有氧會�
   await saveCardio(page)
 
   await cardioCard(page, '跑步機坡度健走').getByRole('button', { name: '跑步機坡度健走：移除動作' }).click()
-  await expect(page.locator('.ex'), '沒填的直接移除').toHaveCount(1)
+  const emptyDialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
+  await expect(emptyDialog.locator('.tr-dialog-body'), '沒填的也要先問，內文只說會移除').toHaveText('這個動作會從這次訓練移除。')
+  await emptyDialog.getByRole('button', { name: '移除', exact: true }).click()
+  await expect(page.locator('.ex')).toHaveCount(1)
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
 
   await cardioCard(page, '有氧拳擊').getByRole('button', { name: '有氧拳擊：移除動作' }).click()

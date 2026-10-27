@@ -518,7 +518,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [replacingExercise, setReplacingExercise] = useState<string | null>(null)
   // 舊動作有記下的東西時，先問再開 picker（取消不花任何東西）；cardio 決定內文
   const [askReplace, setAskReplace] = useState<{ entryId: string; exerciseId: string } | null>(null)
-  // 確認框的內文跟著問的當下記住（同 removeCardio）：關閉時 askReplace 先清掉，照它算會在收起途中跳成重訓的文案
+  // 確認框的內文跟著問的當下記住（同 removeCardio／removeRecorded）：關閉時 askReplace 先清掉，照它算會在收起途中跳成重訓的文案
   const [replaceCardio, setReplaceCardio] = useState(false)
   // 目標與開關分開：關閉動畫期間表單不能跳成別的目標
   const [setTarget, setSetTarget] = useState<SetTarget | null>(null)
@@ -535,6 +535,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [askRemove, setAskRemove] = useState<string | null>(null)
   // 移除確認的內文跟著問的當下記住：關閉時 askRemove 先清掉，照 removing 算的話收起途中會跳成重訓的文案
   const [removeCardio, setRemoveCardio] = useState(false)
+  const [removeRecorded, setRemoveRecorded] = useState(false)
   const [flash, setFlash] = useState<readonly string[]>([])
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reduced = useReducedMotion()
@@ -613,7 +614,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     }
   }
 
-  // 會丟掉已記的東西才先問（同 askRemoveExercise）；沒記東西就直接開 picker
+  // 替換只在會丟掉已記的東西時才先問（移除則一律先問，見 askRemoveExercise）；沒記東西就直接開 picker
   const startReplace = (item: WorkoutExerciseDetail) => {
     const cardio = isCardioCard(item)
     const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
@@ -721,14 +722,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
   const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
-  // 會丟掉已記的東西才先問：重訓是打過勾的組，有氧是填過的分鐘
+  // 移除一律先問（卡片頭的 ✕ 常駐、沒有 undo）；內文依有沒有記下東西分三種：重訓是打過勾的組，有氧是填過的分鐘，都沒有就只說會移除
   const askRemoveExercise = (item: WorkoutExerciseDetail) => {
     const cardio = isCardioCard(item)
-    const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
-    if (recorded) {
-      setRemoveCardio(cardio)
-      setAskRemove(item.entry.id)
-    } else void removeExercise(item.entry.id)
+    setRemoveCardio(cardio)
+    setRemoveRecorded(cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true))
+    setAskRemove(item.entry.id)
   }
 
   return (
@@ -973,7 +972,13 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         onCancel={() => setAskRemove(null)}
         onConfirm={() => removing && void removeExercise(removing.entry.id)}
       >
-        <p>{removeCardio ? '這張卡記下的有氧會一起刪掉。' : '這個動作已經打勾的組會一起刪掉。'}</p>
+        <p>
+          {!removeRecorded
+            ? '這個動作會從這次訓練移除。'
+            : removeCardio
+              ? '這張卡記下的有氧會一起刪掉。'
+              : '這個動作已經打勾的組會一起刪掉。'}
+        </p>
       </ConfirmDialog>
     </div>
   )

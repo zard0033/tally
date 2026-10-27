@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-27）：v2.98 以前已 push（origin/main = 8f14d36）。**本機待 push**：notepad 現況 commit＋v2.99 動作卡細修與設定頁分組（✕ 取代 ⋯ 選單、右側三圖示等距並對齊勾欄、加要點縮成一行、設定頁分「目標與身體／資料庫」）。vitest 803、build、lint 過；e2e 全量 377 條跑 375 過（2 紅＝food-library 焦點、interaction 慢態，已知偶發，各單跑 5 次紅 1 次）。**真機未驗**：v2.91–v2.99、RPE、重量建議。v2.99 取捨：名稱欄約 127→103px，收合列「下一組」較易截斷；✕ 無 undo。
+現況（2026-10-27）：v2.98 以前已 push（origin/main = 8f14d36）。**本機待 push**：notepad 現況 commit＋v2.99 動作卡細修與設定頁分組（✕ 取代 ⋯ 選單、右側三圖示等距並對齊勾欄、加要點縮成一行、設定頁分「目標與身體／資料庫」）。vitest 803、build、lint 過；e2e 全量 377 條跑 375 過（2 紅＝food-library 焦點、interaction 慢態，已知偶發，各單跑 5 次紅 1 次）。**真機未驗**：v2.91–v2.99、RPE、重量建議。v2.99 取捨：名稱欄約 127→103px，收合列「下一組」較易截斷；✕ 一律先跳確認框（無 undo）。
 下一步：①push 前 review＋真機驗 ②使用者要調整每日應攝取熱量的計算（新對話；先讀 MANUAL 最後一節）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
@@ -122,4 +122,4 @@ v2.93（封存搬到動作庫列表）push 前 review 留下的 follow-up（0 bl
 - [LOW] 移除 › 的理由已改成引課表編輯為先例；主按鈕可補 `aria-label="X，編輯"`；錯誤條只在下一次點封存才清（write 成功後也該 `setError(null)`）；錯誤那條 e2e 的 toBeInViewport 分辨不出位置（清單沒捲動）；ARCHIVE_ICON／RESTORE_ICON 在 FoodLibrary 與 ExerciseLibrary 各一份可抽到 src/components/；食品庫寫「復原 X」、動作庫寫「取消封存 X」用詞不一。
 - 另：使用者之後要「調整計算每日應攝取熱量」，新對話一開場先讀 notepad 與 spec.md「每日目標計算引擎」「實測維持熱量」；2026-10-12 的裁決是不改目標、公式、資料表（TDEE 1956 vs 實測約 1760–1800），運動加成另案、等訓練記錄累積 3–4 週（現已累積約 2 週）。
 ### 2026-10-27 15:00
-- [追加 2026-10-27] v2.99 動作卡細修＋設定頁分組（spec.md 沒寫，使用者當天提出；DESIGN v2.99 有全文與取捨）。若嫌名稱欄太窄：`.ex-head` 右內距改回 4px 可拿回 16px，代價是 ✕ 不再對齊勾那一欄。未做：沒打勾的動作按 ✕ 直接移除、沒有 undo。
+- [追加 2026-10-27] v2.99 動作卡細修＋設定頁分組（spec.md 沒寫，使用者當天提出；DESIGN v2.99 有全文與取捨）。若嫌名稱欄太窄：`.ex-head` 右內距改回 4px 可拿回 16px，代價是 ✕ 不再對齊勾那一欄。移除 ✕ 一律先跳確認框（沒打勾也問，使用者當天裁決），所以沒做 undo。
