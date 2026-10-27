@@ -1,12 +1,13 @@
 /* 訓練分頁（階段 2，樣張 ①）：日期元件、當天已記的訓練（進行中與已完成分開）、同步狀態細條，
- * 以及「開始訓練 sheet → 訓練中整頁」這條主流程；課表下方的「動作庫」入口進整頁的動作庫。
+ * 以及「開始訓練 sheet → 訓練中整頁」這條主流程；課表下方的「訓練分析」入口進整頁的分析。
+ * 動作庫管理在 v2.96 搬到設定頁（跟食品庫管理放一起），這裡不再有入口。
  * 有氧是動作（spec「有氧併入動作」）：在訓練中加，沒有獨立的入口與列表；只有一張有氧卡的訓練在列表上以動作名稱與有氧摘要列出。
- * 課表區在已完成之後、動作庫之前：
+ * 課表區在已完成之後、訓練分析入口之前：
  * 點一份進課表編輯整頁，「＋ 新課表」先問名稱；開始訓練 sheet 裡選課表會照它開一次訓練。
  *
  * 日期由 App 持有、經 props 傳進來：主 CTA 在 App 的底部列裡，要知道「選到哪天、能不能開始」。
  * 兩頁的日期軸「長得一致」（共用 DateStrip），但**不連動**——互相揭露是第 2 輪的明確動作。
- * 進行中的整頁（TrainingSession）與動作庫（ExerciseLibrary）接管整個畫面，並通知 App 把底部列收起來
+ * 進行中的整頁（TrainingSession）、課表編輯與訓練分析接管整個畫面，並通知 App 把底部列收起來
  * （同設定的次級頁面）。 */
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
@@ -26,7 +27,6 @@ import {
   type RowOp,
   type WorkoutCard,
 } from '@/lib/training'
-import ExerciseLibrary from './ExerciseLibrary'
 import RoutineEditor from './RoutineEditor'
 import RoutineNameSheet from './RoutineNameSheet'
 import StartSheet from './StartSheet'
@@ -118,7 +118,6 @@ export default function Training({
 }: TrainingProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [syncOpen, setSyncOpen] = useState(false)
-  const [library, setLibrary] = useState(false)
   const [analysis, setAnalysis] = useState(false)
   const [routineId, setRoutineId] = useState<string | null>(null)
   const [nameOpen, setNameOpen] = useState(false)
@@ -131,7 +130,7 @@ export default function Training({
   const detail = view && sessionId ? workoutDetail(view.db, sessionId) : null
   const routines = useMemo(() => (view ? routineList(view.db) : { active: [], archived: [] }), [view])
   const editing = view && routineId ? routineDetail(view.db, routineId) : null
-  const full = detail !== null || library || analysis || editing !== null
+  const full = detail !== null || analysis || editing !== null
   // 訓練中整頁開著時每記一組 view 就變一次，列表又看不到入口：整頁開著就不算
   const analysed = useMemo(() => (view && !full ? progressList(view.db).length : 0), [view, full])
 
@@ -195,9 +194,6 @@ export default function Training({
     )
   }
 
-  if (library && view) {
-    return <ExerciseLibrary exercises={view.db.exercises} onBack={() => setLibrary(false)} onWrite={onWrite} />
-  }
 
   if (analysis && view) {
     return (
@@ -329,21 +325,6 @@ export default function Training({
         )}
         {view && (
           <div className="tr-card tr-entry">
-            <button className="tr-row" type="button" data-action="open-library" onClick={() => setLibrary(true)}>
-              <svg className="lead" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4z" />
-                <path d="M9 8h6M9 12h6" />
-              </svg>
-              <span className="grow">
-                <span className="nm">動作庫</span>
-                <span className="sub">
-                  {view.db.exercises.filter((e) => e.archived !== true).length} 個動作 · 搜尋、編輯要點
-                </span>
-              </span>
-              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
             <button className="tr-row" type="button" data-action="open-analysis" onClick={() => setAnalysis(true)}>
               <svg className="lead" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 19h16" />

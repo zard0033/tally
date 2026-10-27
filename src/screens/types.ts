@@ -10,6 +10,8 @@ import type { Food, IntakeDetailPatch, IntakeRow, NewFood, NewIntake, NewWeight,
 import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
+import type { RowOp } from '@/lib/training'
+import type { TrainingView } from '@/lib/trainingRuntime'
 
 /**
  * 目前檢視日期的 intake 快照。
@@ -94,7 +96,11 @@ export interface SettingsProps {
   /** 復原：把整筆連同 id 一起送回去解封存，App 的使用中清單同步插回並排序。 */
   onUnarchiveFood: (food: Food) => Promise<void>
   onSignOut: () => void
-  /** 進入／離開次級頁面（每日目標／食品庫管理／體重趨勢）時回報，App 據此隱藏底部
+  /** 訓練資料（動作庫管理頁用）。null＝還沒載到：入口列顯示「載入中」、不可點，不顯示 0 個動作。 */
+  training: TrainingView | null
+  /** 動作庫管理頁的寫入（新增、改名、肌群、要點、封存）：排進離線佇列，失敗 rejects，頁面自己接住顯示。 */
+  onTrainingWrite: (ops: RowOp[]) => Promise<void>
+  /** 進入／離開次級頁面（每日目標／食品庫管理／動作庫管理／體重趨勢）時回報，App 據此隱藏底部
    *  navbar——這幾頁自己有返回鍵，主導覽同時存在會讓使用者以為還在設定頁根層。 */
   onSubViewChange: (isSubView: boolean) => void
 }

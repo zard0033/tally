@@ -560,23 +560,39 @@ const LIBRARY_FIX: typeof FIX = {
 const library = (page: Page) => page.locator('[data-screen="exercise-library"]')
 const editSheet = (page: Page) => page.locator('[data-screen="exercise-edit"]')
 
+/** 動作庫管理在設定頁（v2.96 從訓練頁搬來，跟食品庫管理放一起）。 */
+const libraryEntry = (page: Page) => page.locator('[data-action="open-exercise-library"]')
+async function openSettingsTab(page: Page) {
+  await page.locator('.tab[aria-label="設定"]').click()
+  await expect(page.locator('[data-screen="settings"]')).toBeVisible()
+}
 async function openLibrary(page: Page) {
-  await page.locator('[data-action="open-library"]').click()
+  await openSettingsTab(page)
+  await libraryEntry(page).click()
   await expect(library(page)).toBeVisible()
 }
 
-test('動作庫：入口顯示未封存的動作數、整頁接管（底部列收起）、返回回到訓練頁', async ({ page }) => {
+test('動作庫管理：設定頁入口顯示未封存的動作數、整頁接管（底部列收起）、返回回到設定頁；訓練頁不再有動作庫入口', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
-  await expect(page.locator('[data-action="open-library"]')).toContainText('2 個動作')
+  await expect(page.locator('[data-action="open-library"]'), '訓練頁沒有動作庫入口了').toHaveCount(0)
+  await expect(page.locator('[data-action="open-analysis"]'), '訓練分析入口還在').toBeVisible()
 
-  await openLibrary(page)
+  await openSettingsTab(page)
+  await expect(libraryEntry(page)).toContainText('動作庫管理')
+  await expect(libraryEntry(page)).toContainText('2 個動作')
+  // 跟食品庫管理在同一張入口列表裡，緊接在它後面
+  const labels = await page.locator('.entry-row .lb').allTextContents()
+  expect(labels.indexOf('動作庫管理')).toBe(labels.indexOf('食品庫管理') + 1)
+
+  await libraryEntry(page).click()
+  await expect(library(page)).toBeVisible()
   await expect(page.locator('.bottom-bar')).toHaveCount(0)
   await expect(library(page).locator('.tr-row')).toHaveCount(3)
   await expect(library(page).locator('.tr-row', { hasText: '腿推舉' })).toContainText('有要點')
 
   await library(page).getByRole('button', { name: '返回' }).click()
-  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await expect(page.locator('[data-screen="settings"]')).toBeVisible()
   await expect(page.locator('.bottom-bar')).toBeVisible()
 })
 
@@ -678,6 +694,7 @@ test('封存：從「加動作」的選單消失；選單也有肌群橫條', as
   expect(await exercisePatches(page), '封存只送 archived 一欄').toEqual([{ archived: true }])
 
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   const picker = page.locator('[data-screen="exercise-picker"]')
@@ -703,6 +720,7 @@ test('取消封存：回到清單與選單', async ({ page }) => {
 
   // 回到「加動作」的選單
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   await expect(page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '舊的肩推' })).toBeVisible()
@@ -845,6 +863,7 @@ test('封存的動作：歷史訓練照樣顯示名稱', async ({ page }) => {
   await archiveBtn(page, '腿推舉').click()
   await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
 
   await page.locator('.tr-row[data-workout-id="w-1"]').click()
   await expect(page.locator('.ex .nm')).toHaveText(['腿推舉'])
@@ -978,8 +997,8 @@ const imgLoaded = async (img: Locator) => {
  *  152 筆 insert 逐筆上傳每條要約 15 秒。預填本身由「第一次開、伺服器上沒有任何動作」那條守。 */
 async function openCatalogLibrary(page: Page) {
   await openApp(page, {}, SEEDED_FIX)
-  await openTraining(page)
-  await expect(page.locator('[data-action="open-library"]')).toContainText('152 個動作')
+  await openSettingsTab(page)
+  await expect(libraryEntry(page)).toContainText('152 個動作')
   await openLibrary(page)
 }
 
@@ -1015,6 +1034,7 @@ test('動作示意圖：預設動作有照片、自建的動作用肌群單字�
 
   // 加動作 sheet 與訓練中卡片
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   const pickRow = page.locator('[data-screen="exercise-picker"] .tr-row').filter({ has: page.getByText('腿推舉', { exact: true }) })
@@ -1083,6 +1103,7 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×18
 test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；關掉後 sheet 還在，點名稱才選取', async ({ page }) => {
   await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   const picker = page.locator('[data-screen="exercise-picker"]')
@@ -1171,6 +1192,7 @@ test('動作示意圖放大：除了縮圖本身，整列都還是主按鈕（�
 test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，不會開「改預設組次」', async ({ page }) => {
   await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await newRoutine(page, '菜單 A')
   await page.locator('[data-action="add-routine-exercise"]').click()
   await page.locator('[data-screen="exercise-picker"] [data-exercise-id]').filter({ has: page.getByText('腿推舉', { exact: true }) }).click()
@@ -1186,6 +1208,7 @@ test('動作示意圖放大：課表編輯的動作列也能點縮圖放大，�
 test('動作示意圖放大：訓練中卡片點縮圖只放大，卡片不收合', async ({ page }) => {
   await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   await page.locator('[data-screen="exercise-picker"] [data-exercise-id]').filter({ has: page.getByText('腿推舉', { exact: true }) }).click()
@@ -1246,7 +1269,8 @@ test('已經有 16 個預設動作的既有帳號：開 App 自動補其餘（�
   expect(posts, '只送缺的 135 個，已有的 17 個不送').toHaveLength(135)
 
   // 畫面上：沒有任何要按的入口，補進來的有圖，自建的同名那列照常能改要點
-  await expect(page.locator('[data-action="open-library"]')).toContainText('151 個動作') // 152 減 1 個封存的
+  await openSettingsTab(page)
+  await expect(libraryEntry(page)).toContainText('151 個動作') // 152 減 1 個封存的
   await openLibrary(page)
   await expect(library(page).locator('[data-section="fill-catalog"]')).toHaveCount(0)
   const added = library(page).locator('.tr-row').filter({ has: page.getByText('啞鈴二頭彎舉', { exact: true }) })
@@ -1260,8 +1284,8 @@ test('已經有 16 個預設動作的既有帳號：開 App 自動補其餘（�
 
 test('沒有任何預設動作的帳號（自己從零建的庫）：開 App 不會被灌進 152 個', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
-  await openTraining(page)
-  await expect(page.locator('[data-action="open-library"]')).toContainText('2 個動作')
+  await openSettingsTab(page)
+  await expect(libraryEntry(page)).toContainText('2 個動作')
   // 沒有事件可等的反向斷言：給自動補足夠的時間（正常情況下載入完立刻就會排進去）
   await page.waitForTimeout(2500)
   expect(await trainRows(page, 'exercises')).toHaveLength(3)
@@ -3070,6 +3094,7 @@ test('著作權標示：動作庫、加動作 sheet、訓練中畫面的列表�
   await expect(credit(library(page))).toHaveText(CREDIT)
 
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   const picker = page.locator('[data-screen="exercise-picker"]')
@@ -3082,6 +3107,7 @@ test('著作權標示：動作庫、加動作 sheet、訓練中畫面的列表�
 test('著作權標示：課表編輯有預設動作的圖時印一行', async ({ page }) => {
   await openCatalogLibrary(page)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await newRoutine(page, '菜單 A')
   await expect(credit(editor(page)), '還沒有動作，列表上沒有圖').toHaveCount(0)
   await page.locator('[data-action="add-routine-exercise"]').click()
@@ -3099,6 +3125,7 @@ test('著作權標示：畫面上沒有任何預設動作的圖（全是自建�
   await expect(credit(library(page))).toHaveCount(0)
 
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   await expect(page.locator('[data-screen="exercise-picker"] .tr-row').first()).toBeVisible()
@@ -3728,6 +3755,7 @@ test('有氧動作的縮圖：拳擊是手套圖示（不能放大、不印著�
   expect(Math.abs(svg.x + svg.width / 2 - (glove.x + glove.width / 2)), '圖示水平置中').toBeLessThan(1)
   expect(Math.abs(svg.y + svg.height / 2 - (glove.y + glove.height / 2)), '圖示垂直置中').toBeLessThan(1)
   await library(page).getByRole('button', { name: '返回' }).click()
+  await openTraining(page)
 
   await startBlank(page)
   const session = page.locator('[data-screen="training-session"]')

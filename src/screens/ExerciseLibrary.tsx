@@ -2,7 +2,7 @@
    封存的動作不進選單、歷史仍顯示名稱（AC 2），所以列在清單底下的「已封存」區。
    封存／取消封存是每一列尾端的圖示鈕（v2.93，原本在編輯 sheet 欄位區底下，真機回饋位置怪）：
    點了立刻寫，沒有「5 秒復原」提示條——取消封存隨時在已封存區按得到、不丟資料，復原條只會多一層要等它消失的東西。
-   整頁接管畫面（同訓練中），進出時 Training 通知 App 收起底部列。 */
+   整頁接管畫面（同訓練中），放在設定頁的「動作庫管理」（v2.96 從訓練頁搬來）：進出時 Settings 通知 App 收起底部列。 */
 import { useMemo, useState } from 'react'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'

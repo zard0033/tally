@@ -1,5 +1,6 @@
-/* 設定頁：v2.21 起改成純入口列表（取代第一版唯讀 dl），四個入口分頭導到各自的頁面
-   （每日目標／食品庫管理／更新身體數據／體重趨勢）。「更新身體數據」不另做頁面，沿用
+/* 設定頁：v2.21 起改成純入口列表（取代第一版唯讀 dl），入口分頭導到各自的頁面
+   （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。動作庫管理是 v2.96 從訓練頁搬來的：
+   食品庫與動作庫同一類（自己的目錄，日常靠選擇器就地使用，整理才進管理頁），放在一起。「更新身體數據」不另做頁面，沿用
    既有的獨立 sheet 覆蓋層（地基裁決：編輯與記體重不共用 LogSheet 的 Drawer），因為
    DailyGoal 頁裡的「更新身體數據」連結也要能開同一個 sheet，所以 sheet 狀態留在這層
    路由元件管理，往下傳一個 openBodyUpdate callback。
@@ -13,12 +14,13 @@ import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { num } from '@/lib/formulas'
 import DailyGoal from './DailyGoal'
+import ExerciseLibrary from './ExerciseLibrary'
 import FoodLibrary from './FoodLibrary'
 import type { SettingsProps } from './types'
 
 const WeightTrend = lazy(() => import('./WeightTrend')) // recharts 不進主 bundle
 
-type View = 'list' | 'goal' | 'library' | 'trend'
+type View = 'list' | 'goal' | 'library' | 'exercises' | 'trend'
 
 /** 動效時長讀 app.css 的 token，reduced-motion 時降到近乎 0（跟 LogSheet 同一來源）。 */
 function tokenMs(name: string, fallback: number): number {
@@ -49,7 +51,7 @@ export default function Settings(props: SettingsProps) {
   const {
     profile, targets, latestWeight, foods,
     onSaveProfile, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSignOut,
-    onSubViewChange,
+    training, onTrainingWrite, onSubViewChange,
   } = props
 
   const [view, setView] = useState<View>('list')
@@ -203,6 +205,9 @@ export default function Settings(props: SettingsProps) {
       />
     )
   }
+  if (view === 'exercises' && training) {
+    return <ExerciseLibrary exercises={training.db.exercises} onBack={() => setView('list')} onWrite={onTrainingWrite} />
+  }
   if (view === 'trend') {
     return (
       // 第一次進來要先載 recharts 的 chunk：fallback 畫出與 WeightTrend 同樣的頂列與骨架，版面不從空白跳出來（頂列標記與 WeightTrend 一致）
@@ -249,6 +254,13 @@ export default function Settings(props: SettingsProps) {
           </button>
           <button className="entry-row" type="button" onClick={() => setView('library')}>
             <span className="lb-wrap"><span className="lb">食品庫管理</span></span>
+            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+          <button className="entry-row" type="button" data-action="open-exercise-library" disabled={training === null} onClick={() => setView('exercises')}>
+            <span className="lb-wrap">
+              <span className="lb">動作庫管理</span>
+              <span className="lb-sub">{training === null ? '載入中…' : `${training.db.exercises.filter((e) => e.archived !== true).length} 個動作`}</span>
+            </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
           <button className="entry-row" type="button" onClick={openBodyUpdate}>

@@ -561,6 +561,7 @@ button { -webkit-user-select: none; user-select: none; }
   color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .entry-row:last-child { border-bottom: none; }
 .entry-row:active { opacity: .6; }
+.entry-row:disabled { opacity: .45; cursor: default; }
 .entry-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .entry-row .lb-wrap { min-width: 0; flex: 1; }
 .entry-row .lb { display: block; font-size: var(--t-base); font-weight: 600; }

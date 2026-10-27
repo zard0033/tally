@@ -941,6 +941,8 @@ export default function App() {
             onArchiveFood={handleArchiveFood}
             onUnarchiveFood={handleUnarchiveFood}
             onSignOut={handleSignOut}
+            training={training.view}
+            onTrainingWrite={training.write}
             onSubViewChange={setSettingsSubView}
           />
         )}
