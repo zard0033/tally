@@ -120,3 +120,11 @@
 - **Pages:** lesson-presence-animation-mutation-2026-10-27.md
 - **Summary:** Created new page "lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）"
 
+## [2026-10-27T06:13:06.972Z] ingest
+- **Pages:** session-log-2026-10-27-747b4e11.md
+- **Summary:** Auto-captured session log for f0719f2f-9aef-41d3-bbe6-cbe8bf4d1f32 (omc-wiki-capture:8d66f03b784eede4230b4ec1173b1bb44aae77952f44f3f23efda2f971e65fe9)
+
+## [2026-10-27T06:13:27.706Z] ingest
+- **Pages:** session-log-2026-10-27-d85a8454.md
+- **Summary:** Auto-captured session log for d572d42b-d7af-438d-b9ee-f9901449b815 (omc-wiki-capture:1f0f8b76b03d91413dd682e0390b9b88257511d6039ff4a7ed237d1d4a4f43ae)
+

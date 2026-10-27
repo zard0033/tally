@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-27）：v2.93 以前已 push 並部署。**待 push 的 5 個版本**：替換動作 v2.94、要點條 v2.95、Picker 新增動作 v2.96、動作庫管理搬到設定頁 v2.97、月曆展開收合動效 v2.98。vitest 803；e2e 全量 375 條跑 373 過（2 紅：spring-sheet 已知偶發＋已修的日期元件 gotoDate）。**真機未驗**：v2.91–v2.98（尤其要點條的 iOS 鍵盤、月曆 height 掉幀、新增 sheet 疊在 picker）、RPE、重量建議。
+現況（2026-10-27）：v2.98 以前已全數 push（origin/main = 8f14d36，無待 push）：替換動作 v2.94、要點條 v2.95、Picker 新增動作 v2.96、動作庫管理搬到設定頁 v2.97、月曆展開收合動效 v2.98。vitest 803；e2e 全量 375 條跑 373 過（2 紅：spring-sheet 已知偶發＋已修的日期元件 gotoDate）。**真機未驗**：v2.91–v2.98（尤其要點條的 iOS 鍵盤、月曆 height 掉幀、新增 sheet 疊在 picker）、RPE、重量建議。
 下一步：①push 後真機驗 ②使用者要調整每日應攝取熱量的計算（新對話；先讀 MANUAL 最後一節）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
