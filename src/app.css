@@ -555,6 +555,8 @@ button { -webkit-user-select: none; user-select: none; }
 /* ═══════════ 設定頁入口列表（v2.22，取代第一版唯讀 dl） ═══════════ */
 .entry-list { margin: var(--s-2) 0 0; border-radius: var(--r-tab); overflow: clip;
   background: var(--card); border: 1px solid var(--rule-subtle); }
+/* v2.99：入口分組，小標（.settings h2）在列表上方，列表自己的上緣不再另外留 */
+.settings h2 + .entry-list { margin-top: 0; }
 .entry-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
   width: 100%; min-height: 60px; padding: var(--s-2) var(--s-4); border: none; background: none;
   border-bottom: 1px solid var(--rule-subtle); text-align: left; font-family: inherit;
@@ -1406,9 +1408,14 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 /* 排序中：捲動區往上多開 14px（內距補回，內容位置不動），橡皮筋露出的部分畫得出來、不被捲動區裁掉 */
 .tr-scroll.is-sorting { margin-top: -14px; padding-top: calc(var(--s-1) + 14px); }
 .ex.is-dragging { position: relative; z-index: 2; scale: 1.02; box-shadow: var(--shadow-2); }
-/* 卡片頭：握把｜名稱（點了收合／展開）｜ⓘ｜⋯。四件事每張卡一模一樣、上下對齊 */
+/* 卡片頭：握把｜名稱（點了收合／展開）｜箭頭｜替換｜移除。每張卡一模一樣、上下對齊。
+   右側三個圖示等距（中心相隔 44px：箭頭放進 44px 寬的格子、替換與移除貼著排），最右一個的中心落在 .set 勾那一欄的中心
+   （距卡片右緣 16＋26＝42px），欄頭雙勾、每組的勾、移除鈕上下成一直線。 */
 .ex-head { display: flex; align-items: center; gap: var(--s-1); min-height: 60px;
-  padding: var(--s-2) var(--s-1) var(--s-2) var(--s-4); }
+  padding: var(--s-2) var(--s-5) var(--s-2) var(--s-4); }
+.ex-head > .ex-swap, .ex-head > .ex-remove { margin-left: calc(var(--s-1) * -1); }
+/* 握把圖示的中心（距卡片 30px）與 .set 的組號欄中心同一條線（16＋28/2） */
+.ex-head > .tr-grip { margin-left: calc(var(--s-2) * -1); }
 .ex.collapsed .ex-head { min-height: 56px; }
 .ex-toggle { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--s-2);
   padding: 0; border: none; background: none; text-align: left; font-family: inherit; color: inherit;
@@ -1429,7 +1436,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-head .dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--fill);
   box-shadow: inset 0 0 0 1px var(--rule-field); }
 .ex-head .dot.is-done { background: var(--accent); box-shadow: none; }
-.ex-toggle .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0;
+.ex-toggle .chev { width: 14px; height: 14px; margin-right: 15px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
 /* 有氧卡（spec「有氧併入動作」，樣張 cardio-card.html）：沒有組列，永遠是收合的外觀，名稱鈕點了開有氧 sheet。
@@ -1476,28 +1483,22 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
    這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
 /* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝一行淡色「加要點」（沒有底色，
-   不搶組列的視線）。輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉） */
-.ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); min-height: 44px; margin: 0 var(--s-3) var(--s-2);
+   不搶組列的視線）。輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉）。
+   沒寫過的那條只有 28px 高，觸控範圍靠 ::before 往上下各撐出去；有寫過的色塊最少 40px（line-clamp 要 overflow: hidden，
+   ::before 會被自己裁掉，撐不出去）。
+   文字左緣（距卡片 24px）與欄頭「組」字的左緣同一條線。 */
+.ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); margin: 0 var(--s-3) var(--s-2);
   padding: var(--s-2) var(--s-3); border: none; border-radius: var(--r-tab); font-family: inherit; font-size: var(--t-sm); line-height: 1.5;
   text-align: left; -webkit-appearance: none; appearance: none; }
-.ex-tips { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
+.ex-tips { min-height: 40px; position: relative; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
   white-space: pre-wrap; cursor: pointer; }
-.ex-tips.is-empty { display: block; background: none; color: var(--ink-muted); padding-left: 0; padding-right: 0; margin-left: calc(var(--s-3) + var(--s-3)); width: auto; }
+.ex-tips.is-empty { min-height: 0; display: block; background: none; color: var(--ink-muted); padding: 0; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: auto;
+  line-height: 28px; overflow: visible; }
+.ex-tips.is-empty::before { content: ''; position: absolute; inset: -8px calc(var(--s-3) * -1) -8px calc(var(--s-3) * -1); }
 .ex-tips:active { opacity: .6; }
 .ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.ex-tips-input { display: block; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
+.ex-tips-input { display: block; min-height: 44px; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
   outline: 2px solid var(--accent); outline-offset: -2px; }
-/* ⋯ 選單：從按鈕位置縮放長出（scale .95，永不從 0 開始）；開 160ms／關 100ms */
-.ex-menu-pos { z-index: 30; }
-.ex-menu { min-width: 176px; padding: var(--s-1); border-radius: var(--r-tab); background: var(--card);
-  box-shadow: var(--shadow-2); transform-origin: var(--transform-origin);
-  transition: transform 160ms var(--ease), opacity 160ms var(--ease); }
-.ex-menu[data-starting-style], .ex-menu[data-ending-style] { opacity: 0; transform: scale(.95); }
-.ex-menu[data-ending-style] { transition-duration: 100ms; }
-.ex-menu-item { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); border-radius: 10px;
-  font-size: var(--t-base); color: var(--ink); cursor: pointer; outline: none; }
-.ex-menu-item[data-highlighted] { background: var(--raised); }
-.ex-menu-item.is-danger { color: var(--over); }
 /* 一組一列：組｜重量｜次數｜勾。欄頭最後一格是「全部完成」雙勾 */
 .ex-body { padding-bottom: var(--s-1); }
 .set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;

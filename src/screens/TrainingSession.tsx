@@ -2,17 +2,16 @@
    同一頁也用來重新打開已結束的訓練編輯（AC 8）：修改當下就存，不需要再按儲存。
 
    組的重量與次數不在列上打字：點它開「組編輯 sheet」（SetSheet，± 與大數字都在那裡，每次立即寫入）。
-   列上只有兩顆數字鈕與一顆勾；整列可左滑露出紅鈕刪除。卡片頭固定四件事：握把、名稱（點了收合／展開）、
-   替換（點了開 picker 換成另一個動作，位置不動）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群；
+   列上只有兩顆數字鈕與一顆勾；整列可左滑露出紅鈕刪除。卡片頭固定幾件事：握把、名稱（點了收合／展開）、
+   替換（點了開 picker 換成另一個動作，位置不動）、移除；收合時第二行是進度（圓點＋下一組），展開時是肌群；
    展開的卡頂部是要點條（TipsStrip）：點一下原地寫，失焦才存。
    欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
    有氧動作的卡（spec「有氧併入動作」）沒有組：永遠是收合的外觀，名稱鈕點了開有氧 sheet（CardioSheet），第二行是摘要或「點一下填寫」；
-   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、⋯ 與其他卡相同。
+   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、移除與其他卡相同。
    有氧動作卻有組的卡退回重訓的畫法（`isCardioCard`）。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Menu } from '@base-ui/react/menu'
 import { DragDropProvider } from '@dnd-kit/react'
 import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
@@ -165,12 +164,6 @@ function Progress({ sets }: { sets: readonly Row[] }) {
     </span>
   )
 }
-
-const DotsIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M6 12h.01M12 12h.01M18 12h.01" />
-  </svg>
-)
 
 /* ═══════════ 一組 ═══════════ */
 
@@ -412,26 +405,18 @@ function ExerciseCard(p: ExerciseCardProps) {
             </svg>
           </button>
         )}
-        {/* 每張卡都有替換鈕（有氧卡也有）：箭頭、替換、⋯ 在各卡上才對得齊。要換動作比看要點頻繁，所以佔 ⓘ 原本的位置 */}
+        {/* 每張卡都有替換鈕（有氧卡也有）：箭頭、替換、移除在各卡上才對得齊。要換動作比看要點頻繁，所以佔 ⓘ 原本的位置 */}
         <button className="tr-ib ex-swap" type="button" aria-label={`${name}：替換動作`} onClick={p.onReplace}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 7h11l-3-3M17 17H6l3 3" />
           </svg>
         </button>
-        <Menu.Root>
-          <Menu.Trigger className="tr-ib" aria-label={`${name} 的更多操作`}>
-            <DotsIcon />
-          </Menu.Trigger>
-          <Menu.Portal>
-            <Menu.Positioner className="ex-menu-pos" side="bottom" align="end" sideOffset={4} collisionPadding={12}>
-              <Menu.Popup className="ex-menu">
-                <Menu.Item className="ex-menu-item is-danger" onClick={p.onRemove}>
-                  移除這個動作
-                </Menu.Item>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
+        {/* ⋯ 選單只剩「移除」一項時就直接拿出來放：✕ 而不是垃圾桶，頂欄右上的垃圾桶是「放棄整場訓練」，兩個意思不能長得一樣 */}
+        <button className="tr-ib ex-remove" type="button" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
 
       {/* 排序中整段不掛 AnimatePresence：沒有退場動畫，收合在同一次 commit 完成。dnd-kit 在 beforedragstart 之後

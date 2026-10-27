@@ -1,6 +1,7 @@
 /* 設定頁：v2.21 起改成純入口列表（取代第一版唯讀 dl），入口分頭導到各自的頁面
-   （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。動作庫管理是 v2.96 從訓練頁搬來的：
-   食品庫與動作庫同一類（自己的目錄，日常靠選擇器就地使用，整理才進管理頁），放在一起。「更新身體數據」不另做頁面，沿用
+   （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。v2.99 起分兩組加小標，不再五列平鋪：
+   「目標與身體」（每日目標、更新身體數據、體重趨勢）與「資料庫」（食品庫管理、動作庫管理，都是自己的目錄，
+   日常靠選擇器就地使用，整理才進管理頁；動作庫管理是 v2.96 從訓練頁搬來的）。「更新身體數據」不另做頁面，沿用
    既有的獨立 sheet 覆蓋層（地基裁決：編輯與記體重不共用 LogSheet 的 Drawer），因為
    DailyGoal 頁裡的「更新身體數據」連結也要能開同一個 sheet，所以 sheet 狀態留在這層
    路由元件管理，往下傳一個 openBodyUpdate callback。
@@ -242,6 +243,7 @@ export default function Settings(props: SettingsProps) {
       </header>
 
       <div className="settings">
+        <h2>目標與身體</h2>
         <div className="entry-list">
           <button className="entry-row" type="button" onClick={() => setView('goal')}>
             <span className="lb-wrap">
@@ -249,17 +251,6 @@ export default function Settings(props: SettingsProps) {
               <span className="lb-sub">
                 {Math.round(targets.kcal)} 卡・蛋白 {Math.round(targets.protein)}g・脂 {Math.round(targets.fat)}g・碳水 {Math.round(targets.carb)}g
               </span>
-            </span>
-            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-          </button>
-          <button className="entry-row" type="button" onClick={() => setView('library')}>
-            <span className="lb-wrap"><span className="lb">食品庫管理</span></span>
-            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-          </button>
-          <button className="entry-row" type="button" data-action="open-exercise-library" disabled={training === null} onClick={() => setView('exercises')}>
-            <span className="lb-wrap">
-              <span className="lb">動作庫管理</span>
-              <span className="lb-sub">{training === null ? '載入中…' : `${training.db.exercises.filter((e) => e.archived !== true).length} 個動作`}</span>
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
@@ -277,6 +268,20 @@ export default function Settings(props: SettingsProps) {
                 <polyline points={sparklinePoints(weights)} fill="none" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
+            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
+        <h2>資料庫</h2>
+        <div className="entry-list">
+          <button className="entry-row" type="button" onClick={() => setView('library')}>
+            <span className="lb-wrap"><span className="lb">食品庫管理</span></span>
+            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+          <button className="entry-row" type="button" data-action="open-exercise-library" disabled={training === null} onClick={() => setView('exercises')}>
+            <span className="lb-wrap">
+              <span className="lb">動作庫管理</span>
+              <span className="lb-sub">{training === null ? '載入中…' : `${training.db.exercises.filter((e) => e.archived !== true).length} 個動作`}</span>
+            </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         </div>

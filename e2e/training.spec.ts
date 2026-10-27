@@ -361,7 +361,7 @@ test('組編輯 sheet 刪除這一組：沒打勾直接刪；已打勾先確認�
   await expect(setSheet(page).getByRole('button', { name: '刪除這一組' })).toBeDisabled()
 })
 
-/* SpringSheet 裡巢狀 ConfirmDialog 的回歸。宿主原本是有氧 sheet 的「刪除這筆」，v2.89 有氧 sheet 拿掉刪除（改走卡片 ⋯），
+/* SpringSheet 裡巢狀 ConfirmDialog 的回歸。宿主原本是有氧 sheet 的「刪除這筆」，v2.89 有氧 sheet 拿掉刪除（改走卡片頭的移除鈕），
    換成組編輯 sheet 的「刪除這一組？」（已打勾的組才問）——同樣是 SpringSheet 子樹裡的 ConfirmDialog。 */
 test('sheet 裡的確認框：在對話框上往下拖不會拖走 sheet；點過背景再按 Escape 也只關對話框', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
@@ -581,7 +581,7 @@ test('動作庫管理：設定頁入口顯示未封存的動作數、整頁接�
   await openSettingsTab(page)
   await expect(libraryEntry(page)).toContainText('動作庫管理')
   await expect(libraryEntry(page)).toContainText('2 個動作')
-  // 跟食品庫管理在同一張入口列表裡，緊接在它後面
+  // 跟食品庫管理在同一組（資料庫）裡，緊接在它後面
   const labels = await page.locator('.entry-row .lb').allTextContents()
   expect(labels.indexOf('動作庫管理')).toBe(labels.indexOf('食品庫管理') + 1)
 
@@ -1299,7 +1299,7 @@ const exPatches = async (page: Page) =>
   (await allWrites(page)).filter((w) => w.table === 'exercises' && w.method === 'PATCH').map((w) => w.body)
 const tipsStrip = (card: Locator) => card.locator('.ex-tips, .ex-tips-input')
 
-test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「加要點」；卡片頭沒有 ⓘ、⋯ 選單只剩移除', async ({ page }) => {
+test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「加要點」；卡片頭沒有 ⓘ 與 ⋯ 選單、移除是直接的一顆鈕', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1324,8 +1324,39 @@ test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「�
   expect(tipBox.y + tipBox.height).toBeLessThanOrEqual(setHeadBox.y + 1)
 
   await expect(page.locator('.ex-info, .ex-tips-panel')).toHaveCount(0)
-  await legs.getByRole('button', { name: '腿推舉 的更多操作' }).click()
-  await expect(page.getByRole('menuitem')).toHaveText(['移除這個動作'])
+  // 沒有 ⋯ 選單了：移除是卡片頭上直接的一顆鈕
+  await expect(legs.getByRole('button', { name: '腿推舉 的更多操作' })).toHaveCount(0)
+  await expect(legs.getByRole('button', { name: '腿推舉：移除動作' })).toBeVisible()
+})
+
+test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與組列的勾同一條線；握把與組號同一條線；沒寫過的要點條只有一行高、點下緣仍點得到', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await addExercise(page, '坐姿划船') // 腿推舉有要點、坐姿划船沒寫過；最後加的坐姿划船是展開的
+  const card = page.locator('.ex', { hasText: '坐姿划船' })
+  const cx = async (loc: Locator) => {
+    const b = (await loc.boundingBox())!
+    return b.x + b.width / 2
+  }
+  const chev = await cx(card.locator('.ex-toggle .chev'))
+  const swap = await cx(card.locator('.ex-swap'))
+  const remove = await cx(card.locator('.ex-remove'))
+  expect(Math.abs(swap - chev - (remove - swap)), '三個圖示中心等距').toBeLessThanOrEqual(1)
+  const check = await cx(card.locator('.set').first().locator('.tr-check'))
+  expect(Math.abs(remove - check), '移除鈕與每組的勾同一條線').toBeLessThanOrEqual(1)
+  expect(Math.abs((await cx(card.locator('.tr-all'))) - check), '欄頭雙勾與每組的勾同一條線').toBeLessThanOrEqual(1)
+  const grip = await cx(card.locator('.tr-grip'))
+  const setNo = await cx(card.locator('.set').first().locator(':scope > :first-child'))
+  expect(Math.abs(grip - setNo), '握把與組號同一條線').toBeLessThanOrEqual(1)
+
+  const strip = card.locator('.ex-tips.is-empty')
+  const box = (await strip.boundingBox())!
+  expect(box.height, '沒寫過的要點條只有一行高').toBeLessThanOrEqual(32)
+  // 看得到的字只有 28px 高，但下緣之外 8px 仍是它的觸控範圍
+  await strip.click({ position: { x: 20, y: box.height + 6 } })
+  await expect(card.locator('.ex-tips-input')).toBeVisible()
 })
 
 test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一欄）；清空存 null；Esc 與沒改都不寫', async ({ page }) => {
@@ -1399,7 +1430,7 @@ test('要點條：離線也能寫，畫面立刻是新的，回線後上傳', as
     .toBe('離線時寫的')
 })
 
-test('⋯ 選單：「移除這個動作」沒打勾直接移除、有打勾先確認', async ({ page }) => {
+test('移除動作鈕：沒打勾直接移除、有打勾先確認', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1410,16 +1441,14 @@ test('⋯ 選單：「移除這個動作」沒打勾直接移除、有打勾先�
 
   // 有打勾的動作：先問（最後加的腿推舉是展開的）
   await legs.locator('.set').first().locator('.tr-check').click()
-  await legs.getByRole('button', { name: '腿推舉 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await legs.getByRole('button', { name: '腿推舉：移除動作' }).click()
   const dialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: '先不要' }).click()
   await expect(page.locator('.ex')).toHaveCount(2)
 
   // 沒打勾的動作：直接移除
-  await row.getByRole('button', { name: '坐姿划船 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await row.getByRole('button', { name: '坐姿划船：移除動作' }).click()
   await expect(page.locator('.ex')).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
 })
@@ -2892,7 +2921,7 @@ test('收合列：滿 8 組的圓點加上很長的「下一組」不會把箭�
   await expect(card.locator('.set')).toHaveCount(0)
   await expect(card.locator('.sub .dot')).toHaveCount(8)
   const cardBox = (await card.boundingBox())!
-  for (const sel of ['.ex-toggle .chev', '.ex-swap', '[aria-label$="的更多操作"]']) {
+  for (const sel of ['.ex-toggle .chev', '.ex-swap', '.ex-remove']) {
     const box = (await card.locator(sel).boundingBox())!
     expect(box.x + box.width, `${sel} 要在卡片右緣之內`).toBeLessThanOrEqual(cardBox.x + cardBox.width)
   }
@@ -3358,7 +3387,7 @@ test('有氧 sheet：標題是動作名稱；欄位依動作（健走三欄、�
   for (const name of ['分鐘', '速度 km/h', '坡度 %']) await expect(cardioField(page, name)).toBeVisible()
   await expect(sheet.getByRole('group', { name: '有氧類型' }), '類型由動作決定，沒有切換').toHaveCount(0)
   await expect(sheet.locator('.seg')).toHaveCount(0)
-  await expect(sheet.getByRole('button', { name: /刪除/ }), '刪除走卡片 ⋯').toHaveCount(0)
+  await expect(sheet.getByRole('button', { name: /刪除/ }), '刪除走卡片頭的移除鈕').toHaveCount(0)
   await expect(sheet, '日期由訓練決定，不講記在哪天').not.toContainText('記在')
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
@@ -3694,13 +3723,11 @@ test('移除有氧卡：分鐘填過的先問（「這張卡記下的有氧會�
   await cardioField(page, '分鐘').fill('36')
   await saveCardio(page)
 
-  await cardioCard(page, '跑步機坡度健走').getByRole('button', { name: '跑步機坡度健走 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await cardioCard(page, '跑步機坡度健走').getByRole('button', { name: '跑步機坡度健走：移除動作' }).click()
   await expect(page.locator('.ex'), '沒填的直接移除').toHaveCount(1)
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
 
-  await cardioCard(page, '有氧拳擊').getByRole('button', { name: '有氧拳擊 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await cardioCard(page, '有氧拳擊').getByRole('button', { name: '有氧拳擊：移除動作' }).click()
   const dialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
   await expect(dialog.locator('.tr-dialog-body')).toHaveText('這張卡記下的有氧會一起刪掉。')
   // 按「先不要」到對話框卸載之間，內文的每一次變動都記下來（不逐幀取樣）：問的目標一清掉，
@@ -3719,8 +3746,7 @@ test('移除有氧卡：分鐘填過的先問（「這張卡記下的有氧會�
   expect(texts.filter((t) => t !== '這張卡記下的有氧會一起刪掉。'), '收起途中內文不變').toEqual([])
   await expect(page.locator('.ex')).toHaveCount(1)
 
-  await cardioCard(page, '有氧拳擊').getByRole('button', { name: '有氧拳擊 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await cardioCard(page, '有氧拳擊').getByRole('button', { name: '有氧拳擊：移除動作' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: '移除', exact: true }).click()
   await expect(page.locator('.ex')).toHaveCount(0)
   await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(0)
@@ -3869,7 +3895,7 @@ test('393 寬：健走摘要放不下一行時折行、不截斷——全文都�
     expect(b.hidden, `${b.cls} 沒有被截掉的寬度`).toBeLessThanOrEqual(0)
   }
   const cardBox = (await card.boundingBox())!
-  for (const sel of ['.ex-toggle .chev', '.ex-swap', '[aria-label$="的更多操作"]']) {
+  for (const sel of ['.ex-toggle .chev', '.ex-swap', '.ex-remove']) {
     const box = (await card.locator(sel).boundingBox())!
     expect(box.x + box.width, `${sel} 要在卡片右緣之內`).toBeLessThanOrEqual(cardBox.x + cardBox.width)
   }
@@ -3970,8 +3996,7 @@ test('有氧動作卻有組的卡：退回重訓的畫法——組看得到、�
   await expect.poll(async () => (await trainRows(page, 'workout_sets')).map((s) => s.id).sort()).toEqual(['cs-1', 'cs-2'])
 
   // 第 1 組打過勾：移除前先問，文案是重訓的（不是「記下的有氧」）
-  await card.getByRole('button', { name: '跑步機坡度健走 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '移除這個動作' }).click()
+  await card.getByRole('button', { name: '跑步機坡度健走：移除動作' }).click()
   const dialog = page.getByRole('alertdialog', { name: '移除這個動作？' })
   await expect(dialog.locator('.tr-dialog-body')).toHaveText('這個動作已經打勾的組會一起刪掉。')
   await dialog.getByRole('button', { name: '先不要' }).click()

@@ -52,6 +52,21 @@ test('進次級頁收起底部列，三個入口的返回鍵都要把它還原',
   }
 })
 
+test('設定頁入口分兩組加小標：目標與身體、資料庫', async ({ page }) => {
+  await openApp(page)
+  await openSettings(page)
+
+  await expect(page.locator('.settings h2')).toHaveText(['目標與身體', '資料庫'])
+  const groups = page.locator('.settings .entry-list')
+  await expect(groups).toHaveCount(2)
+  await expect(groups.nth(0).locator('.entry-row .lb')).toHaveText(['每日目標', '更新身體數據', '體重趨勢'])
+  await expect(groups.nth(1).locator('.entry-row .lb')).toHaveText(['食品庫管理', '動作庫管理'])
+  // 小標緊貼在自己那組上面
+  const h = (await page.locator('.settings h2').nth(1).boundingBox())!
+  const g = (await groups.nth(1).boundingBox())!
+  expect(g.y - (h.y + h.height), '小標與列表之間只隔一小段').toBeLessThanOrEqual(12)
+})
+
 test('設定頁入口列出目前的每日目標數字，跟每日目標頁算出來的一致', async ({ page }) => {
   await openApp(page)
   await openSettings(page)
