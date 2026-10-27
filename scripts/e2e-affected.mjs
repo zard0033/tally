@@ -25,6 +25,7 @@ const FOOD = [
   'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align',
 ]
 const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend']
+const SHEETS = ['spring-sheet', 'sync-sheet']
 
 /* 動作庫／食品庫的入口列在設定頁，settings-nav 守「三個入口都進得去」，所以兩個庫多帶它 */
 const SCREENS = {
@@ -34,8 +35,10 @@ const SCREENS = {
   RoutineTargetSheet: TRAIN,
   Training: [...TRAIN, ...ANALYSIS], // 訓練分析的入口列在訓練頁
   Analysis: ANALYSIS,
-  Today: FOOD, LogSheet: FOOD, FoodLibrary: [...FOOD, 'settings-nav'],
-  Settings: SETTINGS, DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
+  // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
+  Today: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
+  // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
+  Settings: [...SETTINGS, 'training', 'food-library'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
   Login: ['interaction'],
 }
 
@@ -79,11 +82,16 @@ function classify(file) {
 const args = process.argv.slice(2)
 const dry = args.includes('--dry')
 const filesIdx = args.indexOf('--files')
+if (filesIdx >= 0 && !args[filesIdx + 1]) {
+  console.error('--files 後面要接逗號分隔的檔案清單')
+  process.exit(2)
+}
 const forced = filesIdx >= 0 ? args[filesIdx + 1] : null
 const passthrough = args.filter((a, i) => a !== '--dry' && a !== '--files' && !(filesIdx >= 0 && i === filesIdx + 1))
 
 function git(...a) {
-  const r = spawnSync('git', a, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+  // core.quotePath=false：含非 ASCII 的路徑不被 git 加引號跳脫，IGNORED 的比對才對得上
+  const r = spawnSync('git', ['-c', 'core.quotePath=false', ...a], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   if (r.status !== 0) throw new Error(`git ${a.join(' ')} 失敗`)
   return r.stdout.split(/\r?\n/).filter(Boolean)
 }

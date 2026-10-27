@@ -371,7 +371,8 @@ test('v2.47 ① 往未來只開一天：今天可以往前走，明天就是上�
 })
 
 /* v2.53：原本這裡是「鍵盤按『後一天』到上界，焦點要被容器接住」——那顆鈕不存在了，焦點流失的
-   風險換了個形狀：月曆收合時被點的那格會卸載。同一個要守的事（鍵盤使用者不掉回 body）。 */
+   風險換了個形狀：月曆收合時被點的那格會卸載。同一個要守的事（鍵盤使用者不掉回 body）。
+   v2.101：選日期不再收合月曆，被點的格子不卸載、焦點留在它身上；現在只有 Escape 收合，焦點回標題。 */
 test('v2.101 月曆開著時選日期不收合：連選兩天都還開著、焦點留在被點的那格；Escape 才收，焦點回標題，不是掉回 body', async ({ page }) => {
   await openApp(page)
   const title = page.locator('.datectl-title')
@@ -395,6 +396,10 @@ test('v2.101 月曆開著時選日期不收合：連選兩天都還開著、焦�
   await second.click()
   await expect.poll(() => currentIso(page)).toBe(secondIso)
   await expect(title, '連選第二天月曆仍開著').toHaveAttribute('aria-expanded', 'true')
+  // 點已經選中的那天：什麼都不做、也不收（v2.101 前會收合）
+  await page.locator('.datectl-month .datectl-day[aria-pressed="true"]').click()
+  await expect(title, '點已選中的日期月曆仍開著').toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => currentIso(page)).toBe(secondIso)
 
   await page.keyboard.press('Escape')
   await expect(title).toHaveAttribute('aria-expanded', 'false')

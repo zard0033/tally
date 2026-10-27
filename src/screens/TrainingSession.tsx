@@ -723,7 +723,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
   const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
-  // 移除一律先問（卡片頭的 ✕ 常駐、沒有 undo）；內文依有沒有記下東西分三種：重訓是打過勾的組，有氧是填過的分鐘，都沒有就只說會移除
+  // 移除一律先問（卡片頭的移除鈕常駐、沒有 undo）；內文依有沒有記下東西分三種：重訓是打過勾的組，有氧是填過的分鐘，都沒有就只說會移除
   const askRemoveExercise = (item: WorkoutExerciseDetail) => {
     const cardio = isCardioCard(item)
     setRemoveCardio(cardio)

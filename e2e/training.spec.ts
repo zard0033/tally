@@ -1352,6 +1352,17 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除圖示�
   const gripSvg = (await card.locator('.tr-grip svg').boundingBox())!
   expect(Math.abs(cardBox0.x + cardBox0.width - (removeSvg.x + removeSvg.width) - 20), '移除圖示外緣距卡片右緣 20px').toBeLessThanOrEqual(1)
   expect(Math.abs(gripSvg.x - cardBox0.x - 20), '握把圖示外緣距卡片左緣 20px（與右側對稱）').toBeLessThanOrEqual(1)
+  // 兩顆刪除類的鈕（動作卡的移除、頂欄的刪除這次訓練）都是 --over 色（v2.101 紅色垃圾桶）
+  const overRgb = await page.evaluate(() => {
+    const s = document.createElement('span')
+    s.style.color = 'var(--over)'
+    document.body.appendChild(s)
+    const c = getComputedStyle(s).color
+    s.remove()
+    return c
+  })
+  expect(await card.locator('.ex-remove').evaluate((el) => getComputedStyle(el).color), '移除鈕是 --over 色').toBe(overRgb)
+  expect(await page.getByRole('button', { name: '刪除這次訓練' }).evaluate((el) => getComputedStyle(el).color), '頂欄刪除鈕是 --over 色').toBe(overRgb)
   expect(Math.abs((await cx(card.locator('.tr-all'))) - check), '欄頭雙勾與每組的勾同一條線').toBeLessThanOrEqual(1)
   const grip = await cx(card.locator('.tr-grip'))
   const setNo = await cx(card.locator('.set').first().locator(':scope > :first-child'))
@@ -1388,6 +1399,7 @@ test('加要點點進去：輸入框與原本那一行同位置同高、一樣�
   expect(Math.abs(after.y - before.y), '上緣不動').toBeLessThanOrEqual(1)
   expect(Math.abs(after.height - before.height), '高度不變（點進去前後同高，下面的組列不被推動）').toBeLessThanOrEqual(1)
   expect(await input.evaluate((el) => getComputedStyle(el).backgroundColor), '沒有底色').toBe('rgba(0, 0, 0, 0)')
+  expect(await input.evaluate((el) => getComputedStyle(el).boxShadow), '只多一條 accent 底線（inset 陰影，不佔高度）').toContain('inset')
   await input.press('Escape')
 
   // 已有要點的：展開那張（腿推舉）點進去，一樣是底色塊、位置不動
@@ -1490,7 +1502,7 @@ test('移除動作鈕：一律先確認（沒打勾也問，內文只說會移�
   await expect(dialog).toHaveCount(0)
   await expect(page.locator('.ex')).toHaveCount(2)
 
-  // 沒打勾的動作：也要先問（✕ 常駐、移除沒有 undo），內文不提「打勾的組」
+  // 沒打勾的動作：也要先問（移除鈕常駐、移除沒有 undo），內文不提「打勾的組」
   await row.getByRole('button', { name: '坐姿划船：移除動作' }).click()
   await expect(dialog.locator('.tr-dialog-body')).toHaveText('這個動作會從這次訓練移除。')
   await dialog.getByRole('button', { name: '先不要' }).click()
