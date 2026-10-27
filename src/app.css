@@ -1438,6 +1438,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-head .dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--fill);
   box-shadow: inset 0 0 0 1px var(--rule-field); }
 .ex-head .dot.is-done { background: var(--accent); box-shadow: none; }
+/* margin-right 15px＝(44−14)/2：箭頭放進 44px 寬的格子，中心才跟替換、移除兩顆 44px 鈕等距 */
 .ex-toggle .chev { width: 14px; height: 14px; margin-right: 15px; color: var(--ink-muted); flex-shrink: 0;
   transition: transform var(--dur-base) var(--ease); }
 .ex-toggle .chev.is-open { transform: rotate(90deg); }
@@ -1486,17 +1487,16 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
 /* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝一行淡色「加要點」（沒有底色，
    不搶組列的視線）。輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉）。
-   沒寫過的那條只有 28px 高，觸控範圍靠 ::before 往上下各撐出去；有寫過的色塊最少 40px（line-clamp 要 overflow: hidden，
-   ::before 會被自己裁掉，撐不出去）。
-   文字左緣（距卡片 24px）與欄頭「組」字的左緣同一條線。 */
+   沒寫過的那條 36px 高（原本 44px 加下方 8px 空隙＝52px），**刻意低於 DESIGN 的 44px 觸控下限**——使用者嫌它佔太大塊；
+   試過用 ::before 撐觸控範圍：.ex-body 的 overflow: hidden 會把往上撐的那半裁掉，往下撐又會蓋到「全部完成」鈕的上緣，所以不撐。
+   有寫過的色塊維持最少 44px。文字左緣（距卡片 24px）與欄頭「組」字的左緣同一條線。 */
 .ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); margin: 0 var(--s-3) var(--s-2);
   padding: var(--s-2) var(--s-3); border: none; border-radius: var(--r-tab); font-family: inherit; font-size: var(--t-sm); line-height: 1.5;
   text-align: left; -webkit-appearance: none; appearance: none; }
-.ex-tips { min-height: 40px; position: relative; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
+.ex-tips { min-height: 44px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
   white-space: pre-wrap; cursor: pointer; }
-.ex-tips.is-empty { min-height: 0; display: block; background: none; color: var(--ink-muted); padding: 0; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: auto;
-  line-height: 28px; overflow: visible; }
-.ex-tips.is-empty::before { content: ''; position: absolute; inset: -8px calc(var(--s-3) * -1) -8px calc(var(--s-3) * -1); }
+.ex-tips.is-empty { min-height: 0; height: 36px; display: block; background: none; color: var(--ink-muted); padding: 0; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: auto;
+  line-height: 36px; }
 .ex-tips:active { opacity: .6; }
 .ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ex-tips-input { display: block; min-height: 44px; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);

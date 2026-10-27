@@ -1329,7 +1329,7 @@ test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「�
   await expect(legs.getByRole('button', { name: '腿推舉：移除動作' })).toBeVisible()
 })
 
-test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與組列的勾同一條線；握把與組號同一條線；沒寫過的要點條只有一行高、點下緣仍點得到', async ({ page }) => {
+test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與組列的勾同一條線；握把與組號同一條線；沒寫過的要點條只有一行高、文字左緣與「組」字對齊、不蓋到全部完成鈕', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1344,6 +1344,7 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與�
   const swap = await cx(card.locator('.ex-swap'))
   const remove = await cx(card.locator('.ex-remove'))
   expect(Math.abs(swap - chev - (remove - swap)), '三個圖示中心等距').toBeLessThanOrEqual(1)
+  expect(Math.abs(remove - swap - 44), '間距是 44px（兩顆 44px 鈕貼著排）').toBeLessThanOrEqual(1)
   const check = await cx(card.locator('.set').first().locator('.tr-check'))
   expect(Math.abs(remove - check), '移除鈕與每組的勾同一條線').toBeLessThanOrEqual(1)
   expect(Math.abs((await cx(card.locator('.tr-all'))) - check), '欄頭雙勾與每組的勾同一條線').toBeLessThanOrEqual(1)
@@ -1353,10 +1354,16 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除鈕與�
 
   const strip = card.locator('.ex-tips.is-empty')
   const box = (await strip.boundingBox())!
-  expect(box.height, '沒寫過的要點條只有一行高').toBeLessThanOrEqual(32)
-  // 看得到的字只有 28px 高，但下緣之外 8px 仍是它的觸控範圍
-  await strip.click({ position: { x: 20, y: box.height + 6 } })
-  await expect(card.locator('.ex-tips-input')).toBeVisible()
+  expect(box.height, '沒寫過的要點條只有一行高（刻意低於 44px 觸控下限，見 DESIGN v2.99）').toBeLessThanOrEqual(40)
+  const cardBox = (await card.boundingBox())!
+  expect(Math.abs(box.x - cardBox.x - 24), '文字左緣距卡片 24px，與欄頭「組」字左緣同一條線').toBeLessThanOrEqual(1)
+  // 要點條的範圍不能蓋到全部完成鈕：點雙勾最上緣要打勾（試過 ::before 往下撐觸控範圍，會吃掉這一塊）
+  const all = card.locator('.tr-all')
+  const allBox = (await all.boundingBox())!
+  expect(box.y + box.height, '要點條下緣在欄頭雙勾上緣之上').toBeLessThanOrEqual(allBox.y + 1)
+  await all.click({ position: { x: allBox.width / 2, y: 2 } })
+  await expect(all).toHaveAttribute('aria-pressed', 'true')
+  await expect(card.locator('.ex-tips-input')).toHaveCount(0)
 })
 
 test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一欄）；清空存 null；Esc 與沒改都不寫', async ({ page }) => {

@@ -411,8 +411,9 @@ function ExerciseCard(p: ExerciseCardProps) {
             <path d="M7 7h11l-3-3M17 17H6l3 3" />
           </svg>
         </button>
-        {/* ⋯ 選單只剩「移除」一項時就直接拿出來放：✕ 而不是垃圾桶，頂欄右上的垃圾桶是「放棄整場訓練」，兩個意思不能長得一樣 */}
-        <button className="tr-ib ex-remove" type="button" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
+        {/* v2.99 拆掉 ⋯ 選單（只剩移除一項）、直接放 ✕：不用垃圾桶，頂欄右上的垃圾桶是「放棄整場訓練」，兩個意思不能長得一樣。
+            一律先跳確認框，所以像有氧卡的名稱鈕一樣標 aria-haspopup */}
+        <button className="tr-ib ex-remove" type="button" aria-haspopup="dialog" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>

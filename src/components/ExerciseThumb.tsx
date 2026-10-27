@@ -14,7 +14,7 @@ import { exerciseKind, type ExerciseKind, type Row } from '@/lib/training'
 
 const ExerciseViewer = lazy(() => import('./ExerciseViewer'))
 
-/** 沒有圖的動作依類型顯示的線稿圖示（描邊與 ⓘ、⋯、› 同一套：1.6、圓端圓角，顏色跟方塊的 `--ink-muted`）。
+/** 沒有圖的動作依類型顯示的線稿圖示（描邊與 ✕、⇄、› 同一套：1.6、圓端圓角，顏色跟方塊的 `--ink-muted`）。
  *  樣張 `_design-sample/cardio-icon.html`（使用者 2026-10-22 從五個造型裡定這版）：正面直立的拳擊手套——圓頂拳頭、
  *  左側一道拇指、底下一段袖口。資料集沒有適合有氧拳擊的圖（只有一個出拳技術動作、目標肌是肩）。 */
 const KIND_ICON: Partial<Record<ExerciseKind, ReactNode>> = {
