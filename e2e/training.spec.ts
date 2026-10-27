@@ -686,7 +686,7 @@ test('封存：從「加動作」的選單消失；選單也有肌群橫條', as
   await expect(picker.locator('.tr-row', { hasText: '舊的肩推' })).toHaveCount(0)
 
   await picker.getByRole('button', { name: '背部', exact: true }).click()
-  await expect(picker.locator('.tr-row')).toHaveCount(1)
+  await expect(picker.locator('[data-exercise-id]'), '只數動作列，不含清單末尾的「新增動作」').toHaveCount(1)
 })
 
 test('取消封存：回到清單與選單', async ({ page }) => {
@@ -1543,6 +1543,133 @@ test('替換成有氧動作：變成一張有氧卡（沒有組、不展開）�
   await picker(page).locator('.tr-row', { hasText: '有氧拳擊' }).click()
   await expect(cardioCard(page, '有氧拳擊')).toBeVisible()
   await expect(page.locator('.ex')).toHaveCount(1)
+})
+
+/* ═══════════ Picker 的「新增動作」（spec C，與動作庫搬到設定同一節） ═══════════
+   庫裡沒有要的動作時不用離開訓練：清單末尾的「新增動作」開同一張編輯動作 sheet（疊在 picker 上），
+   建好就是被挑的那個。加動作、替換為…、課表編輯的加動作三處共用同一個 Picker。 */
+
+const createBtn = (page: Page) => picker(page).locator('[data-action="create-exercise"]')
+/** 在已開著的 picker 裡新增一個動作並儲存。 */
+async function createFromPicker(page: Page, name: string, group = 'shoulder') {
+  await createBtn(page).click()
+  await expect(editSheet(page)).toBeVisible()
+  await editSheet(page).getByRole('combobox', { name: '肌群' }).selectOption(group)
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill(name)
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+}
+
+test('加動作 picker 的「新增動作」：建好直接加進這次訓練（預設組、伺服器有新動作與新的一列）；搜尋沒有結果時鈕也在', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+
+  // 搜尋不到時正是最需要它的時候：鈕還在
+  await picker(page).getByRole('searchbox', { name: '搜尋動作' }).fill('側平舉')
+  await expect(picker(page).getByText('沒有符合的動作')).toBeVisible()
+  await expect(createBtn(page)).toBeVisible()
+
+  await createFromPicker(page, '啞鈴側平舉')
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['啞鈴側平舉'])
+  await expect(page.locator('.ex .set'), '新動作沒有歷史，預設 3 組').toHaveCount(3)
+  await expect(page.locator('.ex .set').first().locator('.w')).toHaveText('0')
+
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.name === '啞鈴側平舉')?.muscle_group)
+    .toBe('shoulder')
+  const created = (await trainRows(page, 'exercises')).find((r) => r.name === '啞鈴側平舉')!
+  await expect
+    .poll(async () => (await trainRows(page, 'workout_exercises')).map((r) => r.exercise_id))
+    .toEqual([created.id])
+  expect((await allWrites(page)).filter((w) => w.table === 'exercises' && w.method === 'POST'), '只新增一個動作').toHaveLength(1)
+})
+
+test('picker 的「新增動作」：重名擋在 sheet 裡不寫入、Esc 只關新增 sheet（picker 還在）、關掉之後什麼都沒加', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+
+  await createBtn(page).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('腿推舉')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page).getByRole('alert')).toContainText('已經有「腿推舉」')
+  await expect(picker(page)).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+  await expect(picker(page), 'Esc 只關最內層').toBeVisible()
+  await expect(page.locator('.ex')).toHaveCount(0)
+  expect((await allWrites(page)).filter((w) => w.table === 'exercises' && w.method === 'POST')).toHaveLength(0)
+})
+
+test('替換為… 的「新增動作」：新動作換掉舊卡，位置不動；撞名檢查含這次被排除的那個動作', async ({ page }) => {
+  await openApp(page, {}, SWAP_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await addExercise(page, '深蹲')
+
+  await swapBtn(page, '腿推舉').click()
+  await expect(picker(page).getByRole('heading', { name: '替換為…' })).toBeVisible()
+  // 腿推舉不在這張清單裡（自己不能換自己），但新增時重名檢查要看得到它
+  await createBtn(page).click()
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('腿推舉')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page).getByRole('alert')).toContainText('已經有「腿推舉」')
+
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('單腿硬舉')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['單腿硬舉', '深蹲'])
+  await expect
+    .poll(async () => {
+      const exs = await trainRows(page, 'exercises')
+      const we = (await trainRows(page, 'workout_exercises')).sort((a, b) => Number(a.position) - Number(b.position))
+      return we.map((r) => exs.find((e) => e.id === r.exercise_id)?.name)
+    })
+    .toEqual(['單腿硬舉', '深蹲'])
+})
+
+test('課表編輯的「加動作」也有「新增動作」：建好直接進課表', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await newRoutine(page, '推日')
+  await page.locator('[data-action="add-routine-exercise"]').click()
+  await createFromPicker(page, '繩索下壓', 'arms')
+  await expect(picker(page)).toHaveCount(0)
+
+  const rows = editor(page).locator('[data-section="routine-exercises"] li.tr-row')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('繩索下壓')
+  const created = (await trainRows(page, 'exercises')).find((r) => r.name === '繩索下壓')!
+  await expect
+    .poll(async () => (await trainRows(page, 'routine_exercises')).map((r) => r.exercise_id))
+    .toEqual([created.id])
+})
+
+test('離線新增動作並加進訓練：畫面立刻有，回線後新動作先到、訓練的那一列才跟上', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await setOffline(page, true)
+  await createFromPicker(page, '離線新動作')
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['離線新動作'])
+  expect((await trainRows(page, 'exercises')).some((r) => r.name === '離線新動作'), '離線時伺服器還沒有').toBe(false)
+
+  await setOffline(page, false)
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).some((r) => r.name === '離線新動作'), { timeout: 20_000 })
+    .toBe(true)
+  const created = (await trainRows(page, 'exercises')).find((r) => r.name === '離線新動作')!
+  await expect
+    .poll(async () => (await trainRows(page, 'workout_exercises')).map((r) => r.exercise_id), { timeout: 20_000 })
+    .toEqual([created.id])
 })
 
 test('離線改要點：畫面立刻是新的，回線後上傳', async ({ page }) => {

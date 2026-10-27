@@ -894,6 +894,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         open={picker}
         title={replacing ? '替換為…' : '加動作'}
         exercises={replacePickable}
+        create={{ exercises: db.exercises, onWrite }}
         onClose={() => setPicker(false)}
         onPick={(id) => void (replacing ? replaceExercise(replacing, id) : addExercise(id))}
       />

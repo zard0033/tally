@@ -266,7 +266,13 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
         </div>
       </div>
 
-      <ExercisePicker open={picker} exercises={pickable} onClose={() => setPicker(false)} onPick={(id) => void addExercise(id)} />
+      <ExercisePicker
+        open={picker}
+        exercises={pickable}
+        create={{ exercises: db.exercises, onWrite }}
+        onClose={() => setPicker(false)}
+        onPick={(id) => void addExercise(id)}
+      />
 
       <RoutineTargetSheet
         open={targetOpen}
