@@ -1271,7 +1271,11 @@ test('沒有任何預設動作的帳號（自己從零建的庫）：開 App 不
   expect(posts).toHaveLength(0)
 })
 
-test('訓練中：ⓘ 在卡片內展開要點面板（只能看）；「編輯要點」開同一張編輯 sheet；清空顯示「還沒有要點」', async ({ page }) => {
+const exPatches = async (page: Page) =>
+  (await allWrites(page)).filter((w) => w.table === 'exercises' && w.method === 'PATCH').map((w) => w.body)
+const tipsStrip = (card: Locator) => card.locator('.ex-tips, .ex-tips-input')
+
+test('要點條：展開的卡有、收合的卡沒有；沒寫過是淡色「加要點」；卡片頭沒有 ⓘ、⋯ 選單只剩移除', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1280,47 +1284,98 @@ test('訓練中：ⓘ 在卡片內展開要點面板（只能看）；「編輯�
 
   const legs = page.locator('.ex', { hasText: '腿推舉' })
   const row = page.locator('.ex', { hasText: '坐姿划船' })
-  // 每張卡都有 ⓘ，沒寫過要點的是淡色、不隱藏（隱藏會讓箭頭、ⓘ、⋯ 對不齊）
-  await expect(legs.locator('.ex-info')).toHaveCount(1)
-  await expect(row.locator('.ex-info')).toHaveCount(1)
-  await expect(row.locator('.ex-info')).toHaveClass(/is-empty/)
-  await expect(legs.locator('.ex-info')).not.toHaveClass(/is-empty/)
+  // 最後加的坐姿划船是展開的（沒寫過要點）；腿推舉收合了（有要點但不顯示）
+  await expect(tipsStrip(row)).toHaveText('加要點')
+  await expect(tipsStrip(row)).toHaveClass(/is-empty/)
+  await expect(tipsStrip(legs), '收合的卡沒有要點條').toHaveCount(0)
 
-  await expect(legs.locator('.ex-tips-panel')).toHaveCount(0)
-  await legs.getByRole('button', { name: '腿推舉 的要點' }).click()
-  const panel = legs.locator('.ex-tips-panel')
-  await expect(panel).toContainText('背貼緊椅背')
-  // 不能就地改：卡片上沒有可打字的要點欄
-  await expect(page.locator('.ex textarea')).toHaveCount(0)
+  await legs.locator('.ex-toggle').click()
+  await expect(tipsStrip(legs)).toHaveText('背貼緊椅背')
+  await expect(tipsStrip(legs)).not.toHaveClass(/is-empty/)
+  // 要點條在卡片頭與欄頭之間
+  const tipBox = (await tipsStrip(legs).boundingBox())!
+  const headBox = (await legs.locator('.ex-head').boundingBox())!
+  const setHeadBox = (await legs.locator('.set-head').boundingBox())!
+  expect(tipBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height - 1)
+  expect(tipBox.y + tipBox.height).toBeLessThanOrEqual(setHeadBox.y + 1)
 
-  await panel.getByRole('button', { name: '編輯要點' }).click()
-  await expect(editSheet(page).getByRole('textbox', { name: '要點' })).toHaveValue('背貼緊椅背')
-  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('第三組吃力就降 2.5')
-  await editSheet(page).getByRole('button', { name: '儲存' }).click()
-  await expect(editSheet(page)).toHaveCount(0)
-  await expect(panel).toContainText('第三組吃力就降 2.5')
-  await expect
-    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips)
-    .toBe('第三組吃力就降 2.5')
-
-  // 清空＝「還沒有要點」，伺服器存 null；ⓘ 變淡色但仍在
-  await panel.getByRole('button', { name: '編輯要點' }).click()
-  await editSheet(page).getByRole('textbox', { name: '要點' }).fill('   ')
-  await editSheet(page).getByRole('button', { name: '儲存' }).click()
-  await expect(panel).toContainText('還沒有要點')
-  await expect(panel.getByRole('button', { name: '新增要點' })).toBeVisible()
-  await expect(legs.locator('.ex-info')).toHaveClass(/is-empty/)
-  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
-
-  // 再點一下 ⓘ 收起；收合的卡也能直接點開（腿推舉在加了第二個動作後是收合的）
-  await legs.getByRole('button', { name: '腿推舉 還沒有要點' }).click()
-  await expect(legs.locator('.ex-tips-panel')).toHaveCount(0)
-  await expect(legs.locator('.set')).toHaveCount(0)
-  await legs.locator('.ex-info').click()
-  await expect(legs.locator('.ex-tips-panel')).toHaveCount(1)
+  await expect(page.locator('.ex-info, .ex-tips-panel')).toHaveCount(0)
+  await legs.getByRole('button', { name: '腿推舉 的更多操作' }).click()
+  await expect(page.getByRole('menuitem')).toHaveText(['移除這個動作'])
 })
 
-test('⋯ 選單：「加要點」開編輯 sheet；「移除這個動作」沒打勾直接移除、有打勾先確認', async ({ page }) => {
+test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一欄）；清空存 null；Esc 與沒改都不寫', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const strip = legs.locator('.ex-tips')
+  const input = legs.locator('.ex-tips-input')
+  const blur = () => stat(page, 'time').click() // 點卡片外的統計格＝失焦
+
+  // 沒改就失焦：不寫
+  await strip.click()
+  await expect(input).toHaveValue('背貼緊椅背')
+  await expect(input).toBeFocused()
+  await blur()
+  await expect(strip).toHaveText('背貼緊椅背')
+  expect(await exPatches(page), '沒改不該寫').toHaveLength(0)
+
+  // Esc：放棄這次的字，不寫
+  await strip.click()
+  await input.fill('不要存這句')
+  await input.press('Escape')
+  await expect(input).toHaveCount(0)
+  await expect(strip).toHaveText('背貼緊椅背')
+  expect(await exPatches(page), 'Esc 不該寫').toHaveLength(0)
+
+  // 改了再失焦：存。Enter 是換行、不是送出
+  await strip.click()
+  await input.fill('第三組吃力就降 2.5')
+  await input.press('Enter')
+  await input.pressSequentially('第二行')
+  await expect(input).toBeFocused()
+  expect(await exPatches(page), '失焦前不寫').toHaveLength(0)
+  await blur()
+  await expect(strip).toContainText('第二行')
+  await expect.poll(async () => (await exPatches(page)).length).toBe(1)
+  expect((await exPatches(page))[0], '只送 tips 這一欄').toEqual({ tips: '第三組吃力就降 2.5\n第二行' })
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips)
+    .toBe('第三組吃力就降 2.5\n第二行')
+
+  // 清空＝「加要點」，伺服器存 null
+  await strip.click()
+  await input.fill('   ')
+  await blur()
+  await expect(strip).toHaveText('加要點')
+  await expect(strip).toHaveClass(/is-empty/)
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
+  expect((await exPatches(page))[1]).toEqual({ tips: null })
+})
+
+test('要點條：離線也能寫，畫面立刻是新的，回線後上傳；改的是動作，另一次訓練裡同一個動作也看得到', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '坐姿划船')
+  const row = page.locator('.ex', { hasText: '坐姿划船' })
+
+  await setOffline(page, true)
+  await row.locator('.ex-tips').click()
+  await row.locator('.ex-tips-input').fill('離線時寫的')
+  await stat(page, 'time').click()
+  await expect(row.locator('.ex-tips')).toHaveText('離線時寫的')
+  expect((await trainRows(page, 'exercises')).find((r) => r.id === ROW_ID)?.tips, '離線時伺服器還沒有').toBeNull()
+
+  await setOffline(page, false)
+  await expect
+    .poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === ROW_ID)?.tips, { timeout: 20_000 })
+    .toBe('離線時寫的')
+})
+
+test('⋯ 選單：「移除這個動作」沒打勾直接移除、有打勾先確認', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1328,12 +1383,6 @@ test('⋯ 選單：「加要點」開編輯 sheet；「移除這個動作」沒�
   await addExercise(page, '腿推舉')
   const row = page.locator('.ex', { hasText: '坐姿划船' })
   const legs = page.locator('.ex', { hasText: '腿推舉' })
-
-  await row.getByRole('button', { name: '坐姿划船 的更多操作' }).click()
-  await page.getByRole('menuitem', { name: '加要點' }).click()
-  await expect(editSheet(page)).toBeVisible()
-  await editSheet(page).getByRole('button', { name: '關閉' }).click()
-  await expect(editSheet(page)).toHaveCount(0)
 
   // 有打勾的動作：先問（最後加的腿推舉是展開的）
   await legs.locator('.set').first().locator('.tr-check').click()
@@ -1349,6 +1398,151 @@ test('⋯ 選單：「加要點」開編輯 sheet；「移除這個動作」沒�
   await page.getByRole('menuitem', { name: '移除這個動作' }).click()
   await expect(page.locator('.ex')).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
+})
+
+/* ═══════════ 替換動作（spec「動作替換、要點條、動作庫搬到設定」A） ═══════════
+   卡片頭的替換鈕開 picker（標題「替換為…」、清單不含目前這個動作），挑定後一次寫入：刪舊的 workout_exercises 列、
+   新的插在舊的 position。舊動作有打勾的組（有氧：填過的分鐘）先問再開 picker。預填的運算由 training.test.ts 守。 */
+
+const SQUAT_ID = '44444444-4444-4444-8444-444444444444'
+const SWAP_FIX: typeof FIX = {
+  ...LIBRARY_FIX,
+  exercises: [
+    ...LIBRARY_FIX.exercises,
+    { id: SQUAT_ID, name: '深蹲', muscle_group: 'legs', tips: null, archived: false, created_at: '2026-10-01T00:00:03.000Z' },
+  ],
+}
+const picker = (page: Page) => page.locator('[data-screen="exercise-picker"]')
+const exNames = (page: Page) => page.locator('.ex .ex-toggle .nm').allTextContents()
+const swapBtn = (page: Page, name: string) => page.getByRole('button', { name: `${name}：替換動作` })
+
+/** 三張卡：腿推舉、坐姿划船（最後加的，展開著）、深蹲不在裡面；用來換中間那張。 */
+async function threeCards(page: Page, fix: typeof FIX = SWAP_FIX) {
+  await openApp(page, {}, fix)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await addExercise(page, '坐姿划船')
+  await addExercise(page, '深蹲')
+  await expect(page.locator('.ex')).toHaveCount(3)
+}
+
+test('替換：沒打勾直接開 picker（標題「替換為…」、清單沒有自己）；挑定後卡片位置不動、新卡展開、伺服器是刪一列加一列', async ({ page }) => {
+  await openApp(page, {}, SWAP_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await addExercise(page, '坐姿划船')
+  await addExercise(page, '深蹲')
+  expect(await exNames(page)).toEqual(['腿推舉', '坐姿划船', '深蹲'])
+
+  await swapBtn(page, '坐姿划船').click()
+  await expect(picker(page).getByRole('heading', { name: '替換為…' })).toBeVisible()
+  await expect(picker(page).locator('.tr-row', { hasText: '坐姿划船' }), '清單不放目前這個動作').toHaveCount(0)
+  await expect(picker(page).locator('.tr-row', { hasText: '腿推舉' })).toHaveCount(1)
+
+  // 這時候「加動作」不能被污染：先取消，用 + 加動作進來標題還是「加動作」
+  await picker(page).getByRole('button', { name: '關閉' }).click()
+  await expect(picker(page)).toHaveCount(0)
+  expect(await trainRows(page, 'workout_exercises')).toHaveLength(3)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  await expect(picker(page).getByRole('heading', { name: '加動作' })).toBeVisible()
+  await picker(page).getByRole('button', { name: '關閉' }).click()
+  await expect(picker(page)).toHaveCount(0)
+
+  const rowsBefore = await trainRows(page, 'workout_exercises')
+  const oldRow = rowsBefore.find((r) => r.exercise_id === ROW_ID)!
+  await swapBtn(page, '坐姿划船').click()
+  await picker(page).locator('.tr-row', { hasText: '腿推舉' }).click()
+  await expect(picker(page)).toHaveCount(0)
+
+  expect(await exNames(page), '中間那張換成腿推舉，順序不變').toEqual(['腿推舉', '腿推舉', '深蹲'])
+  await expect(page.locator('.ex').nth(1).locator('.set'), '新卡是展開的，組是新動作的預填').toHaveCount(3)
+  await expect
+    .poll(async () => {
+      const rows = await trainRows(page, 'workout_exercises')
+      return rows.map((r) => [r.exercise_id, r.position]).sort((a, b) => Number(a[1]) - Number(b[1]))
+    })
+    .toEqual([
+      [LEG_ID, 0],
+      [LEG_ID, 1],
+      [SQUAT_ID, 2],
+    ])
+  const rowsAfter = await trainRows(page, 'workout_exercises')
+  expect(rowsAfter.find((r) => r.id === oldRow.id), '舊的那一列真的刪掉了').toBeUndefined()
+  const writes = (await allWrites(page)).filter((w) => w.table === 'workout_exercises')
+  expect(writes.filter((w) => w.method === 'DELETE')).toHaveLength(1)
+})
+
+test('替換：舊動作有打勾的組先問；「先不要」什麼都不動、也不開 picker；「繼續」才開，換完打勾的組跟著消失、統計重算', async ({ page }) => {
+  await threeCards(page)
+  await tick(page, 0) // 只有最後加的深蹲是展開的，DOM 裡只有它的 3 組
+  await expect(stat(page, 'sets')).toHaveText('1/9')
+
+  await swapBtn(page, '深蹲').click()
+  const dialog = page.getByRole('alertdialog', { name: '替換這個動作？' })
+  await expect(dialog).toContainText('已經打勾的組會一起刪掉')
+  await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['腿推舉', '坐姿划船', '深蹲'])
+  await expect(stat(page, 'sets')).toHaveText('1/9')
+
+  await swapBtn(page, '深蹲').click()
+  await dialog.getByRole('button', { name: '繼續' }).click()
+  await expect(picker(page).getByRole('heading', { name: '替換為…' })).toBeVisible()
+  await picker(page).locator('.tr-row', { hasText: '坐姿划船' }).click()
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['腿推舉', '坐姿划船', '坐姿划船'])
+  await expect(stat(page, 'sets'), '被換掉的動作那一組打勾不算了').toHaveText('0/9')
+  await expect(stat(page, 'volume')).toHaveText('0')
+})
+
+test('替換：離線也照常換，畫面立刻是新的，回線後伺服器才跟上', async ({ page }) => {
+  await openApp(page, {}, SWAP_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
+
+  await setOffline(page, true)
+  await swapBtn(page, '腿推舉').click()
+  await picker(page).locator('.tr-row', { hasText: '深蹲' }).click()
+  await expect(picker(page)).toHaveCount(0)
+  expect(await exNames(page)).toEqual(['深蹲'])
+  expect((await trainRows(page, 'workout_exercises')).map((r) => r.exercise_id), '離線時伺服器還是舊的').toEqual([LEG_ID])
+
+  await setOffline(page, false)
+  await expect
+    .poll(async () => (await trainRows(page, 'workout_exercises')).map((r) => r.exercise_id), { timeout: 20_000 })
+    .toEqual([SQUAT_ID])
+})
+
+test('替換成有氧動作：變成一張有氧卡（沒有組、不展開）；有氧卡填過分鐘再換，也先問', async ({ page }) => {
+  await openApp(page, {}, CARDIO_LIB)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+
+  await swapBtn(page, '腿推舉').click()
+  await picker(page).locator('.tr-row', { hasText: '跑步機坡度健走' }).click()
+  await expect(picker(page)).toHaveCount(0)
+  const walk = cardioCard(page, '跑步機坡度健走')
+  await expect(walk).toBeVisible()
+  await expect(page.locator('.ex .set'), '換成有氧之後沒有任何組').toHaveCount(0)
+  await expect(page.locator('.ex')).toHaveCount(1)
+
+  // 填 20 分鐘後再換：先問，文案是有氧版
+  await openCardioSheet(page, '跑步機坡度健走')
+  await cardioField(page, '分鐘').fill('20')
+  await saveCardio(page)
+  await swapBtn(page, '跑步機坡度健走').click()
+  const dialog = page.getByRole('alertdialog', { name: '替換這個動作？' })
+  await expect(dialog).toContainText('這張卡記下的有氧會一起刪掉')
+  await dialog.getByRole('button', { name: '繼續' }).click()
+  await picker(page).locator('.tr-row', { hasText: '有氧拳擊' }).click()
+  await expect(cardioCard(page, '有氧拳擊')).toBeVisible()
+  await expect(page.locator('.ex')).toHaveCount(1)
 })
 
 test('離線改要點：畫面立刻是新的，回線後上傳', async ({ page }) => {
@@ -2547,7 +2741,7 @@ test('收合列：滿 8 組的圓點加上很長的「下一組」不會把箭�
   await expect(card.locator('.set')).toHaveCount(0)
   await expect(card.locator('.sub .dot')).toHaveCount(8)
   const cardBox = (await card.boundingBox())!
-  for (const sel of ['.ex-toggle .chev', '.ex-info', '[aria-label$="的更多操作"]']) {
+  for (const sel of ['.ex-toggle .chev', '.ex-swap', '[aria-label$="的更多操作"]']) {
     const box = (await card.locator(sel).boundingBox())!
     expect(box.x + box.width, `${sel} 要在卡片右緣之內`).toBeLessThanOrEqual(cardBox.x + cardBox.width)
   }
@@ -3520,7 +3714,7 @@ test('393 寬：健走摘要放不下一行時折行、不截斷——全文都�
     expect(b.hidden, `${b.cls} 沒有被截掉的寬度`).toBeLessThanOrEqual(0)
   }
   const cardBox = (await card.boundingBox())!
-  for (const sel of ['.ex-toggle .chev', '.ex-info', '[aria-label$="的更多操作"]']) {
+  for (const sel of ['.ex-toggle .chev', '.ex-swap', '[aria-label$="的更多操作"]']) {
     const box = (await card.locator(sel).boundingBox())!
     expect(box.x + box.width, `${sel} 要在卡片右緣之內`).toBeLessThanOrEqual(cardBox.x + cardBox.width)
   }

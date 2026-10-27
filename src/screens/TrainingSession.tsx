@@ -3,13 +3,14 @@
 
    組的重量與次數不在列上打字：點它開「組編輯 sheet」（SetSheet，± 與大數字都在那裡，每次立即寫入）。
    列上只有兩顆數字鈕與一顆勾；整列可左滑露出紅鈕刪除。卡片頭固定四件事：握把、名稱（點了收合／展開）、
-   ⓘ 要點（點了在卡片內展開面板）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群。
+   替換（點了開 picker 換成另一個動作，位置不動）、⋯ 選單；收合時第二行是進度（圓點＋下一組），展開時是肌群；
+   展開的卡頂部是要點條（TipsStrip）：點一下原地寫，失焦才存。
    欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
    有氧動作的卡（spec「有氧併入動作」）沒有組：永遠是收合的外觀，名稱鈕點了開有氧 sheet（CardioSheet），第二行是摘要或「點一下填寫」；
-   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、ⓘ、⋯ 與其他卡相同。
+   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、⋯ 與其他卡相同。
    有氧動作卻有組的卡退回重訓的畫法（`isCardioCard`）。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Menu } from '@base-ui/react/menu'
 import { DragDropProvider } from '@dnd-kit/react'
@@ -28,7 +29,6 @@ import { sortableAccessibility } from '@/components/sortableA11y'
 import { CASCADE_STEP_MS, DUR, REDUCED_FADE_MAX_MS, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
 import { hasCatalogImage } from '@/lib/exerciseCatalog'
 import CardioSheet from './CardioSheet'
-import ExerciseEditSheet from './ExerciseEditSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
 import SetSheet, { type SetTarget } from './SetSheet'
@@ -48,12 +48,14 @@ import {
   isBackfilled,
   isCardioExercise,
   removeSetOps,
+  replaceExerciseOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
   RPE_CHIPS,
   setExerciseRpeOps,
   setsOfDetail,
   toggleAllDoneOps,
+  updateExerciseOps,
   workoutSummary,
   type MuscleGroup,
   type Row,
@@ -224,6 +226,83 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
   )
 }
 
+/* ═══════════ 要點條 ═══════════ */
+
+/** 展開的動作卡頂部的要點：有要點→最多兩行、點一下原地變輸入框；沒寫過→一行淡色「加要點」。
+ *  失焦才存（內容有變才寫）；Esc 放棄這次的改動；Enter 是換行（要點是多行文字）。
+ *  要點屬於**動作**不屬於這次訓練：改了，其他訓練裡同一個動作也跟著變（與動作庫的編輯一致）。 */
+function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; onSave: (exercise: Row, tips: string) => Promise<boolean> }) {
+  const tips = typeof exercise.tips === 'string' ? exercise.tips.trim() : ''
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const area = useRef<HTMLTextAreaElement>(null)
+  // Esc＝放棄這次的改動：失焦時不存。每次開始編輯都重設，免得上次留下的旗標吃掉下一次的存檔
+  const cancelled = useRef(false)
+
+  const grow = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  useLayoutEffect(() => {
+    const el = area.current
+    if (!editing || !el) return
+    grow(el)
+    el.focus({ preventScroll: true })
+    el.setSelectionRange(el.value.length, el.value.length)
+  }, [editing])
+
+  const begin = () => {
+    cancelled.current = false
+    setDraft(tips)
+    setEditing(true)
+  }
+  const finish = async () => {
+    if (cancelled.current) {
+      setEditing(false)
+      return
+    }
+    if (draft.trim() === tips) {
+      setEditing(false)
+      return
+    }
+    if (await onSave(exercise, draft)) setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <button
+        className={`ex-tips${tips ? '' : ' is-empty'}`}
+        type="button"
+        aria-label={tips ? `${name} 的要點：${tips}。點一下編輯` : `${name}：加要點`}
+        onClick={begin}
+      >
+        {tips || '加要點'}
+      </button>
+    )
+  }
+  return (
+    <textarea
+      ref={area}
+      className="ex-tips-input"
+      aria-label={`${name} 的要點`}
+      rows={2}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value)
+        grow(e.target)
+      }}
+      onBlur={() => void finish()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return
+        e.stopPropagation()
+        // 自己 blur 一次：收尾（放棄、收起輸入框）全走 finish 這一條路，不靠「卸載時瀏覽器補不補 blur」
+        cancelled.current = true
+        e.currentTarget.blur()
+      }}
+    />
+  )
+}
+
 /* ═══════════ 一張動作卡 ═══════════ */
 
 interface ExerciseCardProps {
@@ -232,8 +311,7 @@ interface ExerciseCardProps {
   showRpe: boolean
   index: number
   open: boolean
-  tipsOpen: boolean
-  /** 排序中：所有卡與要點面板一併收起。 */
+  /** 排序中：所有卡一併收起。 */
   sorting: boolean
   swipeId: string | null
   flash: readonly string[]
@@ -241,8 +319,9 @@ interface ExerciseCardProps {
   onToggleOpen: () => void
   /** 有氧卡的名稱鈕：開有氧 sheet（有氧卡不展開）。 */
   onOpenCardio: () => void
-  onToggleTips: () => void
-  onEditTips: () => void
+  /** 就地存要點；回 false＝沒存成（頁面已顯示錯誤），要點條留在編輯狀態保住打的字。 */
+  onSaveTips: (exercise: Row, tips: string) => Promise<boolean>
+  onReplace: () => void
   onRemove: () => void
   onToggleAll: () => void
   onAddSet: () => void
@@ -260,14 +339,12 @@ function ExerciseCard(p: ExerciseCardProps) {
   const allPress = usePressed()
   const name = exercise ? String(exercise.name) : '（已刪除的動作）'
   const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
-  const tips = typeof exercise?.tips === 'string' ? exercise.tips.trim() : ''
   // 有圖的動作（目錄裡有圖的預設動作，含有氧的坡度健走；由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
   // 資料集沒有對應的三個預設動作）肌群單字或類型圖示留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
   const photo = exercise != null && hasCatalogImage(exercise)
   // 有氧卡沒有組：永遠收合，名稱鈕改開有氧 sheet
   const cardio = isCardioCard(item)
   const open = !cardio && p.open && !sorting
-  const tipsOpen = p.tipsOpen
   const { ref, handleRef, isDragging } = useSortable({ id: entry.id, index, data: { name } })
   const spring = reduced ? { duration: 0.01 } : { height: SPRING_CARD, opacity: { duration: 0.16 } }
   // 新增／刪除一組（spec 動效表）：新增＝新列由上方 8px 淡入 220ms ease-out；刪除＝該列淡出並左移 12px 160ms ease-in。
@@ -335,18 +412,10 @@ function ExerciseCard(p: ExerciseCardProps) {
             </svg>
           </button>
         )}
-        {/* 每張卡都有 ⓘ（沒寫過要點的是淡色，不隱藏）：隱藏會讓箭頭、ⓘ、⋯ 在各卡上對不齊 */}
-        <button
-          className={`tr-ib ex-info${tips ? '' : ' is-empty'}`}
-          type="button"
-          aria-expanded={tipsOpen}
-          aria-label={tips ? `${name} 的要點` : `${name} 還沒有要點`}
-          disabled={!exercise}
-          onClick={p.onToggleTips}
-        >
+        {/* 每張卡都有替換鈕（有氧卡也有）：箭頭、替換、⋯ 在各卡上才對得齊。要換動作比看要點頻繁，所以佔 ⓘ 原本的位置 */}
+        <button className="tr-ib ex-swap" type="button" aria-label={`${name}：替換動作`} onClick={p.onReplace}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 11v5M12 8h.01" />
+            <path d="M7 7h11l-3-3M17 17H6l3 3" />
           </svg>
         </button>
         <Menu.Root>
@@ -356,11 +425,6 @@ function ExerciseCard(p: ExerciseCardProps) {
           <Menu.Portal>
             <Menu.Positioner className="ex-menu-pos" side="bottom" align="end" sideOffset={4} collisionPadding={12}>
               <Menu.Popup className="ex-menu">
-                {exercise && (
-                  <Menu.Item className="ex-menu-item" onClick={p.onEditTips}>
-                    {tips ? '編輯要點' : '加要點'}
-                  </Menu.Item>
-                )}
                 <Menu.Item className="ex-menu-item is-danger" onClick={p.onRemove}>
                   移除這個動作
                 </Menu.Item>
@@ -375,27 +439,6 @@ function ExerciseCard(p: ExerciseCardProps) {
       {!sorting && (
         <>
           <AnimatePresence initial={false}>
-            {tipsOpen && (
-              <motion.div
-                key="tips"
-                className="ex-tips-panel"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={spring}
-                style={{ overflow: 'hidden' }}
-              >
-                <div className="ex-tips-body">
-                  {tips ? <p className="ex-tips-text">{tips}</p> : <p className="ex-tips-text is-empty">還沒有要點</p>}
-                  <button className="ex-tips-edit" type="button" onClick={p.onEditTips}>
-                    {tips ? '編輯要點' : '新增要點'}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence initial={false}>
             {open && (
               <motion.div
                 key="body"
@@ -406,6 +449,7 @@ function ExerciseCard(p: ExerciseCardProps) {
                 transition={spring}
                 style={{ overflow: 'hidden' }}
               >
+                {exercise && <TipsStrip name={name} exercise={exercise} onSave={p.onSaveTips} />}
                 <div className="set-head">
                   <span aria-hidden="true">組</span>
                   <span aria-hidden="true">重量 kg</span>
@@ -481,15 +525,16 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
 
   // 一進來展開第一張重訓卡（有氧卡不展開）
   const [openEx, setOpenEx] = useState<string | null>(() => exercises.find((e) => !isCardioCard(e))?.entry.id ?? null)
-  const [tipsOpenIds, setTipsOpenIds] = useState<ReadonlySet<string>>(new Set())
   const [swipeId, setSwipeId] = useState<string | null>(null)
   const [picker, setPicker] = useState(false)
+  // 替換：要換的那張卡（entry id）。跟 picker 的開關分開，關閉動畫期間標題與清單不能跳回「加動作」
+  const [replacing, setReplacing] = useState<string | null>(null)
+  // 舊動作有記下的東西時，先問再開 picker（取消不花任何東西）；cardio 決定內文
+  const [askReplace, setAskReplace] = useState<{ entryId: string; cardio: boolean } | null>(null)
   // 目標與開關分開：關閉動畫期間表單不能跳成別的目標
   const [setTarget, setSetTarget] = useState<SetTarget | null>(null)
   const [setOpen, setSetOpen] = useState(false)
   const setOpener = useRef<HTMLElement | null>(null)
-  const [tipsTarget, setTipsTarget] = useState<Row | null>(null)
-  const [tipsOpen, setTipsOpen] = useState(false)
   // 有氧 sheet：記卡的 id、每次 render 從 detail 取那一列（存檔後卡片與下次打開都是新值）；session 當表單 key
   const [cardioId, setCardioId] = useState<string | null>(null)
   const [cardioOpen, setCardioOpen] = useState(false)
@@ -554,6 +599,42 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
       // 有氧卡不展開：剛加的是有氧就維持目前展開的那張，不把它收起來
       if (!isCardioExercise(db.exercises.find((e) => e.id === exerciseId))) setOpenEx(ops[0].rowId)
     }
+  }
+
+  // 要點條就地存：只送 tips 這一欄（名稱與肌群原樣帶進去，updateExerciseOps 只會留下有變的欄位）
+  const saveTips = (exercise: Row, tips: string) => {
+    const t = tips.trim()
+    const ops = updateExerciseOps({
+      current: exercise,
+      value: { name: String(exercise.name), muscle_group: exercise.muscle_group as MuscleGroup, tips: t === '' ? null : t },
+    })
+    return ops.length === 0 ? Promise.resolve(true) : run(ops)
+  }
+
+  const replaceExercise = async (entryId: string, exerciseId: string) => {
+    const item = exercises.find((e) => e.entry.id === entryId)
+    if (!item) return
+    const ops = replaceExerciseOps({ db, workoutId: workout.id, entry: item.entry, exerciseId, newId })
+    if (await run(ops)) {
+      setPicker(false)
+      setAsk(null) // 問題列問的那一組可能就在被換掉的動作裡（同 removeExercise）
+      // 同 addExercise：新的是有氧就不展開；舊的那張原本展開著就不能再指向已經不在的 id
+      if (!isCardioExercise(db.exercises.find((e) => e.id === exerciseId))) setOpenEx(ops[1].rowId)
+      else if (openEx === entryId) setOpenEx(null)
+    }
+  }
+
+  // 會丟掉已記的東西才先問（同 askRemoveExercise）；沒記東西就直接開 picker
+  const startReplace = (item: WorkoutExerciseDetail) => {
+    const cardio = isCardioCard(item)
+    const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
+    setSwipeId(null)
+    if (recorded) setAskReplace({ entryId: item.entry.id, cardio })
+    else openReplacePicker(item.entry.id)
+  }
+  const openReplacePicker = (entryId: string) => {
+    setReplacing(entryId)
+    setPicker(true)
   }
 
   // 只有有氧動作的卡能開：checkCardio 對非有氧回「請選有氧類型」，而這張 sheet 沒有類型可選
@@ -642,6 +723,9 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }))
 
   const pickable = db.exercises.filter((e) => e.archived !== true)
+  const replaceItem = replacing ? exercises.find((e) => e.entry.id === replacing) : undefined
+  // 替換時清單不放目前這個動作（換成自己沒有意義）
+  const replacePickable = replaceItem ? pickable.filter((e) => e.id !== replaceItem.entry.exercise_id) : pickable
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
   const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
@@ -721,7 +805,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 showRpe={live}
                 index={index}
                 open={openEx === item.entry.id}
-                tipsOpen={tipsOpenIds.has(item.entry.id)}
                 sorting={sorting}
                 swipeId={swipeId}
                 flash={flash}
@@ -734,19 +817,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   setSwipeId(null)
                   openCardio(item)
                 }}
-                onToggleTips={() =>
-                  setTipsOpenIds((cur) => {
-                    const next = new Set(cur)
-                    if (next.has(item.entry.id)) next.delete(item.entry.id)
-                    else next.add(item.entry.id)
-                    return next
-                  })
-                }
-                onEditTips={() => {
-                  if (!item.exercise) return
-                  setTipsTarget(item.exercise)
-                  setTipsOpen(true)
-                }}
+                onReplace={() => startReplace(item)}
+                onSaveTips={saveTips}
                 onRemove={() => askRemoveExercise(item)}
                 onToggleAll={() => {
                   if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 全部完成／取消全部完成都不再問（沒有「剛做完一組」的語意）
@@ -800,7 +872,14 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
             void run(setExerciseRpeOps(entrySets, rpe))
           }}
         />
-        <button className="tr-secondary" type="button" onClick={() => setPicker(true)}>
+        <button
+          className="tr-secondary"
+          type="button"
+          onClick={() => {
+            setReplacing(null)
+            setPicker(true)
+          }}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -811,7 +890,13 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         </button>
       </div>
 
-      <ExercisePicker open={picker} exercises={pickable} onClose={() => setPicker(false)} onPick={(id) => void addExercise(id)} />
+      <ExercisePicker
+        open={picker}
+        title={replacing ? '替換為…' : '加動作'}
+        exercises={replacePickable}
+        onClose={() => setPicker(false)}
+        onPick={(id) => void (replacing ? replaceExercise(replacing, id) : addExercise(id))}
+      />
 
       <SetSheet
         open={setOpen}
@@ -836,14 +921,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         lastMinutes={cardioLast}
         session={cardioSession}
         onClose={() => setCardioOpen(false)}
-        onWrite={onWrite}
-      />
-
-      <ExerciseEditSheet
-        open={tipsOpen}
-        exercise={tipsTarget}
-        exercises={db.exercises}
-        onClose={() => setTipsOpen(false)}
         onWrite={onWrite}
       />
 
@@ -876,6 +953,22 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         }}
       >
         <p>這次訓練的所有動作與組都會刪掉，找不回來。</p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={askReplace !== null}
+        title="替換這個動作？"
+        cancelLabel="先不要"
+        confirmLabel="繼續"
+        danger
+        onCancel={() => setAskReplace(null)}
+        onConfirm={() => {
+          const target = askReplace
+          setAskReplace(null)
+          if (target) openReplacePicker(target.entryId)
+        }}
+      >
+        <p>{askReplace?.cardio ? '換掉之後，這張卡記下的有氧會一起刪掉。' : '換掉之後，這個動作已經打勾的組會一起刪掉。'}</p>
       </ConfirmDialog>
 
       <ConfirmDialog

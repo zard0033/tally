@@ -480,6 +480,23 @@ export function addExerciseOps(args: {
   ]
 }
 
+/** 把這次訓練裡的某個動作換成另一個：先刪舊的 `workout_exercises` 列（組由 cascade 帶走），
+ *  新的插在舊的 position，卡片不跑位。新動作的組用**它自己**的歷史預填，不沿用舊動作的重量。
+ *  新列的 id 在回傳陣列的第二筆（`ops[1].rowId`），第一筆是刪除。 */
+export function replaceExerciseOps(args: {
+  db: TrainingDb
+  workoutId: string
+  entry: Row
+  exerciseId: string
+  newId: () => string
+}): RowOp[] {
+  const { db, workoutId, entry, exerciseId, newId } = args
+  return [
+    { op: 'delete', table: 'workout_exercises', rowId: entry.id },
+    ...addExerciseOps({ db, workoutId, exerciseId, newId, position: Number(entry.position) }),
+  ]
+}
+
 /** 新增一組：預填上一組的值（AC 5）；這個動作還沒有任何組就 0×0。 */
 export function addSetOps(args: { db: TrainingDb; workoutExerciseId: string; newId: () => string }): RowOp[] {
   const { db, workoutExerciseId, newId } = args

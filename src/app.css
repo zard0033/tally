@@ -1455,18 +1455,18 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 /* 列表類畫面（動作庫、加動作、課表編輯、訓練中）底部的著作權標示（GymVisualCredit）；用 --ink-muted：
    這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
-.ex-info.is-empty { color: var(--ink-faint); }
-.ex-info[aria-expanded="true"] { color: var(--accent); }
-.ex-info:disabled { opacity: .35; cursor: default; }
-/* 要點面板：點 ⓘ 在卡片頭下方展開（柔和底色塊），高度走 spring（motion） */
-.ex-tips-body { margin: 0 var(--s-3) var(--s-2); padding: var(--s-3); border-radius: var(--r-tab); background: var(--raised); }
-.ex-tips-text { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
-.ex-tips-text.is-empty { color: var(--ink-muted); }
-.ex-tips-edit { display: block; min-height: 44px; margin: 0 calc(var(--s-2) * -1) calc(var(--s-2) * -1) auto;
-  padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font-family: inherit;
-  font-size: var(--t-sm); font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.ex-tips-edit:active { opacity: .6; }
-.ex-tips-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
+/* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝一行淡色「加要點」（沒有底色，
+   不搶組列的視線）。輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉） */
+.ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); min-height: 44px; margin: 0 var(--s-3) var(--s-2);
+  padding: var(--s-2) var(--s-3); border: none; border-radius: var(--r-tab); font-family: inherit; font-size: var(--t-sm); line-height: 1.5;
+  text-align: left; -webkit-appearance: none; appearance: none; }
+.ex-tips { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
+  white-space: pre-wrap; cursor: pointer; }
+.ex-tips.is-empty { display: block; background: none; color: var(--ink-muted); padding-left: 0; padding-right: 0; margin-left: calc(var(--s-3) + var(--s-3)); width: auto; }
+.ex-tips:active { opacity: .6; }
+.ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ex-tips-input { display: block; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
+  outline: 2px solid var(--accent); outline-offset: -2px; }
 /* ⋯ 選單：從按鈕位置縮放長出（scale .95，永不從 0 開始）；開 160ms／關 100ms */
 .ex-menu-pos { z-index: 30; }
 .ex-menu { min-width: 176px; padding: var(--s-1); border-radius: var(--r-tab); background: var(--card);

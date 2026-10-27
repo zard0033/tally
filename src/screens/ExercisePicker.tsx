@@ -12,13 +12,15 @@ interface ExercisePickerProps {
   open: boolean
   /** 已排除封存的動作。 */
   exercises: readonly Row[]
+  /** 「加動作」或「替換為…」。 */
+  title?: string
   onClose: () => void
   onPick: (exerciseId: string) => void
 }
 
 const NO_FILTER: ExerciseFilter = { q: '', group: 'all' }
 
-export default function ExercisePicker({ open, exercises, onClose, onPick }: ExercisePickerProps) {
+export default function ExercisePicker({ open, exercises, title = '加動作', onClose, onPick }: ExercisePickerProps) {
   const [filter, setFilter] = useState<ExerciseFilter>(NO_FILTER)
   const list = useMemo(() => filterExercises(exercises, filter), [exercises, filter])
 
@@ -28,7 +30,7 @@ export default function ExercisePicker({ open, exercises, onClose, onPick }: Exe
   }, [open])
 
   return (
-    <SpringSheet open={open} onClose={onClose} label="加動作" title="加動作" screen="exercise-picker">
+    <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="exercise-picker">
     <div className="tr-sheet-body tr-sheet-scroll">
       <ExerciseFilterBar value={filter} onChange={setFilter} />
       {list.length === 0 ? (

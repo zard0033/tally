@@ -30,6 +30,7 @@ import {
   exerciseProgress,
   remainingSetsAfter,
   removeSetOps,
+  replaceExerciseOps,
   reorderWorkoutExercisesOps,
   syncSetsForwardOps,
   toggleAllDoneOps,
@@ -603,6 +604,46 @@ describe('addExerciseOps', () => {
   it('每一列的 id 都不同', () => {
     const ops = addExerciseOps({ db: history, workoutId: 'w', exerciseId: 'e1', newId: idGen() })
     expect(new Set(ops.map((o) => o.rowId)).size).toBe(ops.length)
+  })
+})
+
+describe('replaceExerciseOps', () => {
+  // 這次訓練 w：三個動作，要換的是中間那個（position 1），它已經打了勾；e2 在更早的訓練做過 40 kg × 12
+  const d = db({
+    exercises: [exercise('e1'), exercise('e2'), exercise('e3'), { id: 'walk', name: '健走', muscle_group: 'other', kind: 'incline_walk', tips: null, archived: false }],
+    workouts: [workout('old', '2026-10-01'), workout('w', '2026-10-14')],
+    workout_exercises: [we('a', 'w', 'e3', 0), we('b', 'w', 'e1', 1), we('c', 'w', 'e3', 2), we('oldE2', 'old', 'e2')],
+    workout_sets: [set('now1', 'b', 1, 99, 1), set('h1', 'oldE2', 1, 40, 12), set('h2', 'oldE2', 2, 40, 10)],
+  })
+  const entryB = d.workout_exercises.find((r) => r.id === 'b')!
+  const replace = (exerciseId: string) => replaceExerciseOps({ db: d, workoutId: 'w', entry: entryB, exerciseId, newId: idGen() })
+
+  it('第一筆刪舊的那列，第二筆插新的；舊動作的組不另外下刪除（交給 cascade）', () => {
+    const ops = replace('e2')
+    expect(ops[0]).toEqual({ op: 'delete', table: 'workout_exercises', rowId: 'b' })
+    expect(ops[1]).toMatchObject({ op: 'insert', table: 'workout_exercises', payload: { workout_id: 'w', exercise_id: 'e2' } })
+    expect(ops.filter((o) => o.op === 'delete')).toHaveLength(1)
+  })
+
+  it('新的插在舊的 position，不是接在最後', () => {
+    expect(replace('e2')[1].payload?.position).toBe(1)
+  })
+
+  it('新動作的組取它自己的歷史，不沿用舊動作這次打的 99 kg', () => {
+    const sets = replace('e2').filter((o) => o.table === 'workout_sets')
+    expect(sets.map((o) => [o.payload?.weight_kg, o.payload?.reps, o.payload?.done])).toEqual([[40, 12, false], [40, 10, false]])
+  })
+
+  it('換成有氧動作：只有那一列，沒有組', () => {
+    const ops = replace('walk')
+    expect(ops.map((o) => o.table)).toEqual(['workout_exercises', 'workout_exercises'])
+    expect(ops[1].payload?.position).toBe(1)
+  })
+
+  it('每一列的 id 都不同，且不碰舊列以外的 id', () => {
+    const ops = replace('e2')
+    expect(new Set(ops.map((o) => o.rowId)).size).toBe(ops.length)
+    expect(ops.slice(1).every((o) => o.rowId !== 'b')).toBe(true)
   })
 })
 
