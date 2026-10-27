@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>樣張 — 餐建議（重複的餐／補缺口）</title>
+<title>樣張（第二版）— 餐建議：一行建議＋缺口放進營養素條</title>
 <link rel="stylesheet" href="../src/app.css" />
 <style>
   /* ── 樣張外殼（只給這頁看用，不進產品） ── */
@@ -24,27 +24,23 @@
   .mock-head small { font-weight: 400; color: var(--ink-muted); font-size: var(--t-xs); margin-left: var(--s-2); }
 
   /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ─────────────────────────
-     建議卡 .sg：一張卡＝這一餐的一組品項（不是每樣各一張）。左邊三行：來源標籤（xs 灰）／品項（sm、最多兩行）／合計（xs 灰、數字字體）；
-     右邊一顆 44px 高的實心「加入」。底色 --raised，比時間軸的 --paper 深一階，跟已記錄的品項（無底色）分得開。
-     只出現在「還沒記的餐」底下；該餐一有紀錄就整塊不見。 */
-  .sg { margin-top: var(--s-2); padding: var(--s-3); border-radius: var(--r-tab); background: var(--raised);
-    display: flex; align-items: center; gap: var(--s-3); }
-  .sg + .sg { margin-top: var(--s-2); }
-  .sg-body { flex: 1; min-width: 0; }
-  .sg-lb { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
-  .sg-items { margin-top: 2px; font-size: var(--t-sm); line-height: 1.45; color: var(--ink);
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-  .sg-sum { margin-top: 2px; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs);
-    letter-spacing: var(--track-xs); color: var(--ink-muted); }
-  .sg-add { flex-shrink: 0; min-height: 44px; padding: 0 var(--s-4); border: none; border-radius: var(--r-pill);
+     ① 建議列 .sg：**一行**。左：來源兩字（淡）＋品項（一行、放不下用刪節號）＋熱量（固定在右、不被截）；右：小的實心「加入」。
+        底色 --raised、44px 高，整列剛好是一個觸控高度。來源兩字：「上次」＝重複的餐，「適合」＝補缺口。
+        品項放不下的部分在 sheet 與加入後的時間軸都看得到，所以這裡寧可截斷也不長高。一餐最多一張。 */
+  .sg { margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
+    padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-tab); background: var(--raised); }
+  .sg-src { flex-shrink: 0; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+  .sg-items { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sg-kc { flex-shrink: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs); color: var(--ink-muted); }
+  .sg-add { flex-shrink: 0; min-height: 36px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill);
     background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
     cursor: pointer; -webkit-appearance: none; appearance: none; }
   .sg-add:active { opacity: .8; }
-  /* 補缺口那組的標頭：一行字，講還差多少（三個營養素都列，破表那種不列） */
-  .sg-gap { margin: var(--s-2) 0 0; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); line-height: 1.5; }
-  .sg-gap b { color: var(--ink); font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  /* ② 營養素條的缺口：每個營養素值後面接淡色「差 N」（累計／目標之後）。熱量的缺口本來就是上面那顆大數字「還能吃 N 卡」，不重複；
+        吃超過（脂、碳破表）就不顯示——紅字本身已經在說，「差 -5」沒有意義；蛋白質吃超過也不顯示（它不判超標）。 */
+  .macro .val .gap { margin-left: var(--s-1); color: var(--ink-muted); font-weight: 400; }
 
-  /* sheet 裡的「建議」段（框架只畫外形，真實 sheet 是 SpringSheet） */
+  /* sheet 裡的建議（框架只畫外形，真實 sheet 是 SpringSheet） */
   .mock-sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 64px; background: var(--card);
     border-radius: 24px 24px 0 0; box-shadow: var(--shadow-3); display: flex; flex-direction: column; overflow: hidden; }
   .mock-handle { width: 36px; height: 5px; border-radius: 3px; background: var(--rule); margin: 8px auto 0; }
@@ -52,142 +48,106 @@
   .mock-chips { display: flex; gap: var(--s-2); padding: var(--s-3) 0; }
   .mock-search { min-height: 44px; border-radius: var(--r-tab); background: var(--fill); display: flex; align-items: center;
     padding: 0 var(--s-3); color: var(--ink-faint); font-size: var(--t-base); }
-  /* sheet 裡的建議卡：點了才把那組品項放進「已選」，不預設選中；選用後卡片變 accent-soft、右邊的鈕換成「已選用」文字。
-     不寫入資料——寫入仍是底部確認列的「加入」。 */
+  /* sheet 裡同一條建議列：點整列＝把那組品項放進「已選」，不預設選中、不寫入；選用後底色換淡綠、右邊的鈕換成「已選用」文字 */
   .sg.in-sheet { cursor: pointer; }
-  .sg.in-sheet .sg-add { background: none; color: var(--accent); padding: 0 var(--s-2); font-weight: 600; }
+  .sg.in-sheet .sg-add { background: none; color: var(--accent); padding: 0 var(--s-2); }
   .sg.in-sheet.is-picked { background: var(--accent-soft); }
   .sg.in-sheet.is-picked .sg-add { color: var(--accent-dark); }
   .mock-bar { padding: var(--s-3) var(--s-5) var(--s-4); border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: var(--s-2); }
 </style>
 </head>
 <body>
-<h1 class="harness-title">樣張 — 餐建議：今日頁待記錄列＋記一筆 sheet</h1>
+<h1 class="harness-title">樣張（第二版）— 餐建議</h1>
 <p class="harness-sub">
-  <b>一張建議卡＝這一餐的一組品項</b>，兩種來源共用同一個長相：<b>重複的餐</b>（上一個同類日——平日／假日——的同一餐，例：平日早餐）與<b>補缺口</b>（只在晚餐等後面幾餐，依今日還差多少從你這餐常吃的品項裡挑貼近的）。
-  今日頁：卡上的「加入」<b>一點就寫入</b>，靠既有的「復原」兜底；sheet 裡：點卡只是把那組品項放進「已選」，<b>不預設選中、不寫入</b>，仍要按底部的「加入」。
+  依你的三點回饋改：<b>① 缺口放進營養素條</b>（每個營養素後面接「差 N」；熱量的缺口就是大數字「還能吃」，不重複），時間軸不再有那串「還差…」；
+  <b>② 建議列壓成一行</b>（44px，品項放不下就截斷）；<b>③ 一餐只出一張</b>（兩張是我自己加的，沒人要求）。
+  另外補一條我自己發現的限制：<b>補缺口只對「最後一筆有紀錄的餐別之後、最近的那一個待記錄餐」出建議</b>——早上什麼都還沒記就建議晚餐，缺口是整天、沒有意義。
   <b>數字都是示意</b>。
 </p>
 
 <div class="frames">
 
-  <!-- ① 今日頁 -->
+  <!-- ① 早上：重複的餐 -->
   <div class="frame-block">
-    <div class="frame-label">① 今日頁：早餐還沒記（重複的餐）、午餐已記錄、晚餐還沒記（補缺口）</div>
+    <div class="frame-label">① 早上：什麼都還沒記，只有早餐有建議（重複的餐）</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
+      <section class="gauge" aria-label="熱量">
+        <div class="gauge-top"><div><div class="gauge-lead">還能吃</div><div><span class="gauge-num">1778</span><span class="gauge-unit">卡</span></div></div>
+          <div class="gauge-side pair"><span><span class="cur">0</span><span class="sep">/</span><span class="tgt">1778</span></span></div></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+      </section>
+      <section class="macros">
+        <div class="macro"><div class="lbl">蛋白質</div><div class="track-box"><div class="track"><div class="fill" style="width:0%"></div></div></div><div class="val pair"><span class="cur">0.0</span><span class="sep">/</span><span class="tgt">137</span><span class="gap">差 137</span></div></div>
+        <div class="macro"><div class="lbl">脂肪</div><div class="track-box"><div class="track"><div class="fill" style="width:0%"></div></div></div><div class="val pair"><span class="cur">0.0</span><span class="sep">/</span><span class="tgt">65</span><span class="gap">差 65</span></div></div>
+        <div class="macro"><div class="lbl">碳水</div><div class="track-box"><div class="track"><div class="fill" style="width:0%"></div></div></div><div class="val pair"><span class="cur">0.0</span><span class="sep">/</span><span class="tgt">163</span><span class="gap">差 163</span></div></div>
+      </section>
       <div class="timeline">
-
         <div class="node">
-          <div class="rail" aria-hidden="true"><div class="dot todo"></div><div class="line"></div></div>
+          <div class="rail" aria-hidden="true"><div class="dot todo"></div><div class="line todo"></div></div>
           <div class="node-body is-todo">
             <button class="todo-row" type="button"><span class="lb">早餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
-            <div class="sg">
-              <div class="sg-body">
-                <div class="sg-lb">上一個平日的早餐</div>
-                <div class="sg-items">全麥吐司 ×2・無糖豆漿・水煮蛋 ×2</div>
-                <div class="sg-sum">395 卡・蛋白 31g</div>
-              </div>
-              <button class="sg-add" type="button">加入</button>
-            </div>
+            <div class="sg"><span class="sg-src">上次</span><span class="sg-items">全麥吐司 ×2・無糖豆漿・水煮蛋 ×2</span><span class="sg-kc">395</span><button class="sg-add" type="button">加入</button></div>
           </div>
         </div>
-
         <div class="node">
-          <div class="rail" aria-hidden="true"><div class="dot"></div><div class="line"></div></div>
-          <div class="node-body">
-            <button class="node-head" type="button"><span class="node-name">午餐</span><span class="node-kcal">420</span></button>
-            <ul class="items">
-              <li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content">
-                <span class="nm">雞胸餐盒</span><span class="qty">×1</span><span class="kc">420</span>
-              </div></div></div></div></li>
-            </ul>
-          </div>
+          <div class="rail" aria-hidden="true"><div class="dot todo"></div><div class="line todo"></div></div>
+          <div class="node-body is-todo"><button class="todo-row" type="button"><span class="lb">午餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div>
         </div>
-
         <div class="node">
           <div class="rail" aria-hidden="true"><div class="dot todo"></div></div>
-          <div class="node-body is-todo">
-            <button class="todo-row" type="button"><span class="lb">晚餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
-            <p class="sg-gap">還差 <b>520</b> 卡・蛋白 <b>40</b>g・脂 <b>18</b>g・碳 <b>62</b>g</p>
-            <div class="sg">
-              <div class="sg-body">
-                <div class="sg-lb">你這餐常吃，補得進去</div>
-                <div class="sg-items">雞胸餐盒（減醣廚房）・地瓜</div>
-                <div class="sg-sum">510 卡・蛋白 44g</div>
-              </div>
-              <button class="sg-add" type="button">加入</button>
-            </div>
-            <div class="sg">
-              <div class="sg-body">
-                <div class="sg-lb">蛋白優先</div>
-                <div class="sg-items">溫泉蛋 ×2・乳清・香蕉</div>
-                <div class="sg-sum">385 卡・蛋白 39g</div>
-              </div>
-              <button class="sg-add" type="button">加入</button>
-            </div>
-          </div>
+          <div class="node-body is-todo"><button class="todo-row" type="button"><span class="lb">晚餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div>
         </div>
-
       </div>
     </div></div>
-    <div class="frame-note"><b>位置</b>：建議卡掛在待記錄那一列的正下方，列本身（點了開 sheet）不動。<b>高度</b>：早餐那格比現在多約 90px；晚餐兩張建議加一行缺口約多 220px，745px 一屏放不下時時間軸本來就會捲，所以<b>晚餐最多出兩張</b>。</div>
+    <div class="frame-note"><b>建議列</b>：「上次」＝上一個平日的早餐。整列 44px，一餐只多這一行；午餐、晚餐沒有紀錄可參考、或不在補缺口的條件內，就沒有建議。<b>營養素條</b>：每個後面多一個淡色「差 N」，沒吃之前就是目標本身。</div>
   </div>
 
-  <!-- ② 點加入之後 -->
+  <!-- ② 傍晚：補缺口 -->
   <div class="frame-block">
-    <div class="frame-label">② 點了早餐的「加入」：直接寫入，早餐變已記錄，浮起「復原」</div>
+    <div class="frame-label">② 傍晚：早午餐都記了，晚餐有一行「適合」的建議（補缺口）</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
+      <section class="gauge" aria-label="熱量">
+        <div class="gauge-top"><div><div class="gauge-lead">還能吃</div><div><span class="gauge-num">520</span><span class="gauge-unit">卡</span></div></div>
+          <div class="gauge-side pair"><span><span class="cur">1258</span><span class="sep">/</span><span class="tgt">1778</span></span></div></div>
+        <div class="bar"><div class="fill" style="width:71%"></div></div>
+      </section>
+      <section class="macros">
+        <div class="macro"><div class="lbl">蛋白質</div><div class="track-box"><div class="track"><div class="fill" style="width:71%"></div></div></div><div class="val pair"><span class="cur">97.0</span><span class="sep">/</span><span class="tgt">137</span><span class="gap">差 40</span></div></div>
+        <div class="macro"><div class="lbl">脂肪</div><div class="track-box"><div class="track"><div class="fill" style="width:72%"></div></div></div><div class="val pair"><span class="cur">47.0</span><span class="sep">/</span><span class="tgt">65</span><span class="gap">差 18</span></div></div>
+        <div class="macro"><div class="lbl">碳水</div><div class="track-box"><div class="track"><div class="fill" style="width:72%"></div></div></div><div class="val pair"><span class="cur">118.0</span><span class="sep">/</span><span class="tgt">163</span><span class="gap">差 45</span></div></div>
+      </section>
       <div class="timeline">
-
         <div class="node">
           <div class="rail" aria-hidden="true"><div class="dot"></div><div class="line"></div></div>
           <div class="node-body">
             <button class="node-head" type="button"><span class="node-name">早餐</span><span class="node-kcal">395</span></button>
-            <ul class="items">
-              <li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">全麥吐司</span><span class="qty">×2</span><span class="kc">240</span></div></div></div></div></li>
-              <li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">無糖豆漿</span><span class="qty">×1</span><span class="kc">75</span></div></div></div></div></li>
-              <li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">水煮蛋</span><span class="qty">×2</span><span class="kc">80</span></div></div></div></div></li>
-            </ul>
+            <ul class="items"><li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">全麥吐司</span><span class="qty">×2</span><span class="kc">240</span></div></div></div></div></li></ul>
           </div>
         </div>
-
         <div class="node">
           <div class="rail" aria-hidden="true"><div class="dot"></div><div class="line"></div></div>
           <div class="node-body">
-            <button class="node-head" type="button"><span class="node-name">午餐</span><span class="node-kcal">420</span></button>
-            <ul class="items">
-              <li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">雞胸餐盒</span><span class="qty">×1</span><span class="kc">420</span></div></div></div></div></li>
-            </ul>
+            <button class="node-head" type="button"><span class="node-name">午餐</span><span class="node-kcal">863</span></button>
+            <ul class="items"><li class="item"><div class="item-row"><div class="item-main"><div class="item-slide"><div class="item-content"><span class="nm">排骨便當</span><span class="qty">×1</span><span class="kc">443</span></div></div></div></div></li></ul>
           </div>
         </div>
-
         <div class="node">
           <div class="rail" aria-hidden="true"><div class="dot todo"></div></div>
           <div class="node-body is-todo">
             <button class="todo-row" type="button"><span class="lb">晚餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
-            <p class="sg-gap">還差 <b>130</b> 卡・蛋白 <b>9</b>g・脂 <b>6</b>g・碳 <b>20</b>g</p>
-            <div class="sg">
-              <div class="sg-body">
-                <div class="sg-lb">你這餐常吃，補得進去</div>
-                <div class="sg-items">地瓜・無糖豆漿</div>
-                <div class="sg-sum">125 卡・蛋白 10g</div>
-              </div>
-              <button class="sg-add" type="button">加入</button>
-            </div>
+            <div class="sg"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><button class="sg-add" type="button">加入</button></div>
           </div>
         </div>
-
       </div>
-      <div class="undo-bar"><button type="button" aria-label="復原剛加入的早餐"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>復原</button></div>
     </div></div>
-    <div class="frame-note"><b>回報</b>：早餐那一塊本身長出三列就是回報（沿用既有的「剛加入」閃一下），底部浮起既有的「復原」pill。<b>晚餐的缺口跟著重算</b>（還差 520→130），建議也跟著換成補得進去的。不另外跳提示。</div>
+    <div class="frame-note"><b>缺口在哪看</b>：熱量＝大數字「還能吃 520 卡」；蛋白／脂／碳＝條下面的「差 N」。建議挑的是<b>每一項都不超過缺口</b>的組合（蛋白可以超過，它不判超標）：這組 470 卡、蛋白 50、脂 13、碳 33，都在 520／40／18／45 以內（蛋白 50 比 40 多，沒關係）。</div>
   </div>
 
-  <!-- ③ sheet：建議段 -->
+  <!-- ③ sheet：建議（點之前） -->
   <div class="frame-block">
-    <div class="frame-label">③ 記一筆 sheet（晚餐）：最上方多一段「建議」，沒有任何預設選中</div>
+    <div class="frame-label">③ 記一筆 sheet（晚餐）：最上方一行建議，沒有預設選中</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
       <div class="timeline" style="opacity:.35"></div>
@@ -196,26 +156,20 @@
         <div class="mock-scroll">
           <div class="mock-chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip" aria-pressed="true">晚餐</span><span class="chip">點心</span></div>
           <div class="mock-search">搜尋品名或店家</div>
-          <div class="sect-lb" style="margin-top:var(--s-4)">建議　<span style="font-weight:400">還差 520 卡・蛋白 40g</span></div>
-          <div class="sg in-sheet">
-            <div class="sg-body"><div class="sg-lb">你這餐常吃，補得進去</div><div class="sg-items">雞胸餐盒（減醣廚房）・地瓜</div><div class="sg-sum">510 卡・蛋白 44g</div></div>
-            <span class="sg-add">選用</span>
-          </div>
-          <div class="sg in-sheet">
-            <div class="sg-body"><div class="sg-lb">蛋白優先</div><div class="sg-items">溫泉蛋 ×2・乳清・香蕉</div><div class="sg-sum">385 卡・蛋白 39g</div></div>
-            <span class="sg-add">選用</span>
-          </div>
+          <div class="sect-lb" style="margin-top:var(--s-4)">建議</div>
+          <div class="sg in-sheet"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><span class="sg-add">選用</span></div>
           <div class="sect-lb" style="margin-top:var(--s-4)">全部食物</div>
-          <ul class="food-list"><li><div class="food-item"><button class="food-row" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">地瓜</span></div><div class="kc-wrap"><span class="kc">130</span></div></button></div></li></ul>
+          <ul class="food-list"><li><div class="food-item"><button class="food-row" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">地瓜</span></div><div class="kc-wrap"><span class="kc">130</span></div></button></div></li>
+          <li><div class="food-item"><button class="food-row" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">乳清（1匙）</span></div><div class="kc-wrap"><span class="kc">120</span></div></button></div></li></ul>
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>不預設選中</b>：進 sheet 看到的清單跟現在一樣，只是上面多一段可點的建議。建議段只在「這一餐還沒記、且有東西可建議」時出現，搜尋時收起來。</div>
+    <div class="frame-note"><b>不預設選中</b>：清單跟現在一樣，只多這一行。沒有建議（該餐已有紀錄、沒有來源、不符補缺口條件）就整段不出現；搜尋時收起。</div>
   </div>
 
-  <!-- ④ sheet：點選用之後 -->
+  <!-- ④ sheet：選用之後 -->
   <div class="frame-block">
-    <div class="frame-label">④ 點了第一張建議：那組品項進「已選」、確認列有數字，仍要按「加入」才寫入</div>
+    <div class="frame-label">④ 點了建議：品項進「已選」，仍要按「加入」才寫入</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
       <div class="timeline" style="opacity:.35"></div>
@@ -228,27 +182,20 @@
           <ul class="food-list">
             <li><div class="food-item selected"><div class="food-line"><button class="food-row" type="button" aria-pressed="true"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/><path d="M7 11.5l2.5 2.5L15 8.5"/></svg><div class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">減醣廚房</span></div></button>
               <div class="qty-stepper"><button class="qty-btn" type="button" disabled>−</button><input class="qty-value" value="1" aria-label="份量" readonly /><button class="qty-btn" type="button">+</button></div></div></div></li>
-            <li><div class="food-item selected"><div class="food-line"><button class="food-row" type="button" aria-pressed="true"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/><path d="M7 11.5l2.5 2.5L15 8.5"/></svg><div class="nm-wrap"><span class="nm">地瓜</span></div></button>
+            <li><div class="food-item selected"><div class="food-line"><button class="food-row" type="button" aria-pressed="true"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/><path d="M7 11.5l2.5 2.5L15 8.5"/></svg><div class="nm-wrap"><span class="nm">無糖豆漿</span><span class="sub">全家</span></div></button>
               <div class="qty-stepper"><button class="qty-btn" type="button" disabled>−</button><input class="qty-value" value="1" aria-label="份量" readonly /><button class="qty-btn" type="button">+</button></div></div></div></li>
           </ul>
           <div class="sect-lb" style="margin-top:var(--s-3)">建議</div>
-          <div class="sg in-sheet is-picked">
-            <div class="sg-body"><div class="sg-lb">你這餐常吃，補得進去</div><div class="sg-items">雞胸餐盒（減醣廚房）・地瓜</div><div class="sg-sum">510 卡・蛋白 44g</div></div>
-            <span class="sg-add">已選用</span>
-          </div>
-          <div class="sg in-sheet">
-            <div class="sg-body"><div class="sg-lb">蛋白優先</div><div class="sg-items">溫泉蛋 ×2・乳清・香蕉</div><div class="sg-sum">385 卡・蛋白 39g</div></div>
-            <span class="sg-add">選用</span>
-          </div>
+          <div class="sg in-sheet is-picked"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><span class="sg-add">已選用</span></div>
         </div>
         <div class="mock-bar">
-          <div class="pick-line" style="display:flex;justify-content:space-between;align-items:baseline"><span class="sub" style="font-weight:600;font-size:var(--t-base)">2 樣 ・ 510 卡</span><span class="remain" style="color:var(--ink-muted);font-size:var(--t-base)">剩 10</span></div>
-          <div class="macro-line"><span>蛋白 124/137 <span class="add">(+44)</span></span><span>脂 61/65 <span class="add">(+9)</span></span><span>碳 198/163 <span class="add">(+58)</span></span></div>
+          <div class="pick-line" style="display:flex;justify-content:space-between;align-items:baseline"><span class="sub" style="font-weight:600;font-size:var(--t-base)">2 樣 ・ 470 卡</span><span class="remain" style="color:var(--ink-muted);font-size:var(--t-base)">剩 50</span></div>
+          <div class="macro-line"><span>蛋白 147/137 <span class="add">(+50)</span></span><span>脂 60/65 <span class="add">(+13)</span></span><span>碳 151/163 <span class="add">(+33)</span></span></div>
           <button class="pick-bar-btn" type="button">加入</button>
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>再點一次已選用的建議</b>＝把它放進去的品項取消（品項各自仍可在「已選」單獨改份量或取消）。已選用的建議<b>留在原位、換成淡綠底</b>，不從建議段消失——跟「已選品項從清單移除」那條不同，因為建議是一組、拆不開。</div>
+    <div class="frame-note"><b>再點一次已選用的建議</b>＝把它放進去的品項取消（品項各自仍可在「已選」單獨改份量或取消）。已選用的建議<b>留在原位、換成淡綠底</b>，因為建議是一組、拆不開。</div>
   </div>
 
 </div>
