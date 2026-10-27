@@ -580,11 +580,20 @@ export default function LogSheet(props: LogSheetProps) {
                     <div
                       role="group"
                       className="macro-line"
-                      aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克`}
+                      aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
                     >
-                      <span aria-hidden="true">蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}</span>
-                      <span className={fatOver ? 'over' : undefined} aria-hidden="true">脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}</span>
-                      <span className={carbOver ? 'over' : undefined} aria-hidden="true">碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}</span>
+                      <span aria-hidden="true">
+                        蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}
+                        <span className="add">+{Math.round(totals.protein)}</span>
+                      </span>
+                      <span className={fatOver ? 'over' : undefined} aria-hidden="true">
+                        脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}
+                        <span className="add">+{Math.round(totals.fat)}</span>
+                      </span>
+                      <span className={carbOver ? 'over' : undefined} aria-hidden="true">
+                        碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}
+                        <span className="add">+{Math.round(totals.carb)}</span>
+                      </span>
                     </div>
                   )
                 })()}

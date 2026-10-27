@@ -151,3 +151,31 @@ test('軟性排序——常吃：只淡化不重排，維持原本的常吃順�
   await expect(items.nth(0)).toHaveClass(/over-quota/)
   await expect(items.nth(1)).not.toHaveClass(/over-quota/)
 })
+
+/* 確認列蛋白/脂/碳每格後面接「這次加了多少」（DESIGN.md v2.100）：吃完後累計／目標是判斷依據，
+   +N 補的是這次勾選的貢獻。預期值用勾選列實際的份量乘 fixture 的單份數字手算（無糖豆漿 8/4/5、溫泉蛋 7/5/1），
+   不抄實作的 totals。 */
+test('確認列每格接「+這次」：蛋白/脂/碳各是勾選品項的加總，份量改了跟著變', async ({ page }) => {
+  await openApp(page)
+  await page.click('button.cta')
+  await page.waitForSelector('.sheet', { timeout: 3000 })
+
+  await page.locator('.food-row', { hasText: '無糖豆漿' }).first().click()
+  await page.locator('.food-row', { hasText: '溫泉蛋' }).first().click()
+  await page.waitForTimeout(150)
+  const qtyOf = async (name: string) =>
+    Number(await page.locator('.food-item', { hasText: name }).locator('.qty-value').first().inputValue())
+  const adds = () => page.locator('.macro-line .add').allInnerTexts()
+  const expected = async () => {
+    const soy = await qtyOf('無糖豆漿')
+    const egg = await qtyOf('溫泉蛋')
+    return [`+${Math.round(8 * soy + 7 * egg)}`, `+${Math.round(4 * soy + 5 * egg)}`, `+${Math.round(5 * soy + 1 * egg)}`]
+  }
+  expect(await adds()).toEqual(await expected())
+
+  // 豆漿加一份：三格都重算
+  await page.locator('.food-item', { hasText: '無糖豆漿' }).locator('.qty-btn[aria-label*="增加"]').click()
+  await page.waitForTimeout(150)
+  expect(await adds()).toEqual(await expected())
+  await expect(page.locator('.macro-line')).toHaveAttribute('aria-label', /這次加 .* 克/)
+})

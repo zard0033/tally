@@ -1093,6 +1093,8 @@ button { -webkit-user-select: none; user-select: none; }
 .macro-line { display: flex; justify-content: space-between; gap: var(--s-3);
   font-size: var(--t-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .macro-line .over { color: var(--over); font-weight: 700; }
+/* v2.100：每格後面接「這次加了多少」。吃完後累計／目標才是判斷破表的依據，這個只是補上「這次的貢獻」，所以淡、不跟著 .over 變色變粗 */
+.macro-line .add { margin-left: var(--s-1); color: var(--ink-muted); font-weight: 400; }
 .pick-bar-btn { width: 100%; min-height: 52px; padding: 0 var(--s-5); border: none;
   border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent);
   font-family: inherit; font-size: var(--t-md); font-weight: 700;
