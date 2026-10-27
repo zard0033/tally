@@ -25,7 +25,7 @@
 
   /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ─────────────────────────
      ① 建議列 .sg：**一行**。左：來源兩字（淡）＋品項（一行、放不下用刪節號）＋熱量（固定在右、不被截）；右：小的實心「加入」。
-        底色 --raised、44px 高，整列剛好是一個觸控高度。來源兩字：「上次」＝重複的餐，「適合」＝補缺口。
+        底色 --raised、44px 高，整列剛好是一個觸控高度。來源兩字：「上次」＝重複的餐，「建議」＝補缺口。
         品項放不下的部分在 sheet 與加入後的時間軸都看得到，所以這裡寧可截斷也不長高。一餐最多一張。 */
   .sg { margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
     padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-tab); background: var(--raised); }
@@ -48,18 +48,19 @@
   .mock-chips { display: flex; gap: var(--s-2); padding: var(--s-3) 0; }
   .mock-search { min-height: 44px; border-radius: var(--r-tab); background: var(--fill); display: flex; align-items: center;
     padding: 0 var(--s-3); color: var(--ink-faint); font-size: var(--t-base); }
-  /* sheet 裡同一條建議列：點整列＝把那組品項放進「已選」，不預設選中、不寫入；選用後底色換淡綠、右邊的鈕換成「已選用」文字 */
-  .sg.in-sheet { cursor: pointer; }
-  .sg.in-sheet .sg-add { background: none; color: var(--accent); padding: 0 var(--s-2); }
-  .sg.in-sheet.is-picked { background: var(--accent-soft); }
-  .sg.in-sheet.is-picked .sg-add { color: var(--accent-dark); }
+  /* ③ sheet 裡的建議（第三版，使用者 2026-10-27）：不是另一種卡片，是**平常的食物列被排到最上面**，段標換 accent 色、右邊一個文字鈕「全選」。
+        勾選後照既有規則進「已選」，所以沒有「已選用」狀態。 */
+  .sect-suggest { display: flex; align-items: center; justify-content: space-between; color: var(--accent); font-weight: 600; }
+  .sect-suggest .sect-act { min-height: 44px; margin: -12px calc(var(--s-2) * -1) -12px 0; padding: 0 var(--s-2); border: none; background: none;
+    font-family: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--accent); cursor: pointer; }
   .mock-bar { padding: var(--s-3) var(--s-5) var(--s-4); border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: var(--s-2); }
 </style>
 </head>
 <body>
-<h1 class="harness-title">樣張（第二版）— 餐建議</h1>
+<h1 class="harness-title">樣張（第三版）— 餐建議</h1>
 <p class="harness-sub">
-  依你的三點回饋改：<b>① 缺口放進營養素條</b>（每個營養素後面接「差 N」；熱量的缺口就是大數字「還能吃」，不重複），時間軸不再有那串「還差…」；
+  第三版再改：<b>來源字「適合」改「建議」</b>；<b>sheet 不再用一整行的組合卡，改成「平常的食物列排到最上面、段標上色」，沒有「已選用」</b>；補缺口的挑法寫在 ② 下面。
+  第二版：<b>① 缺口放進營養素條</b>（每個營養素後面接「差 N」；熱量的缺口就是大數字「還能吃」，不重複），時間軸不再有那串「還差…」；
   <b>② 建議列壓成一行</b>（44px，品項放不下就截斷）；<b>③ 一餐只出一張</b>（兩張是我自己加的，沒人要求）。
   另外補一條我自己發現的限制：<b>補缺口只對「最後一筆有紀錄的餐別之後、最近的那一個待記錄餐」出建議</b>——早上什麼都還沒記就建議晚餐，缺口是整天、沒有意義。
   <b>數字都是示意</b>。
@@ -105,7 +106,7 @@
 
   <!-- ② 傍晚：補缺口 -->
   <div class="frame-block">
-    <div class="frame-label">② 傍晚：早午餐都記了，晚餐有一行「適合」的建議（補缺口）</div>
+    <div class="frame-label">② 傍晚：早午餐都記了，晚餐有一行「建議」（補缺口）</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
       <section class="gauge" aria-label="熱量">
@@ -137,17 +138,17 @@
           <div class="rail" aria-hidden="true"><div class="dot todo"></div></div>
           <div class="node-body is-todo">
             <button class="todo-row" type="button"><span class="lb">晚餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
-            <div class="sg"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><button class="sg-add" type="button">加入</button></div>
+            <div class="sg"><span class="sg-src">建議</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><button class="sg-add" type="button">加入</button></div>
           </div>
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>缺口在哪看</b>：熱量＝大數字「還能吃 520 卡」；蛋白／脂／碳＝條下面的「差 N」。建議挑的是<b>每一項都不超過缺口</b>的組合（蛋白可以超過，它不判超標）：這組 470 卡、蛋白 50、脂 13、碳 33，都在 520／40／18／45 以內（蛋白 50 比 40 多，沒關係）。</div>
+    <div class="frame-note"><b>缺口在哪看</b>：熱量＝大數字「還能吃 520 卡」；蛋白／脂／碳＝條下面的「差 N」。<b>挑法（三步）</b>：① 熱量、脂肪、碳水都不能超過缺口（硬條件）；② 熱量至少補到缺口的 <b>70%</b> 才算一餐（我猜的數字，防止一罐乳清贏過一頓飯）；③ 剩下的裡面蛋白質最接近缺口的勝出（蛋白可以超過，它不判超標）。這組 470 卡（缺口的 90%）、蛋白 50、脂 13、碳 33，過關。</div>
   </div>
 
   <!-- ③ sheet：建議（點之前） -->
   <div class="frame-block">
-    <div class="frame-label">③ 記一筆 sheet（晚餐）：最上方一行建議，沒有預設選中</div>
+    <div class="frame-label">③ 記一筆 sheet（晚餐）：建議的品項排在最上面、段標上色，沒有預設選中</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
       <div class="timeline" style="opacity:.35"></div>
@@ -156,20 +157,23 @@
         <div class="mock-scroll">
           <div class="mock-chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip" aria-pressed="true">晚餐</span><span class="chip">點心</span></div>
           <div class="mock-search">搜尋品名或店家</div>
-          <div class="sect-lb" style="margin-top:var(--s-4)">建議</div>
-          <div class="sg in-sheet"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><span class="sg-add">選用</span></div>
+          <div class="sect-lb sect-suggest" style="margin-top:var(--s-4)"><span>建議</span><button class="sect-act" type="button">全選</button></div>
+          <ul class="food-list">
+            <li><div class="food-item"><button class="food-row is-suggest" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">減醣廚房</span></div><div class="kc-wrap"><span class="kc">380</span></div></button></div></li>
+            <li><div class="food-item"><button class="food-row is-suggest" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">無糖豆漿</span><span class="sub">全家</span></div><div class="kc-wrap"><span class="kc">90</span></div></button></div></li>
+          </ul>
           <div class="sect-lb" style="margin-top:var(--s-4)">全部食物</div>
           <ul class="food-list"><li><div class="food-item"><button class="food-row" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">地瓜</span></div><div class="kc-wrap"><span class="kc">130</span></div></button></div></li>
           <li><div class="food-item"><button class="food-row" type="button" aria-pressed="false"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/></svg><div class="nm-wrap"><span class="nm">乳清（1匙）</span></div><div class="kc-wrap"><span class="kc">120</span></div></button></div></li></ul>
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>不預設選中</b>：清單跟現在一樣，只多這一行。沒有建議（該餐已有紀錄、沒有來源、不符補缺口條件）就整段不出現；搜尋時收起。</div>
+    <div class="frame-note"><b>建議的品項就是平常那種列</b>，只是被排到最上面、段標用 accent 色，一眼找得到；點哪一項就勾哪一項（跟平常一樣）。段標右邊的「<b>全選</b>」一次勾起這幾項（早餐三樣不用點三次；<b>這是我加的，你不要可以拿掉</b>）。沒有建議就整段不出現；搜尋時收起。</div>
   </div>
 
   <!-- ④ sheet：選用之後 -->
   <div class="frame-block">
-    <div class="frame-label">④ 點了建議：品項進「已選」，仍要按「加入」才寫入</div>
+    <div class="frame-label">④ 按了「全選」（或逐項勾）：品項進「已選」，仍要按「加入」才寫入</div>
     <div class="device"><div class="main">
       <div class="mock-head">週二 10/27<small>今天</small></div>
       <div class="timeline" style="opacity:.35"></div>
@@ -185,8 +189,6 @@
             <li><div class="food-item selected"><div class="food-line"><button class="food-row" type="button" aria-pressed="true"><svg class="chk" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9"/><path d="M7 11.5l2.5 2.5L15 8.5"/></svg><div class="nm-wrap"><span class="nm">無糖豆漿</span><span class="sub">全家</span></div></button>
               <div class="qty-stepper"><button class="qty-btn" type="button" disabled>−</button><input class="qty-value" value="1" aria-label="份量" readonly /><button class="qty-btn" type="button">+</button></div></div></div></li>
           </ul>
-          <div class="sect-lb" style="margin-top:var(--s-3)">建議</div>
-          <div class="sg in-sheet is-picked"><span class="sg-src">適合</span><span class="sg-items">雞胸餐盒（減醣廚房）・無糖豆漿</span><span class="sg-kc">470</span><span class="sg-add">已選用</span></div>
         </div>
         <div class="mock-bar">
           <div class="pick-line" style="display:flex;justify-content:space-between;align-items:baseline"><span class="sub" style="font-weight:600;font-size:var(--t-base)">2 樣 ・ 470 卡</span><span class="remain" style="color:var(--ink-muted);font-size:var(--t-base)">剩 50</span></div>
@@ -195,7 +197,7 @@
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>再點一次已選用的建議</b>＝把它放進去的品項取消（品項各自仍可在「已選」單獨改份量或取消）。已選用的建議<b>留在原位、換成淡綠底</b>，因為建議是一組、拆不開。</div>
+    <div class="frame-note"><b>沒有「已選用」這種狀態了</b>：勾起來的品項照既有規則進「已選」段（從建議段移走），建議段勾完就消失。要取消就在「已選」裡取消，跟其他品項一樣。</div>
   </div>
 
 </div>
