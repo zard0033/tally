@@ -286,6 +286,9 @@ button { -webkit-user-select: none; user-select: none; }
 .item-delete:active, .swipe-delete:active { opacity: .8; }
 /* 刪除中：破壞性動作＋慢網路，按下去毫無變化的話很容易再按第二次 */
 .item-delete:disabled, .swipe-delete:disabled { opacity: .6; cursor: default; }
+/* 組列的紅鈕：中心對齊上下列的勾。勾在 .set 的最後一欄（52px）正中，距列右緣 --s-4 ＋ 26px ＝ 42px；
+   鈕 44px，所以右緣內縮 42 − 22 ＝ 20px（v2.103，使用者真機回報「紅鈕應該跟上下的勾垂直置中」） */
+.swipe-delete { right: calc(var(--s-4) + 26px - 22px); }
 /* 拖過「放手就刪」的門檻時圓放大一點——純 transform 的預告，讓滑到底不是盲的 */
 .item-row.is-armed .item-delete::before { transform: scale(1.1); }
 /* outline-offset 內縮：.item-row 是 overflow:clip，往外長的外框會被裁掉半圈 */
@@ -1470,6 +1473,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-zoom { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 52px; height: 52px;
   padding: 0; border: none; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .ex-zoom:active .ex-thumb { opacity: .6; }
+/* 編輯動作 sheet 最上面的示意圖列：縮圖（點了開放大檢視）＋一行淡色說明 */
+.tr-edit-demo { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); font-size: var(--t-sm); color: var(--ink-muted); }
 .ex-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 .ex-zoom-badge { position: absolute; right: 1px; bottom: 1px; width: 20px; height: 20px; padding: var(--s-1); box-sizing: border-box;
   border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none;
@@ -1500,6 +1505,14 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-tips.is-empty { color: var(--ink-muted); }
 .ex-tips:active { opacity: .6; }
 .ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ex-tips-wrap { position: relative; width: calc(100% - var(--s-3) * 2); margin: 0 var(--s-3) var(--s-2); }
+.ex-tips-wrap .ex-tips-input { width: 100%; margin: 0; padding-right: 44px; }
+/* 清空鈕：輸入框右上角 44px 的觸控區，圖示是淡色 ✕（不是危險動作，不用紅色） */
+.ex-tips-clear { position: absolute; top: 0; right: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--ink-muted); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.ex-tips-clear svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.ex-tips-clear:active { opacity: .6; }
+.ex-tips-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-pill); }
 .ex-tips-input { display: block; min-height: 44px; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
   outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 一組一列：組｜重量｜次數｜勾。欄頭最後一格是「全部完成」雙勾 */
@@ -1572,19 +1585,12 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-text-btn svg { width: 16px; height: 16px; }
 .tr-text-btn.is-quiet { color: var(--ink-muted); font-weight: 400; }
 .tr-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* 組編輯 sheet：上次籤、重量與次數各一排 ±（填色膠囊＋浮起圓鈕）、底部一列左右並排 */
+/* 組編輯 sheet：重量與次數各一排 ±（填色膠囊＋浮起圓鈕）、底部一列左右並排 */
 .set-sheet-body { display: flex; flex-direction: column; gap: var(--s-4); padding-top: var(--s-2); }
 .set-sec { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-2); }
 .set-none { font-size: var(--t-sm); color: var(--ink-muted); }
-.last-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.last-chip { min-height: 40px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill); background: var(--fill);
-  color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-sm);
-  font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.last-chip.is-current { background: var(--accent-soft); color: var(--accent); }
-.last-chip:active { opacity: .6; }
-.last-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 重量建議一行：左邊「建議 62.5 kg · 理由」，右邊文字鈕「套用」（沿用 .rpe-hint 的文字鈕語言）；已等於建議時鈕變灰「已套用」 */
+/* 重量建議一行：左邊「建議 62.5 kg · 理由」，右邊文字鈕「套用」；已等於建議時鈕變灰「已套用」 */
 .set-suggest { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
   font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
 .set-suggest-num { color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -1607,7 +1613,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
 .step-num.is-input:focus { outline: none; }
 .set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
-/* 組編輯 sheet 的 RPE 區：五格（6–10），沿用 .last-chip 的填色膠囊語言；選中＝淡綠底（同 .last-chip.is-current） */
+/* 組編輯 sheet 的 RPE 區：五格（6–10）填色膠囊；選中＝淡綠底。欄位名稱右側接一行淡色說明（v2.104，原本在五格下面） */
 .rpe-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-2); }
 .rpe-opt { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; cursor: pointer;
@@ -1615,10 +1621,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .rpe-opt.is-current { background: var(--accent-soft); color: var(--accent); }
 .rpe-opt:active { opacity: .6; }
 .rpe-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rpe-hint { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
-.rpe-hint button { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.rpe-hint button:disabled { color: var(--ink-faint); cursor: default; }
-.rpe-hint button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.set-sec-row { display: flex; align-items: baseline; gap: var(--s-2); margin-bottom: var(--s-2); }
+.set-sec-row .set-sec { margin-bottom: 0; }
+.rpe-hint { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
 /* 要壓過 `.tr-sheet-body .action-btn` 的 margin-top（同權重、排在後面）：三顆鈕才會在同一條線上 */
 .tr-sheet-body .set-acts .action-btn { flex: 1; margin-top: 0; }
 .set-acts .set-sync { flex: 1.3; justify-content: center; padding: 0 var(--s-2); }

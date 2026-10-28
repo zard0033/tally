@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-28）：v2.101 與 e2e 提速（`e2e:affected`／`e2e:smoke`）已 push；v2.102（日期元件點已選收合、加要點同款 44px 色塊、確認框輕遮罩）已 commit **未 push**，只跑過日期與要點條的 e2e，push 前要走全量閘門；e2e 379 全過（v2.101 時）、vitest 803。有氧併入動作已完成（3 筆舊資料遷成 3 次訓練、舊表已 drop，線上查證過）。餐建議 spec（spec.md「C. 餐建議」）＋樣張 `_design-sample/meal-suggest.html`（第三版）**等核可才動碼**。**真機未驗**：v2.102、v2.91–v2.93、RPE、重量建議（v2.101 垃圾桶、右內距、(+N) 已驗 OK）。
+現況（2026-10-28）：v2.101 與 e2e 提速（`e2e:affected`／`e2e:smoke`）已 push；v2.102（日期元件點已選收合、加要點同款色塊、確認框輕遮罩）與 v2.103＋v2.104（左滑紅鈕置中、動作庫封存先問、編輯 sheet 加縮圖；RPE 拿掉清除與「上次」籤、要點清空鈕、未同步 sheet 清空自動收）**已 commit 未 push**；v2.103／v2.104 只跑 `training`／`sync-sheet` 等相關檔，push 前要走全量閘門；**RPE 擴大用途計畫（階段 0–3）已核可方向、spec 待寫**：每組 RPE 選填、組號格右上角標籤（樣張選 A 只有數字）、重量建議有填更準沒填退回次數規則、沒做過只給指引、有效組門檻 RPE ≥8；已用 CLI 還原使用者誤封存的「上斜胸推機」；要點條就地編輯時底部列不浮在鍵盤上（已裁決）、要點欄不被鍵盤蓋住（真機測過）；e2e 379 全過（v2.101 時）、vitest 803。有氧併入動作已完成（3 筆舊資料遷成 3 次訓練、舊表已 drop，線上查證過）。餐建議 spec（spec.md「C. 餐建議」）＋樣張 `_design-sample/meal-suggest.html`（第三版）**等核可才動碼**。**真機未驗**：v2.102、v2.91–v2.93、RPE、重量建議（v2.101 垃圾桶、右內距、(+N) 已驗 OK）。
 下一步：①真機驗 v2.102 ②核可餐建議樣張 ③每日應攝取熱量計算與每日目標 UX（新對話；先讀 MANUAL）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory

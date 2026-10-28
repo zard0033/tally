@@ -5,7 +5,7 @@
    所以只說「伺服器拒絕、下次同步會再試」，放棄鈕是次要樣式，且先在 sheet 內確認、講清連帶消失幾筆。
    **也不承諾計時重試**：重試只發生在回到前景、回線、寫入、TOKEN_REFRESHED 或按「立即重試」，文案照實說這幾個時機。
    auth 只給文字不放登入鈕：被動登出保留佇列、主動登出會清佇列，兩條路徑易接錯。 */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import SpringSheet from '@/components/SpringSheet'
 import type { QueueEntry } from '@/lib/queue'
@@ -174,6 +174,23 @@ function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, onBusy 
 
 export default function SyncSheet({ open, onClose, ...rest }: SyncSheetProps) {
   const [busy, setBusy] = useState(false)
+
+  /* 開著的時候佇列清空（離線回線、同步完成）就自己收起來（v2.104，使用者真機：同步完只剩「全部都已同步」，
+     還要自己按 ✕ 才回得去主畫面）。只在「有東西 → 沒東西」那一下收：sheet 開著且一開始就是空的不收（不會有這種入口，
+     細條沒東西時不顯示；但就算有，也不該一開就關掉）。收的動作本身就是回饋，不另外留一個「已同步」畫面。 */
+  const left = rest.summary.mine + rest.summary.foreign
+  const hadLeft = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      hadLeft.current = false
+      return
+    }
+    if (left > 0) hadLeft.current = true
+    else if (hadLeft.current) {
+      hadLeft.current = false
+      onClose()
+    }
+  }, [open, left, onClose])
 
   return (
     <SpringSheet open={open} onClose={onClose} label="未同步" title="未同步" screen="sync-sheet" fit locked={busy}>

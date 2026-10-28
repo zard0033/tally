@@ -1,10 +1,12 @@
-/* 編輯動作 sheet（樣張 ⑦b）：名稱 → 肌群（下拉）→ 要點；儲存釘在底部（v2.91）。
+/* 編輯動作 sheet（樣張 ⑦b）：（有示意圖的動作先放縮圖，v2.103）名稱 → 肌群（下拉）→ 要點；儲存釘在底部（v2.91）。
    封存／取消封存不在這裡，在動作庫每一列的圖示鈕（v2.93）；已封存的動作點進來一樣能改這三欄。
    動作庫管理頁（設定）與選動作 sheet 的「新增動作」開的是**同一張**；exercise 為 null＝新增。訓練中的要點改在展開的卡頂部就地寫（v2.95），不再開這張。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
    欄位狀態放在 ExerciseForm、以動作 id 當 key：每次打開都是一份新的草稿，不會殘留上一次打到一半的字。 */
 import { useRef, useState } from 'react'
+import ExerciseThumb from '@/components/ExerciseThumb'
 import SpringSheet from '@/components/SpringSheet'
+import { catalogKey } from '@/lib/exerciseCatalog'
 import { useScrollFocusedIntoView } from '@/components/useScrollFocusedIntoView'
 import {
   MUSCLE_GROUPS,
@@ -83,6 +85,13 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
   return (
     <form className="tr-edit-form" onSubmit={save} noValidate>
       <div className="form-wrap" ref={scrollRef}>
+        {/* 有示意圖的動作（預設動作）才放縮圖；點了開同一個放大檢視（GIF）。新增與自建動作沒有圖，不佔這一列 */}
+        {exercise && catalogKey(exercise) && (
+          <div className="tr-edit-demo">
+            <ExerciseThumb exercise={exercise} zoom />
+            <span>點縮圖看示意動畫</span>
+          </div>
+        )}
         <label className="tr-field">
           <span className="lb">名稱</span>
           <input

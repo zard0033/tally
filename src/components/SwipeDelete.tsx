@@ -9,7 +9,9 @@ import { useRef, type ReactNode } from 'react'
 import { animate, motion, useMotionValue, useReducedMotion, type PanInfo } from 'motion/react'
 import { SETTLE_SPRING } from '@/lib/durations'
 
-const REVEAL = 56
+/* 72＝紅鈕右緣內縮 20 ＋ 鈕 44 ＋ 左側留白 8。鈕的中心與上下列的勾同一條線（距列右緣 42px，見 app.css `.swipe-delete`），
+   所以比飲食頁的 56 寬——那邊的紅鈕貼右緣內縮 8px，沒有對齊的對象 */
+const REVEAL = 72
 const OPEN_AT = 24
 const CLICK_GRACE_MS = 150
 

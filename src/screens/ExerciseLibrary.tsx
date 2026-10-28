@@ -1,9 +1,11 @@
 /* 動作庫整頁（樣張 ⑦a）：搜尋＋肌群橫條＋平面列表，點一列開「編輯動作」sheet，右上＋新增。
    封存的動作不進選單、歷史仍顯示名稱（AC 2），所以列在清單底下的「已封存」區。
    封存／取消封存是每一列尾端的圖示鈕（v2.93，原本在編輯 sheet 欄位區底下，真機回饋位置怪）：
-   點了立刻寫，沒有「5 秒復原」提示條——取消封存隨時在已封存區按得到、不丟資料，復原條只會多一層要等它消失的東西。
+   **封存先跳確認框**（v2.103，取代 v2.93「不問確認」：真機上點下去那列直接消失到清單最底下，使用者找不到）；取消封存是還原、不問。
+   沒有「5 秒復原」提示條——取消封存隨時在已封存區按得到、不丟資料，復原條只會多一層要等它消失的東西。
    整頁接管畫面（同訓練中），放在設定頁的「動作庫管理」（v2.96 從訓練頁搬來）：進出時 Settings 通知 App 收起底部列。 */
 import { useMemo, useState } from 'react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import GymVisualCredit from '@/components/GymVisualCredit'
@@ -89,8 +91,17 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
     }
   }
 
+  // 封存要先問（v2.103，使用者真機：點下去那一列直接消失到清單最底下，找不到）；取消封存是還原，不問
+  const [archiveAsk, setArchiveAsk] = useState<Row | null>(null)
+  const askName = archiveAsk ? String(archiveAsk.name) : ''
+
   const rowOf = (e: Row) => (
-    <ExerciseRow key={e.id} exercise={e} onOpen={() => open(e)} onToggleArchive={() => void toggleArchive(e)} />
+    <ExerciseRow
+      key={e.id}
+      exercise={e}
+      onOpen={() => open(e)}
+      onToggleArchive={() => (e.archived === true ? void toggleArchive(e) : setArchiveAsk(e))}
+    />
   )
 
   return (
@@ -136,6 +147,22 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
         )}
         <GymVisualCredit exercises={shown} />
       </div>
+
+      <ConfirmDialog
+        open={archiveAsk !== null}
+        title={`封存「${askName}」？`}
+        cancelLabel="先不要"
+        confirmLabel="封存"
+        onCancel={() => setArchiveAsk(null)}
+        onConfirm={() => {
+          const row = archiveAsk
+          setArchiveAsk(null)
+          if (row) void toggleArchive(row)
+        }}
+      >
+        <p>封存後不會出現在加動作的選單，過去的訓練仍顯示名稱。</p>
+        <p>要還原：清單最下面的「已封存」。</p>
+      </ConfirmDialog>
 
       <ExerciseEditSheet
         open={sheetOpen}

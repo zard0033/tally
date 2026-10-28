@@ -274,25 +274,51 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
     )
   }
   return (
-    <textarea
-      ref={area}
-      className="ex-tips-input"
-      aria-label={`${name} 的要點`}
-      rows={1}
-      value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value)
-        grow(e.target)
-      }}
-      onBlur={() => void finish()}
-      onKeyDown={(e) => {
-        if (e.key !== 'Escape') return
-        e.stopPropagation()
-        // 自己 blur 一次：收尾（放棄、收起輸入框）全走 finish 這一條路，不靠「卸載時瀏覽器補不補 blur」
-        cancelled.current = true
-        e.currentTarget.blur()
-      }}
-    />
+    <div className="ex-tips-wrap">
+      <textarea
+        ref={area}
+        className="ex-tips-input"
+        aria-label={`${name} 的要點`}
+        rows={1}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          grow(e.target)
+        }}
+        onBlur={() => void finish()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return
+          e.stopPropagation()
+          // 自己 blur 一次：收尾（放棄、收起輸入框）全走 finish 這一條路，不靠「卸載時瀏覽器補不補 blur」
+          cancelled.current = true
+          e.currentTarget.blur()
+        }}
+      />
+      {/* 清空（v2.104）：只在有字時出現；按下時不能讓輸入框失焦（失焦就存），所以擋掉 pointerdown／mousedown 的預設行為，
+          清完把焦點留在輸入框，使用者可以接著打新的；真正存檔還是失焦那一下（內容有變才寫，清空存 null） */}
+      {draft !== '' && (
+        <button
+          className="ex-tips-clear"
+          type="button"
+          aria-label={`清空${name}的要點`}
+          onPointerDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setDraft('')
+            const el = area.current
+            if (el) {
+              el.value = ''
+              grow(el)
+              el.focus({ preventScroll: true })
+            }
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 7l10 10M17 7L7 17" />
+          </svg>
+        </button>
+      )}
+    </div>
   )
 }
 

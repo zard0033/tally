@@ -3,7 +3,7 @@
 
    **每次 ± 或打字立即寫入**，背景頁該列同步更新，沒有「儲存」鈕。點中間的大數字才叫出鍵盤；
    不合法的輸入（打不出數字、負數、超過 DDL 的上限）放回原值，不截斷成別的數字。
-   「上次」是最近一次做這個動作的各組，每顆籤點了就把那組的重量與次數一起套到目前這組。
+   （v2.104 拿掉「上次」籤：加動作時重量與次數已預填上次實際完成的值，兩邊語意相同；RPE 區也拿掉「清除」。）
    底部一列左右並排：🗑 刪除（最左）｜同步剩餘 N 組｜完成。
    走 SpringSheet（含輸入欄位，守 `--kb`／`--vvtop`）。目標與開關分開（呼叫端），關閉動畫期間內容不能消失，
    所以這裡留一份最後一次算得出來的畫面（刪掉這一組後，目標在資料裡已經找不到）。 */
@@ -18,12 +18,10 @@ import {
   MUSCLE_GROUP_LABEL,
   RPE_SHEET_VALUES,
   formatKg,
-  lastCompletedSets,
   remainingSetsAfter,
   removeSetOps,
   syncSetsForwardOps,
   type MuscleGroup,
-  type PrefillSet,
   type Row,
   type RowOp,
   type TrainingDb,
@@ -68,7 +66,6 @@ interface SetView {
   no: number
   total: number
   set: Row
-  last: PrefillSet[]
   /** 重量建議；徒手動作不給（null，整行不出現） */
   suggest: Exclude<WeightSuggestion, { kind: 'none' }> | null
   remaining: number
@@ -90,7 +87,6 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
     no: index + 1,
     total: ex.sets.length,
     set: ex.sets[index],
-    last: lastCompletedSets(db, exerciseId, detail.workout.id),
     suggest: step === null ? null : hideNone(suggestWeight(db, exerciseId, step, detail.workout.id)),
     remaining: remainingSetsAfter(detail, target.setId).length,
   }
@@ -260,27 +256,6 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
     <SpringSheet open={open} onClose={onClose} label={label} title={label} screen="set-sheet" fit finalFocus={finalFocus}>
       {view && (
         <div className="tr-sheet-body tr-sheet-scroll set-sheet-body">
-          <div className="set-last">
-            <span className="set-sec">上次</span>
-            {view.last.length === 0 ? (
-              <span className="set-none">沒有紀錄</span>
-            ) : (
-              <div className="last-chips" role="group" aria-label="上次">
-                {view.last.map((p, i) => (
-                  <button
-                    key={i}
-                    className={`last-chip${p.weight_kg === weight && p.reps === reps ? ' is-current' : ''}`}
-                    type="button"
-                    aria-label={`套用上次 ${formatKg(p.weight_kg)} 公斤 ${p.reps} 次`}
-                    onClick={() => patch({ weight_kg: p.weight_kg, reps: p.reps })}
-                  >
-                    {formatKg(p.weight_kg)} × {p.reps}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {suggest && (
             <div className="set-suggest" data-section="suggest">
               {suggest.kind === 'suggest' ? (
@@ -334,7 +309,10 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
 
           {done && (
             <div className="step-block" data-section="rpe">
-              <span className="set-sec">吃力程度 RPE</span>
+              <div className="set-sec-row">
+                <span className="set-sec">吃力程度 RPE</span>
+                <span className="rpe-hint">9＝還能再做 1 下，10＝力竭</span>
+              </div>
               <div className="rpe-row" role="group" aria-label="吃力程度 RPE">
                 {RPE_SHEET_VALUES.map((v) => (
                   <button
@@ -348,12 +326,6 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
                     {v}
                   </button>
                 ))}
-              </div>
-              <div className="rpe-hint">
-                <span>9＝還能再做 1 下，10＝力竭</span>
-                <button type="button" disabled={rpe === null} onClick={() => patch({ rpe: null }, false)}>
-                  清除
-                </button>
               </div>
             </div>
           )}

@@ -168,7 +168,7 @@ async function rejectedWorkout(page: Page, tickFirst = false) {
 
 /* ═══════════ 1. 離線 ═══════════ */
 
-test('離線記一筆：細條可點，sheet 講離線並給「立即重試」；回線後按立即重試，細條消失、sheet 說全部都已同步', async ({
+test('離線記一筆：細條可點，sheet 講離線並給「立即重試」；回線後按立即重試，細條消失、sheet 自己收起來（v2.104）', async ({
   page,
 }) => {
   await recordOffline(page)
@@ -194,21 +194,20 @@ test('離線記一筆：細條可點，sheet 講離線並給「立即重試」�
   // 只翻旗標、不送 online：確認「立即重試」自己就夠，不是靠自動同步撿回來的
   await dataDown(page, false)
   await sheet(page).getByRole('button', { name: '立即重試' }).click()
-  await expect(lines(page)).toHaveText(['全部都已同步。'])
-  await expect(sheet(page).getByRole('button', { name: '立即重試' })).toHaveCount(0)
+  await expect(sheet(page), '同步完 sheet 自己收起來，不用再按 ✕（v2.104）').toHaveCount(0)
   await expect(statusBar(page)).toHaveCount(0)
   expect(await trainRows(page, 'workouts'), '落地、不重複：fixture 1 ＋ 新的 1').toHaveLength(2)
   expect(await queueEntries(page)).toHaveLength(0)
 })
 
-test('離線記一筆：sheet 開著時網路回來，自動同步後 sheet 變成全部都已同步、細條消失', async ({ page }) => {
+test('離線記一筆：sheet 開著時網路回來，自動同步後 sheet 自己收起來、細條消失', async ({ page }) => {
   await recordOffline(page)
   await openSheet(page)
   await expect(lines(page).filter({ hasText: '因為離線還沒上傳' })).toHaveCount(1)
 
   await dataDown(page, false)
   await fireOnline(page)
-  await expect(lines(page)).toHaveText(['全部都已同步。'], { timeout: 15_000 })
+  await expect(sheet(page)).toHaveCount(0, { timeout: 15_000 })
   await expect(statusBar(page)).toHaveCount(0)
   expect(await trainRows(page, 'workouts')).toHaveLength(2)
 })
@@ -252,7 +251,7 @@ test('放棄被拒絕的訓練：確認框說另有幾「列」一起消失（�
   await rejectedRows(page).getByRole('button', { name: '放棄這筆：新增訓練' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: '放棄', exact: true }).click()
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
-  await expect(lines(page)).toHaveText(['全部都已同步。'])
+  await expect(sheet(page), '放棄到佇列清空：sheet 自己收起來').toHaveCount(0)
   await expect(rejectedRows(page)).toHaveCount(0)
   await expect(statusBar(page), '細條跟著更新：沒有未同步的了').toHaveCount(0)
   expect(await queueEntries(page), '連帶的動作、組與打勾的 update 一起消失').toHaveLength(0)
@@ -303,7 +302,7 @@ test('被拒絕的訓練又按了完成訓練：放棄新增訓練時，那條 u
   await expect(dialog).toContainText('另有 3 筆會一起消失')
   await dialog.getByRole('button', { name: '放棄', exact: true }).click()
 
-  await expect(lines(page)).toHaveText(['全部都已同步。'])
+  await expect(sheet(page)).toHaveCount(0)
   await expect(statusBar(page)).toHaveCount(0)
   await page.waitForTimeout(500) // 放棄之後會馬上跑一輪送出；殘留的 update 若沒走，這段時間內會被送出並被拒絕
   expect(await queueEntries(page), '連 update 都不剩').toHaveLength(0)
@@ -430,7 +429,7 @@ test('放棄確認框開著按 Escape：只關確認框，sheet 還在，佇列�
   await expect(sheet(page)).toHaveCount(0)
 })
 
-test('在確認框上連點「放棄」：只放棄那一條，sheet 不被連點穿透關掉、沒有錯誤訊息', async ({ page }) => {
+test('在確認框上連點「放棄」：只放棄那一條、沒有錯誤訊息（v2.104 起佇列清空 sheet 會自己收，連點穿透關 sheet 的檢查失去鑑別力，拿掉）', async ({ page }) => {
   await rejectedWorkout(page)
   await openSheet(page)
   await rejectedRows(page).getByRole('button', { name: '放棄這筆：新增訓練' }).click()
@@ -438,10 +437,9 @@ test('在確認框上連點「放棄」：只放棄那一條，sheet 不被連�
   await expect(confirm).toBeVisible()
 
   await confirm.click({ clickCount: 2, delay: 0 })
-  await expect(lines(page)).toHaveText(['全部都已同步。'])
+  await expect(sheet(page)).toHaveCount(0)
   await page.waitForTimeout(500)
-  await expect(sheet(page), '第二下不該穿透到底下把 sheet 關掉').toBeVisible()
-  await expect(sheet(page).getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
   expect(await queueEntries(page)).toHaveLength(0)
 })
 

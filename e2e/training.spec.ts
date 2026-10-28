@@ -247,7 +247,7 @@ test('調整：點數字開組編輯 sheet，± 與大數字輸入都立即寫�
   await expect(first.locator('.w')).toHaveText('62.5')
 })
 
-test('組編輯 sheet：上次的籤點了套用整組；關閉後焦點回到被點的那顆；X、Esc 都能關', async ({ page }) => {
+test('組編輯 sheet：±立即寫入；關閉後焦點回到被點的那顆；X、Esc 都能關；沒有「上次」籤', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -256,18 +256,12 @@ test('組編輯 sheet：上次的籤點了套用整組；關閉後焦點回到�
 
   await openSetSheet(page, 0)
   const sheet = setSheet(page)
-  const chips = sheet.getByRole('group', { name: '上次' }).getByRole('button')
-  await expect(chips, '上次實際完成的各組（60×12 兩組）').toHaveText(['60 × 12', '60 × 12'])
-  await expect(chips.first(), '目前這一組對到的那顆標起來').toHaveClass(/is-current/)
+  await expect(sheet.getByRole('group', { name: '上次' }), 'v2.104 拿掉「上次」籤：加動作時已預填上次的值').toHaveCount(0)
 
   await sheet.getByRole('button', { name: '重量加 5 公斤' }).click()
   await sheet.getByRole('button', { name: '次數減 5' }).click()
   await expect(first.locator('.w')).toHaveText('65')
   await expect(first.locator('.r')).toHaveText('7')
-  await expect(chips.first()).not.toHaveClass(/is-current/)
-  await chips.first().click()
-  await expect(first.locator('.w'), '點籤＝重量與次數一起套到這一組').toHaveText('60')
-  await expect(first.locator('.r')).toHaveText('12')
 
   await closeSetSheet(page)
   await expect(first.locator('.w'), '焦點回到被點的那顆數字鈕').toBeFocused()
@@ -280,16 +274,6 @@ test('組編輯 sheet：上次的籤點了套用整組；關閉後焦點回到�
   await openSetSheet(page, 0)
   await page.keyboard.press('Escape')
   await expect(setSheet(page)).toHaveCount(0)
-})
-
-test('沒做過的動作：上次寫「沒有紀錄」', async ({ page }) => {
-  await openApp(page, {}, LIBRARY_FIX)
-  await openTraining(page)
-  await startBlank(page)
-  await addExercise(page, '坐姿划船')
-  await openSetSheet(page, 0)
-  await expect(setSheet(page).getByText('沒有紀錄')).toBeVisible()
-  await expect(setSheet(page).getByRole('group', { name: '上次' })).toHaveCount(0)
 })
 
 test('同步剩餘組數：只改這一組後面、還沒打勾的組，已打勾的不動；沒有剩餘組時 disabled', async ({ page }) => {
@@ -387,7 +371,9 @@ test('sheet 裡的確認框：在對話框上往下拖不會拖走 sheet；點�
   await expect(dialog).toBeVisible()
 
   // 點對話框外的背景（焦點會落到 sheet 上），再按 Escape
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height + 60)
+  // v2.104 拿掉「上次」籤後 sheet 變矮，「對話框下緣 +60px」不再落在 sheet 上；改點 sheet 自己的底緣內側
+  const sb = (await setSheet(page).boundingBox())!
+  await page.mouse.click(sb.x + sb.width / 2, sb.y + sb.height - 12)
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   // sheet 被一起關的話，關閉 spring（約 1 秒）期間它仍「可見」——toBeVisible 分不出來，改看它有沒有開始往下收
@@ -677,6 +663,11 @@ test('名稱空白或與別的動作重複：擋在 sheet 裡說明，不寫入�
 /* v2.93：封存／取消封存從編輯 sheet 搬到動作庫每一列尾端的圖示鈕（真機回饋：sheet 裡那顆位置怪）。 */
 const archiveBtn = (page: Page, name: string) => library(page).getByRole('button', { name: `封存 ${name}`, exact: true })
 const unarchiveBtn = (page: Page, name: string) => library(page).getByRole('button', { name: `取消封存 ${name}`, exact: true })
+/** v2.103：封存先跳確認框，點封存鈕後要再按對話框的「封存」才寫入。 */
+const archive = async (page: Page, name: string) => {
+  await archiveBtn(page, name).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: '封存', exact: true }).click()
+}
 type ExWrite = { table: string; method: string; body: unknown }
 const exercisePatches = async (page: Page) =>
   (await page.evaluate(() => (window as unknown as { __writes: ExWrite[] }).__writes))
@@ -688,7 +679,7 @@ test('封存：從「加動作」的選單消失；選單也有肌群橫條', as
   await openTraining(page)
   await openLibrary(page)
 
-  await archiveBtn(page, '腿推舉').click()
+  await archive(page, '腿推舉')
   await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.archived).toBe(true)
   expect(await exercisePatches(page), '封存只送 archived 一欄').toEqual([{ archived: true }])
@@ -726,6 +717,27 @@ test('取消封存：回到清單與選單', async ({ page }) => {
   await expect(page.locator('[data-screen="exercise-picker"] .tr-row', { hasText: '舊的肩推' })).toBeVisible()
 })
 
+test('v2.103 封存先跳確認框：先不要＝什麼都不寫；取消封存不問', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+
+  await archiveBtn(page, '腿推舉').click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: '封存「腿推舉」？' })).toBeVisible()
+  await expect(dialog, '說明要還原去哪裡找').toContainText('已封存')
+  await dialog.getByRole('button', { name: '先不要' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' }), '先不要：沒封存').toHaveCount(0)
+  expect(await exercisePatches(page), '先不要：什麼都沒送').toEqual([])
+
+  // 取消封存是還原，不問
+  await unarchiveBtn(page, '舊的肩推').click()
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === OLD_ID)?.archived).toBe(false)
+})
+
 test('動作庫列的封存鈕：每列一顆、名稱寫在 aria-label、觸控目標 ≥44px；點它不開編輯 sheet、點列主體仍開', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
@@ -744,6 +756,8 @@ test('動作庫列的封存鈕：每列一顆、名稱寫在 aria-label、觸控
   /* 主按鈕的 ::before 撐滿整列（讓縮圖以外都算開編輯），封存鈕要疊在它上面——
      用滑鼠點按鈕中心（不是 locator.click 的 actionability 直達），點到的才是畫面上真正在最上層的那個 */
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.getByRole('alertdialog'), '點封存鈕先跳確認框，這時還沒封存').toBeVisible()
+  await page.getByRole('alertdialog').getByRole('button', { name: '封存', exact: true }).click()
   await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
   await page.waitForTimeout(400) // 沒有事件可等的反向斷言：sheet 若會開，這段時間內已經出現
   await expect(editSheet(page), '點封存鈕不該開編輯 sheet').toHaveCount(0)
@@ -792,7 +806,7 @@ test('離線封存與取消封存：列表立刻換區，回線後上傳', async
   await setOffline(page, true)
   await openLibrary(page)
 
-  await archiveBtn(page, '坐姿划船').click()
+  await archive(page, '坐姿划船')
   await unarchiveBtn(page, '舊的肩推').click()
   await expect(library(page).locator('[data-section="archived"] .tr-row')).toHaveText([/坐姿划船/])
   await expect(library(page).locator('.tr-card:not([data-section]) .tr-row')).toHaveText([/腿推舉/, /舊的肩推/])
@@ -814,7 +828,7 @@ test('封存寫入失敗（本機儲存寫不進去）：頁上說明「這筆�
       throw new DOMException('模擬的容量已滿', 'QuotaExceededError')
     }
   })
-  await archiveBtn(page, '腿推舉').click()
+  await archive(page, '腿推舉')
   const alert = library(page).getByRole('alert')
   await expect(alert).toContainText('這筆沒有存下來')
   await expect(alert, '說明要在畫面內，不是捲到看不到的地方').toBeInViewport()
@@ -860,7 +874,7 @@ test('封存的動作：歷史訓練照樣顯示名稱', async ({ page }) => {
   await openApp(page, {}, { ...WITH_WORKOUT, exercises: LIBRARY_FIX.exercises })
   await openTraining(page)
   await openLibrary(page)
-  await archiveBtn(page, '腿推舉').click()
+  await archive(page, '腿推舉')
   await expect(library(page).locator('[data-section="archived"] .tr-row', { hasText: '腿推舉' })).toHaveCount(1)
   await library(page).getByRole('button', { name: '返回' }).click()
   await openTraining(page)
@@ -1098,6 +1112,31 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×18
   await page.keyboard.press('Escape')
   await expect(viewer(page)).toHaveCount(0)
   await expect(zoom).toBeFocused()
+})
+
+test('v2.103 編輯動作 sheet：有示意圖的動作最上面有縮圖，點了開同一個放大檢視（GIF）；自建動作沒有這一列', async ({ page }) => {
+  await openCatalogLibrary(page)
+  await library(page).locator('.tr-row-main', { has: page.getByText('腿推舉', { exact: true }) }).click()
+  await expect(editSheet(page)).toBeVisible()
+  const demo = editSheet(page).locator('.tr-edit-demo')
+  await expect(demo).toHaveCount(1)
+  await demo.getByRole('button', { name: '放大腿推舉的示意圖' }).click()
+  await expect(viewer(page)).toBeVisible()
+  expect(await viewer(page).locator('img').getAttribute('src')).toMatch(/\/assets\/leg-press-[\w-]+\.gif$/)
+  await page.keyboard.press('Escape')
+  await expect(viewer(page)).toHaveCount(0)
+  await expect(editSheet(page), 'Esc 只關檢視器，編輯 sheet 還在').toBeVisible()
+
+  // 自建動作沒有圖：沒有這一列；新增也沒有
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+  await library(page).getByRole('button', { name: '新增動作' }).click()
+  await expect(editSheet(page).locator('.tr-edit-demo'), '新增動作沒有示意圖').toHaveCount(0)
+  await editSheet(page).getByRole('textbox', { name: '名稱' }).fill('我的自建動作')
+  await editSheet(page).getByRole('button', { name: '儲存' }).click()
+  await expect(editSheet(page)).toHaveCount(0)
+  await library(page).locator('.tr-row', { hasText: '我的自建動作' }).locator('.tr-row-main').click()
+  await expect(editSheet(page).locator('.tr-edit-demo'), '自建動作沒有示意圖').toHaveCount(0)
 })
 
 test('動作示意圖放大：加動作 sheet 裡點縮圖只放大不選取；關掉後 sheet 還在，點名稱才選取', async ({ page }) => {
@@ -1468,6 +1507,33 @@ test('要點條：點一下原地變輸入框，失焦才存（只送 tips 一�
   await expect(strip).toHaveClass(/is-empty/)
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
   expect((await exPatches(page))[1]).toEqual({ tips: null })
+})
+
+test('v2.104 要點條清空鈕：有字才出現；點了清空、輸入框不收、焦點留著；失焦才存 null；清完還能接著打新的', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉') // 要點「背貼緊椅背」
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const input = legs.locator('.ex-tips-input')
+  const clear = legs.getByRole('button', { name: '清空腿推舉的要點' })
+
+  await legs.locator('.ex-tips').click()
+  await expect(input).toHaveValue('背貼緊椅背')
+  expect((await clear.boundingBox())!.width, '觸控區 ≥ 44px').toBeGreaterThanOrEqual(44)
+  await clear.click()
+  await expect(input, '點清空：字沒了、輸入框沒收').toHaveValue('')
+  await expect(input).toBeFocused()
+  await expect(clear, '沒字時鈕消失').toHaveCount(0)
+  expect(await exPatches(page), '失焦前不寫（清空不是立刻存）').toHaveLength(0)
+
+  await input.pressSequentially('新的一句')
+  await expect(clear).toHaveCount(1)
+  await input.fill('')
+  await stat(page, 'time').click() // 點卡片外＝失焦
+  await expect(legs.locator('.ex-tips')).toHaveText('加要點')
+  await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
+  expect(await exPatches(page)).toEqual([{ tips: null }])
 })
 
 test('要點條：離線也能寫，畫面立刻是新的，回線後上傳', async ({ page }) => {
@@ -2224,11 +2290,11 @@ test('組列左滑露出紅鈕，點紅鈕才刪；開著時點內容只關掉�
 })
 
 /* ── 組列左滑放手後停在哪（v2.92，真機回報「拉到底會停在左邊、與紅鈕隔一段」）──
-   預期值由 SwipeDelete 的常數手算：REVEAL＝56（露出紅鈕的位移）、OPEN_AT＝24（放手時超過才算開）、
-   往左超過 -56 的部分只走 0.4（dragElastic.left）。紅鈕盒子 44px、貼列右緣內縮 --s-2（8px），
-   所以列停在 -56 時列右緣與紅鈕左緣之間是 56 − 8 − 44 ＝ 4px 的設計留白，不是越拉越大的縫。 */
+   預期值由 SwipeDelete 的常數手算：REVEAL＝72（露出紅鈕的位移）、OPEN_AT＝24（放手時超過才算開）、
+   往左超過 -72 的部分只走 0.4（dragElastic.left）。紅鈕盒子 44px、中心與勾同一條線（距列右緣 42px，右緣內縮 20px），
+   所以列停在 -72 時列右緣與紅鈕左緣之間是 72 − 20 − 44 ＝ 8px 的設計留白，不是越拉越大的縫。 */
 
-/** 位移層相對列的位移（px）：位移層右緣減列右緣。收合＝0，露出紅鈕＝-56。 */
+/** 位移層相對列的位移（px）：位移層右緣減列右緣。收合＝0，露出紅鈕＝-72。 */
 const slideOffset = (row: Locator) =>
   row.evaluate((r) => r.querySelector('.swipe-slide')!.getBoundingClientRect().right - r.getBoundingClientRect().right)
 
@@ -2253,22 +2319,29 @@ test('組列左滑拉過頭：拖曳中有橡皮筋，放手一律彈回剛好�
   const row = page.locator('.ex .swipe-row').nth(1)
   await expect(row).toBeVisible()
 
-  // a. 收合時往左拉 140：最多拉到 -56，多出的 84 只走 0.4 → -56 − 33.6 ＝ -89.6（拖曳中）
+  // a. 收合時往左拉 140：最多拉到 -72，多出的 68 只走 0.4 → -72 − 27.2 ＝ -99.2（拖曳中）
   await holdDrag(page, row, -140)
-  await expect.poll(() => slideOffset(row), { message: '拖曳中：超過露出紅鈕的部分有橡皮筋' }).toBeCloseTo(-89.6, 0)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中：超過露出紅鈕的部分有橡皮筋' }).toBeCloseTo(-99.2, 0)
   await page.mouse.up()
   await expect(row).toHaveClass(/is-open/)
-  await expect.poll(() => slideOffset(row), { message: '放手：彈回剛好露出紅鈕，不是停在 -140 或 -112' }).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row), { message: '放手：彈回剛好露出紅鈕，不是停在 -140 或 -112' }).toBeCloseTo(-72, 0)
   const gap = await row.evaluate(
     (r) => r.querySelector('.swipe-delete')!.getBoundingClientRect().left - r.querySelector('.swipe-slide')!.getBoundingClientRect().right,
   )
-  expect(gap, '列右緣與紅鈕之間只剩設計留白 4px').toBeCloseTo(4, 0)
+  expect(gap, '列右緣與紅鈕之間只剩設計留白 8px').toBeCloseTo(8, 0)
+  // v2.103：紅鈕的中心與上一列（沒滑開）的勾同一條垂直線
+  const centers = await page.evaluate(() => {
+    const rows = document.querySelectorAll('.ex .swipe-row')
+    const mid = (el: Element) => { const b = el.getBoundingClientRect(); return b.left + b.width / 2 }
+    return { del: mid(rows[1].querySelector('.swipe-delete')!), check: mid(rows[0].querySelector('.tr-check')!) }
+  })
+  expect(Math.abs(centers.del - centers.check), '紅鈕與上下列的勾垂直置中').toBeLessThanOrEqual(1)
 
-  // b. 已經開著再往左多拉 40（真機回報的情形）：拖曳中 -56 − 40×0.4 ＝ -72，放手回到 -56
+  // b. 已經開著再往左多拉 40（真機回報的情形）：拖曳中 -72 − 40×0.4 ＝ -88，放手回到 -72
   await holdDrag(page, row, -40)
-  await expect.poll(() => slideOffset(row), { message: '開著再拉：拖曳中同樣有橡皮筋' }).toBeCloseTo(-72, 0)
+  await expect.poll(() => slideOffset(row), { message: '開著再拉：拖曳中同樣有橡皮筋' }).toBeCloseTo(-88, 0)
   await page.mouse.up()
-  await expect.poll(() => slideOffset(row), { message: '開著再拉放手：回到剛好露出紅鈕' }).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row), { message: '開著再拉放手：回到剛好露出紅鈕' }).toBeCloseTo(-72, 0)
   await expect(row).toHaveClass(/is-open/)
 })
 
@@ -2287,18 +2360,18 @@ test('組列沒過門檻的拖動放手會吸回原位；開著往右拖到底�
   await expect.poll(() => slideOffset(row), { message: '沒過門檻：放手吸回收合' }).toBeCloseTo(0, 0)
   await expect(row).not.toHaveClass(/is-open/)
 
-  // 開著時往右拖 14：-56 + 14 ＝ -42，仍超過門檻（-24），放手吸回 -56，不停在 -42
+  // 開著時往右拖 14：-72 + 14 ＝ -58，仍超過門檻（-24），放手吸回 -72，不停在 -58
   await swipeLeft(page, row, 70)
   await expect(row).toHaveClass(/is-open/)
-  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-72, 0)
   await holdDrag(page, row, 14)
-  await expect.poll(() => slideOffset(row), { message: '拖曳中列往右跟著手走' }).toBeGreaterThan(-50)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中列往右跟著手走' }).toBeGreaterThan(-66)
   await page.mouse.up()
-  await expect.poll(() => slideOffset(row), { message: '開著小幅往右：放手吸回剛好露出紅鈕' }).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row), { message: '開著小幅往右：放手吸回剛好露出紅鈕' }).toBeCloseTo(-72, 0)
   await expect(row).toHaveClass(/is-open/)
 
-  // d. 開著時往右拖 70（拖過 0 被夾住）：放手收合
-  await holdDrag(page, row, 70)
+  // d. 開著時往右拖 80（拖過 0 被夾住）：放手收合
+  await holdDrag(page, row, 80)
   await page.mouse.up()
   await expect(row).not.toHaveClass(/is-open/)
   await expect.poll(() => slideOffset(row), { message: '往右拖回：收合到 0' }).toBeCloseTo(0, 0)
@@ -2313,10 +2386,10 @@ test('組列左滑：減少動態下開著再往左拉，放手直接回到露�
   const row = page.locator('.ex .swipe-row').nth(1)
   await swipeLeft(page, row, 70)
   await expect(row).toHaveClass(/is-open/)
-  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-72, 0)
 
   await holdDrag(page, row, -40)
-  await expect.poll(() => slideOffset(row), { message: '拖曳中：-56 − 40×0.4' }).toBeCloseTo(-72, 0)
+  await expect.poll(() => slideOffset(row), { message: '拖曳中：-72 − 40×0.4' }).toBeCloseTo(-88, 0)
   // 不逐幀取樣：MutationObserver 記下放手後位移層每一次寫入的 translateX，有沒有中間值與幀數無關
   await row.locator('.swipe-slide').evaluate((n) => {
     const w = window as unknown as { __xs: number[] }
@@ -2327,12 +2400,12 @@ test('組列左滑：減少動態下開著再往左拉，放手直接回到露�
     }).observe(n, { attributes: true, attributeFilter: ['style'] })
   })
   await page.mouse.up()
-  await expect.poll(() => slideOffset(row)).toBeCloseTo(-56, 0)
+  await expect.poll(() => slideOffset(row)).toBeCloseTo(-72, 0)
   await page.waitForTimeout(500) // 讓可能還在跑的回彈有時間寫出中間值
   const xs = await page.evaluate(() => (window as unknown as { __xs: number[] }).__xs)
-  expect(xs.at(-1), '最後一次寫入是 -56').toBeCloseTo(-56, 0)
-  // motion 的放手回彈在 onDragEnd 之前已先寫了一格（≈ 拖曳中的 -72，肉眼等於沒動），所以只抓兩端之間的中間值
-  expect(xs.filter((v) => v > -71.5 && v < -56.5), '沒有 -72 → -56 的中間過程').toEqual([])
+  expect(xs.at(-1), '最後一次寫入是 -72').toBeCloseTo(-72, 0)
+  // motion 的放手回彈在 onDragEnd 之前已先寫了一格（≈ 拖曳中的 -88，肉眼等於沒動），所以只抓兩端之間的中間值
+  expect(xs.filter((v) => v > -86 && v < -72.5), '沒有 -88 → -72 的中間過程').toEqual([])
 })
 
 /* ── 勾與雙勾的按下回饋（v2.92，真機回報按住沒有「被壓下去」的感覺）──
@@ -3245,7 +3318,7 @@ const rpeWrites = (page: Page) =>
       .map((w) => w.body.rpe),
   )
 
-test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換，清除寫 null；沒填時清除不能按', async ({ page }) => {
+test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換；沒有清除鈕；說明在欄位名稱右側', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -3259,8 +3332,15 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
 
   await openSetSheet(page, 0)
   const rpe = setSheet(page).locator('[data-section="rpe"]')
-  await expect(rpe.getByRole('button')).toHaveText(['6', '7', '8', '9', '10', '清除'])
-  await expect(rpe.getByRole('button', { name: '清除' })).toBeDisabled()
+  await expect(rpe.getByRole('button'), 'v2.104 拿掉清除鈕').toHaveText(['6', '7', '8', '9', '10'])
+  // 說明與欄位名稱同一行、在名稱右側（原本在五格下面）
+  // 同一個 evaluate 裡一次量兩個：sheet 開啟時還在滑動，分兩次量會量到不同時刻的位置
+  const pos = await rpe.evaluate((el) => {
+    const r = (s: string) => el.querySelector(s)!.getBoundingClientRect()
+    return { label: r('.set-sec'), hint: r('.rpe-hint') }
+  })
+  expect(Math.abs(pos.hint.y - pos.label.y), '同一行').toBeLessThanOrEqual(6)
+  expect(pos.hint.x, '在名稱右側').toBeGreaterThan(pos.label.right - 1)
   await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
 
   await rpe.getByRole('button', { name: 'RPE 8' }).click()
@@ -3270,11 +3350,6 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
   await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'false')
   await rpe.getByRole('button', { name: 'RPE 9' }).click() // 再點同一格不取消、不重送
   await expect.poll(() => rpeWrites(page)).toEqual([8, 9])
-
-  await rpe.getByRole('button', { name: '清除' }).click()
-  await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
-  await expect(rpe.getByRole('button', { name: '清除' })).toBeDisabled()
-  await expect.poll(() => rpeWrites(page)).toEqual([8, 9, null])
 })
 
 test('新增的組不帶 rpe：預填（上次的組有 rpe）、按「新增一組」、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
