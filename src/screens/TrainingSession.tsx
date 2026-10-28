@@ -197,7 +197,15 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
         data-set-id={set.id}
         style={rowStyle}
       >
-        <span className="no">{no}</span>
+        <span className="no">
+          {no}
+          {/* 有填 RPE 的組在組號格右上角掛一顆小標籤（v2.105，樣張 rpe-badge A：只有數字、不上色）；沒填的不變。RPE 只在打勾的組有意義，同組編輯 sheet */}
+          {done && set.rpe != null && (
+            <span className="rpe-badge" role="img" aria-label={`RPE ${Number(set.rpe)}`}>
+              {Number(set.rpe)}
+            </span>
+          )}
+        </span>
         <button
           className="tr-val w"
           type="button"

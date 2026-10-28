@@ -560,17 +560,18 @@ test('頁尾點 chip：寫在最後一組、選中標起來、狀態字變 RPE �
   await expect.poll(() => rpeWrites(page)).toEqual([8, 10])
 })
 
-test('頁尾改答案時，同動作其他組（sheet 填過的）的 RPE 一併清掉：只剩一個 RPE', async ({ page }) => {
+test('頁尾只管最後一組（v2.105）：別組（sheet 填過的）的 RPE 不動、不冒充；狀態字顯示最後一組的值', async ({ page }) => {
   await prepare(page)
   const withOld: typeof FIX = { ...LIVE, workout_sets: LIVE.workout_sets.map((x, i) => (i === 0 ? { ...x, rpe: 8 } : x)) }
   await openLive(page, true, withOld)
   for (const n of [0, 1, 2]) await tick(page, n)
   await btn(page, '略過休息').click()
-  await expect(footer(page).locator('.st'), '第 1 組在 sheet 填過 8，取各組最大值').toHaveText('RPE 8')
-  await expect(fchip(page, '2 下')).toHaveAttribute('aria-pressed', 'true')
+  await expect(footer(page).locator('.st'), '第 1 組在 sheet 填過 8，但頁尾看的是最後一組（沒填）').toHaveText('還沒填')
+  await expect(page.locator('[data-section="ex-rpe"] [aria-pressed="true"]')).toHaveCount(0)
   await fchip(page, '1 下').click()
-  await expect.poll(() => rpeWrites(page)).toEqual([null, 9]) // 先清第 1 組、再寫最後一組
+  await expect.poll(() => rpeWrites(page)).toEqual([9]) // 只寫最後一組，沒有 null：第 1 組的 8 還在
   await expect(footer(page).locator('.st')).toHaveText('RPE 9')
+  await expect(page.locator('.set .rpe-badge'), '第 1 組（sheet 填的 8）與最後一組（頁尾填的 9）各有標籤').toHaveText(['8', '9'])
 })
 
 test('頁尾收合時也在：收起卡片後頁尾還在、照樣能點；漏填的看得出', async ({ page }) => {

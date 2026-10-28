@@ -1414,19 +1414,17 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
     expect(completesExercise([set('a', true)], 'zz')).toBe(false) // 找不到這組
     expect(completesExercise([], 'a')).toBe(false)
   })
-  it('exerciseRpe：每一組都打勾才算做完；rpe 取各組最大值，都沒填＝null；沒有組＝沒做完', () => {
+  it('exerciseRpe：每一組都打勾才算做完；rpe 是最後一組的值（不取最大值），最後一組沒填＝null；沒有組＝沒做完', () => {
     const set = (done: boolean, rpe?: number | null): Row => ({ id: `${Math.random()}`, done, ...(rpe === undefined ? {} : { rpe }) })
     expect(exerciseRpe([set(true), set(true)])).toEqual({ complete: true, rpe: null })
-    expect(exerciseRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: 9 })
-    expect(exerciseRpe([set(true, 9), set(false)])).toEqual({ complete: false, rpe: 9 })
+    expect(exerciseRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: null }) // 別組的 9 不冒充最後一組
+    expect(exerciseRpe([set(true, 9), set(true, 7)])).toEqual({ complete: true, rpe: 7 }) // 最後一組 7，不是最大值 9
+    expect(exerciseRpe([set(true, 9), set(false, 8)])).toEqual({ complete: false, rpe: 8 })
     expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
   })
-  it('setExerciseRpeOps：寫在最後一組；同動作其他組已有的 RPE 一併清成 null，沒有的不動；沒有組＝不寫', () => {
+  it('setExerciseRpeOps：只寫最後一組，其他組（包含已有 RPE 的）不動；沒有組＝不寫', () => {
     const rows: Row[] = [{ id: 'a', rpe: 8 }, { id: 'b' }, { id: 'c', rpe: null }, { id: 'd' }]
-    expect(setExerciseRpeOps(rows, 9)).toEqual([
-      { op: 'update', table: 'workout_sets', rowId: 'a', payload: { rpe: null } },
-      { op: 'update', table: 'workout_sets', rowId: 'd', payload: { rpe: 9 } },
-    ])
+    expect(setExerciseRpeOps(rows, 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'd', payload: { rpe: 9 } }])
     expect(setExerciseRpeOps([{ id: 'x' }], 7)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'x', payload: { rpe: 7 } }])
     expect(setExerciseRpeOps([], 7)).toEqual([])
   })

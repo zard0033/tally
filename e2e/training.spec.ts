@@ -3352,6 +3352,56 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
   await expect.poll(() => rpeWrites(page)).toEqual([8, 9])
 })
 
+test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝RPE；沒填與沒打勾的沒有；不壓到重量欄', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await tick(page, 0)
+  await tick(page, 1)
+  const badges = page.locator('.ex .set .rpe-badge')
+  await expect(badges, '都沒填：沒有標籤').toHaveCount(0)
+
+  await openSetSheet(page, 0)
+  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: 'RPE 8' }).click()
+  await closeSetSheet(page)
+  await expect(badges).toHaveText(['8'])
+  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge'), '標籤在第 1 組的組號格裡').toHaveCount(1)
+  await expect(page.locator('.ex .set').nth(1).locator('.rpe-badge'), '沒填的第 2 組沒有').toHaveCount(0)
+  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge')).toHaveAttribute('aria-label', 'RPE 8')
+
+  await openSetSheet(page, 1)
+  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: 'RPE 10' }).click()
+  await closeSetSheet(page)
+  await expect(badges).toHaveText(['8', '10'])
+
+  // 不壓到重量欄：標籤右緣在同一列重量鈕的左緣之內（right -8px 剛好碰到）；也不能蓋住組號數字（見下面的相交檢查）
+  const gap = await page.locator('.ex .set').nth(1).evaluate((row) => {
+    const b = row.querySelector('.rpe-badge')!.getBoundingClientRect()
+    const w = row.querySelector('.tr-val.w')!.getBoundingClientRect()
+    return w.left - b.right
+  })
+  expect(gap, '標籤與重量鈕之間不重疊').toBeGreaterThanOrEqual(-0.5)
+  // 不蓋住組號數字：用 Range 量數字本身的方框，與標籤的方框相交面積要很小（容許 8px²）
+  const overlap = await page.locator('.ex .set').nth(1).evaluate((row) => {
+    const no = row.querySelector('.no')!
+    const r = document.createRange()
+    r.setStart(no.firstChild!, 0)
+    r.setEnd(no.firstChild!, no.firstChild!.textContent!.length)
+    const d = r.getBoundingClientRect()
+    const b = row.querySelector('.rpe-badge')!.getBoundingClientRect()
+    const w = Math.min(d.right, b.right) - Math.max(d.left, b.left)
+    const h = Math.min(d.bottom, b.bottom) - Math.max(d.top, b.top)
+    return w > 0 && h > 0 ? w * h : 0
+  })
+  // 數字方框含行高留白，字形本身沒碰到（393 寬截圖確認，兩位數的 10 實測相交約 5px²）；第一版真的蓋住數字時是 50px² 以上，8 仍抓得到
+  expect(overlap, '標籤沒有蓋住組號數字（10 這種兩位數最容易）').toBeLessThanOrEqual(8)
+
+  // 取消勾：RPE 只在打勾的組有意義，標籤跟著不顯示（資料還在，重勾就回來）
+  await tick(page, 0)
+  await expect(badges).toHaveText(['10'])
+})
+
 test('新增的組不帶 rpe：預填（上次的組有 rpe）、按「新增一組」、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
   // 上次的兩組都有 RPE 9：新組若是複製舊列就會帶出來
   await openApp(page, {}, { ...WITH_WORKOUT, workout_sets: WITH_WORKOUT.workout_sets.map((s) => ({ ...s, rpe: 9 })) })

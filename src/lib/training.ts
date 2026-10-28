@@ -585,20 +585,20 @@ export function completesExercise(sets: readonly Row[], setId: string): boolean 
   return sets.some((s) => s.id === setId) && sets.every((s) => s.id === setId || s.done === true)
 }
 
-/** 一個動作在訓練清單上的 RPE 狀態：做完了（每一組都打勾）才談得上填沒填；rpe 取各組最大值，都沒填＝null。 */
+/** 一個動作在訓練清單上的 RPE 狀態：做完了（每一組都打勾）才談得上填沒填；rpe 是**最後一組**的值，沒填＝null。
+ *  （階段 4 丙／v2.105：RPE 是每組各一個，這裡只回頁尾與休息條關心的那一組；原本取各組最大值，會讓別組的值冒充最後一組。） */
 export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: number | null } {
   const complete = sets.length > 0 && sets.every((s) => s.done === true)
-  const values = sets.map((s) => (s.rpe == null ? NaN : Number(s.rpe))).filter((n) => Number.isFinite(n))
-  return { complete, rpe: values.length > 0 ? Math.max(...values) : null }
+  const last = sets.at(-1)
+  const n = last?.rpe == null ? NaN : Number(last.rpe)
+  return { complete, rpe: Number.isFinite(n) ? n : null }
 }
 
-/** 一個動作的 RPE 只有一個：寫在最後一組上，同動作其他組若已有 RPE 一併清成 null（不然「取各組最大值」會讓新答案被舊的蓋過）。
- *  休息條與動作卡的頁尾都走這個；組編輯 sheet 是逐組改，走 setRpeOps。 */
+/** 休息條與動作卡頁尾的快捷入口：只寫**最後一組**的 RPE，其他組不動（v2.105 起；原本會把其他組的 RPE 清成 null）。
+ *  每組各自的 RPE 在組編輯 sheet 改，走 setRpeOps。 */
 export function setExerciseRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
   const last = sets.at(-1)
-  if (!last) return []
-  const clears = sets.filter((s) => s.id !== last.id && s.rpe != null).map((s) => setRpeOps(s.id, null)[0])
-  return [...clears, ...setRpeOps(last.id, rpe)]
+  return last ? setRpeOps(last.id, rpe) : []
 }
 
 /** 寫一組的 RPE；null＝清掉（回到沒填）。 */

@@ -1529,8 +1529,15 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-all:disabled { opacity: .4; cursor: default; }
 .tr-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .set { padding-top: var(--s-1); padding-bottom: var(--s-1); }
-.set .no { text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
+.set .no { position: relative; text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-sm); }
+/* 組號格右上角的 RPE 小標籤（v2.105，樣張 _design-sample/rpe-badge.html 的 A）：統一 --fill 底、--ink 字，不分強度、不上色；
+   `--card` 的 1.5px 外圈讓它在底下有東西時也分得開。組號欄只有 28px 寬、數字在正中，所以標籤要小（16px 高、10px 字）並貼右上角
+   （right -8px＝右緣剛好碰到重量鈕左緣、不壓它）：第一版往左挪（right -4px）會蓋住組號數字本身（實機截圖看到「5」被「10」蓋掉）。 */
+.rpe-badge { position: absolute; top: -9px; right: -8px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill);
+  background: var(--fill); color: var(--ink); box-shadow: 0 0 0 1.5px var(--card);
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 10px; font-weight: 700; line-height: 1; }
 /* 重量與次數是按鈕（點了開組編輯 sheet），不是輸入框；預填（還沒做）＝淡、打勾（做完了）＝墨色加深 */
 .tr-val { width: 100%; min-height: 48px; border: none; border-radius: 12px; background: var(--fill);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 600;
