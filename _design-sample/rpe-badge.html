@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 組號格的 RPE 標籤：A 只有數字／B 暖色階</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; }
+  body { font-family: var(--font-body); padding: 32px; }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 28px; max-width: 980px; line-height: 1.7; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: 13px; font-weight: 700; color: #3D2210; max-width: 393px; }
+  .frame-note { font-size: 12px; color: #7A5C44; max-width: 393px; line-height: 1.6; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 560px; overflow: hidden; border-radius: 28px;
+    border: 1px solid #D8C9AE; position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device .main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .device .tr-scroll { flex: 1; min-height: 0; overflow: hidden; padding: var(--s-3) var(--s-5) var(--s-4); }
+
+  /* ── 若核可，下面這些進 app.css、色階變成 token 並寫回 DESIGN.md ──────────────────────
+     組號格：現在是一個 28px 欄裡的灰色數字。有 RPE 的組，在格子右上角掛一顆小圓角標籤（數字＝RPE）。
+     沒填的組完全不變，所以一眼看得出哪幾組有填、哪幾組沒填。 */
+  .set .no { position: relative; }
+  .rpe-badge { position: absolute; top: -9px; right: -9px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill);
+    font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 700; line-height: 1; }
+
+  /* A：只有數字。標籤一律用 --fill 底、--ink 字，不分強度（強度靠數字本身讀） */
+  .va .rpe-badge { background: var(--fill); color: var(--ink); box-shadow: 0 0 0 1.5px var(--card); }
+
+  /* B：暖色階。6–7 偏輕（綠灰）、8 中（沙）、9 重（陶土淺）、10 最重（陶土）。
+     全部由既有 token 混出來（--accent-soft／--raised／--over-fill／--paper），不新增色票、沒有裸 hex。
+     --ink 對各階底色的對比（實算）：6＝12.2、7＝11.4、8＝約 10、9＝10.2、10＝8.1，都過 4.5:1。
+     9、10 用到 --over-fill 的淡版（22%／38%），不是「破表」的實心紅，但色相相同——這是 B 的代價。 */
+  .vb { --rpe-6: color-mix(in srgb, var(--accent-soft) 60%, var(--paper));
+        --rpe-7: var(--accent-soft);
+        --rpe-8: color-mix(in srgb, var(--over-fill) 10%, var(--raised));
+        --rpe-9: color-mix(in srgb, var(--over-fill) 22%, var(--paper));
+        --rpe-10: color-mix(in srgb, var(--over-fill) 38%, var(--paper)); }
+  .vb .set .no.r6 { background: var(--rpe-6); }  .vb .set .no.r7 { background: var(--rpe-7); }
+  .vb .set .no.r8 { background: var(--rpe-8); }  .vb .set .no.r9 { background: var(--rpe-9); }
+  .vb .set .no.r10 { background: var(--rpe-10); }
+  .vb .set .no[class*="r"] { color: var(--ink); font-weight: 600; border-radius: 8px; line-height: 28px; height: 28px; }
+  .vb .rpe-badge { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1.5px var(--card); }
+  .vb .set .no.r8 .rpe-badge, .vb .set .no.r9 .rpe-badge, .vb .set .no.r10 .rpe-badge { font-weight: 800; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">樣張 — 組號格的 RPE 標籤</h1>
+<p class="harness-sub">
+  參考 Gymwork：<b>有填 RPE 的組，在組號格右上角掛一顆小標籤</b>，沒填的組不變。填寫入口仍是組編輯 sheet（休息條與動作卡頁尾是最後一組的快捷）。
+  兩版差在「要不要用顏色表達強度」。<b>數字都是示意</b>：每組 60 kg × 12，RPE 依序為 沒填／7／8／9／10。
+</p>
+<div class="frames">
+
+<div class="frame-block va">
+  <div class="frame-label">A　只有數字：標籤統一底色，強度靠讀數字</div>
+  <div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex">
+    <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身</span></span></div>
+    <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+    <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no">2<span class="rpe-badge">7</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no">3<span class="rpe-badge">8</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no">4<span class="rpe-badge">9</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no">5<span class="rpe-badge">10</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+  </section></main></div></div>
+  <div class="frame-note"><b>優點</b>：不用新增任何顏色；數字本身就是資訊，不需要學色階。<b>缺點</b>：要掃過每顆數字才知道哪組最吃力，沒有 Gymwork 那種一眼的強度感。</div>
+</div>
+
+<div class="frame-block vb">
+  <div class="frame-label">B　暖色階：組號格依強度染底，標籤仍寫數字</div>
+  <div class="device"><div class="main"><main class="tr-scroll"><section class="tr-card ex">
+    <div class="ex-head"><span class="grow"><span class="nm">腿推舉</span><span class="sub">下半身</span></span></div>
+    <div class="set-head"><span>組</span><span>重量 kg</span><span>次數</span><span>完成</span></div>
+    <div class="set done"><span class="no">1</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no r7">2<span class="rpe-badge">7</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no r8">3<span class="rpe-badge">8</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no r9">4<span class="rpe-badge">9</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+    <div class="set done"><span class="no r10">5<span class="rpe-badge">10</span></span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">12</button><button class="tr-check" type="button" aria-pressed="true" aria-label="完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></div>
+  </section></main></div></div>
+  <div class="frame-note"><b>優點</b>：一眼看出哪組最吃力，接近 Gymwork 的感覺。<b>缺點</b>：多一套色階要維護；顏色不能是唯一訊號（DESIGN 原則），所以標籤的數字仍然要留；9、10 借用 <b>--over-fill 的淡版</b>（--over 在全站專指「破表」），色相相同，可能讓人誤以為「RPE 10＝超標」。</div>
+</div>
+
+</div>
+</body>
+</html>
