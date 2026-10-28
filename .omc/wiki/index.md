@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 27 pages | Last updated: 2026-10-27T06:13:07.608Z
+> 31 pages | Last updated: 2026-10-28T05:35:47.482Z
 
 ## debugging
 
@@ -23,6 +23,7 @@
 - [lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）](lesson-recharts-trend-chart-recharts-2026-10-20.md) — # lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）
 - [lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）](lesson-recovery-status-2026-10-21.md) — # lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）
 - [lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）](lesson-rpe-and-ddl-rpe-ddl-2026-10-21.md) — # lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）
+- [lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）](lesson-rpe-expansion-rpe-push-review-2026-10-28.md) — # lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）
 - [lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）](lesson-spring-sheet-spring-sheet-2026-10-16.md) — # lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）
 - [lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）](lesson-sync-sheet-review-sheet-2026-10-15.md) — # lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）
 - [verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA](verified-platform-rls-a11y-supabase-pwa.md) — # verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA
@@ -43,3 +44,6 @@
 - [Session Log 2026-10-21](session-log-2026-10-21-537aa75a.md) — # Session Log 2026-10-21
 - [Session Log 2026-10-22](session-log-2026-10-22-418f2a9c.md) — # Session Log 2026-10-22
 - [Session Log 2026-10-22](session-log-2026-10-22-ab471733.md) — # Session Log 2026-10-22
+- [Session Log 2026-10-27](session-log-2026-10-27-747b4e11.md) — # Session Log 2026-10-27
+- [Session Log 2026-10-27](session-log-2026-10-27-a6571a6a.md) — # Session Log 2026-10-27
+- [Session Log 2026-10-27](session-log-2026-10-27-d85a8454.md) — # Session Log 2026-10-27

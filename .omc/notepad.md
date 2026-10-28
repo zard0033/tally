@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-28）：v2.102–v2.105＋RPE spec 已 commit、**未 push**；push 閘門進行中（vitest／build／lint 過；全量 e2e 與兩軸 review 已跑，review 發現的問題修正中），過了要先貼「準備 push」確認訊息。v2.102–v2.105 真機都未驗。RPE 擴大用途見 spec.md「階段 4 丙」：階段 0＝v2.105 已實作；階段 1 規則＝簡單規則（RPE ≤7 加一格、沒做過只給指引）。餐建議樣張等核可才動碼。
-下一步：①push 後真機驗 v2.102–v2.105 ②新對話開階段 1 ③核可餐建議樣張。
+現況（2026-10-28）：v2.102–v2.105＋RPE spec 已 push 並部署，**使用者真機驗過全部 OK**。RPE 擴大用途見 spec.md「階段 4 丙」：階段 0（v2.105）已上線；階段 1 規則＝簡單規則（RPE ≤7 加一格、沒做過只給指引；沒填 RPE 退回次數規則），尚未動碼。餐建議樣張等核可才動碼。待使用者決定：RPE 填上後清不掉，要不要加「再點同一格取消」。
+下一步：①新對話開階段 1（先讀 spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）②核可餐建議樣張 ③每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

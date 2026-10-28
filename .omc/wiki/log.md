@@ -132,3 +132,7 @@
 - **Pages:** session-log-2026-10-27-a6571a6a.md
 - **Summary:** Auto-captured session log for 0084a983-2371-4dc5-9c41-15fb0d0a4d06 (omc-wiki-capture:20d4993c3aeffc3defa897026e35ef994d9c6872b10849a41f4b9697263a8863)
 
+## [2026-10-28T05:35:47.406Z] ingest
+- **Pages:** lesson-rpe-expansion-rpe-push-review-2026-10-28.md
+- **Summary:** Created new page "lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）"
+
