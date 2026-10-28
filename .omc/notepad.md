@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-27）：v2.101 與 e2e 提速（`e2e:affected`／`e2e:smoke`）已 push，main 乾淨同步；e2e 379 全過、vitest 803。有氧併入動作已完成（3 筆舊資料遷成 3 次訓練、舊表已 drop，線上查證過）。餐建議 spec（spec.md「C. 餐建議」）＋樣張 `_design-sample/meal-suggest.html`（第三版）**等核可才動碼**。**真機未驗**：v2.101、v2.91–v2.93、RPE、重量建議。
-下一步：①真機驗 v2.101 ②核可餐建議樣張 ③每日應攝取熱量計算與每日目標 UX（新對話；先讀 MANUAL）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
+現況（2026-10-28）：v2.101 與 e2e 提速（`e2e:affected`／`e2e:smoke`）已 push；v2.102（日期元件點已選收合、加要點同款 44px 色塊、確認框輕遮罩）已 commit **未 push**，只跑過日期與要點條的 e2e，push 前要走全量閘門；e2e 379 全過（v2.101 時）、vitest 803。有氧併入動作已完成（3 筆舊資料遷成 3 次訓練、舊表已 drop，線上查證過）。餐建議 spec（spec.md「C. 餐建議」）＋樣張 `_design-sample/meal-suggest.html`（第三版）**等核可才動碼**。**真機未驗**：v2.102、v2.91–v2.93、RPE、重量建議（v2.101 垃圾桶、右內距、(+N) 已驗 OK）。
+下一步：①真機驗 v2.102 ②核可餐建議樣張 ③每日應攝取熱量計算與每日目標 UX（新對話；先讀 MANUAL）。待確認：1.25 kg 槓片、啞鈴一格 2 或 2.5。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

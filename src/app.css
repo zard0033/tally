@@ -1488,27 +1488,20 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 /* 列表類畫面（動作庫、加動作、課表編輯、訓練中）底部的著作權標示（GymVisualCredit）；用 --ink-muted：
    這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
-/* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝一行淡色「加要點」（沒有底色，
-   不搶組列的視線）。輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉）。
-   沒寫過的那條 36px 高（原本 44px 加下方 8px 空隙＝52px），**刻意低於 DESIGN 的 44px 觸控下限**——使用者嫌它佔太大塊；
-   試過用 ::before 撐觸控範圍：.ex-body 的 overflow: hidden 會把往上撐的那半裁掉，往下撐又會蓋到「全部完成」鈕的上緣，所以不撐。
-   有寫過的色塊維持最少 44px。文字左緣（距卡片 24px）與欄頭「組」字的左緣同一條線。 */
+/* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝同一個色塊，只是字換成淡色「加要點」
+   （v2.102：使用者要預設狀態就跟有值時的輸入框一樣，點進去只多出游標與聚焦外框，整條不跳）。
+   輸入框的聚焦外框畫在內側（卡片頭到組列之間被 .ex-body 的 overflow 裁著，外側會被切掉）。
+   兩種都最少 44px、符合觸控下限；文字左緣（距卡片 24px）與欄頭「組」字的左緣同一條線。 */
 .ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); margin: 0 var(--s-3) var(--s-2);
   padding: var(--s-2) var(--s-3); border: none; border-radius: var(--r-tab); font-family: inherit; font-size: var(--t-sm); line-height: 1.5;
   text-align: left; -webkit-appearance: none; appearance: none; }
 .ex-tips { min-height: 44px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
   white-space: pre-wrap; cursor: pointer; }
-.ex-tips.is-empty { min-height: 0; height: 36px; display: block; background: none; color: var(--ink-muted); padding: 0; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: auto;
-  line-height: 36px; }
+.ex-tips.is-empty { color: var(--ink-muted); }
 .ex-tips:active { opacity: .6; }
 .ex-tips:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ex-tips-input { display: block; min-height: 44px; max-height: 40vh; resize: none; overflow-y: auto; background: var(--raised); color: var(--ink);
   outline: 2px solid var(--accent); outline-offset: -2px; }
-/* v2.101：從「加要點」（沒有底色的一行字）點進去時，輸入框長得一樣——同一條 36px 高、文字從同一個位置開始、沒有底色，
-   只多一條 accent 底線表示正在輸入（inset 陰影不佔高度）。免得點一下整條跳成有底色的大方塊（使用者回報「跳來跳去」）。
-   已經有要點的，點進去仍是同樣的底色塊，本來就沒有跳。 */
-.ex-tips-input.is-fresh { min-height: 36px; margin: 0 0 0 calc(var(--s-3) + var(--s-3)); width: calc(100% - var(--s-3) * 3);
-  padding: var(--s-2) 0; background: none; border-radius: 0; outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
 /* 一組一列：組｜重量｜次數｜勾。欄頭最後一格是「全部完成」雙勾 */
 .ex-body { padding-bottom: var(--s-1); }
 .set-head, .set { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center;
@@ -1741,7 +1734,10 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-sheet-body .muted.tr-target-note { margin: 0 0 var(--s-2); font-size: var(--t-sm); line-height: 1.6; }
 
 /* 確認對話框（Base UI AlertDialog；樣張 ⑨）：蓋在 sheet（z 11）之上 */
-.dialog-scrim { z-index: 12; }
+/* 確認框只有一行字加兩顆鈕，用不著 sheet 那層 55%＋16px 模糊；照 iOS alert 的輕遮罩（約 30%、不模糊）。
+   留著遮罩而不是拿掉：全站只有淺色，對話框底色 --paper 與頁面同色，沒有遮罩就看不出邊界。 */
+.dialog-scrim { z-index: 12; background: color-mix(in srgb, var(--ink) 30%, transparent);
+  -webkit-backdrop-filter: none; backdrop-filter: none; }
 .tr-dialog { position: fixed; left: var(--s-5); right: var(--s-5); top: 50%; transform: translateY(-50%);
   z-index: 13; max-width: 420px; margin: 0 auto; background: var(--paper); border-radius: var(--r-btn);
   padding: var(--s-5); }

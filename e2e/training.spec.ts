@@ -1370,9 +1370,12 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除圖示�
 
   const strip = card.locator('.ex-tips.is-empty')
   const box = (await strip.boundingBox())!
-  expect(box.height, '沒寫過的要點條只有一行高（刻意低於 44px 觸控下限，見 DESIGN v2.99）').toBeLessThanOrEqual(40)
+  expect(box.height, '沒寫過的要點條與有值時同款色塊：一行高、不低於 44px 觸控下限（v2.102）').toBeGreaterThanOrEqual(43.5)
+  expect(box.height, '一行高，不是兩行').toBeLessThanOrEqual(48)
   const cardBox = (await card.boundingBox())!
-  expect(Math.abs(box.x - cardBox.x - 24), '文字左緣距卡片 24px，與欄頭「組」字左緣同一條線').toBeLessThanOrEqual(1)
+  expect(Math.abs(box.x - cardBox.x - 12), '色塊距卡片 12px，與有值時的色塊同位置').toBeLessThanOrEqual(1)
+  const padL = await strip.evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft))
+  expect(Math.abs(box.x + padL - cardBox.x - 24), '文字左緣距卡片 24px，與欄頭「組」字左緣同一條線').toBeLessThanOrEqual(1)
   // 要點條的範圍不能蓋到全部完成鈕：點雙勾最上緣要打勾（試過 ::before 往下撐觸控範圍，會吃掉這一塊）
   const all = card.locator('.tr-all')
   const allBox = (await all.boundingBox())!
@@ -1382,7 +1385,7 @@ test('卡片頭右側：箭頭、替換、移除的中心等距，移除圖示�
   await expect(card.locator('.ex-tips-input')).toHaveCount(0)
 })
 
-test('加要點點進去：輸入框與原本那一行同位置同高、一樣沒有底色，不跳；已有要點的點進去維持同樣的底色塊', async ({ page }) => {
+test('加要點：沒寫過的預設就跟有值時同款色塊（同底色、同高同位置同內距），點進去輸入框不跳', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await startBlank(page)
@@ -1390,6 +1393,9 @@ test('加要點點進去：輸入框與原本那一行同位置同高、一樣�
   await addExercise(page, '坐姿划船') // 沒寫過；最後加的是展開的
   const row = page.locator('.ex', { hasText: '坐姿划船' })
   const strip = row.locator('.ex-tips.is-empty')
+  const bg = (el: Element) => getComputedStyle(el).backgroundColor
+  const emptyBg = await strip.evaluate(bg)
+  expect(emptyBg, '預設狀態有底色塊').not.toBe('rgba(0, 0, 0, 0)')
   const before = (await strip.boundingBox())!
   await strip.click()
   const input = row.locator('.ex-tips-input')
@@ -1398,14 +1404,14 @@ test('加要點點進去：輸入框與原本那一行同位置同高、一樣�
   expect(Math.abs(after.x - before.x), '左緣不動').toBeLessThanOrEqual(1)
   expect(Math.abs(after.y - before.y), '上緣不動').toBeLessThanOrEqual(1)
   expect(Math.abs(after.height - before.height), '高度不變（點進去前後同高，下面的組列不被推動）').toBeLessThanOrEqual(1)
-  expect(await input.evaluate((el) => getComputedStyle(el).backgroundColor), '沒有底色').toBe('rgba(0, 0, 0, 0)')
-  expect(await input.evaluate((el) => getComputedStyle(el).boxShadow), '只多一條 accent 底線（inset 陰影，不佔高度）').toContain('inset')
+  expect(await input.evaluate(bg), '點進去前後底色相同').toBe(emptyBg)
   await input.press('Escape')
 
   // 已有要點的：展開那張（腿推舉）點進去，一樣是底色塊、位置不動
   await page.locator('.ex', { hasText: '腿推舉' }).locator('.ex-toggle').click()
   const legs = page.locator('.ex', { hasText: '腿推舉' })
   const filled = legs.locator('.ex-tips')
+  expect(await filled.evaluate(bg), '預設狀態與有值時同底色').toBe(emptyBg)
   const fb = (await filled.boundingBox())!
   await filled.click()
   const fi = (await legs.locator('.ex-tips-input').boundingBox())!

@@ -99,6 +99,7 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
   const titleRef = useRef<HTMLButtonElement>(null)
   /* 選了日期之後焦點要去哪：月曆收合時（v2.101 起只剩 Escape 與回今天；選日期不再收）被點的那顆格子會卸載、週列換週時選中那顆也是新元素，
      不接的話焦點掉回 body，鍵盤使用者失去位置（同 v2.4「回今天」那條的教訓）。 */
+  // 註：v2.101 起月曆收合只剩 Escape、回今天、點標題、點已選的那天
   const refocus = useRef<'title' | 'day' | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const swipedAt = useRef(0)
@@ -121,11 +122,18 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
     else rootRef.current?.querySelector<HTMLElement>(':scope > :not([data-leaving]) .datectl-day[aria-pressed="true"]')?.focus({ preventScroll: true })
   }, [date, open])
 
-  /* v2.101：月曆開著時選日期**不收合**（使用者：點其他日期時不需要主動收起來，連續看幾天比較順），收合只走標題、Escape、「回今天」。
+  /* v2.101：月曆開著時選**別天**不收合（使用者：點其他日期時不需要主動收起來，連續看幾天比較順）；
+     點**目前已選的那天**會收合（使用者 2026-10-28：這是一個會發生的動作，要保留），焦點回標題。
      被點的那顆格子不會卸載（同一個月的格子沒有換 key），焦點本來就在它身上，所以不用 refocus；週列選日期照舊（週列換週時選中那顆是新元素）。 */
   const pick = (iso: string) => {
     if (iso > max) return
-    if (iso === date) return
+    if (iso === date) {
+      if (open) {
+        refocus.current = 'title'
+        setOpen(false)
+      }
+      return
+    }
     if (!open) refocus.current = 'day'
     onSelect(iso)
   }

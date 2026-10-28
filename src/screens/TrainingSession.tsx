@@ -276,7 +276,7 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
   return (
     <textarea
       ref={area}
-      className={`ex-tips-input${tips ? '' : ' is-fresh'}`}
+      className="ex-tips-input"
       aria-label={`${name} 的要點`}
       rows={1}
       value={draft}
