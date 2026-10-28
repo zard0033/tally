@@ -97,9 +97,8 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
   const [monthSeq, setMonthSeq] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLButtonElement>(null)
-  /* 選了日期之後焦點要去哪：月曆收合時（v2.101 起只剩 Escape 與回今天；選日期不再收）被點的那顆格子會卸載、週列換週時選中那顆也是新元素，
-     不接的話焦點掉回 body，鍵盤使用者失去位置（同 v2.4「回今天」那條的教訓）。 */
-  // 註：v2.101 起月曆收合只剩 Escape、回今天、點標題、點已選的那天
+  /* 選了日期之後焦點要去哪：月曆收合時（Escape、回今天、點標題、點目前已選的那天；選別天不收，v2.101／v2.102）被點的那顆格子會卸載、
+     週列換週時選中那顆也是新元素，不接的話焦點掉回 body，鍵盤使用者失去位置（同 v2.4「回今天」那條的教訓）。 */
   const refocus = useRef<'title' | 'day' | null>(null)
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
   const swipedAt = useRef(0)

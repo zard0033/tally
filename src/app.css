@@ -1473,14 +1473,14 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-zoom { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 52px; height: 52px;
   padding: 0; border: none; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .ex-zoom:active .ex-thumb { opacity: .6; }
-/* 編輯動作 sheet 最上面的示意圖列：縮圖（點了開放大檢視）＋一行淡色說明 */
-.tr-edit-demo { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); font-size: var(--t-sm); color: var(--ink-muted); }
 .ex-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 .ex-zoom-badge { position: absolute; right: 1px; bottom: 1px; width: 20px; height: 20px; padding: var(--s-1); box-sizing: border-box;
   border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none;
   fill: none; stroke: var(--ink-muted); stroke-width: 2.4; stroke-linecap: round; }
 .ex-head > .ex-zoom { width: 44px; height: 44px; margin-right: var(--s-1); }
 .ex-head > .ex-zoom .ex-zoom-badge { right: 0; bottom: 0; width: 16px; height: 16px; padding: 3px; }
+/* 編輯動作 sheet 最上面的示意圖列：縮圖（點了開放大檢視）＋一行淡色說明 */
+.tr-edit-demo { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); font-size: var(--t-sm); color: var(--ink-muted); }
 /* 放大檢視（ExerciseViewer）：一個 180×180 的動畫（GIF），放大到最寬 270px 置中；離線或減少動態時退成靜態縮圖 */
 .ex-viewer { display: flex; flex-direction: column; gap: var(--s-3); }
 .ex-viewer-group { margin: 0; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
@@ -1500,6 +1500,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-tips, .ex-tips-input { box-sizing: border-box; width: calc(100% - var(--s-3) * 2); margin: 0 var(--s-3) var(--s-2);
   padding: var(--s-2) var(--s-3); border: none; border-radius: var(--r-tab); font-family: inherit; font-size: var(--t-sm); line-height: 1.5;
   text-align: left; -webkit-appearance: none; appearance: none; }
+.ex-tips:not(.is-empty) { padding-right: 44px; } /* 與編輯中的輸入框同寬（那邊為清空鈕留 44px），要點長度落在兩者之間時點進去才不換行、不跳高（v2.104 review） */
 .ex-tips { min-height: 44px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; background: var(--raised); color: var(--ink);
   white-space: pre-wrap; cursor: pointer; }
 .ex-tips.is-empty { color: var(--ink-muted); }
@@ -1532,12 +1533,12 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .set .no { position: relative; text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-sm); }
 /* 組號格右上角的 RPE 小標籤（v2.105，樣張 _design-sample/rpe-badge.html 的 A）：統一 --fill 底、--ink 字，不分強度、不上色；
-   `--card` 的 1.5px 外圈讓它在底下有東西時也分得開。組號欄只有 28px 寬、數字在正中，所以標籤要小（16px 高、10px 字）並貼右上角
-   （right -8px＝右緣剛好碰到重量鈕左緣、不壓它）：第一版往左挪（right -4px）會蓋住組號數字本身（實機截圖看到「5」被「10」蓋掉）。 */
-.rpe-badge { position: absolute; top: -9px; right: -8px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+   `--card` 的 1.5px 外圈讓它在底下有東西時也分得開。組號欄只有 28px 寬、數字在正中，所以標籤要小（16px 高、--t-xs 字）並貼右上角
+   （right -8px＝右緣剛好碰到重量鈕左緣、不壓它）；字級用 --t-xs，不另開 px（review 抓到寫死 10px 超出字階）；--t-xs 比 10px 大，標籤變寬，所以再往上提到 top -11px，避開組號數字（列高 56px、這個格子上方有餘裕，不會被 overflow 裁掉）：第一版往左挪（right -4px）會蓋住組號數字本身（實機截圖看到「5」被「10」蓋掉）。 */
+.rpe-badge { position: absolute; top: -11px; right: -8px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill);
   background: var(--fill); color: var(--ink); box-shadow: 0 0 0 1.5px var(--card);
-  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 10px; font-weight: 700; line-height: 1; }
+  font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs); font-weight: 700; line-height: 1; }
 /* 重量與次數是按鈕（點了開組編輯 sheet），不是輸入框；預填（還沒做）＝淡、打勾（做完了）＝墨色加深 */
 .tr-val { width: 100%; min-height: 48px; border: none; border-radius: 12px; background: var(--fill);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 600;

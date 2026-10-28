@@ -1114,6 +1114,26 @@ test('動作示意圖放大：點動作庫的縮圖開檢視器（一個 180×18
   await expect(zoom).toBeFocused()
 })
 
+test('加要點：長度落在「有清空鈕的輸入框」與「平常的色塊」可用寬度之間的要點，點進去不換行、高度不跳', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const strip = legs.locator('.ex-tips')
+  const input = legs.locator('.ex-tips-input')
+  // 22 個全形字：色塊可用寬度約 23 字／行，輸入框右側為清空鈕留 44px 後約 20 字／行——這個長度在兩者之間
+  await strip.click()
+  await input.fill('背貼緊椅背腳尖朝外膝蓋不內扣吸氣下放吐氣推起')
+  await stat(page, 'time').click()
+  await expect(strip).toContainText('吐氣推起')
+  const before = (await strip.boundingBox())!
+  await strip.click()
+  await expect(input).toBeVisible()
+  const after = (await input.boundingBox())!
+  expect(Math.abs(after.height - before.height), '點進去不換行、高度不跳（色塊與輸入框的右內距要一致）').toBeLessThanOrEqual(1)
+})
+
 test('v2.103 編輯動作 sheet：有示意圖的動作最上面有縮圖，點了開同一個放大檢視（GIF）；自建動作沒有這一列', async ({ page }) => {
   await openCatalogLibrary(page)
   await library(page).locator('.tr-row-main', { has: page.getByText('腿推舉', { exact: true }) }).click()
@@ -1128,6 +1148,12 @@ test('v2.103 編輯動作 sheet：有示意圖的動作最上面有縮圖，點�
   await expect(editSheet(page), 'Esc 只關檢視器，編輯 sheet 還在').toBeVisible()
 
   // 自建動作沒有圖：沒有這一列；新增也沒有
+  await page.keyboard.press('Escape')
+  await expect(editSheet(page)).toHaveCount(0)
+  // 預設動作裡資料集沒有對應圖的（徒手深蹲、箱式深蹲、有氧拳擊）：沒有縮圖就不該有「點縮圖看示意動畫」
+  await library(page).locator('.tr-row-main', { has: page.getByText('徒手深蹲', { exact: true }) }).click()
+  await expect(editSheet(page)).toBeVisible()
+  await expect(editSheet(page).locator('.tr-edit-demo'), '沒有示意圖的預設動作沒有這一列').toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(editSheet(page)).toHaveCount(0)
   await library(page).getByRole('button', { name: '新增動作' }).click()
@@ -1534,6 +1560,36 @@ test('v2.104 要點條清空鈕：有字才出現；點了清空、輸入框不�
   await expect(legs.locator('.ex-tips')).toHaveText('加要點')
   await expect.poll(async () => (await trainRows(page, 'exercises')).find((r) => r.id === LEG_ID)?.tips).toBeNull()
   expect(await exPatches(page)).toEqual([{ tips: null }])
+})
+
+test('要點條清空鈕：鍵盤用 Tab 從輸入框移過去，輸入框不收、焦點在 ✕；Enter 清空後焦點回輸入框；Tab 離開才存', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉') // 要點「背貼緊椅背」
+  const legs = page.locator('.ex', { hasText: '腿推舉' })
+  const input = legs.locator('.ex-tips-input')
+  const clear = legs.getByRole('button', { name: '清空腿推舉的要點' })
+
+  await legs.locator('.ex-tips').click()
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(clear, 'Tab 到清空鈕：它拿得到焦點').toBeFocused()
+  await expect(input, '輸入框沒有因為焦點移走而收起').toBeVisible()
+  expect(await exPatches(page), '焦點還在 wrap 裡，沒有提前存').toHaveLength(0)
+  await page.keyboard.press('Enter')
+  await expect(input).toHaveValue('')
+  await expect(input, '清完焦點回輸入框').toBeFocused()
+  expect(await exPatches(page), '清空不是立刻存').toHaveLength(0)
+
+  await input.pressSequentially('換一句')
+  await page.keyboard.press('Tab') // 有字時 Tab 先到清空鈕
+  await expect(clear).toBeFocused()
+  await page.keyboard.press('Tab') // 再 Tab 離開 wrap：這才收尾、存
+  await expect(input).toHaveCount(0)
+  await expect(legs.locator('.ex-tips')).toHaveText('換一句')
+  await expect.poll(async () => (await exPatches(page)).length).toBe(1)
+  expect((await exPatches(page))[0]).toEqual({ tips: '換一句' })
 })
 
 test('要點條：離線也能寫，畫面立刻是新的，回線後上傳', async ({ page }) => {

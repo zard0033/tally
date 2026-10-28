@@ -429,18 +429,24 @@ test('放棄確認框開著按 Escape：只關確認框，sheet 還在，佇列�
   await expect(sheet(page)).toHaveCount(0)
 })
 
-test('在確認框上連點「放棄」：只放棄那一條、沒有錯誤訊息（v2.104 起佇列清空 sheet 會自己收，連點穿透關 sheet 的檢查失去鑑別力，拿掉）', async ({ page }) => {
+test('在確認框上連點「放棄」：只放棄那一條，sheet 不被連點穿透關掉、沒有錯誤訊息（兩條被拒絕的，放棄一條後佇列還沒清空，sheet 才該留著）', async ({ page }) => {
   await rejectedWorkout(page)
+  // 第二個被拒絕的訓練：放棄第一個之後佇列仍有東西，sheet 不會因為「清空自動收」而關，連點穿透的檢查才有鑑別力（v2.104）
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await backToList(page)
+  await expect.poll(async () => (await queueEntries(page)).filter((e) => e.failure === 'rejected').length).toBe(2)
   await openSheet(page)
-  await rejectedRows(page).getByRole('button', { name: '放棄這筆：新增訓練' }).click()
+  await expect(rejectedRows(page)).toHaveCount(2)
+  await rejectedRows(page).first().getByRole('button', { name: /^放棄這筆：新增訓練/ }).click()
   const confirm = page.getByRole('alertdialog').getByRole('button', { name: '放棄', exact: true })
   await expect(confirm).toBeVisible()
 
   await confirm.click({ clickCount: 2, delay: 0 })
-  await expect(sheet(page)).toHaveCount(0)
+  await expect(rejectedRows(page)).toHaveCount(1)
   await page.waitForTimeout(500)
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  expect(await queueEntries(page)).toHaveLength(0)
+  await expect(sheet(page), '第二下不該穿透到底下把 sheet 關掉').toBeVisible()
+  await expect(sheet(page).getByRole('alert')).toHaveCount(0)
 })
 
 /* ═══════════ 6. 別的帳號 ═══════════ */

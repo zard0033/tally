@@ -6,7 +6,7 @@
 import { useRef, useState } from 'react'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import SpringSheet from '@/components/SpringSheet'
-import { catalogKey } from '@/lib/exerciseCatalog'
+import { hasCatalogImage } from '@/lib/exerciseCatalog'
 import { useScrollFocusedIntoView } from '@/components/useScrollFocusedIntoView'
 import {
   MUSCLE_GROUPS,
@@ -85,8 +85,9 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
   return (
     <form className="tr-edit-form" onSubmit={save} noValidate>
       <div className="form-wrap" ref={scrollRef}>
-        {/* 有示意圖的動作（預設動作）才放縮圖；點了開同一個放大檢視（GIF）。新增與自建動作沒有圖，不佔這一列 */}
-        {exercise && catalogKey(exercise) && (
+        {/* 有示意圖的動作才放縮圖；點了開同一個放大檢視（GIF）。新增、自建、與資料集沒有對應圖的預設動作（徒手深蹲、箱式深蹲、有氧拳擊）不佔這一列——
+            用 hasCatalogImage 不用 catalogKey：後者對那三個也回 key，會畫出點不動的縮圖與「點縮圖看示意動畫」（review 抓到） */}
+        {exercise && hasCatalogImage(exercise) && (
           <div className="tr-edit-demo">
             <ExerciseThumb exercise={exercise} zoom />
             <span>點縮圖看示意動畫</span>

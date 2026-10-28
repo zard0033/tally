@@ -98,7 +98,8 @@ function useNow(active: boolean): Date {
 /** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
 const MAX_DOTS = 8
 /** 動作卡的頁尾：這個動作每一組都打勾之後，固定長在卡片最底（展開時在「新增一組」下面、收合時在標頭下面）。
- *  一個動作一個 RPE，和休息條是同一格；進行中的訓練才有。選中的是各組最大值對得上的那一顆（sheet 填的 6 沒有對應的 chip）。 */
+ *  v2.105 起 RPE 是每組各一個，頁尾與休息條只是「最後一組」的快捷入口：點 chip 只寫最後一組、不動別組；狀態字與選中的 chip 看最後一組
+ *  （sheet 填的 6 沒有對應的 chip）。進行中的訓練才有。 */
 function RpeFooter({ name, sets, show, onPick }: { name: string; sets: readonly Row[]; show: boolean; onPick: (rpe: number) => void }) {
   const reduced = useReducedMotion()
   const { complete, rpe } = exerciseRpe(sets)
@@ -282,7 +283,14 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
     )
   }
   return (
-    <div className="ex-tips-wrap">
+    <div
+      className="ex-tips-wrap"
+      // 失焦收尾放在外層：焦點從輸入框用 Tab 移到清空鈕時（relatedTarget 仍在 wrap 裡）不收，否則鍵盤按得到 ✕ 的瞬間整塊就卸載、焦點掉回 body
+      onBlur={(e) => {
+        if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
+        void finish()
+      }}
+    >
       <textarea
         ref={area}
         className="ex-tips-input"
@@ -293,7 +301,6 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
           setDraft(e.target.value)
           grow(e.target)
         }}
-        onBlur={() => void finish()}
         onKeyDown={(e) => {
           if (e.key !== 'Escape') return
           e.stopPropagation()
