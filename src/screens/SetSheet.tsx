@@ -3,7 +3,7 @@
 
    **每次 ± 或打字立即寫入**，背景頁該列同步更新，沒有「儲存」鈕。點中間的大數字才叫出鍵盤；
    不合法的輸入（打不出數字、負數、超過 DDL 的上限）放回原值，不截斷成別的數字。
-   （v2.104 拿掉「上次」籤：加動作時重量與次數已預填上次實際完成的值，兩邊語意相同；RPE 區也拿掉「清除」。）
+   （v2.104 拿掉「上次」籤：加動作時重量與次數已預填上次實際完成的值，兩邊語意相同；RPE 區也拿掉「清除」；v2.108 起改成「再點同一格取消」，寫 null。）
    底部一列左右並排：🗑 刪除（最左）｜同步剩餘 N 組｜完成。
    走 SpringSheet（含輸入欄位，守 `--kb`／`--vvtop`）。目標與開關分開（呼叫端），關閉動畫期間內容不能消失，
    所以這裡留一份最後一次算得出來的畫面（刪掉這一組後，目標在資料裡已經找不到）。 */
@@ -321,7 +321,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
                     type="button"
                     aria-pressed={rpe === v}
                     aria-label={`RPE ${v}`}
-                    onClick={() => rpe !== v && patch({ rpe: v }, false)}
+                    onClick={() => patch({ rpe: rpe === v ? null : v }, false)}
                   >
                     {v}
                   </button>

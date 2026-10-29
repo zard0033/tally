@@ -3374,7 +3374,7 @@ const rpeWrites = (page: Page) =>
       .map((w) => w.body.rpe),
   )
 
-test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換；沒有清除鈕；說明在欄位名稱右側', async ({ page }) => {
+test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換；沒有清除鈕、再點同一格取消；說明在欄位名稱右側', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -3404,8 +3404,12 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
   await rpe.getByRole('button', { name: 'RPE 9' }).click()
   await expect(rpe.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'true')
   await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'false')
-  await rpe.getByRole('button', { name: 'RPE 9' }).click() // 再點同一格不取消、不重送
-  await expect.poll(() => rpeWrites(page)).toEqual([8, 9])
+  await rpe.getByRole('button', { name: 'RPE 9' }).click() // v2.108：再點同一格＝取消，寫 null
+  await expect(rpe.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
+  await expect.poll(() => rpeWrites(page)).toEqual([8, 9, null])
+  await closeSetSheet(page)
+  await expect(page.locator('.ex .set .rpe-badge'), '取消後組號格標籤跟著消失').toHaveCount(0)
 })
 
 test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝RPE；沒填與沒打勾的沒有；不壓到重量欄', async ({ page }) => {
