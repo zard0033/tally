@@ -501,6 +501,13 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     const t = setTimeout(() => setAsk(null), RPE_ASK_CLOSE_MS)
     return () => clearTimeout(t)
   }, [ask])
+  // 在組編輯 sheet 填了這個動作最後一組的 RPE：休息條上同一題跟著標已答（走同一條 0.6 秒收起的路），免得兩個入口各說各話
+  useEffect(() => {
+    if (!ask || ask.picked !== null) return
+    const entry = exercises.find((e) => e.sets.some((s) => s.id === ask.setId))
+    const rpe = entry ? exerciseRpe(entry.sets).rpe : null
+    if (rpe !== null) setAsk({ ...ask, picked: rpe })
+  }, [ask, exercises])
 
   // 一進來展開第一張重訓卡（有氧卡不展開）
   const [openEx, setOpenEx] = useState<string | null>(() => exercises.find((e) => !isCardioCard(e))?.entry.id ?? null)
@@ -880,7 +887,11 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
 
       <SetSheet
         open={setOpen}
-        onClose={() => setSetOpen(false)}
+        onClose={() => {
+          // 從 RPE 標籤開的 sheet、在裡面把 RPE 取消，標籤已卸載：焦點改回同一列的重量鈕
+          if (!setOpener.current?.isConnected) setOpener.current = document.querySelector<HTMLElement>(`[data-set-id="${setTarget?.setId}"] .tr-val.w`)
+          setSetOpen(false)
+        }}
         target={setTarget}
         detail={detail}
         db={db}

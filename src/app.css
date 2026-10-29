@@ -1527,8 +1527,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1.5px var(--card);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs); font-weight: 700; line-height: 1; }
-/* v2.107 起標籤是按鈕（點了開那一組的組編輯 sheet，RPE 只剩那裡能填）：16px 太小按不到，用 ::after 把點擊範圍往左、下放大；往上不放，免得蓋到上一列 */
-.rpe-badge::after { content: ''; position: absolute; inset: -2px -2px -12px -10px; }
+/* v2.107 起標籤是按鈕（點了開那一組的組編輯 sheet，RPE 只剩那裡能填）：16px 太小按不到，用 ::after 把點擊範圍往左、下放大；
+   右邊不放（標籤右緣剛好碰到重量鈕左緣，放了會壓進重量鈕）；往上只多 2px，列有 overflow: clip 本來就碰不到上一列 */
+.rpe-badge::after { content: ''; position: absolute; inset: -2px 0 -12px -10px; }
 .rpe-badge:active { opacity: .6; }
 .rpe-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* 重量與次數是按鈕（點了開組編輯 sheet），不是輸入框；預填（還沒做）＝淡、打勾（做完了）＝墨色加深 */

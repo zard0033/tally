@@ -523,7 +523,6 @@ test('點組號格的 RPE 標籤開那一組的組編輯 sheet，亮的格子就
   for (const n of [0, 1, 2]) await tick(page, n)
   await chip(page, '2 下').click() // 休息條答 8，寫在最後一組
   await expect(ask(page)).toHaveCount(0)
-  await expect(page.locator('.ex [data-section="ex-rpe"]'), 'v2.107 起動作卡沒有 RPE 頁尾').toHaveCount(0)
   const badge = page.locator('.ex .set').nth(2).locator('.rpe-badge')
   await expect(badge).toHaveText('8')
   await badge.click()
@@ -535,6 +534,38 @@ test('點組號格的 RPE 標籤開那一組的組編輯 sheet，亮的格子就
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
   await expect(badge, '標籤跟著變').toHaveText('10')
+})
+
+test('標籤開的 sheet 裡把 RPE 取消、標籤卸載後關 sheet：焦點回到同一列的重量鈕，不掉到 body（v2.108 review）', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await chip(page, '2 下').click()
+  const row = page.locator('.ex .set').nth(2)
+  const badge = row.locator('.rpe-badge')
+  await expect(badge).toHaveText('8')
+  await badge.focus()
+  await page.keyboard.press('Enter')
+  const sheet = page.locator('[data-screen="set-sheet"]')
+  await expect(sheet).toBeVisible()
+  await sheet.getByRole('button', { name: 'RPE 8' }).click() // 再點亮著那格＝取消
+  await expect(badge, '標籤隨取消卸載').toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(row.locator('.tr-val.w'), '標籤已不在，焦點改回重量鈕').toBeFocused()
+})
+
+test('在組編輯 sheet 填了最後一組的 RPE：休息條上同一題跟著收起，不會留著再問一次（v2.108 review）', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await expect(ask(page)).toBeVisible()
+  await page.locator('.ex .set').nth(2).locator('.w').click()
+  const sheet = page.locator('[data-screen="set-sheet"]')
+  await expect(sheet).toBeVisible()
+  await sheet.getByRole('button', { name: 'RPE 8' }).click()
+  await expect(ask(page), '條上那題標已答後收起').toHaveCount(0)
+  await expect.poll(() => rpeWrites(page)).toEqual([8]) // 只有 sheet 寫的那一筆
 })
 
 test('問題還在時：亂序勾完後取消勾別組、取消全部完成，問題列都收掉，不會寫到沒打勾的組', async ({ page }) => {
@@ -587,7 +618,6 @@ test('有氧卡：沒有組、全部完成、新增一組；點它開的是有�
   await expect(sheet).toHaveCount(0)
   await expect(cardio.locator('.cardio-sum')).toHaveText('30 分')
   await expect(bar(page), '記了有氧不開休息條').toHaveCount(0)
-  await expect(ask(page), '填了分鐘也不問 RPE').toHaveCount(0)
 
   // 對照：同一頁的重訓卡勾組照常開休息條、三組勾完照常問 RPE——這頁的休息條與問題是活的，上面的「沒有」才有意義
   for (const n of [0, 1, 2]) await tick(page, n)

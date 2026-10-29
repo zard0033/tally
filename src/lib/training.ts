@@ -595,7 +595,7 @@ export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: num
 }
 
 /** 休息條的快捷入口：只寫**最後一組**的 RPE，其他組不動（v2.105 起；原本會把其他組的 RPE 清成 null）。
- *  每組各自的 RPE 在組編輯 sheet 改，走 setRpeOps。 */
+ *  每組各自的 RPE 在組編輯 sheet 改（sheet 直接 patch，再點同一格取消＝寫 null）。 */
 export function setExerciseRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
   const last = sets.at(-1)
   return last ? setRpeOps(last.id, rpe) : []
