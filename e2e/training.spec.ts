@@ -3424,7 +3424,7 @@ test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝
   await expect(badges).toHaveText(['8'])
   await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge'), '標籤在第 1 組的組號格裡').toHaveCount(1)
   await expect(page.locator('.ex .set').nth(1).locator('.rpe-badge'), '沒填的第 2 組沒有').toHaveCount(0)
-  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge')).toHaveAttribute('aria-label', 'RPE 8')
+  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge')).toHaveAttribute('aria-label', '第 1 組 RPE 8，調整')
 
   await openSetSheet(page, 1)
   await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: 'RPE 10' }).click()
@@ -3493,7 +3493,7 @@ test('離線時答的 RPE 進佇列，回線後送出（payload 只有 rpe）', 
     .toBe(1)
 })
 
-test('補記的訓練沒有 RPE 頁尾，也沒有休息條（與休息條同一個條件）', async ({ page }) => {
+test('補記的訓練沒有休息條，也就不問 RPE', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await gotoDate(page, shiftIso(TODAY, -1))
@@ -3502,9 +3502,8 @@ test('補記的訓練沒有 RPE 頁尾，也沒有休息條（與休息條同一
   await page.locator('[data-action="start-blank"]').click()
   await addExercise(page, '腿推舉')
   await tick(page, 0)
-  await tick(page, 1) // 兩組都勾完：進行中的訓練這時會長出頁尾
+  await tick(page, 1) // 兩組都勾完：進行中的訓練這時會開休息條、問 RPE
   await expect(page.locator('.ex .set').nth(1).locator('.tr-check')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.ex [data-section="ex-rpe"]')).toHaveCount(0)
   await expect(page.locator('.tr-rest')).toHaveCount(0)
 })
 

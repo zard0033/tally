@@ -586,7 +586,7 @@ export function completesExercise(sets: readonly Row[], setId: string): boolean 
 }
 
 /** 一個動作在訓練清單上的 RPE 狀態：做完了（每一組都打勾）才談得上填沒填；rpe 是**最後一組**的值，沒填＝null。
- *  （階段 4 丙／v2.105：RPE 是每組各一個，這裡只回頁尾與休息條關心的那一組；原本取各組最大值，會讓別組的值冒充最後一組。） */
+ *  （階段 4 丙／v2.105：RPE 是每組各一個，這裡只回休息條關心的那一組；原本取各組最大值，會讓別組的值冒充最後一組。） */
 export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: number | null } {
   const complete = sets.length > 0 && sets.every((s) => s.done === true)
   const last = sets.at(-1)
@@ -594,7 +594,7 @@ export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: num
   return { complete, rpe: Number.isFinite(n) ? n : null }
 }
 
-/** 休息條與動作卡頁尾的快捷入口：只寫**最後一組**的 RPE，其他組不動（v2.105 起；原本會把其他組的 RPE 清成 null）。
+/** 休息條的快捷入口：只寫**最後一組**的 RPE，其他組不動（v2.105 起；原本會把其他組的 RPE 清成 null）。
  *  每組各自的 RPE 在組編輯 sheet 改，走 setRpeOps。 */
 export function setExerciseRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
   const last = sets.at(-1)

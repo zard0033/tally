@@ -507,107 +507,34 @@ test('減少動態：問題列照出現、點了照寫入，收起只淡出', as
   await expect(ask(page)).toHaveCount(0)
 })
 
-test('已結束的訓練沒有 RPE 頁尾', async ({ page }) => {
-  await prepare(page)
-  await openApp(page, {}, FINISHED)
-  await openTraining(page)
-  await page.locator('.tr-row[data-workout-id="w-1"]').click()
-  await expect(page.locator('[data-screen="training-session"]')).toBeVisible()
-  await expect(page.locator('.ex [data-section="ex-rpe"]'), '已結束的訓練沒有頁尾').toHaveCount(0)
-})
-
-/* ── 動作卡的 RPE 頁尾（DESIGN v2.86）：每一組都打勾後固定長在卡片最底 ──────────────────────────── */
-const footer = (page: Page) => page.locator('.ex [data-section="ex-rpe"]')
-const fchip = (page: Page, name: string) => footer(page).getByRole('button', { name, exact: true })
-const addSetTop = (page: Page) => page.locator('.ex .tr-addset').evaluate((el) => el.getBoundingClientRect().top)
-
-test('頁尾：每一組都打勾才出現；「新增一組」的位置從頭到尾不動；沒填時狀態字是「還沒填」、四顆 chip 都沒亮', async ({ page }) => {
-  await prepare(page)
-  await openLive(page)
-  const top = await addSetTop(page)
-  await tick(page, 0)
-  await tick(page, 1)
-  await expect(footer(page), '還有一組沒做').toHaveCount(0)
-  await tick(page, 2)
-  await expect(footer(page)).toBeVisible()
-  await page.waitForTimeout(400) // 長出來的過渡跑完
-  expect(await addSetTop(page), '頁尾長在「新增一組」下面，不把它往下推').toBeCloseTo(top, 0)
-  await expect(footer(page).locator('.st')).toHaveText('還沒填')
-  await expect(footer(page).getByRole('button')).toHaveText(['3 下以上', '2 下', '1 下', '力竭'])
-  await expect(footer(page).locator('[aria-pressed="true"]')).toHaveCount(0)
-})
-
-test('頁尾點 chip：寫在最後一組、選中標起來、狀態字變 RPE 值，頁尾高度前後不變；改答案寫成新值', async ({ page }) => {
-  await prepare(page)
-  await openLive(page)
-  for (const n of [0, 1, 2]) await tick(page, n)
-  await btn(page, '略過休息').click() // 不讓休息條的問題列干擾
-  await page.waitForTimeout(400)
-  const h = await footer(page).evaluate((el) => el.getBoundingClientRect().height)
-  await fchip(page, '2 下').click()
-  await expect(fchip(page, '2 下')).toHaveAttribute('aria-pressed', 'true')
-  await expect(fchip(page, '2 下'), '視覺上的選中（淡綠底）').toHaveClass(/is-on/)
-  await expect(footer(page).locator('.st')).toHaveText('RPE 8')
-  await expect.poll(() => rpeWrites(page)).toEqual([8])
-  const patched = await page.evaluate(() =>
-    (window as unknown as { __writes: { method: string; path: string; body: Record<string, unknown> }[] }).__writes.filter((w) => w.method === 'PATCH' && w.body && 'rpe' in w.body).map((w) => w.path),
-  )
-  expect(patched[0], '寫的是最後一組').toContain('s-3')
-  expect(await footer(page).evaluate((el) => el.getBoundingClientRect().height), '填完前後高度不變').toBeCloseTo(h, 0)
-  await fchip(page, '力竭').click()
-  await expect(fchip(page, '力竭')).toHaveAttribute('aria-pressed', 'true')
-  await expect(fchip(page, '2 下')).toHaveAttribute('aria-pressed', 'false')
-  await expect.poll(() => rpeWrites(page)).toEqual([8, 10])
-})
-
-test('頁尾只管最後一組（v2.105）：別組（sheet 填過的）的 RPE 不動、不冒充；狀態字顯示最後一組的值', async ({ page }) => {
+test('休息條只寫最後一組（v2.105）：別組（sheet 填過的）的 RPE 不動、不被清掉', async ({ page }) => {
   await prepare(page)
   const withOld: typeof FIX = { ...LIVE, workout_sets: LIVE.workout_sets.map((x, i) => (i === 0 ? { ...x, rpe: 8 } : x)) }
   await openLive(page, true, withOld)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await btn(page, '略過休息').click()
-  await expect(footer(page).locator('.st'), '第 1 組在 sheet 填過 8，但頁尾看的是最後一組（沒填）').toHaveText('還沒填')
-  await expect(page.locator('[data-section="ex-rpe"] [aria-pressed="true"]')).toHaveCount(0)
-  await fchip(page, '1 下').click()
+  await chip(page, '1 下').click()
   await expect.poll(() => rpeWrites(page)).toEqual([9]) // 只寫最後一組，沒有 null：第 1 組的 8 還在
-  await expect(footer(page).locator('.st')).toHaveText('RPE 9')
-  await expect(page.locator('.set .rpe-badge'), '第 1 組（sheet 填的 8）與最後一組（頁尾填的 9）各有標籤').toHaveText(['8', '9'])
+  await expect(page.locator('.set .rpe-badge'), '第 1 組（原本的 8）與最後一組（休息條答的 9）各有標籤').toHaveText(['8', '9'])
 })
 
-test('頁尾收合時也在：收起卡片後頁尾還在、照樣能點；漏填的看得出', async ({ page }) => {
+test('點組號格的 RPE 標籤開那一組的組編輯 sheet，亮的格子就是標籤上的值（v2.107，動作卡沒有 RPE 頁尾）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await btn(page, '略過休息').click()
-  await page.locator('.ex .ex-toggle').click()
-  await expect(page.locator('.ex.collapsed')).toHaveCount(1)
-  await expect(page.locator('.ex.collapsed [data-section="ex-rpe"]')).toBeVisible()
-  await expect(page.locator('.ex.collapsed [data-section="ex-rpe"] .st')).toHaveText('還沒填')
-  await fchip(page, '1 下').click()
-  await expect.poll(() => rpeWrites(page)).toEqual([9])
-  await expect(page.locator('.ex.collapsed [data-section="ex-rpe"] .st')).toHaveText('RPE 9')
-})
-
-test('頁尾：按「新增一組」就收掉（動作又不算做完了）；休息條答的值頁尾也看得到', async ({ page }) => {
-  await prepare(page)
-  await openLive(page)
-  for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '1 下').click() // 休息條答 9
-  await expect(fchip(page, '1 下')).toHaveAttribute('aria-pressed', 'true')
-  await page.locator('.ex').getByRole('button', { name: '新增一組' }).click()
-  await expect(footer(page)).toHaveCount(0)
-})
-
-test('頁尾先答：休息條上的同一題跟著收起，不會兩邊狀態不同', async ({ page }) => {
-  await prepare(page)
-  await openLive(page)
-  for (const n of [0, 1, 2]) await tick(page, n)
-  await expect(ask(page)).toBeVisible()
-  await fchip(page, '2 下').click()
-  await expect(fchip(page, '2 下')).toHaveAttribute('aria-pressed', 'true')
-  await expect(ask(page), '條上同一題也收了').toHaveCount(0)
-  await expect(bar(page)).toBeVisible()
-  await expect.poll(() => rpeWrites(page)).toEqual([8])
+  await chip(page, '2 下').click() // 休息條答 8，寫在最後一組
+  await expect(ask(page)).toHaveCount(0)
+  await expect(page.locator('.ex [data-section="ex-rpe"]'), 'v2.107 起動作卡沒有 RPE 頁尾').toHaveCount(0)
+  const badge = page.locator('.ex .set').nth(2).locator('.rpe-badge')
+  await expect(badge).toHaveText('8')
+  await badge.click()
+  const sheet = page.locator('[data-screen="set-sheet"]')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'true')
+  await sheet.getByRole('button', { name: 'RPE 10' }).click() // 在 sheet 改成 10
+  await expect.poll(() => rpeWrites(page)).toEqual([8, 10])
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await expect(badge, '標籤跟著變').toHaveText('10')
 })
 
 test('問題還在時：亂序勾完後取消勾別組、取消全部完成，問題列都收掉，不會寫到沒打勾的組', async ({ page }) => {
@@ -624,7 +551,7 @@ test('問題還在時：亂序勾完後取消勾別組、取消全部完成，�
   expect(await rpeWrites(page)).toEqual([])
 })
 
-/* ── 有氧卡（spec「有氧併入動作」AC 6）：沒有組，所以休息條、RPE（頁尾與條上的問題）、重量建議、全部完成、新增一組都碰不到 ── */
+/* ── 有氧卡（spec「有氧併入動作」AC 6）：沒有組，所以休息條、RPE（條上的問題）、重量建議、全部完成、新增一組都碰不到 ── */
 const WALK = (() => {
   const row = SEEDED_FIX.exercises.find((e) => e.name === '跑步機坡度健走')
   if (!row) throw new Error('目錄裡沒有「跑步機坡度健走」')
@@ -641,7 +568,7 @@ const WITH_CARDIO: typeof FIX = {
   ],
 }
 
-test('有氧卡：沒有組、全部完成、新增一組、RPE 頁尾；點它開的是有氧 sheet（沒有重量建議），存檔不開休息條', async ({ page }) => {
+test('有氧卡：沒有組、全部完成、新增一組；點它開的是有氧 sheet（沒有重量建議），存檔不開休息條', async ({ page }) => {
   await prepare(page)
   await openLive(page, true, WITH_CARDIO)
   const cardio = page.locator('.ex.is-cardio')
@@ -649,7 +576,6 @@ test('有氧卡：沒有組、全部完成、新增一組、RPE 頁尾；點它�
   await expect(cardio.locator('.set')).toHaveCount(0)
   await expect(cardio.getByRole('button', { name: '全部完成', exact: true })).toHaveCount(0)
   await expect(cardio.getByRole('button', { name: '新增一組' })).toHaveCount(0)
-  await expect(cardio.locator('[data-section="ex-rpe"]')).toHaveCount(0)
 
   await cardio.locator('.ex-toggle').click()
   const sheet = page.locator('[data-screen="cardio-sheet"]')
@@ -661,11 +587,10 @@ test('有氧卡：沒有組、全部完成、新增一組、RPE 頁尾；點它�
   await expect(sheet).toHaveCount(0)
   await expect(cardio.locator('.cardio-sum')).toHaveText('30 分')
   await expect(bar(page), '記了有氧不開休息條').toHaveCount(0)
-  await expect(cardio.locator('[data-section="ex-rpe"]'), '填了分鐘也不問 RPE').toHaveCount(0)
+  await expect(ask(page), '填了分鐘也不問 RPE').toHaveCount(0)
 
-  // 對照：同一頁的重訓卡勾組照常開休息條、三組勾完照常長頁尾——這頁的休息條與頁尾是活的，上面的「沒有」才有意義
+  // 對照：同一頁的重訓卡勾組照常開休息條、三組勾完照常問 RPE——這頁的休息條與問題是活的，上面的「沒有」才有意義
   for (const n of [0, 1, 2]) await tick(page, n)
   await expect(bar(page)).toBeVisible()
-  await expect(page.locator('.ex', { hasText: '腿推舉' }).locator('[data-section="ex-rpe"]')).toBeVisible()
-  await expect(cardio.locator('[data-section="ex-rpe"]')).toHaveCount(0)
+  await expect(ask(page)).toBeVisible()
 })

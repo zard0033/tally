@@ -7,7 +7,7 @@
    展開的卡頂部是要點條（TipsStrip）：點一下原地寫，失焦才存。
    欄頭的雙勾是「全部完成」。排序只能從握把拖（@dnd-kit/react），拖起時所有卡收合、範圍限制在清單區內並有橡皮筋。
    有氧動作的卡（spec「有氧併入動作」）沒有組：永遠是收合的外觀，名稱鈕點了開有氧 sheet（CardioSheet），第二行是摘要或「點一下填寫」；
-   沒有組列、全部完成、新增一組、RPE 頁尾，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、移除與其他卡相同。
+   沒有組列、全部完成、新增一組，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、移除與其他卡相同。
    有氧動作卻有組的卡退回重訓的畫法（`isCardioCard`）。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
@@ -25,7 +25,7 @@ import { usePressed } from '@/components/usePressed'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
-import { CASCADE_STEP_MS, DUR, REDUCED_FADE_MAX_MS, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
+import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
 import { hasCatalogImage } from '@/lib/exerciseCatalog'
 import CardioSheet from './CardioSheet'
 import ExercisePicker from './ExercisePicker'
@@ -50,7 +50,6 @@ import {
   replaceExerciseOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
-  RPE_CHIPS,
   setExerciseRpeOps,
   setsOfDetail,
   toggleAllDoneOps,
@@ -97,54 +96,6 @@ function useNow(active: boolean): Date {
 
 /** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
 const MAX_DOTS = 8
-/** 動作卡的頁尾：這個動作每一組都打勾之後，固定長在卡片最底（展開時在「新增一組」下面、收合時在標頭下面）。
- *  v2.105 起 RPE 是每組各一個，頁尾與休息條只是「最後一組」的快捷入口：點 chip 只寫最後一組、不動別組；狀態字與選中的 chip 看最後一組
- *  （sheet 填的 6 沒有對應的 chip）。進行中的訓練才有。 */
-function RpeFooter({ name, sets, show, onPick }: { name: string; sets: readonly Row[]; show: boolean; onPick: (rpe: number) => void }) {
-  const reduced = useReducedMotion()
-  const { complete, rpe } = exerciseRpe(sets)
-  const shown = show && complete
-  // 外層只動 height／opacity：border-box 下 height: 0 縮不到 padding 以下，所以分隔線與 padding 都放內層（同要點面板）
-  const hidden = reduced ? { opacity: 0 } : { height: 0, opacity: 0 }
-  const visible = reduced ? { opacity: 1 } : { height: 'auto', opacity: 1 }
-  return (
-    <AnimatePresence initial={false}>
-      {shown && (
-        <motion.div
-          key="rpe-footer"
-          className="ex-rpe"
-          data-section="ex-rpe"
-          initial={hidden}
-          animate={visible}
-          exit={hidden}
-          transition={{ duration: sec(reduced ? Math.min(DUR.base, REDUCED_FADE_MAX_MS) : DUR.base), ease: 'easeOut' }}
-        >
-          <div className="ex-rpe-in">
-            <div className="lbl">
-              <span>最後一組還能再做幾下？</span>
-              <span className="st">{rpe === null ? '還沒填' : `RPE ${rpe}`}</span>
-            </div>
-            <div className="opts" role="group" aria-label={`${name} 的吃力程度`}>
-              {RPE_CHIPS.map((c) => (
-                <button
-                  key={c.rpe}
-                  className={`opt${rpe === c.rpe ? ' is-on' : ''}`}
-                  type="button"
-                  data-rpe={c.rpe}
-                  aria-pressed={rpe === c.rpe}
-                  onClick={() => rpe !== c.rpe && onPick(c.rpe)}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
 function Progress({ sets }: { sets: readonly Row[] }) {
   const { done, total, next } = exerciseProgress(sets)
   if (total === 0) return <>沒有組</>
@@ -200,11 +151,17 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
       >
         <span className="no">
           {no}
-          {/* 有填 RPE 的組在組號格右上角掛一顆小標籤（v2.105，樣張 rpe-badge A：只有數字、不上色）；沒填的不變。RPE 只在打勾的組有意義，同組編輯 sheet */}
+          {/* 有填 RPE 的組在組號格右上角掛一顆小標籤（v2.105，樣張 rpe-badge A：只有數字、不分強度；v2.106 起用強調色）；沒填的不變。
+              RPE 只在打勾的組有意義，同組編輯 sheet。v2.107 起它是按鈕：點了開那一組的組編輯 sheet（RPE 唯一能改的地方）。 */}
           {done && set.rpe != null && (
-            <span className="rpe-badge" role="img" aria-label={`RPE ${Number(set.rpe)}`}>
+            <button
+              className="rpe-badge"
+              type="button"
+              aria-label={`第 ${no} 組 RPE ${Number(set.rpe)}，調整`}
+              onClick={(e) => onEdit(e.currentTarget)}
+            >
               {Number(set.rpe)}
-            </span>
+            </button>
           )}
         </span>
         <button
@@ -341,8 +298,6 @@ function TipsStrip({ name, exercise, onSave }: { name: string; exercise: Row; on
 
 interface ExerciseCardProps {
   item: WorkoutExerciseDetail
-  /** 動作卡有沒有 RPE 頁尾：只在即時進行中的訓練（與休息條同一個條件，補記與已結束的沒有）。 */
-  showRpe: boolean
   index: number
   open: boolean
   /** 排序中：所有卡一併收起。 */
@@ -359,7 +314,6 @@ interface ExerciseCardProps {
   onRemove: () => void
   onToggleAll: () => void
   onAddSet: () => void
-  onPickRpe: (rpe: number) => void
   onSwipe: (setId: string, open: boolean) => void
   onEditSet: (setId: string, opener: HTMLElement) => void
   onToggleSet: (set: Row) => void
@@ -523,8 +477,6 @@ function ExerciseCard(p: ExerciseCardProps) {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* 有氧卡沒有組，也就沒有「最後一組」可問；明確不掛，不靠 exerciseRpe([]) 剛好回「沒做完」 */}
-          {!cardio && <RpeFooter name={name} sets={sets} show={p.showRpe} onPick={p.onPickRpe} />}
         </>
       )}
     </section>
@@ -835,7 +787,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
               <ExerciseCard
                 key={item.entry.id}
                 item={item}
-                showRpe={live}
                 index={index}
                 open={openEx === item.entry.id}
                 sorting={sorting}
@@ -856,11 +807,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 onToggleAll={() => {
                   if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 全部完成／取消全部完成都不再問（沒有「剛做完一組」的語意）
                   void toggleAll(item.entry.id)
-                }}
-                onPickRpe={(rpe) => {
-                  // 休息條正問著這個動作的同一題：在頁尾答了，條上那題也跟著標已答、走同一條 0.6 秒收起的路
-                  if (ask && ask.picked === null && item.sets.some((x) => x.id === ask.setId)) setAsk({ ...ask, picked: rpe })
-                  void run(setExerciseRpeOps(item.sets, rpe))
                 }}
                 onAddSet={() => {
                   if (item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 多了一組沒做的，這個動作就不算做完了

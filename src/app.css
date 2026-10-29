@@ -1356,19 +1356,6 @@ button { -webkit-user-select: none; user-select: none; }
 .rpe-chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
 .rpe-chip.is-on { background: var(--paper); color: var(--ink); }
 .rpe-chips.is-picked .rpe-chip:not(.is-on) { opacity: .35; }
-/* 動作卡的 RPE 頁尾（v2.86）：每一組都打勾之後固定長在卡片最底；四顆 chip 與休息條同一組字。沒填時狀態字較深較粗（不加顏色）。
-   用 padding 不用 margin 撐底：卡片有 overflow clip，底部 margin 會被吃掉。 */
-.ex-rpe { margin: 0 var(--s-4); overflow: hidden; } /* 外層只給 height／opacity 動畫用，分隔線與 padding 在內層（border-box 下 height: 0 縮不到 padding 以下） */
-.ex-rpe-in { margin-top: var(--s-1); padding: var(--s-3) 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
-.ex-rpe .lbl { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2);
-  font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.ex-rpe .lbl .st { font-weight: 700; color: var(--ink); }
-.ex-rpe .opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-2); margin-top: var(--s-2); padding: 0 var(--s-1); }
-.ex-rpe .opt { min-height: 44px; padding: 0 var(--s-1); border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
-  font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.ex-rpe .opt.is-on { background: var(--accent-soft); color: var(--accent); }
-.ex-rpe .opt:active { opacity: .6; }
-.ex-rpe .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tr-rest .grow { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
 .tr-rest .lbl { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); opacity: .7; }
 .tr-rest .time { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 700; }
@@ -1532,13 +1519,18 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .set { padding-top: var(--s-1); padding-bottom: var(--s-1); }
 .set .no { position: relative; text-align: center; color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-sm); }
-/* 組號格右上角的 RPE 小標籤（v2.105，樣張 _design-sample/rpe-badge.html 的 A）：統一 --fill 底、--ink 字，不分強度、不上色；
+/* 組號格右上角的 RPE 小標籤（v2.105，樣張 _design-sample/rpe-badge.html 的 A）：v2.106 起 --accent-soft 底、--accent 字（使用者嫌 --fill／--ink 不明顯），不分強度；
    `--card` 的 1.5px 外圈讓它在底下有東西時也分得開。組號欄只有 28px 寬、數字在正中，所以標籤要小（16px 高、--t-xs 字）並貼右上角
    （right -8px＝右緣剛好碰到重量鈕左緣、不壓它）；字級用 --t-xs，不另開 px（review 抓到寫死 10px 超出字階）；--t-xs 比 10px 大，標籤變寬，所以再往上提到 top -11px，避開組號數字（列高 56px、這個格子上方有餘裕，不會被 overflow 裁掉）：第一版往左挪（right -4px）會蓋住組號數字本身（實機截圖看到「5」被「10」蓋掉）。 */
 .rpe-badge { position: absolute; top: -11px; right: -8px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box;
+  border: none; cursor: pointer; -webkit-appearance: none; appearance: none;
   display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-pill);
-  background: var(--fill); color: var(--ink); box-shadow: 0 0 0 1.5px var(--card);
+  background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1.5px var(--card);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs); font-weight: 700; line-height: 1; }
+/* v2.107 起標籤是按鈕（點了開那一組的組編輯 sheet，RPE 只剩那裡能填）：16px 太小按不到，用 ::after 把點擊範圍往左、下放大；往上不放，免得蓋到上一列 */
+.rpe-badge::after { content: ''; position: absolute; inset: -2px -2px -12px -10px; }
+.rpe-badge:active { opacity: .6; }
+.rpe-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* 重量與次數是按鈕（點了開組編輯 sheet），不是輸入框；預填（還沒做）＝淡、打勾（做完了）＝墨色加深 */
 .tr-val { width: 100%; min-height: 48px; border: none; border-radius: 12px; background: var(--fill);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 600;
