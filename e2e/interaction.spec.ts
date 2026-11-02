@@ -148,9 +148,13 @@ test('undo 跨日期 3 — 切走再切回、不按復原 → 那一筆仍不在
   await deleteViaTap(page)
   await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
 
-  await prevDay(page)
+  /* 切日期用 dispatchEvent，不走 prevDay／nextDay：那兩支要等點擊可操作與動畫，來回實測到
+     第 6 秒才切回，已超過 5 秒的復原時限，最後那句斷言變成跟退場動畫賽跑（2026-11-02 查明，
+     之前一直被當偶發紅）。週列一定看得到昨天或明天其中之一，週界那天不用開月曆。 */
+  const other = (await page.locator(`.datectl [data-date="${YDAY}"]`).count()) > 0 ? YDAY : TOMORROW
+  await page.locator(`.datectl [data-date="${other}"]`).first().dispatchEvent('click')
   await page.waitForTimeout(500) // 換日期要等 fetch 落地才有東西可切回去，這裡沒有立即斷言
-  await nextDay(page)
+  await page.locator('button.date-today-btn').dispatchEvent('click')
 
   await waitCount(
     page,
