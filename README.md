@@ -35,11 +35,13 @@ That boundary buys nothing today. The app runs in exactly one place, a browser, 
 
 ### A shared component needs a reason, and looking alike isn't one
 
-The bar for lifting UI into `src/components` is that the same set of fields appears on two or more screens and the two should never disagree. There is exactly one shared component so far, and it came out only after the two copies had already drifted apart twice. Extracting on resemblance makes a promise you didn't mean to make: that these two things will always change together.
+The bar for sharing UI between screens is that the same set of fields or the same interaction appears on two or more of them and the two should never disagree. The first shared component came out only after the two copies had already drifted apart twice. Extracting on resemblance makes a promise you didn't mean to make: that these two things will always change together.
 
-### 147 end-to-end tests, and a UI change runs all of them
+### 381 end-to-end tests, and when they all run
 
-147 browser tests across 13 files, plus 470 unit tests covering the formulas, dates, rounding, image sizing, the offline write queue, and the label-reading and weight-sync Edge Functions. Any UI change runs the entire browser suite, not the file that looks related. The whole thing finishes in about two minutes, and "the relevant tests passed" is the most common way a regression gets shipped.
+The suite is 381 browser tests across 20 files, plus 803 unit tests covering the formulas, dates, rounding, image sizing, the offline write queue, and the label-reading and weight-sync Edge Functions.
+
+Any UI change used to run the entire browser suite, which took under two minutes at around 100 tests. A full run now takes about 12 minutes, so during development a script picks the specs from the changed files, using a table I maintain by hand. The rule before a push is still the full suite, because "the relevant tests passed" is the most common way a regression gets shipped. I've skipped it on some recent rounds by explicit decision, and the [run log](.omc/wiki/e2e-reference.md) says which.
 
 Every new test also gets checked by breaking the thing it covers on purpose and confirming it goes red. A test that has never failed hasn't been shown to test anything.
 
@@ -77,8 +79,8 @@ npm run dev        # http://localhost:5500
 ```
 
 ```bash
-npx vitest run     # 97 unit tests: formulas, dates, rounding, image sizing, edge function
-npm run e2e        # 147 browser tests, 13 files (WebKit, 393x745)
+npx vitest run     # unit tests: formulas, dates, rounding, image sizing, edge function
+npm run e2e        # browser tests (WebKit, 393x745)
 npm run build      # tsc -b + vite build
 npm run lint
 ```
