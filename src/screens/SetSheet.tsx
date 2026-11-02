@@ -61,6 +61,7 @@ const clampWeight = (n: number) => Math.min(1000, Math.max(0, round2(n)))
 const clampReps = (n: number) => Math.min(999, Math.max(0, n))
 
 interface SetView {
+  setId: string
   name: string
   group: string
   no: number
@@ -82,6 +83,7 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
   const exerciseId = String(ex.entry.exercise_id)
   const step = weightStep(ex.exercise ? catalogKey(ex.exercise) : null)
   return {
+    setId: target.setId,
     name: ex.exercise ? String(ex.exercise.name) : '（已刪除的動作）',
     group: ex.exercise ? (MUSCLE_GROUP_LABEL[ex.exercise.muscle_group as MuscleGroup] ?? '其他') : '',
     no: index + 1,
@@ -219,12 +221,13 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
   if (fresh) cache.current = fresh
   const view = fresh ?? cache.current
   const [askDelete, setAskDelete] = useState(false)
-  const [synced, setSynced] = useState(false)
+  /** 剛同步過的那一組。這個 sheet 常駐不重掛，只存布林的話換開另一組還會顯示「已同步 ✓」。 */
+  const [syncedSetId, setSyncedSetId] = useState<string | null>(null)
 
   const patch = (payload: Record<string, unknown>, touchesSync = true) => {
     if (!target || !fresh) return
     void run([{ op: 'update', table: 'workout_sets', rowId: target.setId, payload }])
-    if (touchesSync) setSynced(false) // RPE 不在「同步剩餘組數」複製的欄位裡，改它不該把「已同步 ✓」打回去
+    if (touchesSync) setSyncedSetId(null) // RPE 不在「同步剩餘組數」複製的欄位裡，改它不該把「已同步 ✓」打回去
   }
 
   const sync = async () => {
@@ -232,7 +235,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
     const ops = syncSetsForwardOps(detail, target.setId)
     if (await run(ops)) {
       onSynced(ops.map((o) => o.rowId))
-      setSynced(true)
+      setSyncedSetId(target.setId)
     }
   }
 
@@ -343,7 +346,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               </svg>
             </button>
             <button className="tr-secondary set-sync" type="button" disabled={view.remaining === 0} onClick={() => void sync()}>
-              {view.remaining === 0 ? '沒有剩餘組' : synced ? '已同步 ✓' : `同步剩餘 ${view.remaining} 組`}
+              {view.remaining === 0 ? '沒有剩餘組' : syncedSetId === view.setId ? '已同步 ✓' : `同步剩餘 ${view.remaining} 組`}
             </button>
             <button className="action-btn" type="button" onClick={onClose}>
               完成

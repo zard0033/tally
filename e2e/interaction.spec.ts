@@ -1092,3 +1092,81 @@ test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會�
   await page.mouse.click(tab.x + tab.width / 2, tab.y + tab.height / 2)
   await expect(page.locator('[data-screen="settings"]'), '收合中的點擊被 scrim 吃掉了').toBeVisible({ timeout: 1500 })
 })
+
+/* 全頁錯誤畫面不能變成死路（2026-11-02 整體盤點抓到）。失敗的那天不是正在看的那天時，
+   loadDay 的日期守門會提前 return、notice 沒人清，畫面就只能靠重新整理離開。 */
+test('刪除送不出去時人已在別天：按重試回到正在看的那天，不卡在錯誤畫面', async ({ page }) => {
+  await openApp(page)
+  const before = await page.locator('.timeline .item').count()
+  await deleteViaTap(page)
+  await waitCount(page, '.timeline .item', before - 1, '刪除沒生效')
+  await prevDay(page)
+  await waitCount(page, '.timeline .item', FIX.intakeYday.length, '前一天的品項數應收斂到穩態')
+
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'DELETE' }
+  })
+  await expect(page.locator('.notice .headline'), '5 秒後 DELETE 失敗應該報錯').toHaveText('刪不掉這一筆', { timeout: 8000 })
+
+  await page.locator('.notice .action-btn').click()
+  await waitCount(page, '.notice', 0, '按重試後仍卡在錯誤畫面')
+  await waitCount(page, '.timeline .item', FIX.intakeYday.length, '重試後應該看到正在看的那天的品項')
+
+  await nextDay(page)
+  await waitCount(page, '.timeline .item', before, '那筆沒有真的刪掉，切回原本那天應該還在')
+})
+
+test('慢請求在換日之後才失敗：不對正在看的這天彈別天的錯誤', async ({ page }) => {
+  await openApp(page, { intakeDelayMs: 1500 })
+  await page.waitForTimeout(3000) // 今天載入完成、前一天也預取進快取
+  const todayItems = await page.locator('.timeline .item').count()
+
+  await prevDay(page)
+  await page.waitForTimeout(300)
+  await prevDay(page) // 前兩天沒有快取 → 開始 1.5s 的慢 fetch
+  await page.waitForTimeout(200)
+  await page.evaluate(() => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = true
+  })
+  await page.click('button.date-today-btn') // 在慢請求落地前回到今天（命中快取）
+  // 慢請求落地後失敗，postgrest-js 再退避重試才真的拋出（實測 14 秒還沒到、20 秒已到）
+  await page.waitForTimeout(20000)
+
+  await waitCount(page, '.notice', 0, '別天的讀取失敗不該蓋掉正在看的這天')
+  await waitCount(page, '.timeline .item', todayItems, '正在看的這天的品項不該受影響')
+})
+
+/* 放手吸回：`animate` prop 只在 open 真的變了才重跑，open 沒變時要自己吸回去。
+   SwipeDelete 修過同一個真機 bug，這裡是飲食列那一份。 */
+const slideX = (page: Page) =>
+  page.locator('.timeline .item-slide').first().evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m41)
+
+test('列開著再往左多拉、放手 → 吸回開啟位置，不停在拖到的地方', async ({ page }) => {
+  await openApp(page)
+  const g = await grabPoint(page)
+  await slowDrag(page, g, leg(g, { x: g.x - 100, y: g.y }, 8))
+  await expect.poll(() => slideX(page), { message: '第一次拖曳應該吸附到開啟位置' }).toBeCloseTo(-56, 0)
+
+  const g2 = await grabPoint(page)
+  await slowDrag(page, g2, leg(g2, { x: g2.x - 30, y: g2.y }, 4))
+  await expect.poll(() => slideX(page), { message: '放手後應該吸回 -56，不停在拖到的位置' }).toBeCloseTo(-56, 0)
+  check((await rowState(page)).open, '列應該維持開啟')
+})
+
+test('小幅拖曳不到門檻、放手 → 位移回到 0', async ({ page }) => {
+  await openApp(page)
+  const g = await grabPoint(page)
+  await slowDrag(page, g, leg(g, { x: g.x - 12, y: g.y }, 4))
+  await expect.poll(() => slideX(page), { message: '放手後位移應該回到 0' }).toBeCloseTo(0, 0)
+})
+
+test('減少動態：開著再多拉、放手 → 直接回到開啟位置', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page)
+  const g = await grabPoint(page)
+  await slowDrag(page, g, leg(g, { x: g.x - 100, y: g.y }, 8))
+  await expect.poll(() => slideX(page)).toBeCloseTo(-56, 0)
+  const g2 = await grabPoint(page)
+  await slowDrag(page, g2, leg(g2, { x: g2.x - 30, y: g2.y }, 4))
+  await expect.poll(() => slideX(page), { message: '減少動態下也要回到 -56' }).toBeCloseTo(-56, 0)
+})

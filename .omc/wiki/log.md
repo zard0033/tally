@@ -149,3 +149,11 @@
 ## [2026-11-02T01:46:40.000Z] ingest
 - **Pages:** e2e-reference.md
 - **Summary:** Created new page "e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄"
+## [2026-11-02T03:59:52.479Z] query
+- **Pages:** e2e-reference.md, verified-platform-rls-a11y-supabase-pwa.md, lesson-cardio-merge-2026-10-22.md, lesson-presence-animation-mutation-2026-10-27.md, lesson-recharts-trend-chart-recharts-2026-10-20.md
+- **Summary:** Query "src/lib 清理 死碼 重複" → 5 results (of 17 total)
+
+## [2026-11-02T04:43:04.353Z] ingest
+- **Pages:** cleanup-inventory-2026-11-02.md
+- **Summary:** Created new page "cleanup-inventory 整體程式碼盤點（2026-11-02）"
+

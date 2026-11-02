@@ -3,9 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-10-29）：v2.106–v2.108 已 commit（動作卡 RPE 頁尾拿掉、RPE 標籤強調色且可點開 sheet、sheet 再點同格取消），已 push（2026-10-29，使用者裁決**沒跑全量 e2e**，只跑 RPE 相關條目＋vitest／build／lint），**尚未真機驗**；下次動 UI 前先跑一次全量。「尾巴與 sheet RPE 不同步」stub 下重現不出來，原因未查；再現請記兩邊值與線上／離線。
-2026-11-02：e2e 細節搬到 wiki `e2e-reference`；`e2e:affected` 碰 `app.css` 一律全量。全量改到 push 後背景跑（push 前 affected／smoke，SW、離線佇列例外），見 CLAUDE.md。
-下一步：①新對話開階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）②核可餐建議樣張 ③每日目標 UX。
+現況（2026-11-02）：整體 code 盤點完成、未改 code，清單在 wiki `cleanup-inventory`，等使用者選。基線全量 381 條 377 過 4 偶發（重跑 20 次全過），見 `e2e-reference`。v2.106–v2.108 尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。全量在 push 後背景跑（push 前 affected／smoke，SW、離線佇列例外）。
+下一步：①依清單修 bug／清理 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -61,3 +60,8 @@
 **工具備忘**
 - `notepad_write_priority`／`notepad_write_manual` 2026-10-20 兩次回報成功但檔案沒變；改用 Edit／Write 直接改 `.omc/notepad.md`，改完回讀。
 - 開暫存 worktree 收的時候：先 `cmd /c rmdir` 拆掉 node_modules junction，再 `git worktree remove`，別遞迴刪。
+### 2026-11-02 04:43
+[待決 2026-11-02] 整體 code 盤點完成、沒改 code：完整清單在 wiki `cleanup-inventory`，等使用者選先處理哪批。
+### 2026-11-02 05:16
+[追加 2026-11-02] 整體盤點修 B1–B6（使用者選「B1–B6＋批次 1」），清單在 wiki `cleanup-inventory`。
+

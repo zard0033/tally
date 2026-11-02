@@ -4259,3 +4259,26 @@ test('有氧動作卻有組的卡：退回重訓的畫法——組看得到、�
   await expect(dialog).toHaveCount(0)
   await expect(card.locator('.set')).toHaveCount(2)
 })
+
+/* 2026-11-02 整體盤點抓到：SetSheet 常駐不重掛，「已同步 ✓」要跟著那一組走。 */
+test('同步完一組後換開另一組：按鈕不沿用「已同步 ✓」', async ({ page }) => {
+  await openApp(page, {}, WITH_WORKOUT)
+  await openTraining(page)
+  await startBlank(page)
+  await addExercise(page, '腿推舉')
+  await page.locator('.ex').first().getByRole('button', { name: '新增一組' }).click()
+  await expect(page.locator('.ex .set')).toHaveCount(3)
+
+  await openSetSheet(page, 0)
+  const sync = setSheet(page).locator('.set-sync')
+  await sync.click()
+  await expect(sync).toHaveText('已同步 ✓')
+  await closeSetSheet(page)
+
+  await openSetSheet(page, 1)
+  await expect(setSheet(page).locator('.set-sync'), '第 2 組還沒同步過').toHaveText('同步剩餘 1 組')
+  await closeSetSheet(page)
+
+  await openSetSheet(page, 0)
+  await expect(setSheet(page).locator('.set-sync'), '回到剛同步的那組仍是已同步').toHaveText('已同步 ✓')
+})

@@ -335,6 +335,8 @@ export default function App() {
         setNotice(null)
         prefetchAdjacent(date)
       } catch (e) {
+        // 同上面成功路徑的日期檢查：人已經不在這一天，別天的失敗不該蓋掉正在看的畫面
+        if (date !== currentDateRef.current) return
         showNotice('讀不到這天的紀錄', friendlyError(errMsg(e)), '重試', () => void loadDay(date))
       }
     },
@@ -457,10 +459,10 @@ export default function App() {
          記一筆的 sheet 不在那道 gate 裡，會把 A 日的熱量算進 B 日的「已吃」
          （precommit deep review 抓到）。不同天時不必補償：那筆從沒真的刪掉，
          下次載入那天自然還在。
-         重試也要帶上 p.date——不帶的話 loadDay 會用預設的 currentDate，重撈的是
-         使用者現在看的那天，而不是真正出事的那天。 */
+         重試重撈的是**正在看的那天**：帶 p.date 的話，人已在別天時 loadDay 會先清空 rows、
+         再被日期檢查擋下，notice 沒人清，畫面就卡死在這裡（2026-11-02 盤點抓到）。 */
       if (p.date === currentDateRef.current) restore(p)
-      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDayRef.current(p.date))
+      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDayRef.current(currentDateRef.current))
     }
   }, [restore, showNotice])
 

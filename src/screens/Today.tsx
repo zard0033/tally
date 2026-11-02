@@ -4,7 +4,7 @@
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useMotionValue, type PanInfo } from 'motion/react'
+import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import DateStrip from '@/components/DateStrip'
 import SegmentedControl from '@/components/SegmentedControl'
@@ -366,7 +366,15 @@ function SwipeRow({
     // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔。
     // 速度也要配 moved < 0 把關，否則縱向甩動時的 velocity.x 雜訊會誤判成開啟
     const flung = info.velocity.x < -320 && moved < 0
-    onSwipeTo(moved < -OPEN_AT || flung)
+    const next = moved < -OPEN_AT || flung
+    onSwipeTo(next)
+    /* `animate` prop 只在 `open` 真的變了才會重跑：列開著又往左多拉，沒有東西把它吸回去，
+       就停在拖到的位置（SwipeDelete 修過同一個真機 bug，那邊有完整說明）。 */
+    if (next === open) {
+      const target = next ? -REVEAL : 0
+      if (quick) x.jump(target)
+      else animate(x, target, { ...SETTLE_SPRING, velocity: 0 })
+    }
   }
 
   const editorId = `item-editor-${row.id}`
@@ -523,6 +531,8 @@ function ItemEditor({
 }) {
   const [localQty, setLocalQty] = useState(qty)
   const [draft, setDraft] = useState(String(qty))
+  /** 最後一次存成功的值，是比較「有沒有變」與失敗回滾的基準。不能用 localQty：打字途中它已經跟著改了。 */
+  const savedQty = useRef(qty)
   /* 餐別也走樂觀：按下當場就渲染成選中，不等往返。原本 aria-current 綁 row.meal（伺服器
      真值）＋ disabled 只改 cursor，於是慢網路下按「晚餐」畫面上一個 pixel 都不會變，
      使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。專案在隔壁對
@@ -554,16 +564,16 @@ function ItemEditor({
      那需要多一組 timer 生命週期，而這個元件已經在 timer 清理上翻船過兩次（長按計時器
      沒隨 unmount 清、sheet 關閉計時器），先不引入第三組。 */
   async function commitQty(next: number) {
-    const prevQty = localQty
-    const prevDraft = draft
     setLocalQty(next)
     setDraft(String(next))
+    if (next === savedQty.current) return // 只送有變的，同品名與營養欄
     try {
       await onQty(next)
+      savedQty.current = next
       setSaid(`份量已改為 ${next}`)
     } catch {
-      setLocalQty(prevQty)
-      setDraft(prevDraft)
+      setLocalQty(savedQty.current)
+      setDraft(String(savedQty.current))
       // 訊息由 Today 層的 editErr 供應（它活得比這個元件久），這裡只負責回滾自己的值
     }
   }

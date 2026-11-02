@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 34 pages | Last updated: 2026-11-02T01:46:40.000Z
+> 35 pages | Last updated: 2026-11-02T04:43:04.514Z
 
 ## debugging
 
@@ -30,6 +30,7 @@
 
 ## reference
 
+- [cleanup-inventory 整體程式碼盤點（2026-11-02）](cleanup-inventory-2026-11-02.md) — # cleanup-inventory 整體程式碼盤點（2026-11-02）
 - [e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄](e2e-reference.md) — # e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄
 - [lesson-pointers 教訓指標與蒸餾（本體已升格，這裡只留指標）](lesson-pointers.md) — # lesson-pointers 教訓指標與蒸餾（本體已升格，這裡只留指標）
 

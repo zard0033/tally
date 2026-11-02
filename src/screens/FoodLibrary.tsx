@@ -118,19 +118,24 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   }
 
   async function archive(f: Food) {
-    setHiddenIds((prev) => new Set(prev).add(f.id))
-    window.clearTimeout(undoTimer.current)
-    try {
-      const archivedFood = await onArchiveFood(f)
-      setArchived((prev) => (prev ? [archivedFood, ...prev] : prev))
-      setUndo({ food: archivedFood })
-      undoTimer.current = window.setTimeout(() => setUndo(null), 5000)
-    } catch {
+    const unhide = () =>
       setHiddenIds((prev) => {
         const next = new Set(prev)
         next.delete(f.id)
         return next
       })
+    setHiddenIds((prev) => new Set(prev).add(f.id))
+    if (editingId === f.id) setEditingId(null) // 不然復原後編輯區帶著舊草稿復活
+    window.clearTimeout(undoTimer.current)
+    try {
+      const archivedFood = await onArchiveFood(f)
+      // 成功後 App 已把它濾出 foods，隱藏功成身退；留著的話之後復原回來還是看不到
+      unhide()
+      setArchived((prev) => (prev ? [archivedFood, ...prev] : prev))
+      setUndo({ food: archivedFood })
+      undoTimer.current = window.setTimeout(() => setUndo(null), 5000)
+    } catch {
+      unhide()
     }
   }
 
@@ -139,16 +144,10 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     if (!p) return
     setUndo(null)
     window.clearTimeout(undoTimer.current)
-    setHiddenIds((prev) => {
-      const next = new Set(prev)
-      next.delete(p.food.id)
-      return next
-    })
     setArchived((prev) => prev?.filter((f) => f.id !== p.food.id) ?? prev)
     try {
       await onUnarchiveFood(p.food)
     } catch {
-      setHiddenIds((prev) => new Set(prev).add(p.food.id))
       setArchived((prev) => (prev ? [p.food, ...prev] : prev))
     }
   }
@@ -230,13 +229,14 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   )
 
   const sourceList = tab === 'active' ? foods : archived
-  // hiddenIds 只套用在使用中分頁——它是「封存中，正在等 5 秒 undo」的樂觀隱藏集合，
+  // hiddenIds 只套用在使用中分頁——它是「封存請求送出中」的樂觀隱藏集合，
   // 已封存分頁的清單本來就該看得到剛封存的那筆（precommit-review 抓到：共用同一份
   // hiddenIds 會讓剛封存的食物在「已封存」分頁也消失，5 秒後永遠救不回來）。
   const visible = sourceList
     ?.filter((f) => tab !== 'active' || !hiddenIds.has(f.id))
     .filter((f) => foodMatches(f, query)) ?? null
   const groups = visible ? groupByVendor(visible) : null
+  const editorShown = visible?.some((f) => f.id === editingId) ?? false
 
   return (
     <div className="main" data-screen="food-library" style={{ position: 'relative' }}>
@@ -330,11 +330,12 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
       {/* 編輯中隱藏：FAB 是 fixed 定位，展開的編輯區一長，操作列剛好捲到 FAB 那個
        *  高度時兩者會疊在一起，儲存鈕被蓋住一半（使用者截圖回報）。編輯時本來就用不到
-       *  「新增食物」，藏起來比調整捲動位置或搶 z-index 乾淨。 */}
+       *  「新增食物」，藏起來比調整捲動位置或搶 z-index 乾淨。看的是編輯區在不在畫面上，
+       *  不是 editingId：那一列被搜尋濾掉時連取消鈕都按不到，新增鈕不能跟著消失。 */}
       {/* 復原提示出現時也一起藏（v2.29）：pill 從「封頂半個螢幕」放寬成整行之後，長品名
           會水平覆蓋到右下角的 FAB，而 pill 的 z-index 6 高於 FAB 的 5——那 5 秒內按下去
           會變成誤觸復原。同「編輯中隱藏 FAB」的處理：藏起來比互搶 z-index 或調位置乾淨。 */}
-      {editingId === null && !undo && (
+      {!editorShown && !undo && (
         <button className="lib-fab" type="button" aria-label="新增食物" onClick={() => openAdd(null)}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         </button>

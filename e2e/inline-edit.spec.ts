@@ -246,3 +246,29 @@ test('換日期時編輯區隨那一列一起卸載，且不留下任何 PATCH',
   await expect(page.locator(`${ROW} .qty`)).toHaveCount(0)
   await expect(page.locator(`${ROW} .kc`)).toHaveText('420')
 })
+
+/* 份量欄（2026-11-02 整體盤點抓到）：品名與營養欄都只送有變的，份量欄沒有這道檢查；
+   打字途中 localQty 已經改掉，失敗時回滾基準是剛打的數字，畫面看起來像存好了。 */
+test('份量欄點進去沒改就離開：不送 PATCH', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  const input = page.locator(`${ROW} .qty-value`)
+  await input.focus()
+  await input.blur()
+  await page.waitForTimeout(300)
+  expect(await patches(page), '沒改份量不該寫入').toHaveLength(0)
+  await expect(input).toHaveValue('1')
+})
+
+test('份量欄打字後送出失敗：回到改之前的值，不留剛打的數字', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'PATCH' }
+  })
+  const input = page.locator(`${ROW} .qty-value`)
+  await input.fill('3')
+  await input.blur()
+  await expect.poll(async () => (await patches(page)).length, { message: '應該送出一次' }).toBe(1)
+  await expect(input, '失敗後要回到伺服器上的值').toHaveValue('1')
+})

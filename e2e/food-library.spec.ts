@@ -718,3 +718,45 @@ test('辨識失敗只留一行字，欄位不動、仍可手動完成新增', as
   await page.locator('#lf-kcal').fill('100')
   await expect(sheet.locator('.scan-error')).toHaveCount(0)
 })
+
+/* 2026-11-02 整體盤點抓到。stub 分不出兩個分頁（見檔頭），但這條驗的是「復原之後回到
+   使用中看得到」，靠的是 App 的 foods，不靠已封存清單的內容。 */
+test('封存超過復原時限後，從已封存復原：回到使用中看得到', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const name = ((await rows(page).first().locator('.nm').textContent()) ?? '').trim()
+  await rows(page).first().locator(`[aria-label="封存 ${name}"]`).click()
+  await expect(page.locator('.undo-pill')).toBeVisible()
+  await expect(page.locator('.undo-pill'), '復原提示應該在 5 秒後消失').toHaveCount(0, { timeout: 8000 })
+
+  await page.locator('.tabrow .chip', { hasText: '已封存' }).click()
+  await page.locator(`[aria-label="復原 ${name}"]`).click()
+  await page.locator('.tabrow .chip', { hasText: '使用中' }).click()
+  await expect(page.locator(`[aria-label="封存 ${name}"]`), '復原的食物要回到使用中').toBeVisible()
+})
+
+test('編輯中的列被搜尋濾掉：新增鈕要回來，不然沒有取消鈕也沒有新增鈕', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const name = ((await rows(page).first().locator('.nm').textContent()) ?? '').trim()
+  await rows(page).first().locator(`[aria-label="編輯 ${name}"]`).click()
+  await expect(page.locator('.lib-fab')).toHaveCount(0)
+
+  await page.locator('[aria-label="搜尋食品庫"]').fill('不可能有這個品名')
+  await expect(page.locator('.lib-fab'), '編輯區已不在畫面上，新增鈕要回來').toBeVisible()
+})
+
+test('封存編輯中的列再復原：編輯區收起、新增鈕回來', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="編輯 ${name}"]`).click()
+  await expect(page.locator('.lib-edit')).toHaveCount(1)
+  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await page.locator('.undo-pill').click()
+
+  await expect(page.locator(`[aria-label="封存 ${name}"]`)).toBeVisible()
+  await expect(page.locator('.lib-edit'), '編輯區不該復活').toHaveCount(0)
+  await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
+})

@@ -289,6 +289,8 @@ export async function seedFetchStub(
           if (m) {
             w.__intakeCalls.push(m[1])
             if (intakeDelayMs) await new Promise((r) => setTimeout(r, intakeDelayMs))
+            // 延遲期間才斷線：造「慢請求晚到才失敗」，開頭那道檢查攔不到
+            if (intakeDelayMs && w.__dataDown) throw new TypeError('Load failed')
             if (m[1] === today) return json(fix.intake)
             if (m[1] === yday) return json(fix.intakeYday)
             return json([])
