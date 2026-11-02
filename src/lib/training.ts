@@ -651,7 +651,7 @@ export const formatKg = (n: number): string => String(Number(n.toFixed(2)))
 /* ═══════════ 組編輯 sheet 的欄位規則 ═══════════ */
 
 /** 上限對齊 DDL（workout_sets：weight_kg between 0 and 1000、reps between 0 and 999，spec.md）。
- *  次數上限數值上等於 MAX_TARGET_REPS，但那是 workout_routine_exercises.target_reps（下限 1）
+ *  次數上限數值上等於 MAX_TARGET_REPS，但那是 routine_exercises.target_reps（下限 1）
  *  的上限，是另一個欄位，不共用常數。 */
 export const MAX_SET_WEIGHT = 1000
 export const MAX_SET_REPS = 999

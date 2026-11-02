@@ -96,11 +96,8 @@ export function niceDomain(values: number[], pad: number, step: number): [number
   return [lo, hi]
 }
 
-/** 趨勢圖的 X 軸設定（recharts 的 XAxis props）：t 是日序，刻度顯示月/日。Analysis 與 WeightTrend 共用。 */
-export const trendXAxis = (dom: [number, number] | null, ticks: number[]) => ({
-  type: 'number' as const, dataKey: 't', domain: dom ?? ['auto', 'auto'] as [string, string], ticks,
-  tickFormatter: (t: number) => monthDay(isoOfDay(t)), tickLine: false, axisLine: { stroke: 'var(--rule)' },
-})
+/** 趨勢圖 X 軸的刻度文字：t 是日序，顯示月/日。 */
+export const trendTickLabel = (t: number): string => monthDay(isoOfDay(t))
 
 /** 趨勢圖的數值顯示：一位小數。 */
 export const fmt1 = (n: number) => n.toFixed(1)

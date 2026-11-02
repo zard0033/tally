@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_FAT_MAX, BODY_FAT_MIN, fmt1, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendXAxis, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { BODY_FAT_MAX, BODY_FAT_MIN, fmt1, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
 import { dayIndex } from './dates'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
@@ -124,13 +124,9 @@ describe('fmt1', () => {
   })
 })
 
-describe('trendXAxis', () => {
-  it('有 domain 就用它，沒有退回 auto；刻度顯示月/日', () => {
-    const ax = trendXAxis([100, 200], [100, 150, 200])
-    expect(ax.domain).toEqual([100, 200])
-    expect(ax.ticks).toEqual([100, 150, 200])
-    expect(trendXAxis(null, []).domain).toEqual(['auto', 'auto'])
-    expect(ax.tickFormatter(dayIndex('2026-09-06'))).toBe('9/6')
+describe('trendTickLabel', () => {
+  it('日序顯示成月/日', () => {
+    expect(trendTickLabel(dayIndex('2026-09-06'))).toBe('9/6')
   })
 })
 

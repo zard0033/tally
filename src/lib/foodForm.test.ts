@@ -66,8 +66,9 @@ describe('foodMatches', () => {
 describe('byFoodName', () => {
   it('同名回 0，不同名依 zh-Hant 排序', () => {
     expect(byFoodName({ name: '雞胸' }, { name: '雞胸' })).toBe(0)
-    const sorted = [{ name: 'b' }, { name: 'a' }].sort(byFoodName)
-    expect(sorted.map((x) => x.name)).toEqual(['a', 'b'])
+    // 碼位順序「三」在「八」前面，筆畫順序相反：拿掉 zh-Hant 這條就會紅
+    const sorted = [{ name: '三商' }, { name: '八方' }].sort(byFoodName)
+    expect(sorted.map((x) => x.name)).toEqual(['八方', '三商'])
   })
 })
 

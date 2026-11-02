@@ -12,7 +12,8 @@ import { localDate, monthDay, tableDate } from '@/lib/dates'
 import { recoveryStatus, type MuscleRecovery } from '@/lib/recovery'
 import { bestE1rm, chartPoints, progressList, strengthHistory, type ChartPoint } from '@/lib/strength'
 import { formatKg, MUSCLE_GROUP_LABEL, type TrainingDb } from '@/lib/training'
-import { fmt1, niceDomain, TREND_RANGES, trendXAxis, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
+import { fmt1, niceDomain, TREND_RANGES, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
+import { trendXAxis } from '@/components/trendAxis'
 
 interface AnalysisProps {
   db: TrainingDb

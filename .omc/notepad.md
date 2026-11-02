@@ -61,7 +61,7 @@
 - `notepad_write_priority`／`notepad_write_manual` 2026-10-20 兩次回報成功但檔案沒變；改用 Edit／Write 直接改 `.omc/notepad.md`，改完回讀。
 - 開暫存 worktree 收的時候：先 `cmd /c rmdir` 拆掉 node_modules junction，再 `git worktree remove`，別遞迴刪。
 ### 2026-11-02 04:43
-[待決 2026-11-02] 整體 code 盤點完成、沒改 code：完整清單在 wiki `cleanup-inventory`，等使用者選先處理哪批。
+[追加 2026-11-02] 使用者裁決續做清理批次 2、3、4，全部做完、全量綠後 push。
 ### 2026-11-02 05:16
 [追加 2026-11-02] 整體盤點修 B1–B6（使用者選「B1–B6＋批次 1」），清單在 wiki `cleanup-inventory`。
 

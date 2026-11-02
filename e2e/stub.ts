@@ -79,6 +79,8 @@ export async function seedFetchStub(
          * 跟 __failNext 的差別：那個是一次性 500（transient），這個用來造 4xx（409／403＝rejected、
          * 401＝auth）——佇列對 4xx 不會自己好，要持續拒絕才驗得到「卡住了怎麼辦」那條路徑。 */
         __rejectWrite: Record<string, number> | null
+        /* 非 GET 請求記錄後延遲這麼久才回應：造「前一筆還在路上」。 */
+        __writeDelayMs: number
         /* 拍照辨識（read-label Edge Function）的回應控制。**預設 null＝比照其他非 rest/v1 的
          * 請求擋下來並記進 __blocked**，測試要用才明確打開——不讓「忘了設」變成靜默放行。
          * delayMs 是讓測試有時間在辨識途中操作畫面（例如打字），那正是 stale closure 那類
@@ -100,6 +102,7 @@ export async function seedFetchStub(
       w.__intakeCalls = []
       w.__failNext = null
       w.__rejectWrite = null
+      w.__writeDelayMs = 0
       w.__scan = null
 
       const TRAINING_TABLES = [
@@ -215,6 +218,14 @@ export async function seedFetchStub(
             body = opts.body ?? null
           }
           w.__writes.push({ path, table, method, body })
+
+          if (w.__writeDelayMs) {
+            // 失敗要在送出當下判定，不然 __failNext 會被延遲中的下一筆搶走
+            const failing = w.__failNext?.table === table && w.__failNext.method === method
+            if (failing) w.__failNext = null
+            await new Promise((r) => setTimeout(r, w.__writeDelayMs))
+            if (failing) return json({ message: '模擬的寫入失敗' }, 500)
+          }
 
           // 記錄在前、判失敗在後：要能斷言「確實送出了，但伺服器回錯」
           if (w.__failNext && w.__failNext.table === table && w.__failNext.method === method) {

@@ -48,8 +48,13 @@ export default function ItemEditor({
 }) {
   const [localQty, setLocalQty] = useState(qty)
   const [draft, setDraft] = useState(String(qty))
-  /** 最後一次存成功的值，是比較「有沒有變」與失敗回滾的基準。不能用 localQty：打字途中它已經跟著改了。 */
+  /** 最後一次存成功的值：失敗時回到它。 */
   const savedQty = useRef(qty)
+  /** 最後送出的值，是比較「有沒有變」的基準。不能用 savedQty：前一筆還在路上時按 + 再按 −，會被當成沒變而不送，
+   *  資料庫停在 + 的結果；也不能用 localQty：打字途中它已經跟著改了。 */
+  const sentQty = useRef(qty)
+  const inFlight = useRef(0)
+  const anyFailed = useRef(false)
   /* 餐別也走樂觀：按下當場就渲染成選中，不等往返。原本 aria-current 綁 row.meal（伺服器
      真值）＋ disabled 只改 cursor，於是慢網路下按「晚餐」畫面上一個 pixel 都不會變，
      使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。 */
@@ -81,15 +86,24 @@ export default function ItemEditor({
   async function commitQty(next: number) {
     setLocalQty(next)
     setDraft(String(next))
-    if (next === savedQty.current) return // 只送有變的，同品名與營養欄
+    if (next === sentQty.current) return // 只送有變的，同品名與營養欄
+    sentQty.current = next
+    inFlight.current += 1
     try {
       await onQty(next)
       savedQty.current = next
       setSaid(`份量已改為 ${next}`)
     } catch {
+      anyFailed.current = true
+      // 訊息由 Today 層的 editErr 供應（它活得比這個元件久），這裡只負責回滾自己的值
+    }
+    inFlight.current -= 1
+    // 全部回來才回滾：前一筆失敗、後一筆成功時畫面本來就對，提早回滾會停在舊值
+    if (inFlight.current === 0 && anyFailed.current) {
+      anyFailed.current = false
+      sentQty.current = savedQty.current
       setLocalQty(savedQty.current)
       setDraft(String(savedQty.current))
-      // 訊息由 Today 層的 editErr 供應（它活得比這個元件久），這裡只負責回滾自己的值
     }
   }
 

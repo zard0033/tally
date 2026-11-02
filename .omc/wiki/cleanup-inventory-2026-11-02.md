@@ -20,6 +20,8 @@ schemaVersion: 1
 
 **還沒處理**：其餘 15 個疑似 bug（含 B7）；`app.css:370` 的 `.ed-error` margin 被後面的 `.sheet-error` 蓋掉，上方註解也不準；`LogSheet`、`api.ts`、`Login.tsx`、`main.tsx` 還有提到 legacy 的舊註解；`training.ts`「補齊預設動作」的舊說法；`DESIGN.md` 元件規則表「店家欄位」「食物表單」還寫 vaul；`prefersReducedMotion`、`errText` 多份；`FoodFormFields` 的 `portalContainer` 是否還需要沒有實測。`src/components/` 的新檔不在 `e2e:affected` 的表上，改了會升全量，是刻意的（共用元件影響面看不出來）。
 
+**批次 1 刪死規則時連帶消失的意圖**：掃描填入的 340ms 文字淡入（`app.css` 的 `.form-lock.scan-filled`）在減少動態下仍會跑。被刪的 reduced-motion 規則因權重輸給 `:not([id$="vendor"])` 那條，本來就沒作用，所以畫面沒變，但要關掉的話得修權重。
+
 **要真機確認**：飲食列放手吸回（B5）、左滑手感（`swipePhysics`）、分頁指示器滑動（`TabBar`）、iOS 鍵盤（`useViewportInsets`）。
 
 **狀態說明**：其餘 bug 都來自讀碼，沒有實際重現，修之前要先重現。標「回讀」的是主對話親自對過原始碼；其餘只有審查 agent 回讀過。基線全量見 `e2e-reference`。
@@ -85,7 +87,7 @@ schemaVersion: 1
 - `FoodFormFields` 與 `DailyGoal` 的輸入框、`CardioSheet` 與 `RoutineTargetSheet`、`ExerciseLibrary` 與 `RoutineEditor`、`Training.tsx:276-291`：語意不同或抽了不划算
 - `.screen svg` 與 `.sheet svg`：併了會改 stroke 勝負
 - `App.tsx` 的開機與 intake 待刪邏輯：競態修最多次，邊界不乾淨
-- `queue.ts`、`queueStore.ts`、`sender.ts`、`useTraining.ts:84`：壞了難救，沒有明確問題不動
+- `queue.ts`、`queueStore.ts`、`sender.ts`、`useTraining.ts:84`：壞了難救，沒有明確問題不動（批次 1 只拿掉 `sender.ts` 的 `SenderTable` export，型別層面，但它在 CLAUDE.md 的例外清單上，全量要在 push 前綠）
 - `knip` 誤判：`scripts/build-*.mjs`、`supabase/functions/*/index.ts`
 - 重複程式碼總量 0.77%（14 處、125 行），工具掃到的片段多半不值得處理
 

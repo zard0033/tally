@@ -1173,5 +1173,17 @@ test('減少動態：開著再多拉、放手 → 直接回到開啟位置', asy
   await expect.poll(() => slideX(page)).toBeCloseTo(-56, 0)
   const g2 = await grabPoint(page)
   await slowDrag(page, g2, leg(g2, { x: g2.x - 30, y: g2.y }, 4))
+  // 只看終點驗不出來（spring 走完也到 -56）：記放手後每次 style 寫入，直接到位就不會有中間值
+  await page.locator('.timeline .item-slide').first().evaluate((el) => {
+    const xs: number[] = []
+    ;(window as unknown as { __xs: number[] }).__xs = xs
+    new MutationObserver(() => xs.push(new DOMMatrix(getComputedStyle(el).transform).m41)).observe(el, {
+      attributes: true,
+      attributeFilter: ['style'],
+    })
+  })
   await expect.poll(() => slideX(page), { message: '減少動態下也要回到 -56' }).toBeCloseTo(-56, 0)
+  const xs = await page.evaluate(() => (window as unknown as { __xs: number[] }).__xs)
+  const between = xs.filter((x) => x < -56.5 && x > -85.5)
+  expect(between, '減少動態不該跑 spring').toEqual([])
 })

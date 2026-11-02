@@ -397,7 +397,7 @@ export default function LogSheet(props: LogSheetProps) {
                 **role="tab" 一併拿掉**：tab 角色的選中態屬性是 aria-selected，而完整的
                 APG tablist 契約還要 roving tabindex ＋ 方向鍵導航 ＋ aria-controls 指向
                 tabpanel。半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟——這是
-                Today.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
+                ItemEditor.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
             <div className="chiprow" role="group" aria-label="餐別">
               {MEALS.map((m) => (
                 <button

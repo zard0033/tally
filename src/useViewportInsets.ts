@@ -19,7 +19,7 @@ export function useViewportInsets() {
 
      **上面那段描述的效果，在 vaul 的兩個 sheet 上要到 v2.34 才第一次真的發生**：v2.32～v2.33
      期間 vaul 的 `repositionInputs` 用 inline style 蓋著它，這裡算得再對也寫不進版面。
-     全文（含關掉 flag 的兩個代價）在 app.css `.sheet` 那段。這個 effect 本身沒有改動——
+     這個 effect 本身沒有改動——
      它一直是對的，只是沒被套用。
 
      **第二個變數 `--vvtop`（v2.35）＝ `vv.offsetTop`，補的是完全不同的一件事**：欄位在

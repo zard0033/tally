@@ -760,3 +760,35 @@ test('封存編輯中的列再復原：編輯區收起、新增鈕回來', async
   await expect(page.locator('.lib-edit'), '編輯區不該復活').toHaveCount(0)
   await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
 })
+
+test('封存編輯中的列但送不出去：編輯區與草稿都留著', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="編輯 ${name}"]`).click()
+  const nameInput = page.locator('.lib-edit input').first()
+  await nameInput.fill('改到一半的草稿')
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'foods', method: 'PATCH' }
+  })
+  await first.locator(`[aria-label="封存 ${name}"]`).click()
+
+  await expect(page.locator('.lib-edit'), '封存失敗不該丟掉編輯區').toHaveCount(1)
+  await expect(page.locator('.lib-edit input').first(), '草稿要留著').toHaveValue('改到一半的草稿')
+})
+
+test('已封存分頁編輯到一半就復原：回到使用中編輯區不復活', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const name = ((await rows(page).first().locator('.nm').textContent()) ?? '').trim()
+  await page.locator('.tabrow .chip', { hasText: '已封存' }).click()
+  await page.locator(`[aria-label="編輯 ${name}"]`).click()
+  await expect(page.locator('.lib-edit')).toHaveCount(1)
+  await page.locator(`[aria-label="復原 ${name}"]`).click()
+  await page.locator('.tabrow .chip', { hasText: '使用中' }).click()
+
+  await expect(page.locator(`[aria-label="封存 ${name}"]`)).toBeVisible()
+  await expect(page.locator('.lib-edit'), '舊草稿不該復活').toHaveCount(0)
+  await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
+})

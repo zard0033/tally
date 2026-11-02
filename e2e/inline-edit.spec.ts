@@ -272,3 +272,56 @@ test('份量欄打字後送出失敗：回到改之前的值，不留剛打的�
   await expect.poll(async () => (await patches(page)).length, { message: '應該送出一次' }).toBe(1)
   await expect(input, '失敗後要回到伺服器上的值').toHaveValue('1')
 })
+
+/* 連按時前一筆還在路上（2026-11-02 push 前 review 抓到）。比對基準若用「存成功的值」，
+   按 + 再按 − 會被當成沒變而不送，資料庫停在 + 的結果、畫面卻顯示 −。 */
+const slowWrites = (page: Page, ms: number) =>
+  page.evaluate((delay) => {
+    ;(window as unknown as { __writeDelayMs: number }).__writeDelayMs = delay
+  }, ms)
+
+test('連按：按 + 再按 − 時前一筆還沒回來，兩筆都要送，最後一筆是改回來的值', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await slowWrites(page, 400)
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await page.locator(`${ROW} .qty-btn`).first().click()
+  await expect.poll(async () => (await patches(page)).length, { message: '兩筆都要送出' }).toBe(2)
+  expect((await patches(page)).at(-1)?.body, '最後一筆要是改回來的 1').toEqual({ qty: 1 })
+  await page.waitForTimeout(1000) // 兩筆都落定
+  await expect(page.locator(`${ROW} .qty-value`)).toHaveValue('1')
+})
+
+test('連按：前一筆失敗、後一筆成功，畫面停在成功的值', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await slowWrites(page, 300)
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'PATCH' }
+  })
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await expect.poll(async () => (await patches(page)).length).toBe(2)
+  await page.waitForTimeout(1000) // 兩筆都落定
+  await expect(page.locator(`${ROW} .qty-value`), '第二筆成功，伺服器上是 3').toHaveValue('3')
+})
+
+test('連按：兩筆都失敗，畫面回到原本的值，之後再按同一個值還是會送', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await slowWrites(page, 200)
+  await page.evaluate(() => {
+    ;(window as unknown as { __rejectWrite: Record<string, number> | null }).__rejectWrite = { intake: 500 }
+  })
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await expect.poll(async () => (await patches(page)).length).toBe(2)
+  await page.waitForTimeout(800) // 兩筆都落定
+  await expect(page.locator(`${ROW} .qty-value`), '兩筆都失敗要回到 1').toHaveValue('1')
+
+  await page.evaluate(() => {
+    ;(window as unknown as { __rejectWrite: Record<string, number> | null }).__rejectWrite = null
+  })
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await expect.poll(async () => (await patches(page)).length, { message: '失敗後再按 + 要送得出去' }).toBe(3)
+})

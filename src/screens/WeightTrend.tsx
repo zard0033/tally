@@ -10,7 +10,8 @@ import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate, monthDay, tableDate } from '@/lib/dates'
-import { fmt1, niceDomain, TREND_RANGES, trendXAxis, trendPoints, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
+import { fmt1, niceDomain, TREND_RANGES, trendPoints, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
+import { trendXAxis } from '@/components/trendAxis'
 
 /** 「全部」要撈完整歷史：listWeights 預設只給 90 筆。1000 是 Supabase 單次回應上限。 */
 const FULL_HISTORY = 1000

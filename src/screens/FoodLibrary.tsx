@@ -100,12 +100,13 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         return next
       })
     setHiddenIds((prev) => new Set(prev).add(f.id))
-    if (editingId === f.id) setEditingId(null) // 不然復原後編輯區帶著舊草稿復活
     window.clearTimeout(undoTimer.current)
     try {
       const archivedFood = await onArchiveFood(f)
       // 成功後 App 已把它濾出 foods，隱藏功成身退；留著的話之後復原回來還是看不到
       unhide()
+      // 成功才收起：失敗時草稿要留著；不收的話復原後編輯區會帶著舊草稿復活
+      if (editingId === f.id) setEditingId(null)
       setArchived((prev) => (prev ? [archivedFood, ...prev] : prev))
       setUndo({ food: archivedFood })
       undoTimer.current = window.setTimeout(() => setUndo(null), 5000)
@@ -131,6 +132,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     setArchived((prev) => prev?.filter((x) => x.id !== f.id) ?? prev)
     try {
       await onUnarchiveFood(f)
+      if (editingId === f.id) setEditingId(null) // 同封存：復原後編輯區不帶舊草稿復活
     } catch {
       setArchived((prev) => (prev ? [f, ...prev] : prev))
     }
@@ -170,7 +172,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
      app.css `.sheet` 那段（`--kb`／`--vvtop`）。
 
      `locked={scanBusy}`：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
-     而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */
+     而誤關的代價是那張照片白拍。函式端 45 秒逾時保證最壞情況不會被關太久。 */
   const addSheet = (
     <SpringSheet open={addOpen} onClose={() => setAddOpen(false)} label={addTitle} screen="food-add-sheet" initialFocus={addSheetRef} popupRef={addSheetRef} locked={scanBusy}>
       <SheetGrabZone className="sheet-head">
