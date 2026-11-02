@@ -9,10 +9,12 @@
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
 import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
+import SubPageTop from '@/components/SubPageTop'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
-import { BLANK_FOOD_FORM, foodToForm, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
+import { BLANK_FOOD_FORM, byFoodName, foodMatches, foodToForm, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
 export interface FoodLibraryProps {
   /** 使用中的食品庫（App 既有 state，已排除封存）。 */
@@ -26,18 +28,10 @@ export interface FoodLibraryProps {
 
 type Tab = 'active' | 'archived'
 
-const byName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
-
-function foodMatches(f: Food, q: string): boolean {
-  const s = q.trim().toLowerCase()
-  if (!s) return true
-  return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)
-}
-
 /** 依店家分組，未標店家的排最後——它不是一個真的店家名，跟著筆畫排序沒有意義。 */
 function groupByVendor(foods: Food[]): { vendor: string; items: Food[] }[] {
   const map = new Map<string, Food[]>()
-  for (const f of [...foods].sort(byName)) {
+  for (const f of [...foods].sort(byFoodName)) {
     const key = f.vendor ?? '未標店家'
     const list = map.get(key)
     if (list) list.push(f)
@@ -57,8 +51,6 @@ const EDIT_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"
    尺寸下約 2.5px），跟左右兩顆並排時看起來就是沒對齊（使用者真機回報，量 getBBox 確認）。
    相對指令（a／h／v）不受位移影響，只有起點 M 與絕對的 V 要跟著改。 */
 const TEMPLATE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="7.5" width="11" height="11" rx="2" /><path d="M8.5 7.5V6.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1" /></svg>
-const ARCHIVE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1" /><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><path d="M10 12h4" /></svg>
-const RESTORE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>
 
 export default function FoodLibrary(props: FoodLibraryProps) {
   const { foods, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onBack } = props
@@ -240,12 +232,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
   return (
     <div className="main" data-screen="food-library" style={{ position: 'relative' }}>
-      <div className="lib-topbar">
-        <button className="icon-btn" type="button" aria-label="返回設定" onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-        </button>
-        <h1>食品庫管理</h1>
-      </div>
+      <SubPageTop title="食品庫管理" backLabel="返回設定" onBack={onBack} />
 
       <div className="search-wrap">
         <div className="search-box">

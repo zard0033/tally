@@ -1055,6 +1055,17 @@ export const isCardioExercise = (row: Row | null | undefined): boolean => exerci
 /** 這張有氧卡記了沒（D5：有氧卡沒有勾，分鐘有值＝有記錄）。 */
 export const cardioRecorded = (entry: Row): boolean => entry.minutes !== null && entry.minutes !== undefined && entry.minutes !== ''
 
+/** 這張卡用有氧的畫法：有氧動作、而且沒有組。有氧動作卻有組的卡（舊版 App 把有氧當重訓加進來；照課表開訓時
+ *  動作還沒載到本機底、addExerciseOps 當重訓產了組）退回重訓的畫法——組看得到、刪得掉、打過勾的組移除前照樣先問。 */
+export const isCardioCard = (item: WorkoutExerciseDetail): boolean => isCardioExercise(item.exercise) && item.sets.length === 0
+
+/** 這張卡有沒有記下東西：有氧看分鐘，重訓看有沒有打過勾的組。換動作、移除動作要不要先問都靠它。 */
+export const entryHasRecord = (item: WorkoutExerciseDetail): boolean =>
+  isCardioCard(item) ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
+
+/** 動作名；動作被刪或底還沒載到（exercise 是 null）時的退路。 */
+export const exerciseDisplayName = (exercise: Row | null | undefined): string => (exercise ? String(exercise.name) : '（已刪除的動作）')
+
 /** workout_exercises 上的四個有氧欄位（類型在動作上，不在這一列）。 */
 export interface CardioFields {
   minutes: number | null

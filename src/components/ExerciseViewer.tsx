@@ -11,8 +11,8 @@ import { useEffect, useState, type RefObject } from 'react'
 import { useReducedMotion } from 'motion/react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import SpringSheet from '@/components/SpringSheet'
-import { catalogKey } from '@/lib/exerciseCatalog'
-import { MUSCLE_GROUP_LABEL, type MuscleGroup, type Row } from '@/lib/training'
+import { catalogKey, muscleGroupLabel } from '@/lib/exerciseCatalog'
+import type { Row } from '@/lib/training'
 
 const urls = import.meta.glob<string>('/src/assets/exercise-gifs/*.gif', { eager: true, query: '?url', import: 'default' })
 
@@ -33,7 +33,7 @@ interface ExerciseViewerProps {
 
 export default function ExerciseViewer({ exercise, thumb, open, onClose, finalFocus }: ExerciseViewerProps) {
   const name = String(exercise.name)
-  const group = MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他'
+  const group = muscleGroupLabel(exercise.muscle_group)
   const reduced = useReducedMotion()
   const [gifFailed, setGifFailed] = useState(false)
   // 每次開啟都重新嘗試動畫：離線時退成靜態圖，回線後再開就看得到
@@ -44,7 +44,7 @@ export default function ExerciseViewer({ exercise, thumb, open, onClose, finalFo
   const playing = gif !== undefined && !gifFailed && !reduced
   const note = reduced ? '已開啟「減少動態」，顯示靜態圖' : gifFailed ? '離線時只能看靜態圖，連上網路後再開就有動畫' : null
   return (
-    <SpringSheet open={open} onClose={onClose} label={`${name}示意圖`} title={name} screen="exercise-viewer" fit finalFocus={finalFocus}>
+    <SpringSheet open={open} onClose={onClose} title={name} screen="exercise-viewer" fit finalFocus={finalFocus}>
       <div className="tr-sheet-body tr-sheet-scroll ex-viewer">
         <p className="ex-viewer-group">{group}</p>
         <figure className="ex-viewer-fig">

@@ -36,7 +36,8 @@ import {
   type Weight,
   listIntakeDates,
 } from '@/lib/api'
-import { DUR, sec } from '@/lib/durations'
+import { DUR, EASE, sec } from '@/lib/durations'
+import { byFoodName } from '@/lib/foodForm'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, maxPlanDate, monthBounds, shiftDate, type MonthKey } from '@/lib/dates'
 import { defaultMeal, type MealKey } from '@/lib/meals'
@@ -47,9 +48,8 @@ import LogSheet from '@/screens/LogSheet'
 import Settings from '@/screens/Settings'
 import Training from '@/screens/Training'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import TabBar, { type Tab } from '@/components/TabBar'
 import { useTraining } from '@/useTraining'
-
-type Tab = 'today' | 'training' | 'settings'
 
 interface Notice {
   headline: string
@@ -91,7 +91,6 @@ type BootStatus = 'loading' | 'slow' | 'unreachable'
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
-const byFoodName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
 
 /** 把「待刪那一筆」從 rows 濾掉——這是把 rows 放進畫面的唯一合法方式，不論 rows 是
  *  剛 fetch 回來的、還是從快取取出的。快取本身永遠存**原始**（未濾除）的 rows，
@@ -960,7 +959,7 @@ export default function App() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
+              transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
             >
               {/* 「已刪除」只給讀屏（role=status 播報）。畫面上不寫——列消失本身就是回報，
                   再寫一次就得為它撐出一整條，而使用者要的是一顆「icon ＋ 復原」 */}
@@ -987,81 +986,7 @@ export default function App() {
       {floatingBar && <div className="fog" aria-hidden="true" />}
       {barShown && (
       <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
-        <nav className="tabbar" aria-label="主要導覽">
-          {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
-              各分頁共用同一個 layoutId——切換時上一顆卸載、下一顆掛載發生在同一次
-              React commit，motion 的 projection 系統把這當成「同一個元素移動」，
-              自動在兩個掛載點之間做 FLIP（只動 transform），接管掉原本瞬跳的底色／邊框。
-              --dur-mid（220ms）是 DESIGN.md「中等位移」級距，EASE 沿用全站的
-              cubic-bezier(0.4,0,0.2,1)；reduced-motion 直接把 duration 降到 0，
-              不是另外接 CSS transition-duration（indicator 的位移是 JS 端的
-              motion tween，CSS 那條規則對它沒有作用）。 */}
-          <button
-            className="tab"
-            type="button"
-            aria-current={tab === 'today' ? 'page' : undefined}
-            aria-label="飲食"
-            onClick={() => setTab('today')}
-          >
-            {tab === 'today' && (
-              <motion.span
-                className="tab-indicator"
-                layoutId="tab-indicator"
-                aria-hidden="true"
-                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
-              />
-            )}
-            {/* 刀叉（v2.53：分頁從「日記」改名「飲食」——這頁現在只管吃，訓練有自己的分頁） */}
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21" />
-              <path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3" />
-            </svg>
-          </button>
-          <button
-            className="tab"
-            type="button"
-            aria-current={tab === 'training' ? 'page' : undefined}
-            aria-label="訓練"
-            onClick={() => setTab('training')}
-          >
-            {tab === 'training' && (
-              <motion.span
-                className="tab-indicator"
-                layoutId="tab-indicator"
-                aria-hidden="true"
-                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
-              />
-            )}
-            {/* 啞鈴（樣張 ①）：兩端的片與中間的槓 */}
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
-            </svg>
-          </button>
-          <button
-            className="tab"
-            type="button"
-            aria-current={tab === 'settings' ? 'page' : undefined}
-            aria-label="設定"
-            onClick={() => setTab('settings')}
-          >
-            {tab === 'settings' && (
-              <motion.span
-                className="tab-indicator"
-                layoutId="tab-indicator"
-                aria-hidden="true"
-                transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: [0.4, 0, 0.2, 1] }}
-              />
-            )}
-            {/* 齒輪（cog），取代原本的圓＋放射線——那組讀起來像太陽／亮度圖示，跟「設定」
-                語意不合（review 快篩抓到的）。path 是通用的齒輪幾何座標（lucide 的
-                settings 圖示同款輪廓），不 import lucide-react，手抄座標到這裡即可，
-                stroke/fill 規格沿用 `.screen svg` 的全域設定，不必額外覆寫 */}
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-        </nav>
+        <TabBar tab={tab} onChange={setTab} />
         {/* !failed 不可少：ready 只看 profile/targets/weight，初次載入成功之後才發生的失敗
             （loadDay 掛掉、刪除送不出去）不會讓 ready 轉 false。CTA 搬出 Today 之前是跟著
             Today 一起被錯誤畫面換掉的，搬到底部列之後就沒人管它了——會在「讀不到這天的

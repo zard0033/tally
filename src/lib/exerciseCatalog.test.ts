@@ -9,6 +9,7 @@ import {
   catalogToAdd,
   glyphOf,
   hasCatalogImage,
+  muscleGroupLabel,
   WEIGHT_STEP_KEYS,
   weightStep,
 } from './exerciseCatalog'
@@ -355,5 +356,19 @@ describe('glyphOf', () => {
     expect(glyphOf('legs')).toBe('腿')
     expect(glyphOf('???')).toBe('他')
     expect(glyphOf(undefined)).toBe('他')
+  })
+})
+
+describe('muscleGroupLabel', () => {
+  it('七類各回中文名', () => {
+    expect(muscleGroupLabel('chest')).toBe('胸部')
+    expect(muscleGroupLabel('legs')).toBe('下半身')
+    expect(muscleGroupLabel('other')).toBe('其他')
+  })
+  it('不在七類裡的值（舊資料、空值、非字串）一律「其他」', () => {
+    expect(muscleGroupLabel('cardio')).toBe('其他')
+    expect(muscleGroupLabel('')).toBe('其他')
+    expect(muscleGroupLabel(undefined)).toBe('其他')
+    expect(muscleGroupLabel(null)).toBe('其他')
   })
 })

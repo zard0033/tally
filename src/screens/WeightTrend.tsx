@@ -6,9 +6,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
 import SegmentedControl from '@/components/SegmentedControl'
+import SubPageTop from '@/components/SubPageTop'
+import TrendNoRecords from '@/components/TrendNoRecords'
 import { listWeights, type Weight } from '@/lib/api'
-import { localDate, monthDay } from '@/lib/dates'
-import { isoOfDay, niceDomain, TREND_RANGES, trendPoints, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
+import { localDate, monthDay, tableDate } from '@/lib/dates'
+import { fmt1, niceDomain, TREND_RANGES, trendXAxis, trendPoints, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
 
 /** 「全部」要撈完整歷史：listWeights 預設只給 90 筆。1000 是 Supabase 單次回應上限。 */
 const FULL_HISTORY = 1000
@@ -17,8 +19,6 @@ export interface WeightTrendProps {
   weights: Weight[] | null
   onBack: () => void
 }
-
-const fmt1 = (n: number) => n.toFixed(1)
 
 /** 浮動讀數：值在前（粗）、名稱在後（淡）；體脂沒填寫「—」。 */
 function TrendTip({ active, payload }: TooltipContentProps) {
@@ -60,10 +60,7 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   const fatDomain = useMemo(() => niceDomain(fatPoints.map((p) => p.fat as number), 0.5, 1), [fatPoints])
   const last = points[points.length - 1]
 
-  const axis = {
-    type: 'number' as const, dataKey: 't', domain: dom ?? ['auto', 'auto'] as [string, string], ticks,
-    tickFormatter: (t: number) => monthDay(isoOfDay(t)), tickLine: false, axisLine: { stroke: 'var(--rule)' },
-  }
+  const axis = trendXAxis(dom, ticks)
 
   /* 7 日平均線只在最後一點畫端點與數字；其餘不畫點（每個點都標數字是 dataviz 的反例）。 */
   const endDot = (props: { cx?: number; cy?: number; index?: number }) => {
@@ -83,12 +80,7 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   } else if (source.length === 0) {
     body = <p className="trend-empty">{failed ? '連不上伺服器，載不到體重紀錄。連上網路後再開一次。' : '還沒有體重紀錄'}</p>
   } else if (points.length === 0) {
-    body = (
-      <p className="trend-empty">
-        這段期間沒有紀錄
-        <button type="button" className="trend-link" onClick={() => setRange('all')}>看全部</button>
-      </p>
-    )
+    body = <TrendNoRecords onSeeAll={() => setRange('all')} />
   } else {
     body = (
       <>
@@ -139,7 +131,7 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
             <tbody>
               {[...points].reverse().map((p) => (
                 <tr key={p.date}>
-                  <th scope="row">{p.date.slice(0, 4) === today.slice(0, 4) ? monthDay(p.date) : p.date.replace(/-/g, '/')}</th>
+                  <th scope="row">{tableDate(p.date, today)}</th>
                   <td>{fmt1(p.kg)} kg</td>
                   <td>{p.fat === null ? '—' : `${fmt1(p.fat)} %`}</td>
                 </tr>
@@ -153,12 +145,7 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
 
   return (
     <div className="main" data-screen="weight-trend">
-      <div className="lib-topbar">
-        <button className="icon-btn" type="button" aria-label="返回設定" onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-        </button>
-        <h1>體重趨勢</h1>
-      </div>
+      <SubPageTop title="體重趨勢" backLabel="返回設定" onBack={onBack} />
       <div className="trend-scroll">
         <SegmentedControl label="範圍" items={TREND_RANGES} value={range} onPick={setRange} className="trend-range" />
         {body}

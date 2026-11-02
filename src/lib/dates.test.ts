@@ -9,6 +9,7 @@ import {
   maxPlanDate,
   monthBounds,
   monthDay,
+  tableDate,
   monthGrid,
   monthKeyOf,
   monthTitle,
@@ -102,6 +103,19 @@ describe('monthDay', () => {
   })
   it('兩位數月日不變：2026-12-25 → 12/25', () => {
     expect(monthDay('2026-12-25')).toBe('12/25')
+  })
+})
+
+describe('tableDate', () => {
+  it('同年只顯示月/日：2026-09-06 在 2026 年 → 9/6', () => {
+    expect(tableDate('2026-09-06', '2026-10-13')).toBe('9/6')
+  })
+  it('跨年顯示 YYYY/MM/DD 並保留前導零：2025-09-06 在 2026 年 → 2025/09/06', () => {
+    expect(tableDate('2025-09-06', '2026-10-13')).toBe('2025/09/06')
+  })
+  it('年底的跨年邊界：2025-12-31 在 2026-01-01 → 2025/12/31；2026-01-01 同年 → 1/1', () => {
+    expect(tableDate('2025-12-31', '2026-01-01')).toBe('2025/12/31')
+    expect(tableDate('2026-01-01', '2026-01-01')).toBe('1/1')
   })
 })
 

@@ -139,7 +139,7 @@ export default function CardioSheet({ open, entry, exercise, lastMinutes, sessio
   const title = exercise ? String(exercise.name) : '有氧'
 
   return (
-    <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="cardio-sheet" fit locked={busy}>
+    <SpringSheet open={open} onClose={onClose} title={title} screen="cardio-sheet" fit locked={busy}>
       {entry && (
         <CardioForm
           key={session}

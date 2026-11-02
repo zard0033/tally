@@ -21,6 +21,7 @@ import {
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
 import SegmentedControl from '@/components/SegmentedControl'
+import SubPageTop from '@/components/SubPageTop'
 import MaintenanceCard from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
@@ -280,12 +281,7 @@ export default function DailyGoal(props: DailyGoalProps) {
 
   return (
     <div className="main" data-screen="daily-goal">
-      <div className="lib-topbar">
-        <button className="icon-btn" type="button" aria-label="返回設定" onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-        </button>
-        <h1>每日目標</h1>
-      </div>
+      <SubPageTop title="每日目標" backLabel="返回設定" onBack={onBack} />
 
       <div className="goal-seg-wrap">
         <SegmentedControl

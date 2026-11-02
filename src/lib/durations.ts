@@ -15,6 +15,9 @@ export const DUR = {
   sheet: 280,
 } as const
 
+/** 全站位移類 motion 的曲線（cubic-bezier(0.4,0,0.2,1)，同 CSS 端 --ease 的標準曲線） */
+export const EASE = [0.4, 0, 0.2, 1] as const
+
 /** motion 吃的是秒 */
 export const sec = (ms: number) => ms / 1000
 

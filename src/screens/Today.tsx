@@ -7,12 +7,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import DateStrip from '@/components/DateStrip'
+import QtyStepper from '@/components/QtyStepper'
 import SegmentedControl from '@/components/SegmentedControl'
 import { isPlannable, weekdayDate } from '@/lib/dates'
-import { DUR, sec, SETTLE_SPRING } from '@/lib/durations'
+import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
-import { normalizeQty } from '@/lib/quantity'
+import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -37,7 +38,6 @@ const OPEN_AT = 24
 const FULL_AT = 0.45
 /** 拖曳結束後這段時間內的 click 都當成「瀏覽器補的那一下」吃掉 */
 const CLICK_GRACE_MS = 150
-const EASE = [0.4, 0, 0.2, 1] as const
 
 /* v2.20：編輯份量從「長按開全屏 sheet」改成「點按就地展開」，長按整套（500ms 計時器、
    位移備援門檻、與 drag 手勢的互相取消、開合／退場動畫的 token 讀取）連同 sheet 一起移除。
@@ -579,8 +579,8 @@ function ItemEditor({
   // 打字途中不正規化，理由與 LogSheet 的 handleQtyInput 相同：中間態被改掉游標會跳走
   function handleInput(raw: string) {
     setDraft(raw)
-    const n = Number(raw.trim())
-    if (Number.isFinite(n) && n > 0) setLocalQty(n)
+    const n = parseTypedQty(raw)
+    if (n !== null) setLocalQty(n)
   }
 
   /* 品名與四個營養數字：**改的是這一筆，不是食品庫**（去皮、少醬、店家給多了）。
@@ -701,38 +701,13 @@ function ItemEditor({
       onSubmit={(e) => e.preventDefault()}
     >
       <div className="ed-line">
-        <div className="qty-stepper">
-          <button
-            className="qty-btn"
-            type="button"
-            disabled={localQty <= 1}
-            aria-label="減少份量"
-            onClick={() => void commitQty(normalizeQty(localQty - 1))}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 12h14" />
-            </svg>
-          </button>
-          <input
-            className="qty-value"
-            type="text"
-            inputMode="decimal"
-            aria-label="份量"
-            value={draft}
-            onChange={(e) => handleInput(e.target.value)}
-            onBlur={(e) => void commitQty(normalizeQty(e.target.value))}
-          />
-          <button
-            className="qty-btn"
-            type="button"
-            aria-label="增加份量"
-            onClick={() => void commitQty(normalizeQty(localQty + 1))}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </div>
+        <QtyStepper
+          qty={localQty}
+          draft={draft}
+          onStep={(dir) => void commitQty(normalizeQty(localQty + dir))}
+          onInput={handleInput}
+          onBlur={(raw) => void commitQty(normalizeQty(raw))}
+        />
         <button className="ed-del" type="button" aria-label={`刪除 ${name} 這一筆`} onClick={onDelete}>
           <DeleteIcon />
         </button>

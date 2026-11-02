@@ -8,3 +8,12 @@ export function normalizeQty(v: unknown): number {
   const n = Number(String(v).trim())
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 1
 }
+
+/**
+ * 打字途中只收「能解析成正數」的值：這時還不正規化（"1." 這種中間狀態被改成 1，游標會跳走），
+ * 正規化留到 blur 再做。解析不出正數回 null，呼叫端就不更新數量。
+ */
+export function parseTypedQty(raw: string): number | null {
+  const n = Number(raw.trim())
+  return Number.isFinite(n) && n > 0 ? n : null
+}

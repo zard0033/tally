@@ -59,6 +59,11 @@ export function monthDay(iso: string): string {
   return `${m}/${d}`
 }
 
+/** 趨勢明細表的日期欄：跟 today 同年顯示「9/6」，跨年顯示「2025/09/06」（沒有年份的話跨年的兩筆會分不出來）。 */
+export function tableDate(iso: string, today: string): string {
+  return iso.slice(0, 4) === today.slice(0, 4) ? monthDay(iso) : iso.replace(/-/g, '/')
+}
+
 /** 出生年在 today 那年的年齡（今年－出生年）。只問年份，不問月日——
  *  換掉 date picker 要滾幾十年份的操作成本，換來的是 ±1 歲的誤差，對 BMR 影響是個位數卡路里等級。 */
 export function ageFromYear(birthYear: number, today: Date = new Date()): number {

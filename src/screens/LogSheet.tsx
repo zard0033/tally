@@ -8,6 +8,7 @@
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import FoodFormFields from '@/components/FoodFormFields'
+import QtyStepper from '@/components/QtyStepper'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import {
   listRecentIntake,
@@ -16,23 +17,14 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import { isPlannable } from '@/lib/dates'
-import { BLANK_FOOD_FORM, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
+import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
-import { normalizeQty } from '@/lib/quantity'
+import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
 
 
 type View = 'list' | 'food-form'
-
-const byName = (a: Food, b: Food) => a.name.localeCompare(b.name, 'zh-Hant')
-
-/* 同時比對品名與店家——五筆「雞胸餐盒」其中三筆完全同名，只靠店家區分 */
-function foodMatches(f: Food, q: string): boolean {
-  const s = q.trim().toLowerCase()
-  if (!s) return true
-  return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)
-}
 
 function pickTotals(
   picks: Map<number, number>,
@@ -91,38 +83,14 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
                 {f.vendor && <span className="sub">{f.vendor}</span>}
               </div>
             </button>
-            <div className="qty-stepper">
-              <button
-                className="qty-btn"
-                type="button"
-                disabled={qty <= 1}
-                aria-label={`減少 ${f.name} 的份量`}
-                onClick={() => h.onStep(f.id, -1)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14" />
-                </svg>
-              </button>
-              <input
-                className="qty-value"
-                type="text"
-                inputMode="decimal"
-                aria-label={`${f.name} 份量`}
-                value={draft}
-                onChange={(e) => h.onQtyInput(f.id, e.target.value)}
-                onBlur={(e) => h.onQtyBlur(f.id, e.target.value)}
-              />
-              <button
-                className="qty-btn"
-                type="button"
-                aria-label={`增加 ${f.name} 的份量`}
-                onClick={() => h.onStep(f.id, 1)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </button>
-            </div>
+            <QtyStepper
+              qty={qty}
+              draft={draft}
+              name={f.name}
+              onStep={(dir) => h.onStep(f.id, dir)}
+              onInput={(raw) => h.onQtyInput(f.id, raw)}
+              onBlur={(raw) => h.onQtyBlur(f.id, raw)}
+            />
           </div>
         ) : (
           (() => {
@@ -269,8 +237,8 @@ export default function LogSheet(props: LogSheetProps) {
      （能解析成正數就先更新 picks 讓小計跟著動），正規化留到 onBlur 再做 */
   function handleQtyInput(id: number, raw: string) {
     setQtyDrafts((prev) => new Map(prev).set(id, raw))
-    const n = Number(raw.trim())
-    if (Number.isFinite(n) && n > 0) setPicks((prev) => new Map(prev).set(id, n))
+    const n = parseTypedQty(raw)
+    if (n !== null) setPicks((prev) => new Map(prev).set(id, n))
   }
 
   function handleQtyBlur(id: number, raw: string) {
@@ -378,7 +346,7 @@ export default function LogSheet(props: LogSheetProps) {
   }
   const fitsQuota = (over: OverDelta) => over.kcal === 0 && over.fat === 0 && over.carb === 0
 
-  const sortedFoods = foods ? [...foods].sort(byName) : null
+  const sortedFoods = foods ? [...foods].sort(byFoodName) : null
   const overQuotaIds = new Set<number>()
   // 超標品項的 OverDelta 順便存起來給 byQuotaFit 的排序分數用，不必為了 tie-break
   // 對同一筆再呼叫一次 quotaOverage（precommit-review 抓到的重複運算）
@@ -392,7 +360,7 @@ export default function LogSheet(props: LogSheetProps) {
       }
     }
   }
-  /* 符合的排前面（維持原本 byName 順序，Array.sort 穩定排序）；不符合的排後面，
+  /* 符合的排前面（維持原本 byFoodName 順序，Array.sort 穩定排序）；不符合的排後面，
      按超出總量（kcal ＋ 脂 ＋ 碳，三個單位不同但只拿來排序不顯示，不必為排序
      另外換算成同一單位）由小到大。 */
   function byQuotaFit(list: Food[]): Food[] {

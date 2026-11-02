@@ -76,7 +76,7 @@ function RoutineNameForm({
 export default function RoutineNameSheet({ open, onClose, onWrite, onCreated }: RoutineNameSheetProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   return (
-    <SpringSheet open={open} onClose={onClose} label="新課表" title="新課表" screen="routine-name" fit initialFocus={inputRef}>
+    <SpringSheet open={open} onClose={onClose} title="新課表" screen="routine-name" fit initialFocus={inputRef}>
       <RoutineNameForm onWrite={onWrite} onCreated={onCreated} inputRef={inputRef} />
     </SpringSheet>
   )

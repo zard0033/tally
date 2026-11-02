@@ -104,3 +104,13 @@ export function foodToForm(f: { name: string; vendor: string | null; kcal: numbe
     carb: String(f.carb),
   }
 }
+
+/** 食品庫的排序：依品名，中文照 zh-Hant 排。 */
+export const byFoodName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'zh-Hant')
+
+/* 同時比對品名與店家——五筆「雞胸餐盒」其中三筆完全同名，只靠店家區分 */
+export function foodMatches(f: { name: string; vendor: string | null }, q: string): boolean {
+  const s = q.trim().toLowerCase()
+  if (!s) return true
+  return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoOfDay, niceDomain, rangeStart, trendPoints, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { fmt1, isoOfDay, niceDomain, rangeStart, trendPoints, trendXAxis, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
 import { dayIndex } from './dates'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
@@ -113,5 +113,23 @@ describe('niceDomain', () => {
 
   it('沒資料回 [0, 1]', () => {
     expect(niceDomain([], 0.3, 1)).toEqual([0, 1])
+  })
+})
+
+describe('fmt1', () => {
+  it('固定一位小數：整數補 .0、多位捨入', () => {
+    expect(fmt1(72)).toBe('72.0')
+    expect(fmt1(72.46)).toBe('72.5')
+    expect(fmt1(0.04)).toBe('0.0')
+  })
+})
+
+describe('trendXAxis', () => {
+  it('有 domain 就用它，沒有退回 auto；刻度顯示月/日', () => {
+    const ax = trendXAxis([100, 200], [100, 150, 200])
+    expect(ax.domain).toEqual([100, 200])
+    expect(ax.ticks).toEqual([100, 150, 200])
+    expect(trendXAxis(null, []).domain).toEqual(['auto', 'auto'])
+    expect(ax.tickFormatter(dayIndex('2026-09-06'))).toBe('9/6')
   })
 })

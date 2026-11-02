@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readingToForm, type LabelReading } from './foodForm'
+import { byFoodName, foodMatches, readingToForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -44,5 +44,29 @@ describe('readingToForm', () => {
   it('數字一律轉成字串（表單欄位吃的是字串）', () => {
     const f = readingToForm({ ...BROWN, kcal: 559.1, protein_g: 0, fat_g: 25.1, carb_g: 70.8 })
     expect([f.kcal, f.protein, f.fat, f.carb]).toEqual(['559.1', '0', '25.1', '70.8'])
+  })
+})
+
+describe('foodMatches', () => {
+  const f = { name: '雞胸餐盒', vendor: 'Ａ店' }
+  it('空字串與空白全部命中', () => {
+    expect(foodMatches(f, '')).toBe(true)
+    expect(foodMatches(f, '   ')).toBe(true)
+  })
+  it('比對品名與店家，不分大小寫', () => {
+    expect(foodMatches(f, '餐盒')).toBe(true)
+    expect(foodMatches({ name: 'Latte', vendor: 'Cafe' }, 'cAFe')).toBe(true)
+    expect(foodMatches(f, '牛排')).toBe(false)
+  })
+  it('沒有店家時只比品名', () => {
+    expect(foodMatches({ name: '雞胸餐盒', vendor: null }, 'a店')).toBe(false)
+  })
+})
+
+describe('byFoodName', () => {
+  it('同名回 0，不同名依 zh-Hant 排序', () => {
+    expect(byFoodName({ name: '雞胸' }, { name: '雞胸' })).toBe(0)
+    const sorted = [{ name: 'b' }, { name: 'a' }].sort(byFoodName)
+    expect(sorted.map((x) => x.name)).toEqual(['a', 'b'])
   })
 })

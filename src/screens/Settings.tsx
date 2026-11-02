@@ -10,6 +10,7 @@
    sheet-out／scrim-out 這組 keyframes。 */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
+import SubPageTop from '@/components/SubPageTop'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { num } from '@/lib/formulas'
@@ -210,16 +211,11 @@ export default function Settings(props: SettingsProps) {
   }
   if (view === 'trend') {
     return (
-      // 第一次進來要先載 recharts 的 chunk：fallback 畫出與 WeightTrend 同樣的頂列與骨架，版面不從空白跳出來（頂列標記與 WeightTrend 一致）
+      // 第一次進來要先載 recharts 的 chunk：fallback 畫出與 WeightTrend 同樣的頂列與骨架，版面不從空白跳出來（頂列與 WeightTrend 共用 SubPageTop，標記天然一致）
       <Suspense
         fallback={
           <div className="main" data-screen="weight-trend">
-            <div className="lib-topbar">
-              <button className="icon-btn" type="button" aria-label="返回設定" onClick={() => setView('list')}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-              </button>
-              <h1>體重趨勢</h1>
-            </div>
+            <SubPageTop title="體重趨勢" backLabel="返回設定" onBack={() => setView('list')} />
             <div className="trend-scroll">
               <div className="trend-skel" aria-busy="true" aria-label="載入中" />
             </div>

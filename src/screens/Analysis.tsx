@@ -6,24 +6,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
 import SegmentedControl, { type SegItem } from '@/components/SegmentedControl'
-import { localDate, monthDay } from '@/lib/dates'
+import SubPageTop from '@/components/SubPageTop'
+import TrendNoRecords from '@/components/TrendNoRecords'
+import { localDate, monthDay, tableDate } from '@/lib/dates'
 import { recoveryStatus, type MuscleRecovery } from '@/lib/recovery'
 import { bestE1rm, chartPoints, progressList, strengthHistory, type ChartPoint } from '@/lib/strength'
 import { formatKg, MUSCLE_GROUP_LABEL, type TrainingDb } from '@/lib/training'
-import { isoOfDay, niceDomain, TREND_RANGES, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
+import { fmt1, niceDomain, TREND_RANGES, trendXAxis, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
 
 interface AnalysisProps {
   db: TrainingDb
   onBack: () => void
 }
-
-const fmt1 = (n: number) => n.toFixed(1)
-
-const BackIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M15 6l-6 6 6 6" />
-  </svg>
-)
 
 /** 浮動讀數：值在前（粗）、名稱在後（淡）。 */
 function StrengthTip({ active, payload }: TooltipContentProps) {
@@ -50,10 +44,7 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
   const best = bestE1rm(history)
   const latest = history[history.length - 1]
 
-  const axis = {
-    type: 'number' as const, dataKey: 't', domain: dom ?? ['auto', 'auto'] as [string, string], ticks,
-    tickFormatter: (t: number) => monthDay(isoOfDay(t)), tickLine: false, axisLine: { stroke: 'var(--rule)' },
-  }
+  const axis = trendXAxis(dom, ticks)
 
   /* 每次訓練一個點（點少），只在最後一點標數字，其餘靠十字線讀。 */
   const dot = (props: { cx?: number; cy?: number; index?: number }) => {
@@ -70,10 +61,7 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
 
   return (
     <div className="main" data-screen="analysis-exercise">
-      <div className="lib-topbar">
-        <button className="icon-btn" type="button" aria-label="返回訓練分析" onClick={onBack}><BackIcon /></button>
-        <h1>{name}</h1>
-      </div>
+      <SubPageTop title={name} backLabel="返回訓練分析" onBack={onBack} />
       <div className="trend-scroll">
         <SegmentedControl label="範圍" items={TREND_RANGES} value={range} onPick={setRange} className="trend-range" />
         <section className="trend-card" aria-label="e1RM">
@@ -83,10 +71,7 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
           </div>
           <div className="trend-head"><h2>e1RM <small>kg，估算</small></h2></div>
           {points.length === 0 ? (
-            <p className="trend-empty">
-              這段期間沒有紀錄
-              <button type="button" className="trend-link" onClick={() => setRange('all')}>看全部</button>
-            </p>
+            <TrendNoRecords onSeeAll={() => setRange('all')} />
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={points} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
@@ -110,7 +95,7 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
               <tbody>
                 {[...points].reverse().map((p) => (
                   <tr key={p.workoutId}>
-                    <th scope="row">{p.date.slice(0, 4) === today.slice(0, 4) ? monthDay(p.date) : p.date.replace(/-/g, '/')}</th>
+                    <th scope="row">{tableDate(p.date, today)}</th>
                     <td>{formatKg(p.topSet.weight_kg)} kg × {p.topSet.reps}</td>
                     <td>{fmt1(p.e1rm)} kg</td>
                   </tr>
@@ -188,10 +173,7 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
 
   return (
     <div className="main" data-screen="analysis">
-      <div className="lib-topbar">
-        <button className="icon-btn" type="button" aria-label="返回訓練" onClick={onBack}><BackIcon /></button>
-        <h1>訓練分析</h1>
-      </div>
+      <SubPageTop title="訓練分析" backLabel="返回訓練" onBack={onBack} />
       <div className="trend-scroll">
         <SegmentedControl label="分析項目" items={TABS} value={tab} onPick={setTab} className="trend-range" />
         {tab === 'recovery' ? (

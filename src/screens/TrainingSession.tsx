@@ -21,18 +21,18 @@ import Flip from '@/components/Flip'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import RestBar, { type RpeAsk } from '@/components/RestBar'
 import { useRestTimer } from '@/components/useRestTimer'
+import { usePendingOrder } from '@/components/usePendingOrder'
 import { usePressed } from '@/components/usePressed'
 import SwipeDelete from '@/components/SwipeDelete'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
 import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS, SPRING_CARD, sec } from '@/lib/durations'
-import { hasCatalogImage } from '@/lib/exerciseCatalog'
+import { hasCatalogImage, muscleGroupLabel } from '@/lib/exerciseCatalog'
 import CardioSheet from './CardioSheet'
 import ExercisePicker from './ExercisePicker'
 import FinishSheet, { type FinishLine } from './FinishSheet'
 import SetSheet, { type SetTarget } from './SetSheet'
 import {
-  MUSCLE_GROUP_LABEL,
   addExerciseOps,
   addSetOps,
   allSetsDone,
@@ -40,10 +40,13 @@ import {
   cardioRecorded,
   cardioSummary,
   completesExercise,
+  entryHasRecord,
+  exerciseDisplayName,
   exerciseProgress,
   finishWorkoutOps,
   formatKg,
   isBackfilled,
+  isCardioCard,
   isCardioExercise,
   lastSetRpe,
   removeSetOps,
@@ -72,10 +75,6 @@ interface TrainingSessionProps {
 
 const newId = () => crypto.randomUUID()
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
-
-/** 這張卡用有氧的畫法：有氧動作、而且沒有組。有氧動作卻有組的卡（舊版 App 把有氧當重訓加進來；照課表開訓時
- *  動作還沒載到本機底、addExerciseOps 當重訓產了組）退回重訓的畫法——組看得到、刪得掉、打過勾的組移除前照樣先問。 */
-const isCardioCard = (item: WorkoutExerciseDetail) => isCardioExercise(item.exercise) && item.sets.length === 0
 
 /** m:ss；超過一小時就繼續累加分鐘（75:12），不換成時:分:秒——掃一眼看的是「大概多久」。 */
 function clock(ms: number): string {
@@ -325,8 +324,8 @@ function ExerciseCard(p: ExerciseCardProps) {
   const { entry, exercise, sets } = item
   const reduced = useReducedMotion()
   const allPress = usePressed()
-  const name = exercise ? String(exercise.name) : '（已刪除的動作）'
-  const group = exercise ? (MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他') : ''
+  const name = exerciseDisplayName(exercise)
+  const group = exercise ? muscleGroupLabel(exercise.muscle_group) : ''
   // 有圖的動作（目錄裡有圖的預設動作，含有氧的坡度健走；由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
   // 資料集沒有對應的三個預設動作）肌群單字或類型圖示留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
   const photo = exercise != null && hasCatalogImage(exercise)
@@ -541,8 +540,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [cascade, setCascade] = useState<readonly string[]>([])
   const cascadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sorting, setSorting] = useState(false)
-  // 放下後到寫入完成之間的顯示順序（entry id）；null＝照資料的順序
-  const [pending, setPending] = useState<string[] | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -616,7 +613,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   // 替換只在會丟掉已記的東西時才先問（移除則一律先問，見 askRemoveExercise）；沒記東西就直接開 picker
   const startReplace = (item: WorkoutExerciseDetail) => {
     const cardio = isCardioCard(item)
-    const recorded = cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true)
+    const recorded = entryHasRecord(item)
     setSwipeId(null)
     const exerciseId = String(item.entry.exercise_id)
     if (recorded) {
@@ -661,18 +658,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     await run([{ op: 'delete', table: 'workout_exercises', rowId: entryId }])
   }
 
-  const reorder = async (orderedIds: string[]) => {
-    try {
-      const ops = reorderWorkoutExercisesOps({ entries: exercises.map((e) => e.entry), orderedIds })
-      if (ops.length === 0) return
-      setPending(orderedIds)
-      await run(ops)
-    } catch (e) {
-      setError(`這筆沒有存下來：${errText(e)}`)
-    } finally {
-      setPending(null)
-    }
-  }
+  const { shown, reorder } = usePendingOrder({
+    items: exercises,
+    buildOps: (orderedIds) => reorderWorkoutExercisesOps({ entries: exercises.map((e) => e.entry), orderedIds }),
+    run,
+    onError: (e) => setError(`這筆沒有存下來：${errText(e)}`),
+  })
 
   const showFlash = (ids: string[]) => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
@@ -703,7 +694,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }
 
   const finishLines: FinishLine[] = exercises.map((item) => ({
-    name: item.exercise ? String(item.exercise.name) : '（已刪除的動作）',
+    name: exerciseDisplayName(item.exercise),
     // 有氧卡沒有組：列有氧摘要；沒填分鐘時給「還沒填」，不落到 FinishSheet 的「沒有打勾的組」
     text: isCardioCard(item)
       ? cardioSummary(item.entry) || '還沒填'
@@ -717,13 +708,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   // 替換時清單不放目前這個動作（換成自己沒有意義）
   const replacePickable = replacing ? pickable.filter((e) => e.id !== replacingExercise) : pickable
   const removing = askRemove ? exercises.find((e) => e.entry.id === askRemove) : undefined
-  const shown = pending ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id)) : exercises
 
   // 移除一律先問（卡片頭的移除鈕常駐、沒有 undo）；內文依有沒有記下東西分三種：重訓是打過勾的組，有氧是填過的分鐘，都沒有就只說會移除
   const askRemoveExercise = (item: WorkoutExerciseDetail) => {
     const cardio = isCardioCard(item)
     setRemoveCardio(cardio)
-    setRemoveRecorded(cardio ? cardioRecorded(item.entry) : item.sets.some((s) => s.done === true))
+    setRemoveRecorded(entryHasRecord(item))
     setAskRemove(item.entry.id)
   }
 
@@ -876,7 +866,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         open={picker}
         title={replacing ? '替換為…' : '加動作'}
         exercises={replacePickable}
-        create={{ exercises: db.exercises, onWrite }}
+        allExercises={db.exercises}
+        onWrite={onWrite}
         onClose={() => setPicker(false)}
         onPick={(id) => void (replacing ? replaceExercise(replacing, id) : addExercise(id))}
       />

@@ -192,7 +192,7 @@ export default function SyncSheet({ open, onClose, ...rest }: SyncSheetProps) {
   }, [open, left, onClose])
 
   return (
-    <SpringSheet open={open} onClose={onClose} label="未同步" title="未同步" screen="sync-sheet" fit locked={busy}>
+    <SpringSheet open={open} onClose={onClose} title="未同步" screen="sync-sheet" fit locked={busy}>
       <SyncBody {...rest} onBusy={setBusy} />
     </SpringSheet>
   )

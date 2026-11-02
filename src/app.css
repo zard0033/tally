@@ -1065,7 +1065,7 @@ button { -webkit-user-select: none; user-select: none; }
 .pick-bar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .pick-bar-btn:disabled { opacity: .6; cursor: default; }
 /* 寫入失敗就地可見，已選內容不清空——記錄的地點正好是收訊最差的地方 */
-.sheet-error, .ed-error { color: var(--over); font-size: var(--t-sm); }
+.sheet-error, .ed-error, .scan-error, .tr-form-error { color: var(--over); font-size: var(--t-sm); }
 .sheet-error { margin: 0; }
 
 /* ═══════════ 表單（新增食物／設定編輯／記體重） ═══════════ */
@@ -1096,7 +1096,7 @@ button { -webkit-user-select: none; user-select: none; }
 .scan-sec { font-variant-numeric: tabular-nums; min-width: 1.6ch; display: inline-block;
   text-align: right; margin: 0 .15em 0 .4em; }
 /* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
-.scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); color: var(--over); font-size: var(--t-sm); }
+.scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); }
 /* 辨識中把整組欄位鎖住。fieldset 純粹當開關用，樣式全部重置——
    `min-width: 0` 不可省：fieldset 的預設 min-content 寬度會把裡面的 flex 版面撐破。 */
 .form-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -1594,7 +1594,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-sheet-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .tr-sheet-body .muted { color: var(--ink-muted); margin: var(--s-3) 0 0; }
 .tr-sheet-body .action-btn { margin-top: var(--s-4); }
-.tr-form-error { color: var(--over); font-size: var(--t-sm); margin: var(--s-2) 0; }
+.tr-form-error { margin: var(--s-2) 0; }
 /* 編輯動作 sheet（v2.91）：form 包住可捲的 `.form-wrap` 與釘底的 `.confirm-wrap`，自己要是撐滿 sheet 的 flex column。
    兩層的 `min-height: 0` 都不可省——sheet 是 `.sheet-fit`（只有 max-height），少一層欄位區就不會縮，
    鍵盤升起（max-height 扣掉 --kb）時儲存鈕被擠出 sheet 外，正是這輪要修的症狀。 */

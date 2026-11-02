@@ -92,7 +92,7 @@ export default function FinishSheet({
   ].join(' · ')
 
   return (
-    <SpringSheet open={open} onClose={onClose} label="訓練完成" title="訓練完成" screen="finish-sheet" fit>
+    <SpringSheet open={open} onClose={onClose} title="訓練完成" screen="finish-sheet" fit>
     <div className="tr-sheet-body tr-sheet-scroll">
       <div className="tr-summary">
         <span className="big" data-testid="finish-volume">

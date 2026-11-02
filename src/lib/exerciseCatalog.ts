@@ -12,6 +12,7 @@
    insert-ignore，不動使用者改過或封存的列；**名稱與既有動作重複的不補**（`checkExercise` 的規則：名稱不能重複，含已封存的）。 */
 import {
   MUSCLE_GROUPS,
+  MUSCLE_GROUP_LABEL,
   PRESET_EXERCISES,
   foldName,
   presetExerciseId,
@@ -20,6 +21,11 @@ import {
   type Row,
   type RowOp,
 } from './training'
+
+/** 肌群顯示名：欄位值不在七類裡（舊資料、手改）一律顯示「其他」。 */
+export function muscleGroupLabel(group: unknown): string {
+  return MUSCLE_GROUP_LABEL[group as MuscleGroup] ?? '其他'
+}
 
 export interface CatalogExercise {
   readonly key: string

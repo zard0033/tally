@@ -16,7 +16,10 @@ import {
   cardioSummary,
   checkCardio,
   describeEntry,
+  entryHasRecord,
+  exerciseDisplayName,
   exerciseKind,
+  isCardioCard,
   isCardioExercise,
   updateCardioEntryOps,
   type CardioDraft,
@@ -1445,6 +1448,45 @@ describe('exerciseKind／isCardioExercise／cardioRecorded', () => {
     expect(cardioRecorded(card('c', 'w', 'walk'))).toBe(false)
     expect(cardioRecorded(card('c', 'w', 'walk', { minutes: '' }))).toBe(false)
     expect(cardioRecorded({ id: 'c' }), '欄位整個缺（佇列疊上的列）').toBe(false)
+  })
+})
+
+describe('isCardioCard／entryHasRecord／exerciseDisplayName', () => {
+  const strengthEx: Row = { id: 'e1', name: '臥推', muscle_group: 'chest', kind: 'strength' }
+  const item = (exercise: Row | null, entry: Row, sets: Row[] = []) => ({ entry, exercise, sets })
+
+  it('isCardioCard：有氧動作且沒有組才用有氧的畫法', () => {
+    expect(isCardioCard(item(walkEx, card('c', 'w', 'walk')))).toBe(true)
+    expect(isCardioCard(item(strengthEx, card('c', 'w', 'e1')))).toBe(false)
+    expect(isCardioCard(item(null, card('c', 'w', 'x')))).toBe(false)
+  })
+
+  it('isCardioCard：有氧動作卻有組（舊版當重訓加進來）退回重訓的畫法', () => {
+    expect(isCardioCard(item(walkEx, card('c', 'w', 'walk'), [{ id: 's1', done: false }]))).toBe(false)
+  })
+
+  it('entryHasRecord：有氧卡看分鐘', () => {
+    expect(entryHasRecord(item(walkEx, card('c', 'w', 'walk', { minutes: 30 })))).toBe(true)
+    expect(entryHasRecord(item(walkEx, card('c', 'w', 'walk')))).toBe(false)
+  })
+
+  it('entryHasRecord：重訓卡看有沒有打過勾的組，done 必須嚴格等於 true', () => {
+    const e = card('c', 'w', 'e1')
+    expect(entryHasRecord(item(strengthEx, e, [{ id: 's1', done: false }, { id: 's2', done: true }]))).toBe(true)
+    expect(entryHasRecord(item(strengthEx, e, [{ id: 's1', done: false }, { id: 's2', done: 1 }]))).toBe(false)
+    expect(entryHasRecord(item(strengthEx, e))).toBe(false)
+  })
+
+  it('entryHasRecord：有氧動作卻有組，照重訓算（看組的勾，不看分鐘）', () => {
+    const e = card('c', 'w', 'walk', { minutes: 30 })
+    expect(entryHasRecord(item(walkEx, e, [{ id: 's1', done: false }]))).toBe(false)
+    expect(entryHasRecord(item(walkEx, e, [{ id: 's1', done: true }]))).toBe(true)
+  })
+
+  it('exerciseDisplayName：動作被刪時用退路文字', () => {
+    expect(exerciseDisplayName(strengthEx)).toBe('臥推')
+    expect(exerciseDisplayName(null)).toBe('（已刪除的動作）')
+    expect(exerciseDisplayName(undefined)).toBe('（已刪除的動作）')
   })
 })
 

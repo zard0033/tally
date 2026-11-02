@@ -12,7 +12,9 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
-import { localDate, monthDay, weekdayDate } from '@/lib/dates'
+import RoutineRow from '@/components/RoutineRow'
+import SubPageTop from '@/components/SubPageTop'
+import { localDate, weekdayDate } from '@/lib/dates'
 import { progressList } from '@/lib/strength'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import {
@@ -23,7 +25,6 @@ import {
   trainingDates,
   workoutDetail,
   workoutsOn,
-  type RoutineCard,
   type RowOp,
   type WorkoutCard,
 } from '@/lib/training'
@@ -78,23 +79,6 @@ function WorkoutRow({ card, onOpen }: { card: WorkoutCard; onOpen: () => void })
       <span className="grow">
         <span className="nm">{title}</span>
         <span className="sub">{detail}</span>
-      </span>
-      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </button>
-  )
-}
-
-function RoutineRow({ card, onOpen }: { card: RoutineCard; onOpen: () => void }) {
-  const { routine, exerciseCount, lastUsed } = card
-  return (
-    <button className="tr-row" type="button" data-routine-id={routine.id} onClick={onOpen}>
-      <span className="grow">
-        <span className="nm">{String(routine.name)}</span>
-        <span className="sub">
-          {exerciseCount} 個動作{lastUsed ? ` · 上次 ${monthDay(lastUsed)}` : ''}
-        </span>
       </span>
       <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M9 6l6 6-6 6" />
@@ -197,16 +181,11 @@ export default function Training({
 
   if (analysis && view) {
     return (
-      // 第一次進來要先載 recharts 的 chunk：fallback 畫出同樣的頂列與骨架，版面不從空白跳出來
+      // 第一次進來要先載 recharts 的 chunk：fallback 畫出同樣的頂列與骨架，版面不從空白跳出來（頂列與 Analysis 共用 SubPageTop）
       <Suspense
         fallback={
           <div className="main" data-screen="analysis">
-            <div className="lib-topbar">
-              <button className="icon-btn" type="button" aria-label="返回訓練" onClick={() => setAnalysis(false)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-              </button>
-              <h1>訓練分析</h1>
-            </div>
+            <SubPageTop title="訓練分析" backLabel="返回訓練" onBack={() => setAnalysis(false)} />
             <div className="trend-scroll">
               <div className="trend-skel" aria-busy="true" aria-label="載入中" />
             </div>

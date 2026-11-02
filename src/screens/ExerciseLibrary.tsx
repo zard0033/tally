@@ -5,16 +5,16 @@
    沒有「5 秒復原」提示條——取消封存隨時在已封存區按得到、不丟資料，復原條只會多一層要等它消失的東西。
    整頁接管畫面（同訓練中），放在設定頁的「動作庫管理」（v2.96 從訓練頁搬來）：進出時 Settings 通知 App 收起底部列。 */
 import { useMemo, useState } from 'react'
+import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import GymVisualCredit from '@/components/GymVisualCredit'
+import { muscleGroupLabel } from '@/lib/exerciseCatalog'
 import {
-  MUSCLE_GROUP_LABEL,
   filterExercises,
   setExerciseArchivedOps,
   type ExerciseFilter,
-  type MuscleGroup,
   type Row,
   type RowOp,
 } from '@/lib/training'
@@ -28,12 +28,8 @@ interface ExerciseLibraryProps {
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-// 圖示同食品庫的封存／復原（FoodLibrary.tsx 的 ARCHIVE_ICON／RESTORE_ICON），同一個動作用同一個圖
-const ARCHIVE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="4" rx="1" /><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><path d="M10 12h4" /></svg>
-const RESTORE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>
-
 function ExerciseRow({ exercise, onOpen, onToggleArchive }: { exercise: Row; onOpen: () => void; onToggleArchive: () => void }) {
-  const group = MUSCLE_GROUP_LABEL[exercise.muscle_group as MuscleGroup] ?? '其他'
+  const group = muscleGroupLabel(exercise.muscle_group)
   const hasTips = typeof exercise.tips === 'string' && exercise.tips.trim() !== ''
   const name = String(exercise.name)
   const archived = exercise.archived === true

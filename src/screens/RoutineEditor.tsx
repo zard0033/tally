@@ -5,7 +5,7 @@
 
    排序：只有左邊握把能拖（整列都能拖會跟捲動打架）。`@dnd-kit/react`：握把是 button，鍵盤聚焦後
    空白鍵／Enter 拿起、方向鍵移動、空白鍵放下、Esc 取消；觸控靠握把的 `touch-action: none`，
-   列的其餘部分照常捲動。放下的當下先用本機的 `pending` 順序顯示、寫完才放掉，不然函式庫會先把列
+   列的其餘部分照常捲動。放下的當下先用本機順序顯示、寫完才放掉（`usePendingOrder`），不然函式庫會先把列
    彈回原位、等寫入完成才跳到新位置，看起來像閃一下。 */
 import { useRef, useState } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
@@ -14,6 +14,7 @@ import { move } from '@dnd-kit/helpers'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import { sortableAccessibility } from '@/components/sortableA11y'
+import { usePendingOrder } from '@/components/usePendingOrder'
 import {
   addRoutineExerciseOps,
   checkRoutineName,
@@ -100,8 +101,6 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
   const [targetOpen, setTargetOpen] = useState(false)
   // 同步的重入擋（busy state 要等下一次 render 才生效）：只給非冪等的寫入用，見 runOnce
   const inFlight = useRef(false)
-  // 放下後到寫入完成之間的顯示順序（entry id）；null＝照資料的順序
-  const [pending, setPending] = useState<string[] | null>(null)
 
   const run = async (ops: RowOp[]): Promise<boolean> => {
     if (ops.length === 0) return false
@@ -154,22 +153,12 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
 
   const pickable = db.exercises.filter((e) => e.archived !== true)
 
-  const shown = pending
-    ? pending.flatMap((id) => exercises.filter((e) => e.entry.id === id))
-    : exercises
-
-  const reorder = async (orderedIds: string[]) => {
-    try {
-      const ops = reorderRoutineExercisesOps({ entries: exercises.map((e) => e.entry), orderedIds })
-      if (ops.length === 0) return
-      setPending(orderedIds)
-      await run(ops)
-    } catch (e) {
-      setError(`這筆沒有存下來：${errText(e)}`)
-    } finally {
-      setPending(null)
-    }
-  }
+  const { shown, reorder } = usePendingOrder({
+    items: exercises,
+    buildOps: (orderedIds) => reorderRoutineExercisesOps({ entries: exercises.map((e) => e.entry), orderedIds }),
+    run,
+    onError: (e) => setError(`這筆沒有存下來：${errText(e)}`),
+  })
 
   return (
     <div className="main" data-screen="routine-editor">
@@ -269,7 +258,8 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
       <ExercisePicker
         open={picker}
         exercises={pickable}
-        create={{ exercises: db.exercises, onWrite }}
+        allExercises={db.exercises}
+        onWrite={onWrite}
         onClose={() => setPicker(false)}
         onPick={(id) => void addExercise(id)}
       />

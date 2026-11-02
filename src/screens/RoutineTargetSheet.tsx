@@ -100,7 +100,7 @@ function TargetForm({ entry, onClose, onWrite }: Pick<RoutineTargetSheetProps, '
 
 export default function RoutineTargetSheet({ open, entry, exerciseName, onClose, onWrite }: RoutineTargetSheetProps) {
   return (
-    <SpringSheet open={open} onClose={onClose} label="預設組次" title={exerciseName} screen="routine-target" fit>
+    <SpringSheet open={open} onClose={onClose} title={exerciseName} screen="routine-target" fit>
       {entry && <TargetForm key={entry.id} entry={entry} onClose={onClose} onWrite={onWrite} />}
     </SpringSheet>
   )

@@ -140,7 +140,7 @@ export default function ExerciseEditSheet({ open, exercise, exercises, onClose, 
   const title = exercise ? '編輯動作' : '新增動作'
 
   return (
-    <SpringSheet open={open} onClose={onClose} label={title} title={title} screen="exercise-edit" fit>
+    <SpringSheet open={open} onClose={onClose} title={title} screen="exercise-edit" fit>
       <ExerciseForm key={exercise?.id ?? 'new'} exercise={exercise} exercises={exercises} onClose={onClose} onWrite={onWrite} />
     </SpringSheet>
   )

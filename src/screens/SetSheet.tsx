@@ -12,16 +12,15 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import Flip from '@/components/Flip'
 import SpringSheet from '@/components/SpringSheet'
 import { NUMBER_FLIP_MS } from '@/lib/durations'
-import { catalogKey, weightStep } from '@/lib/exerciseCatalog'
+import { catalogKey, muscleGroupLabel, weightStep } from '@/lib/exerciseCatalog'
 import { suggestWeight, type WeightSuggestion } from '@/lib/strength'
 import {
-  MUSCLE_GROUP_LABEL,
   RPE_SHEET_VALUES,
+  exerciseDisplayName,
   formatKg,
   remainingSetsAfter,
   removeSetOps,
   syncSetsForwardOps,
-  type MuscleGroup,
   type Row,
   type RowOp,
   type TrainingDb,
@@ -84,8 +83,8 @@ function viewOf(detail: WorkoutDetail, db: TrainingDb, target: SetTarget | null)
   const step = weightStep(ex.exercise ? catalogKey(ex.exercise) : null)
   return {
     setId: target.setId,
-    name: ex.exercise ? String(ex.exercise.name) : '（已刪除的動作）',
-    group: ex.exercise ? (MUSCLE_GROUP_LABEL[ex.exercise.muscle_group as MuscleGroup] ?? '其他') : '',
+    name: exerciseDisplayName(ex.exercise),
+    group: ex.exercise ? muscleGroupLabel(ex.exercise.muscle_group) : '',
     no: index + 1,
     total: ex.sets.length,
     set: ex.sets[index],
@@ -256,7 +255,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
   const rpe = view?.set.rpe == null ? null : Number(view.set.rpe)
 
   return (
-    <SpringSheet open={open} onClose={onClose} label={label} title={label} screen="set-sheet" fit finalFocus={finalFocus}>
+    <SpringSheet open={open} onClose={onClose} title={label} screen="set-sheet" fit finalFocus={finalFocus}>
       {view && (
         <div className="tr-sheet-body tr-sheet-scroll set-sheet-body">
           {suggest && (

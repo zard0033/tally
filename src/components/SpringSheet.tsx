@@ -14,13 +14,21 @@ import { animate, motion, useDragControls, useMotionValue, useReducedMotion, use
 import { SPRING_SHEET_CLOSE, SPRING_SHEET_OPEN } from '@/lib/durations'
 import { shouldDismiss } from '@/lib/sheetPhysics'
 
-interface SpringSheetProps {
+/** 讀屏念的名稱二選一：給 `title` 就渲染標題列、以標題為準（aria-labelledby）；沒有標題列的 sheet 才給 `label`（aria-label）。 */
+type SheetName =
+  | {
+      /** 標題列。給了就渲染「標題＋關閉鈕」（沿用 `.sheet-head`）。 */
+      title: string
+      label?: never
+    }
+  | {
+      label: string
+      title?: undefined
+    }
+
+type SpringSheetProps = SheetName & {
   open: boolean
   onClose: () => void
-  /** 讀屏念的名稱；有 `title` 時以標題為準（aria-labelledby）。 */
-  label: string
-  /** 標題列。給了就渲染「標題＋關閉鈕」（沿用 `.sheet-head`）。 */
-  title?: string
   /** 給 e2e／樣式用的 `data-screen`。 */
   screen?: string
   /** 貼合內容高度。預設近全高（含大量輸入欄位的 sheet）。 */

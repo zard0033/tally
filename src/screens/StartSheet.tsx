@@ -1,8 +1,8 @@
 /* 開始訓練 sheet（樣張 ②）：課表（最上面）與空白開始。封存的課表不進這張選單。
    沒有「記一筆有氧」：有氧是動作（spec「有氧併入動作」D4），單獨記一筆也是空白開始→加有氧動作。
    走 SpringSheet（沒有輸入欄、貼合內容高度）。 */
+import RoutineRow from '@/components/RoutineRow'
 import SpringSheet from '@/components/SpringSheet'
-import { monthDay } from '@/lib/dates'
 import type { RoutineCard } from '@/lib/training'
 
 interface StartSheetProps {
@@ -32,28 +32,11 @@ export default function StartSheet({
   onRoutine,
 }: StartSheetProps) {
   return (
-    <SpringSheet open={open} onClose={onClose} label="開始訓練" title="開始訓練" screen="start-sheet" fit>
+    <SpringSheet open={open} onClose={onClose} title="開始訓練" screen="start-sheet" fit>
       <div className="tr-sheet-body">
         <div className="tr-card">
-          {routines.map(({ routine, exerciseCount, lastUsed }) => (
-            <button
-              key={routine.id}
-              className="tr-row"
-              type="button"
-              disabled={busy}
-              data-routine-id={routine.id}
-              onClick={() => onRoutine(routine.id)}
-            >
-              <span className="grow">
-                <span className="nm">{String(routine.name)}</span>
-                <span className="sub">
-                  {exerciseCount} 個動作{lastUsed ? ` · 上次 ${monthDay(lastUsed)}` : ''}
-                </span>
-              </span>
-              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
+          {routines.map((card) => (
+            <RoutineRow key={card.routine.id} card={card} disabled={busy} onOpen={() => onRoutine(card.routine.id)} />
           ))}
           <button className="tr-row" type="button" disabled={busy} onClick={onBlank} data-action="start-blank">
             <span className="grow">
