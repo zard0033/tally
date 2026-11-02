@@ -11,6 +11,7 @@ import QtyStepper from '@/components/QtyStepper'
 import SegmentedControl from '@/components/SegmentedControl'
 import { isPlannable, weekdayDate } from '@/lib/dates'
 import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
+import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
@@ -30,14 +31,10 @@ const DETAIL_LABEL: Record<DetailKey, string> = {
   carb: '碳水 g',
 }
 
-/* 左滑的三個距離。REVEAL＝44px 圓鈕＋兩側留白，就是「開啟」時停下來的位置；
-   OPEN_AT＝放手時超過它就吸附開啟（拖不到一半視為反悔）；
+/* 左滑的距離（放手是否開啟的判定在 lib/swipePhysics）。REVEAL＝44px 圓鈕＋兩側留白，就是「開啟」時停下來的位置；
    FULL_AT＝拖過列寬這個比例放手，直接刪除（iOS 提醒事項的滑到底行為，配 undo 才安全）。 */
 const REVEAL = 56
-const OPEN_AT = 24
 const FULL_AT = 0.45
-/** 拖曳結束後這段時間內的 click 都當成「瀏覽器補的那一下」吃掉 */
-const CLICK_GRACE_MS = 150
 
 /* v2.20：編輯份量從「長按開全屏 sheet」改成「點按就地展開」，長按整套（500ms 計時器、
    位移備援門檻、與 drag 手勢的互相取消、開合／退場動畫的 token 讀取）連同 sheet 一起移除。
@@ -356,17 +353,14 @@ function SwipeRow({
   function handleDragEnd(_e: unknown, info: PanInfo) {
     setArmed(false)
     blockClickUntil.current = Date.now() + CLICK_GRACE_MS
-    releaseVel.current = Math.max(-1500, Math.min(1500, info.velocity.x))
+    releaseVel.current = clampReleaseVelocity(info.velocity.x)
     const moved = x.get()
     // 拖過列寬 45% 放手＝直接刪除（有 undo 兜底，見 App.tsx 的 pendingDelete）
     if (moved < -fullSwipeAt()) {
       onDelete()
       return
     }
-    // 甩一下就開：速度夠快時不要求拖滿距離，否則短促的手勢會被判成反悔。
-    // 速度也要配 moved < 0 把關，否則縱向甩動時的 velocity.x 雜訊會誤判成開啟
-    const flung = info.velocity.x < -320 && moved < 0
-    const next = moved < -OPEN_AT || flung
+    const next = shouldOpenSwipe(moved, info.velocity.x)
     onSwipeTo(next)
     /* `animate` prop 只在 `open` 真的變了才會重跑：列開著又往左多拉，沒有東西把它吸回去，
        就停在拖到的位置（SwipeDelete 修過同一個真機 bug，那邊有完整說明）。 */

@@ -544,11 +544,12 @@ test('日期元件展開：月曆高度從 0 長到內容高度（寫了中間�
   await watchMonthHeights(page)
   await page.locator('.datectl-title').click()
   await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1) // 退場的週列走完才卸載
+  // 週列卸載不代表月曆的 spring 已落定，負載下會讀到中間值（2026-11-02 紅過），要等它落定
+  await expect.poll(async () => (await monthHeights(page)).at(-1), { message: '落定後高度應是 auto' }).toBe('auto')
   const hs = await monthHeights(page)
   const px = hs.map((h) => parseFloat(h)).filter((n) => Number.isFinite(n))
   check(px.length >= 2, `展開時高度沒有逐步寫入（只有 ${JSON.stringify(hs)}）`)
   check(px.some((n) => n > 0), '高度從沒離開 0')
-  check(hs.at(-1) === 'auto', `落定後高度應是 auto，實際 ${hs.at(-1)}`)
   await expect(page.locator('.datectl-week')).toHaveCount(0)
   const month = page.locator('.datectl-month')
   const panelH = await month.evaluate((el) => el.parentElement!.getBoundingClientRect().height)

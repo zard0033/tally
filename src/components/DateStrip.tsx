@@ -21,6 +21,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react'
 import Flip from '@/components/Flip'
 import { DUR, REDUCED_FADE_MAX_MS, SPRING_CARD, sec } from '@/lib/durations'
+import { CLICK_GRACE_MS } from '@/lib/swipePhysics'
 import {
   addMonths,
   dayLabel,
@@ -39,8 +40,6 @@ import {
 const DOW = ['一', '二', '三', '四', '五', '六', '日']
 /** 水平位移超過它、且明顯大於垂直位移，才算「切週」 */
 const SWIPE_MIN = 48
-/** 切週手勢結束後，瀏覽器補的那一下 click 要吃掉（同 Today 左滑刪除的作法） */
-const CLICK_GRACE_MS = 150
 
 /** 週列與月曆的共同外殼：進退場動畫與「退場中」的標記。必須是 AnimatePresence 的直接子元件，useIsPresent 才讀得到。
  *  減少動態（AC 10）：不動高度，進場只淡入（≤120ms），退場立刻消失。 */
