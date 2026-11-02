@@ -4,7 +4,7 @@
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
 現況（2026-10-29）：v2.106–v2.108 已 commit（動作卡 RPE 頁尾拿掉、RPE 標籤強調色且可點開 sheet、sheet 再點同格取消），已 push（2026-10-29，使用者裁決**沒跑全量 e2e**，只跑 RPE 相關條目＋vitest／build／lint），**尚未真機驗**；下次動 UI 前先跑一次全量。「尾巴與 sheet RPE 不同步」stub 下重現不出來，原因未查；再現請記兩邊值與線上／離線。
-2026-11-02：e2e 細節搬到 wiki `e2e-reference`；`e2e:affected` 碰 `app.css` 一律全量。
+2026-11-02：e2e 細節搬到 wiki `e2e-reference`；`e2e:affected` 碰 `app.css` 一律全量。全量改到 push 後背景跑（push 前 affected／smoke，SW、離線佇列、schema 例外），見 CLAUDE.md。
 下一步：①新對話開階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）②核可餐建議樣張 ③每日目標 UX。
 
 ## Working Memory

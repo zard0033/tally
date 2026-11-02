@@ -1,5 +1,5 @@
 /* 煙霧層 e2e：只跑 e2e/smoke.json 列的那幾十條（核心路徑＋tally.spec 的大回歸），
-   開發中快速確認「沒把東西弄壞」用；push 前仍要跑全量 `npm run e2e`。
+   開發中與 push 前快速確認「沒把東西弄壞」用；不能取代全量 `npm run e2e`，全量排在 push 後（見 CLAUDE.md）。
 
    清單存的是測試標題原文，這裡逃脫 regex 特殊字元後用 `|` 串成一個 -g。
    其餘參數原樣轉給 playwright（例如 `--list` 可以核對選到幾條）。

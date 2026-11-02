@@ -10,8 +10,9 @@
 - 測試（各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄在 wiki `e2e-reference`，這裡只留規則；**每輪跑測紀錄寫那頁，不寫回這裡**）：
   - `npx vitest run`＝邏輯層（動公式、捨入、日期必跑）。**在 Git Bash 下跑會整批炸成「N files failed, 0 tests run」，而且會表現成 flaky（重跑就綠）——那是環境不是測試，用 PowerShell 跑**（全域 `windows-shell-ledger` 有全文；別再為它去查 vitest 設定）。
   - `npm run e2e`＝UI 回歸，fetch 全 stub 不打真後端。**e2e 條數用 `npx playwright test --list` 實測，不要用「舊數字＋本輪新增」外推**——條數就是這樣一路從 57 漂到 65。
-  - **開發中只跑受影響的檔，push 前（Pre-Push Checklist）才跑全量**——全量約 12 分鐘（2026-10-27 實測 377 條 738 秒，已排滿 2 個 worker、沒有長尾可拆，慢在條數乘每條固定開銷，所以省時間只能靠少跑）。`npm run e2e:affected` 依改動檔自動挑 spec（`--dry` 先預覽；表上沒有的檔與 `app.css` 自動升全量，表上的訓練相關 `src/lib` 檔照表縮小）；`npm run e2e:smoke` 只跑 `e2e/smoke.json` 的 55 條核心路徑（約 1.5 分鐘，不能取代 push 前全量）。
-  - 手動選檔的做法：在 `e2e/` 搜這次動到的 class、`data-screen`、aria-label 出現在哪些 spec 就跑哪些；**動到共用的東西（`SpringSheet`、`DateStrip`、`app.css` 的全域 token 或元件通用規則、`src/lib/`、`App.tsx`、`e2e/harness.ts`／`stub.ts`／`fixtures.ts`）一律跑全量**，因為影響面看不出來。
+  - **開發中只跑受影響的檔；push 前跑 `npm run e2e:affected`（選到全量就改跑 `npm run e2e:smoke`）；全量在 push 後背景跑**——全量約 12 分鐘（2026-10-27 實測 377 條 738 秒，已排滿 2 個 worker、沒有長尾可拆，慢在條數乘每條固定開銷，所以省時間只能靠少跑）。`npm run e2e:affected` 依改動檔自動挑 spec（`--dry` 先預覽；表上沒有的檔與 `app.css` 自動升全量，表上的訓練相關 `src/lib` 檔照表縮小）；`npm run e2e:smoke` 只跑 `e2e/smoke.json` 的 55 條核心路徑（約 1.5 分鐘，不能取代全量）。
+  - **push 後的全量**：push 完立刻在背景開 `npm run e2e`，結果回來前 notepad Priority Context 標「全量 e2e 待確認」；紅了照下面的偶發紅流程判斷，真紅立刻修。push 會觸發部署、CI 不跑 e2e，所以全量抓到的問題可能已上線。全量跑的期間不要另開 e2e 或 `npm run build`，它們共用 build 產物和 port 5501。**例外：動到 service worker、離線寫入佇列、資料庫 schema 或遷移時，壞了難救，全量仍要在 push 前跑綠。**
+  - 手動選檔的做法：在 `e2e/` 搜這次動到的 class、`data-screen`、aria-label 出現在哪些 spec 就跑哪些；**動到共用的東西（`SpringSheet`、`DateStrip`、`app.css` 的全域 token 或元件通用規則、`src/lib/`、`App.tsx`、`e2e/harness.ts`／`stub.ts`／`fixtures.ts`）手動選不準，改跑 `e2e:smoke`，全量留給 push 後**，因為影響面看不出來。
   - 單跑一條：`npx playwright test interaction -g "關鍵字"`。要重複單跑 `tally.spec.ts` 時，過濾字串寫 `tally.spec`——寫 `tally` 會比對到 repo 路徑而把整套都跑進去。
   - **e2e 跑的是 build 後的靜態 preview（port 5501），不是 dev server**——所以它會自己先 build 一次，也不會跟你開著的 `npm run dev`（5500）搶 port，兩邊可以同時開。
   - **`workers` 釘 2，不要拿掉**：那是這台機器在一般桌面負載下能同時開的 WebKit 數量，調高會偶發崩在 `Cannot find parent object page@…`（來龍去脈見 playwright.config.ts 註解）。
@@ -24,7 +25,7 @@
 
 - [ ] `npx vitest run` 全量綠（動公式、捨入、日期、資料存取必跑）
 - [ ] `npm run build` 過（tsc -b 含在內）＋ `npm run lint` 0 error
-- [ ] 改 UI → `npm run e2e` 綠（條數用 `--list` 實測、檔案清單見 wiki `e2e-reference`，這裡不重寫第二份數字——它已經漂過一次）；webkit 393×745 截圖看過，token 無黑色 fallback。**本專案只有淺色一套**（DESIGN.md 明文不做暗色模式），所以沒有暗色那半邊要截
+- [ ] 改 UI → `npm run e2e:affected` 綠，選到全量就跑 `npm run e2e:smoke`；動到 service worker、離線寫入佇列、schema 或遷移則 `npm run e2e` 全量綠；其餘全量 push 後背景跑（條數用 `--list` 實測、檔案清單見 wiki `e2e-reference`，這裡不重寫第二份數字——它已經漂過一次）；webkit 393×745 截圖看過，token 無黑色 fallback。**本專案只有淺色一套**（DESIGN.md 明文不做暗色模式），所以沒有暗色那半邊要截
 - [ ] 改 UI → 設計決策已回寫 DESIGN.md（元件規則 ＋ 版本紀錄），不只改 code
 - [ ] 動 Supabase schema / 匯出格式 → 屬影響面升級，先給 spec＋plan、等我點頭再動實作碼（全域 CLAUDE.md「工作流程」：跨檔或不可逆的先給 spec＋plan）
 - [ ] spec 外追加？有 → notepad MANUAL 加一行 `[追加]`
