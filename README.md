@@ -18,6 +18,8 @@ MyFitnessPal would have saved me the build. It would also have put my history in
 - The screen leads with how much budget is left today. A horizontal calorie gauge sits above three macro bars (protein, fat, carbs), readable at a glance.
 - Targets recalculate from current weight, so they move with me instead of going stale.
 - I can also back-fill a past day, record weight, edit an entry in place, manage the food library, and adjust body stats in settings.
+- It logs gym sessions too: start from a routine, tick off sets prefilled with what I last did, rest on a timer, and record cardio. A session can be logged with no signal and syncs the next time the app is open with a connection.
+- Analysis screens show estimated 1RM progress per exercise (sets of 10 reps or fewer) and an estimate of which muscle groups are still recovering. Body weight has its own trend charts.
 
 ## How the decisions were made
 
@@ -45,9 +47,13 @@ Any UI change used to run the entire browser suite, which took under two minutes
 
 Every new test also gets checked by breaking the thing it covers on purpose and confirming it goes red. A test that has never failed hasn't been shown to test anything.
 
+### I cut exercise tracking, then built it anyway
+
+Exercise was on the original not-building list. In October 2026 I tried a gym app called Gymwork and hit two problems. The gym's network is unreliable and the app doesn't work offline, so the day's exercises and their images wouldn't load. The analysis I wanted (1RM, recovery status, week-over-week comparison) was behind its PRO tier. Neither had been part of the earlier decision, so I reversed it. The price is that workouts logged in Tally don't appear in Apple Health, because a web app can't write to HealthKit.
+
 ### What I decided not to build
 
-Barcode scanning (the places I eat from don't put barcodes on anything), recipes (I log per item, not per ingredient), progress photos, exercise, water, a community food database. MyFitnessPal has all of them. I considered each one and cut it.
+Barcode scanning (the places I eat from don't put barcodes on anything), recipes (I log per item, not per ingredient), progress photos, water, a community food database. MyFitnessPal has all of them. I considered each one and cut it.
 
 The first design draft had a progress ring, and it died in review. A ring says that filling it up is winning, which is the opposite of what's true for calories.
 
@@ -65,7 +71,7 @@ DESIGN.md carries a version log. Each entry says what changed and why, including
 
 ## Built with
 
-Vite · React 19 · TypeScript · Tailwind 4 · shadcn/ui (Base UI) · vaul · Motion · supabase-js
+Vite · React 19 · TypeScript · Tailwind 4 · shadcn/ui (Base UI) · Motion · dnd-kit · Recharts · vite-plugin-pwa · supabase-js
 
 The backend is Supabase: Postgres plus Google OAuth. Hosting is GitHub Pages, built and deployed by GitHub Actions. Nothing loads from a CDN, and every dependency is bundled and self-hosted.
 
