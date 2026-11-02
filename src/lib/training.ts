@@ -182,10 +182,21 @@ export interface PrefillSet {
 
 const DEFAULT_TARGET_SETS = 3
 
-const startedMs = (w: Row): number => {
+export const startedMs = (w: Row): number => {
   const ms = Date.parse(String(w.started_at))
   return Number.isNaN(ms) ? 0 : ms
 }
+
+const byPositionAsc = (a: Row, b: Row) => Number(a.position) - Number(b.position)
+
+const bySetNo = (a: Row, b: Row) =>
+  Number(a.set_no) - Number(b.set_no) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
+
+/** 「上次」的順序：performed_on → started_at → position，由新到舊。 */
+const byLastDesc = (a: { we: Row; workout: Row }, b: { we: Row; workout: Row }) =>
+  String(b.workout.performed_on).localeCompare(String(a.workout.performed_on)) ||
+  startedMs(b.workout) - startedMs(a.workout) ||
+  Number(b.we.position) - Number(a.we.position)
 
 export interface CompletedSession {
   readonly workoutId: string
@@ -210,21 +221,12 @@ export function completedSessions(db: TrainingDb, exerciseId: string, excludeWor
       const done = setsByWe.get(we.id)
       return workout && done ? [{ we, workout, done }] : []
     })
-    .sort(
-      (a, b) =>
-        String(b.workout.performed_on).localeCompare(String(a.workout.performed_on)) ||
-        startedMs(b.workout) - startedMs(a.workout) ||
-        Number(b.we.position) - Number(a.we.position),
-    )
+    .sort(byLastDesc)
 
   return candidates.map((c) => ({
     workoutId: c.workout.id,
     sets: [...c.done]
-      .sort(
-        (a, b) =>
-          Number(a.set_no) - Number(b.set_no) ||
-          String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')),
-      )
+      .sort(bySetNo)
       .map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps) })),
   }))
 }
@@ -264,6 +266,8 @@ export interface SetLike {
   readonly reps: number
   readonly done: boolean
 }
+
+const toSetLike = (s: Row): SetLike => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps), done: s.done === true })
 
 export interface WorkoutSummary {
   /** 已打勾各組 重量×次數 的總和（kg）。 */
@@ -335,7 +339,7 @@ export function workoutsOn(db: TrainingDb, date: string, now: Date): WorkoutCard
       const sets = exercises.flatMap((e) => setsOf.get(e.id) ?? [])
       const endedAt = typeof w.ended_at === 'string' ? w.ended_at : null
       const summary = workoutSummary(
-        sets.map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps), done: s.done === true })),
+        sets.map(toSetLike),
         String(w.started_at),
         endedAt,
         now,
@@ -375,12 +379,9 @@ export function workoutDetail(db: TrainingDb, workoutId: string): WorkoutDetail 
   const workout = db.workouts.find((w) => w.id === workoutId)
   if (!workout) return null
   const exerciseById = new Map(db.exercises.map((e) => [e.id, e]))
-  const byPosition = (a: Row, b: Row) => Number(a.position) - Number(b.position)
-  const bySetNo = (a: Row, b: Row) =>
-    Number(a.set_no) - Number(b.set_no) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
   const exercises = db.workout_exercises
     .filter((we) => we.workout_id === workoutId)
-    .sort(byPosition)
+    .sort(byPositionAsc)
     .map((entry) => ({
       entry,
       exercise: exerciseById.get(String(entry.exercise_id)) ?? null,
@@ -391,12 +392,10 @@ export function workoutDetail(db: TrainingDb, workoutId: string): WorkoutDetail 
 
 /** 一組一組攤平，給 workoutSummary 用。 */
 export function setsOfDetail(detail: WorkoutDetail): SetLike[] {
-  return detail.exercises.flatMap((e) =>
-    e.sets.map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps), done: s.done === true })),
-  )
+  return detail.exercises.flatMap((e) => e.sets.map(toSetLike))
 }
 
-/** 寫入的最小描述；與 trainingRuntime 的 WriteOp 同形（不引用它，那邊反過來引用這裡）。 */
+/** 寫入的最小描述；trainingRuntime.write 與 useTraining 都直接用它。 */
 export interface RowOp {
   op: 'insert' | 'update' | 'delete'
   table: TrainingTable
@@ -587,8 +586,8 @@ export function completesExercise(sets: readonly Row[], setId: string): boolean 
 
 /** 一個動作在訓練清單上的 RPE 狀態：做完了（每一組都打勾）才談得上填沒填；rpe 是**最後一組**的值，沒填＝null。
  *  （階段 4 丙／v2.105：RPE 是每組各一個，這裡只回休息條關心的那一組；原本取各組最大值，會讓別組的值冒充最後一組。） */
-export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: number | null } {
-  const complete = sets.length > 0 && sets.every((s) => s.done === true)
+export function lastSetRpe(sets: readonly Row[]): { complete: boolean; rpe: number | null } {
+  const complete = allSetsDone(sets)
   const last = sets.at(-1)
   const n = last?.rpe == null ? NaN : Number(last.rpe)
   return { complete, rpe: Number.isFinite(n) ? n : null }
@@ -596,14 +595,9 @@ export function exerciseRpe(sets: readonly Row[]): { complete: boolean; rpe: num
 
 /** 休息條的快捷入口：只寫**最後一組**的 RPE，其他組不動（v2.105 起；原本會把其他組的 RPE 清成 null）。
  *  每組各自的 RPE 在組編輯 sheet 改（sheet 直接 patch，再點同一格取消＝寫 null）。 */
-export function setExerciseRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
+export function setLastSetRpeOps(sets: readonly Row[], rpe: number): RowOp[] {
   const last = sets.at(-1)
-  return last ? setRpeOps(last.id, rpe) : []
-}
-
-/** 寫一組的 RPE；null＝清掉（回到沒填）。 */
-export function setRpeOps(setId: string, rpe: number | null): RowOp[] {
-  return [{ op: 'update', table: 'workout_sets', rowId: setId, payload: { rpe } }]
+  return last ? [{ op: 'update', table: 'workout_sets', rowId: last.id, payload: { rpe } }] : []
 }
 
 /** 收合列要看的進度：做完幾組、共幾組、下一組（第一個還沒打勾的）。全部做完 next＝null。 */
@@ -620,18 +614,25 @@ export function exerciseProgress(sets: readonly Row[]): {
   }
 }
 
-/** 訓練中拖曳排序的結果 → 只更新位置有變的 workout_exercises。與課表那支同樣嚴格：對不上就丟錯。 */
-export function reorderWorkoutExercisesOps(args: { entries: readonly Row[]; orderedIds: readonly string[] }): RowOp[] {
-  const { entries, orderedIds } = args
+/** 拖曳排序共用：`orderedIds` 對不上 `entries` 就丟 `mismatchMessage`，否則只更新位置有變的列。 */
+function reorderOps(
+  table: TrainingTable,
+  mismatchMessage: string,
+  entries: readonly Row[],
+  orderedIds: readonly string[],
+): RowOp[] {
   const known = new Map(entries.map((e) => [e.id, e]))
   if (new Set(orderedIds).size !== known.size || !orderedIds.every((id) => known.has(id))) {
-    throw new Error('排序的項目與這次訓練現有的動作對不上')
+    throw new Error(mismatchMessage)
   }
   return orderedIds.flatMap((id, i): RowOp[] =>
-    Number(known.get(id)?.position) === i
-      ? []
-      : [{ op: 'update', table: 'workout_exercises', rowId: id, payload: { position: i } }],
+    Number(known.get(id)?.position) === i ? [] : [{ op: 'update', table, rowId: id, payload: { position: i } }],
   )
+}
+
+/** 訓練中拖曳排序的結果 → 只更新位置有變的 workout_exercises。與課表那支同樣嚴格：對不上就丟錯。 */
+export function reorderWorkoutExercisesOps(args: { entries: readonly Row[]; orderedIds: readonly string[] }): RowOp[] {
+  return reorderOps('workout_exercises', '排序的項目與這次訓練現有的動作對不上', args.entries, args.orderedIds)
 }
 
 /** 結束一次進行中的訓練。即時的：ended_at＝現在；補記的：started_at／ended_at 由手填分鐘算
@@ -737,8 +738,6 @@ export function setExerciseArchivedOps(args: { id: string; archived: boolean }):
 
 export const MAX_TARGET_SETS = 20
 export const MAX_TARGET_REPS = 999
-
-const byPositionAsc = (a: Row, b: Row) => Number(a.position) - Number(b.position)
 
 /** 可為 null 的數字欄（伺服器回 null；佇列疊上的列可能整欄缺）。 */
 const optNum = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
@@ -910,26 +909,17 @@ export function removeRoutineExerciseOps(id: string): RowOp[] {
 /** 拖曳排序的結果 → 只更新位置有變的列。`orderedIds` 必須正好是這份課表現有的那些列（順序不同而已）；
  *  對不上代表畫面與資料已經分岔，丟錯而不是默默排出一份缺漏的課表。 */
 export function reorderRoutineExercisesOps(args: { entries: readonly Row[]; orderedIds: readonly string[] }): RowOp[] {
-  const { entries, orderedIds } = args
-  const known = new Map(entries.map((e) => [e.id, e]))
-  if (new Set(orderedIds).size !== known.size || !orderedIds.every((id) => known.has(id))) {
-    throw new Error('排序的項目與課表現有的動作對不上')
-  }
-  return orderedIds.flatMap((id, i): RowOp[] =>
-    Number(known.get(id)?.position) === i
-      ? []
-      : [{ op: 'update', table: 'routine_exercises', rowId: id, payload: { position: i } }],
-  )
+  return reorderOps('routine_exercises', '排序的項目與課表現有的動作對不上', args.entries, args.orderedIds)
 }
 
-/** 複製課表：只複製結構（動作、順序、預設組次），名稱預設「原名稱 複本」。找不到來源回空陣列。 */
-export function copyRoutineOps(args: { db: TrainingDb; routineId: string; newId: () => string; name?: string }): RowOp[] {
+/** 複製課表：只複製結構（動作、順序、預設組次），名稱是「原名稱 複本」。找不到來源回空陣列。 */
+export function copyRoutineOps(args: { db: TrainingDb; routineId: string; newId: () => string }): RowOp[] {
   const { db, routineId, newId } = args
   const source = routineDetail(db, routineId)
   if (!source) return []
   const copyId = newId()
   return [
-    ...createRoutineOps({ id: copyId, name: args.name ?? `${String(source.routine.name)} 複本` }),
+    ...createRoutineOps({ id: copyId, name: `${String(source.routine.name)} 複本` }),
     ...source.exercises.map(
       ({ entry }, i): RowOp => ({
         op: 'insert',
@@ -1084,12 +1074,7 @@ function lastCardioEntry(db: TrainingDb, exerciseId: string, excludeWorkoutId?: 
       const workout = workouts.get(String(we.workout_id))
       return workout ? [{ we, workout }] : []
     })
-    .sort(
-      (a, b) =>
-        String(b.workout.performed_on).localeCompare(String(a.workout.performed_on)) ||
-        startedMs(b.workout) - startedMs(a.workout) ||
-        Number(b.we.position) - Number(a.we.position),
-    )[0]?.we
+    .sort(byLastDesc)[0]?.we
 }
 
 /** 加有氧動作時預填的欄位：上次那張有記錄的有氧卡（`lastCardioEntry`）的速度／坡度／預估熱量。

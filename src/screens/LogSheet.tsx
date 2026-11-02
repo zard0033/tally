@@ -222,7 +222,7 @@ export default function LogSheet(props: LogSheetProps) {
         for (const r of hist) {
           const key = `${r.meal}:${r.food_id}`
           if (!lq.has(key)) lq.set(key, num(r.qty))
-          const c = byMeal.get(r.meal as MealKey)
+          const c = byMeal.get(r.meal)
           if (c) c.set(r.food_id, (c.get(r.food_id) ?? 0) + 1)
         }
         setLastQty(lq)

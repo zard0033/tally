@@ -11,7 +11,7 @@
    口徑就是記錄口徑：漏記的油與飲料會讓結果偏低。但上限本來就是套在「記下來的熱量」上，
    只要記錄習慣一致，這把尺就是對的。
    lib 內禁止碰 window／document。 */
-import { shiftDate } from './dates'
+import { dayIndex, shiftDate } from './dates'
 import { KCAL_PER_KG } from './formulas'
 
 export interface DailyKcal {
@@ -115,13 +115,9 @@ export function baselineFetchRange(today: string): { from: string; end: string }
   return { from: shiftDate(from, -LOOKBACK_DAYS), end }
 }
 
-/** 兩個 yyyy-mm-dd 相差幾天。用 UTC 解析只為了算整數日差，不經本地時區的夏令時間。 */
+/** 兩個 yyyy-mm-dd 相差幾天（見 dayIndex：UTC 日界，不經本地時區的夏令時間）。 */
 function daysBetween(from: string, to: string): number {
-  const utc = (iso: string) => {
-    const [y, m, d] = iso.split('-').map(Number)
-    return Date.UTC(y, m - 1, d)
-  }
-  return Math.round((utc(to) - utc(from)) / 86_400_000)
+  return dayIndex(to) - dayIndex(from)
 }
 
 /**

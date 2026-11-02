@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { dayIndex, isoOfDay, niceDomain, rangeStart, trendPoints, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { isoOfDay, niceDomain, rangeStart, trendPoints, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { dayIndex } from './dates'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
   ({ weight_kg, measured_on, body_fat_pct })

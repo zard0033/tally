@@ -27,6 +27,7 @@ import {
   emptyTrainingDb,
   parentRefs,
   type Row,
+  type RowOp,
   type TrainingDb,
   type TrainingTable,
 } from './training'
@@ -48,16 +49,6 @@ export type TrainingClient = ReaderClient & SenderClient
 
 /* ═══════════ 對外介面 ═══════════ */
 
-export interface WriteOp {
-  op: 'insert' | 'update' | 'delete'
-  table: TrainingTable
-  rowId: string
-  /** insert／update 必填。 */
-  payload?: Record<string, unknown>
-  /** 只對 insert 有意義，見 queue.ts。 */
-  ignoreDuplicates?: boolean
-}
-
 export interface TrainingView {
   /** 伺服器資料（或本機底）疊上未同步變更後的樣子，畫面一律讀這份。 */
   readonly db: TrainingDb
@@ -76,7 +67,7 @@ export interface TrainingRuntime {
   /** 不碰網路：記憶體或本機底，疊上佇列。 */
   view(userId: string): Promise<TrainingView>
   /** 排進佇列（父列依賴自動補齊）並回傳新畫面。本機寫入失敗會丟 QueueStorageError。 */
-  write(userId: string, ops: readonly WriteOp[]): Promise<TrainingView>
+  write(userId: string, ops: readonly RowOp[]): Promise<TrainingView>
   flush(userId: string): Promise<{ report: FlushReport; view: TrainingView }>
   /** 主動登出：清佇列與本機底。呼叫前由 UI 依 signOutPlan 確認。被動掉線不要呼叫。 */
   clearAll(): Promise<void>
@@ -92,14 +83,14 @@ export interface TrainingRuntimeDeps {
   sessionUserId: () => Promise<string | null>
   /** 跨分頁互斥（見 queue.ts 的 crossLock）。瀏覽器接 Web Locks；不給＝只有這一個實例。 */
   crossLock?: <T>(name: string, fn: () => Promise<T>) => Promise<T>
-  /** 單一請求的逾時。 */
-  fetchTimeoutMs?: number
   /** 一頁拉幾列。PostgREST 預設單次最多 1000，不能超過。 */
   pageSize?: number
-  now?: () => number
 }
 
 export const BASE_STORAGE_KEY = 'training-base'
+
+/** 單一請求的逾時。 */
+const FETCH_TIMEOUT_MS = 8000
 
 /** 目前的 session 不是這個帳號（或沒有 session）。與「連不上」分開：前者不該預填。 */
 class SessionMismatch extends Error {
@@ -132,7 +123,7 @@ function parseBase(raw: unknown): StoredBase | null {
 /* ═══════════ 實作 ═══════════ */
 
 export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntime {
-  const { kv, client, sessionUserId, fetchTimeoutMs = 8000, pageSize = 1000 } = deps
+  const { kv, client, sessionUserId, pageSize = 1000 } = deps
 
   let base: { userId: string; db: TrainingDb } | null = null
   let source: TrainingView['source'] = 'empty'
@@ -195,7 +186,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
             .select('*')
             .order('id')
             .range(from, from + pageSize - 1)
-            .abortSignal(AbortSignal.timeout(fetchTimeoutMs))
+            .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS))
           if (r.error) throw new Error(`${table}：${r.error.message}`)
           const page = Array.isArray(r.data) ? (r.data as Row[]) : []
           rows.push(...page)
@@ -239,7 +230,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     return result
   }
 
-  const queue = createQueue({ store: createQueueStore(kv), send, now: deps.now, crossLock: deps.crossLock })
+  const queue = createQueue({ store: createQueueStore(kv), send, crossLock: deps.crossLock })
 
   async function composeView(userId: string): Promise<TrainingView> {
     const { entries, summary } = await queue.read(userId)
@@ -248,7 +239,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     return { db, source, summary, entries: mine, cacheError }
   }
 
-  async function write(userId: string, ops: readonly WriteOp[]): Promise<TrainingView> {
+  async function write(userId: string, ops: readonly RowOp[]): Promise<TrainingView> {
     // 一次寫進去：一個動作＋三組要嘛全存、要嘛都沒存——只存下一半，UI 說「沒有存下來」卻有半份會上傳
     await queue.enqueueMany(
       ops.map((o) => ({
@@ -269,16 +260,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     const ops = autoSeedOps(userId, view.db.exercises, view.source === 'server') // 不需要補就是空陣列，write 不排任何東西
     // 這個檢查與下面 write 呼叫 enqueueMany 之間不能有 await：中間若插進 clearAll，預填會排在 clear 之後落地
     if (gen !== generation) return view
-    return write(
-      userId,
-      ops.map((o) => ({
-        op: 'insert' as const,
-        table: 'exercises' as const,
-        rowId: o.rowId,
-        payload: { ...o.payload },
-        ignoreDuplicates: true,
-      })),
-    )
+    return write(userId, ops)
   }
 
   return {

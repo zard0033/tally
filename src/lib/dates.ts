@@ -13,6 +13,12 @@ export function shiftDate(iso: string, days: number): string {
   return localDate(new Date(y, m - 1, d + days))
 }
 
+/** yyyy-mm-dd → 自 1970-01-01 起算的天數（UTC 日界，只用來做差，不受夏令時間影響）。 */
+export function dayIndex(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000)
+}
+
 /**
  * 使用者能檢視／記錄到的**最後一天＝明天**（v2.47）。
  *

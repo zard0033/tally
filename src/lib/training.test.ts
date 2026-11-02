@@ -6,9 +6,8 @@ import {
   RPE_CHIPS,
   RPE_SHEET_VALUES,
   completesExercise,
-  exerciseRpe,
-  setExerciseRpeOps,
-  setRpeOps,
+  lastSetRpe,
+  setLastSetRpeOps,
   PRESET_EXERCISES,
   cardioEntryDraft,
   cardioLastMinutes,
@@ -1267,8 +1266,7 @@ describe('copyRoutineOps', () => {
     expect(head.rowId).not.toBe('r')
   })
 
-  it('可指定名稱；找不到來源回空陣列', () => {
-    expect(copyRoutineOps({ db: d, routineId: 'r', newId: idGen(), name: 'B' })[0].payload?.name).toBe('B')
+  it('找不到來源回空陣列', () => {
     expect(copyRoutineOps({ db: d, routineId: 'nope', newId: idGen() })).toEqual([])
   })
 
@@ -1398,23 +1396,19 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
     expect(completesExercise([set('a', true)], 'zz')).toBe(false) // 找不到這組
     expect(completesExercise([], 'a')).toBe(false)
   })
-  it('exerciseRpe：每一組都打勾才算做完；rpe 是最後一組的值（不取最大值），最後一組沒填＝null；沒有組＝沒做完', () => {
+  it('lastSetRpe：每一組都打勾才算做完；rpe 是最後一組的值（不取最大值），最後一組沒填＝null；沒有組＝沒做完', () => {
     const set = (done: boolean, rpe?: number | null): Row => ({ id: `${Math.random()}`, done, ...(rpe === undefined ? {} : { rpe }) })
-    expect(exerciseRpe([set(true), set(true)])).toEqual({ complete: true, rpe: null })
-    expect(exerciseRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: null }) // 別組的 9 不冒充最後一組
-    expect(exerciseRpe([set(true, 9), set(true, 7)])).toEqual({ complete: true, rpe: 7 }) // 最後一組 7，不是最大值 9
-    expect(exerciseRpe([set(true, 9), set(false, 8)])).toEqual({ complete: false, rpe: 8 })
-    expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
+    expect(lastSetRpe([set(true), set(true)])).toEqual({ complete: true, rpe: null })
+    expect(lastSetRpe([set(true, 8), set(true, 9), set(true, null)])).toEqual({ complete: true, rpe: null }) // 別組的 9 不冒充最後一組
+    expect(lastSetRpe([set(true, 9), set(true, 7)])).toEqual({ complete: true, rpe: 7 }) // 最後一組 7，不是最大值 9
+    expect(lastSetRpe([set(true, 9), set(false, 8)])).toEqual({ complete: false, rpe: 8 })
+    expect(lastSetRpe([])).toEqual({ complete: false, rpe: null })
   })
-  it('setExerciseRpeOps：只寫最後一組，其他組（包含已有 RPE 的）不動；沒有組＝不寫', () => {
+  it('setLastSetRpeOps：只寫最後一組，其他組（包含已有 RPE 的）不動；沒有組＝不寫', () => {
     const rows: Row[] = [{ id: 'a', rpe: 8 }, { id: 'b' }, { id: 'c', rpe: null }, { id: 'd' }]
-    expect(setExerciseRpeOps(rows, 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'd', payload: { rpe: 9 } }])
-    expect(setExerciseRpeOps([{ id: 'x' }], 7)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'x', payload: { rpe: 7 } }])
-    expect(setExerciseRpeOps([], 7)).toEqual([])
-  })
-  it('setRpeOps：單筆 update，payload 只有 rpe；null＝清掉', () => {
-    expect(setRpeOps('s1', 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: 9 } }])
-    expect(setRpeOps('s1', null)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 's1', payload: { rpe: null } }])
+    expect(setLastSetRpeOps(rows, 9)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'd', payload: { rpe: 9 } }])
+    expect(setLastSetRpeOps([{ id: 'x' }], 7)).toEqual([{ op: 'update', table: 'workout_sets', rowId: 'x', payload: { rpe: 7 } }])
+    expect(setLastSetRpeOps([], 7)).toEqual([])
   })
 })
 
@@ -1777,7 +1771,7 @@ describe('有氧卡不影響其他功能（AC 6）', () => {
     const detail = workoutDetail(d, 'w')!
     expect(exerciseProgress([])).toEqual({ done: 0, total: 0, next: null })
     expect(allSetsDone([])).toBe(false)
-    expect(exerciseRpe([])).toEqual({ complete: false, rpe: null })
+    expect(lastSetRpe([])).toEqual({ complete: false, rpe: null })
     expect(completesExercise([], 'c1')).toBe(false)
     expect(toggleAllDoneOps(detail, 'c1')).toEqual([])
   })

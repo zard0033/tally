@@ -1,7 +1,8 @@
 /* 訓練分析 A（spec.md「階段 4 甲」）的純運算：e1RM 與單一動作的歷次進度。
    不沾 DOM；吃的是已疊上離線佇列的 TrainingDb，所以離線剛記完的訓練也算。 */
-import { dayIndex, rangeStart, type TrendRange } from './weightTrend'
-import { completedSessions, type Row, type TrainingDb } from './training'
+import { dayIndex } from './dates'
+import { rangeStart, type TrendRange } from './weightTrend'
+import { completedSessions, startedMs, type TrainingDb } from './training'
 
 /** 只信 10 下以內：次數越高 Epley 估得越不準。 */
 const E1RM_MAX_REPS = 10
@@ -24,11 +25,6 @@ export interface StrengthPoint {
   readonly e1rm: number
   /** 產出該 e1RM 的那一組 */
   readonly topSet: { readonly weight_kg: number; readonly reps: number }
-}
-
-const startedMs = (w: Row): number => {
-  const ms = Date.parse(String(w.started_at))
-  return Number.isNaN(ms) ? 0 : ms
 }
 
 /** 某動作歷次訓練的進度，由舊到新。一次訓練一點：取該次有效已打勾組 e1RM 最大的那一組

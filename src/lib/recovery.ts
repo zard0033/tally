@@ -3,9 +3,8 @@
    窗口是依文獻範圍估的起點，不是診斷：下半身比上半身慢（48–72 小時 vs 24 小時內），訓練量大要更久。
    文獻還說「離力竭多近」影響最大（多 24–48 小時）：D（spec.md「階段 4 乙」）起，那次訓練該肌群有任一組 RPE ≥ 9 就加 24 小時。
    熱身組（重量不到該動作當天最重一組的 60%）不計入組數，沒有熱身欄位，純用規則判斷。 */
-import { dayIndex } from './weightTrend'
 import { groupOf, MUSCLE_GROUPS, type MuscleGroup, type Row, type TrainingDb } from './training'
-import { localDate } from './dates'
+import { dayIndex, localDate } from './dates'
 
 /** 「其他」含有氧，不算；順序同 MUSCLE_GROUPS。 */
 export const RECOVERY_GROUPS = MUSCLE_GROUPS.filter((g): g is Exclude<MuscleGroup, 'other'> => g !== 'other')

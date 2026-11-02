@@ -536,7 +536,7 @@ function ItemEditor({
   /* 餐別也走樂觀：按下當場就渲染成選中，不等往返。原本 aria-current 綁 row.meal（伺服器
      真值）＋ disabled 只改 cursor，於是慢網路下按「晚餐」畫面上一個 pixel 都不會變，
      使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。 */
-  const [localMeal, setLocalMeal] = useState<MealKey>(row.meal as MealKey)
+  const [localMeal, setLocalMeal] = useState<MealKey>(row.meal)
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState('')
 
@@ -788,7 +788,7 @@ function ItemEditor({
 
 function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
   const byMeal = new Map<MealKey, IntakeRow[]>(MEALS.map((m) => [m.key, []]))
-  for (const r of rows) byMeal.get(r.meal as MealKey)?.push(r)
+  for (const r of rows) byMeal.get(r.meal)?.push(r)
 
   /* 三筆完全同名的「雞胸餐盒」只靠店家區分。今日頁常態不顯示店家，
      同一天出現兩筆同名時才非顯示不可，否則回頭核對或刪除都是盲的。

@@ -128,7 +128,7 @@ export async function updateFood(id: number, patch: Partial<NewFood & { archived
 
 export interface IntakeRow {
   id: number
-  meal: string
+  meal: MealKey
   qty: number
   kcal: number
   protein: number
@@ -192,7 +192,7 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
 }
 
 export interface RecentIntakeRow {
-  meal: string
+  meal: MealKey
   food_id: number
   qty: number
 }
@@ -210,7 +210,7 @@ export async function listRecentIntake(limit = 120): Promise<RecentIntakeRow[]> 
 
 export interface NewIntake {
   eaten_on: string
-  meal: string
+  meal: MealKey
   food_id: number
   qty: number
   kcal: number
@@ -263,12 +263,14 @@ export interface Weight {
   body_fat_pct: number | null
 }
 
+const WEIGHT_COLS = 'weight_kg,measured_on,body_fat_pct'
+
 /** body_fat_pct 一併撈：目標計算（Katch-McArdle）要用最新一筆的體脂率，
  *  沒有就是沒有，呼叫端不再往回找更舊的值（見 formulas.ts computeTargets 註解）。 */
 export async function getLatestWeight(): Promise<Weight | null> {
   const rows = unwrap<Weight[]>(await supabase
     .from('weight')
-    .select('weight_kg,measured_on,body_fat_pct')
+    .select(WEIGHT_COLS)
     .order('measured_on', { ascending: false })
     .limit(1)
     .abortSignal(dbSignal()))
@@ -279,7 +281,7 @@ export async function getLatestWeight(): Promise<Weight | null> {
 export async function listWeights(limit = 90): Promise<Weight[]> {
   const rows = unwrap<Weight[]>(await supabase
     .from('weight')
-    .select('weight_kg,measured_on,body_fat_pct')
+    .select(WEIGHT_COLS)
     .order('measured_on', { ascending: false })
     .limit(limit)
     .abortSignal(dbSignal()))

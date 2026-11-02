@@ -41,16 +41,16 @@ import {
   cardioSummary,
   completesExercise,
   exerciseProgress,
-  exerciseRpe,
   finishWorkoutOps,
   formatKg,
   isBackfilled,
   isCardioExercise,
+  lastSetRpe,
   removeSetOps,
   replaceExerciseOps,
   reorderWorkoutExercisesOps,
   routineFromWorkoutOps,
-  setExerciseRpeOps,
+  setLastSetRpeOps,
   setsOfDetail,
   toggleAllDoneOps,
   updateExerciseOps,
@@ -503,7 +503,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   useEffect(() => {
     if (!ask || ask.picked !== null) return
     const entry = exercises.find((e) => e.sets.some((s) => s.id === ask.setId))
-    const rpe = entry ? exerciseRpe(entry.sets).rpe : null
+    const rpe = entry ? lastSetRpe(entry.sets).rpe : null
     if (rpe !== null) setAsk({ ...ask, picked: rpe })
   }, [ask, exercises])
 
@@ -827,7 +827,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   if (s.done === true && item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 取消勾：這個動作不算做完了，不再問
                   if (s.done !== true) {
                     rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
-                    setAsk(completesExercise(item.sets, s.id) && exerciseRpe(item.sets).rpe === null ? { setId: s.id, picked: null } : null)
+                    setAsk(completesExercise(item.sets, s.id) && lastSetRpe(item.sets).rpe === null ? { setId: s.id, picked: null } : null)
                   }
                   void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
                 }}
@@ -851,7 +851,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
             if (!ask || ask.picked !== null) return
             setAsk({ ...ask, picked: rpe })
             const entrySets = exercises.find((e) => e.sets.some((s) => s.id === ask.setId))?.sets ?? []
-            void run(setExerciseRpeOps(entrySets, rpe))
+            void run(setLastSetRpeOps(entrySets, rpe))
           }}
         />
         <button

@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { onAuthStateChange } from '@/lib/api'
-import type { TrainingView, WriteOp } from '@/lib/trainingRuntime'
+import type { RowOp } from '@/lib/training'
+import type { TrainingView } from '@/lib/trainingRuntime'
 import { trainingRuntime } from './trainingSync'
 
 export interface TrainingState {
@@ -15,7 +16,7 @@ export interface TrainingState {
   /** 最近一次失敗的白話說明（本機寫入失敗等）；成功一次就清掉。 */
   error: string | null
   /** 排進佇列並立刻更新畫面；本機寫入失敗會 reject，呼叫端要接住並告知「這筆沒有存下來」。 */
-  write: (ops: WriteOp[]) => Promise<void>
+  write: (ops: RowOp[]) => Promise<void>
   /** 放棄佇列裡的一條（連帶的子孫一起走），之後以佇列現況刷新畫面。 */
   discard: (seq: number) => Promise<void>
   /** 放棄這一條會連帶消失幾列（不含它自己），給確認框用。 */
@@ -141,7 +142,7 @@ export function useTraining(userId: string | null): TrainingState {
   }, [userId, sync])
 
   const write = useCallback(
-    async (ops: WriteOp[]) => {
+    async (ops: RowOp[]) => {
       const id = userRef.current
       if (!id) return
       try {

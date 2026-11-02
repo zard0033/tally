@@ -1,6 +1,6 @@
 /* 體重趨勢圖（spec.md「體重趨勢圖」）的純運算：7 日平均、範圍切片、軸範圍與刻度。
    不沾 DOM、不碰 recharts——圖怎麼畫是 WeightTrend.tsx 的事，這裡只管數字對不對。 */
-import { shiftDate } from './dates'
+import { dayIndex, shiftDate } from './dates'
 import { num } from './formulas'
 
 export type TrendRange = '30' | '90' | 'all'
@@ -26,12 +26,6 @@ export interface TrendPoint {
   /** 7 日平均 */
   avg: number
   fat: number | null
-}
-
-/** yyyy-mm-dd → 自 1970-01-01 起算的天數（UTC 日界，只用來做差，不受夏令時間影響）。 */
-export function dayIndex(iso: string): number {
-  const [y, m, d] = iso.split('-').map(Number)
-  return Math.round(Date.UTC(y, m - 1, d) / 86400000)
 }
 
 /** dayIndex 的反運算。 */
