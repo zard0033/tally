@@ -38,12 +38,12 @@ const SCREENS = {
   // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
   Today: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
   // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
-  Settings: [...SETTINGS, 'training', 'food-library'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
+  Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
   Login: ['interaction'],
 }
 
 /* 訓練／分析的邏輯層與 hook（import 關係查過）。分析讀訓練底，所以資料層的改動兩邊都帶。
-   這些檔每次開機也會跑，但開機壞掉時這裡選到的 spec 一樣會紅，所以不必把其他 spec 都帶上。
+   useTraining 與它帶進來的同步、佇列層每次開機也會跑，但開機壞掉時這裡選到的 spec 一樣會紅，所以不必把其他 spec 都帶上。
    strength 被 SetSheet（重量建議）與訓練頁用；體重趨勢頁只有 settings-nav、weight-trend 會開 */
 const FILES = {
   'src/useTraining.ts': [...TRAIN, ...ANALYSIS],

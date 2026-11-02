@@ -43,7 +43,7 @@ The bar for sharing UI between screens is that the same set of fields or the sam
 
 The suite is 381 browser tests across 20 files, plus 803 unit tests covering the formulas, dates, rounding, image sizing, the offline write queue, and the label-reading and weight-sync Edge Functions.
 
-Any UI change used to run the entire browser suite, which took under two minutes at around 100 tests. A full run now takes about 12 minutes, so during development a script picks the specs from the changed files, using a table I maintain by hand. The rule before a push is still the full suite, because "the relevant tests passed" is the most common way a regression gets shipped. I've skipped it on some recent rounds by explicit decision, and the [run log](.omc/wiki/e2e-reference.md) says which.
+Any UI change used to run the entire browser suite, which took under two minutes at around 100 tests. A full run now takes about 12 minutes, so during development a script picks the specs from the changed files, using a hand-maintained table. The rule before a push is still the full suite, because "the relevant tests passed" is the most common way a regression gets shipped. I've skipped it on some recent rounds by explicit decision, and the [run log](.omc/wiki/e2e-reference.md) says which.
 
 Every new test also gets checked by breaking the thing it covers on purpose and confirming it goes red. A test that has never failed hasn't been shown to test anything.
 

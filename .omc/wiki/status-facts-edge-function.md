@@ -16,7 +16,7 @@ schemaVersion: 1
   棧＝Vite + React 19 + TS + Tailwind 4 + shadcn(Base UI) + motion + dnd-kit + recharts + vite-plugin-pwa + supabase-js。
 - **功能**：第一版全數上線＋額度預警提示＋今日頁品項就地編輯＋每日目標計算引擎＋食品庫管理
   與設定頁重構。逐版細節一律看 DESIGN.md 版本紀錄，這裡不再複述。
-  **目前版本看 DESIGN.md 版本紀錄。****v2.45 拍照讀營養標示之後**：v2.46＝鍵盤真正機制（見續點 2 ③）；
+  **目前版本看 DESIGN.md 版本紀錄。** **v2.45 拍照讀營養標示之後**：v2.46＝鍵盤真正機制（見續點 2 ③）；
   v2.47＝預先記錄明天（界在 `dates.ts` 的 `maxPlanDate()`，全文 DESIGN.md v2.47）。v2.48（後端連不上提示）、v2.49／v2.50（實測維持熱量卡）亦已 push；**v2.51（離線開機，推翻 v2.48 開機畫面決策）、v2.52（網路回來自動恢復）已上線並經真機驗證**。
   Edge Function `read-label` 部署在 Supabase（**`--use-api --no-verify-jwt` 兩個旗標缺一不可**，
   理由在 spec 與 DESIGN v2.40；本機沒有 Docker，預設打包路徑會靜默失敗成 404）。`ingest-weight` 同旗標，**2026-10-12 已部署並線上驗證**。
