@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 33 pages | Last updated: 2026-10-29T05:41:37.658Z
+> 34 pages | Last updated: 2026-11-02T01:46:40.000Z
 
 ## debugging
 
@@ -30,6 +30,7 @@
 
 ## reference
 
+- [e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄](e2e-reference.md) — # e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄
 - [lesson-pointers 教訓指標與蒸餾（本體已升格，這裡只留指標）](lesson-pointers.md) — # lesson-pointers 教訓指標與蒸餾（本體已升格，這裡只留指標）
 
 ## session-log

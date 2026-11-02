@@ -143,3 +143,9 @@
 ## [2026-10-28T05:36:40.682Z] ingest
 - **Pages:** session-log-2026-10-28-802b4059.md
 - **Summary:** Auto-captured session log for e9cde7f8-9b5f-4a4d-b24e-caa1072e8691 (omc-wiki-capture:16550bb4a38663c844cf8c49d8e7b628fd5dcd49554c07f2989b64eda54cce5a)
+
+
+
+## [2026-11-02T01:46:40.000Z] ingest
+- **Pages:** e2e-reference.md
+- **Summary:** Created new page "e2e-reference 各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄"

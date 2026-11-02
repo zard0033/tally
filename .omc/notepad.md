@@ -53,7 +53,7 @@
 - 佇列格式認不得時每次操作都丟錯、沒有出路（要不要做「原樣備份、清空重來」的逃生口）。
 - 寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」；sheet 關閉後焦點落到 body。
 - 新版 SW 偶發卡在 activating：與 precache 項數有關（460 項會卡，311／159 項穩），根因未查；該 spec 不能用 `--repeat-each`。
-- e2e 偶發紅（原因與做法看 CLAUDE.md e2e 段）：`tally.spec` 的 `.undo-bar` 一族、`settings-nav`、`spring-sheet`、`food-library` 焦點、`recovery-foreground`。
+- e2e 偶發紅（原因與做法看 wiki `e2e-reference`）：`tally.spec` 的 `.undo-bar` 一族、`settings-nav`、`spring-sheet`、`food-library` 焦點、`recovery-foreground`。
 - 主 repo `npm audit` 有 1 critical／13 high（與功能無關）。
 - 其餘 v2.91–v2.93 review 的 LOW 條目在 git 歷史，真機驗完再看。
 
