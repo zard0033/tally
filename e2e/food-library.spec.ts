@@ -792,3 +792,23 @@ test('已封存分頁編輯到一半就復原：回到使用中編輯區不復�
   await expect(page.locator('.lib-edit'), '舊草稿不該復活').toHaveCount(0)
   await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
 })
+
+test('封存請求還在路上時改編輯別列：成功回來不關掉別列的編輯區', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const nameOf = async (n: number) => ((await rows(page).nth(n).locator('.nm').textContent()) ?? '').trim()
+  const a = await nameOf(0)
+  const b = await nameOf(1)
+  await rows(page).first().locator(`[aria-label="編輯 ${a}"]`).click()
+  await page.evaluate(() => {
+    ;(window as unknown as { __writeDelayMs: number }).__writeDelayMs = 500
+  })
+  await rows(page).first().locator(`[aria-label="封存 ${a}"]`).click()
+  await page.locator(`[aria-label="編輯 ${b}"]`).click()
+  await expect(page.locator('.lib-edit')).toHaveCount(1)
+  await page.locator('.lib-edit input').first().fill('別列的草稿')
+
+  await expect(page.locator('.undo-pill'), '封存成功才會出現復原提示').toBeVisible()
+  await expect(page.locator('.lib-edit'), '別列的編輯區不該被關掉').toHaveCount(1)
+  await expect(page.locator('.lib-edit input').first()).toHaveValue('別列的草稿')
+})

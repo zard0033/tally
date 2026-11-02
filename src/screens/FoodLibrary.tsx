@@ -105,8 +105,9 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       const archivedFood = await onArchiveFood(f)
       // 成功後 App 已把它濾出 foods，隱藏功成身退；留著的話之後復原回來還是看不到
       unhide()
-      // 成功才收起：失敗時草稿要留著；不收的話復原後編輯區會帶著舊草稿復活
-      if (editingId === f.id) setEditingId(null)
+      // 成功才收起：失敗時草稿要留著；不收的話復原後編輯區會帶著舊草稿復活。
+      // 要讀最新值：請求在路上時可能已經改編輯別列，不能關掉那一列
+      setEditingId((cur) => (cur === f.id ? null : cur))
       setArchived((prev) => (prev ? [archivedFood, ...prev] : prev))
       setUndo({ food: archivedFood })
       undoTimer.current = window.setTimeout(() => setUndo(null), 5000)
@@ -132,7 +133,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     setArchived((prev) => prev?.filter((x) => x.id !== f.id) ?? prev)
     try {
       await onUnarchiveFood(f)
-      if (editingId === f.id) setEditingId(null) // 同封存：復原後編輯區不帶舊草稿復活
+      setEditingId((cur) => (cur === f.id ? null : cur)) // 同封存：復原後編輯區不帶舊草稿復活
     } catch {
       setArchived((prev) => (prev ? [f, ...prev] : prev))
     }

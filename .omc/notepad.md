@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-02）：整體清理 B1–B6＋批次 1–4 已 commit，尚未 push；全量 e2e 與 push 前 review 進行中。清單與「要真機確認」在 wiki `cleanup-inventory`。v2.106–v2.108 也尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。全量平常在 push 後背景跑（push 前 affected／smoke，SW、離線佇列例外）。
-下一步：①push 後真機驗 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
+現況（2026-11-02）：整體清理 B1–B6＋批次 1–4 準備 push。全量（`484bcad`）397 條 396 過，紅的是偶發清單上的日期快取 5；之後的 stale closure 修正只跑 `FoodLibrary` 對應 spec。清單與「要真機確認」在 wiki `cleanup-inventory`。v2.106–v2.108 也尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。
+下一步：①真機驗 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
