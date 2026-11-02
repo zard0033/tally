@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 31 pages | Last updated: 2026-10-28T05:35:47.482Z
+> 33 pages | Last updated: 2026-10-29T05:41:37.658Z
 
 ## debugging
 
@@ -47,3 +47,5 @@
 - [Session Log 2026-10-27](session-log-2026-10-27-747b4e11.md) — # Session Log 2026-10-27
 - [Session Log 2026-10-27](session-log-2026-10-27-a6571a6a.md) — # Session Log 2026-10-27
 - [Session Log 2026-10-27](session-log-2026-10-27-d85a8454.md) — # Session Log 2026-10-27
+- [Session Log 2026-10-28](session-log-2026-10-28-193d7204.md) — # Session Log 2026-10-28
+- [Session Log 2026-10-28](session-log-2026-10-28-802b4059.md) — # Session Log 2026-10-28

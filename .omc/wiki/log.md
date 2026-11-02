@@ -136,3 +136,10 @@
 - **Pages:** lesson-rpe-expansion-rpe-push-review-2026-10-28.md
 - **Summary:** Created new page "lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）"
 
+## [2026-10-28T05:36:26.833Z] ingest
+- **Pages:** session-log-2026-10-28-193d7204.md
+- **Summary:** Auto-captured session log for a7f9da10-3ef6-4664-88f1-6cfa61570733 (omc-wiki-capture:dfc487e58b2b9710af29f65333298a326ff20a36879c0df2d8e38bcbbeeb796a)
+
+## [2026-10-28T05:36:40.682Z] ingest
+- **Pages:** session-log-2026-10-28-802b4059.md
+- **Summary:** Auto-captured session log for e9cde7f8-9b5f-4a4d-b24e-caa1072e8691 (omc-wiki-capture:16550bb4a38663c844cf8c49d8e7b628fd5dcd49554c07f2989b64eda54cce5a)
