@@ -42,7 +42,9 @@ const SCREENS = {
   Login: ['interaction'],
 }
 
-/* 只被訓練／分析用到的邏輯層與 hook（import 關係查過）。分析讀訓練底，所以資料層的改動兩邊都帶 */
+/* 訓練／分析的邏輯層與 hook（import 關係查過）。分析讀訓練底，所以資料層的改動兩邊都帶。
+   這些檔每次開機也會跑，但開機壞掉時這裡選到的 spec 一樣會紅，所以不必把其他 spec 都帶上。
+   strength 被 SetSheet（重量建議）與訓練頁用；體重趨勢頁只有 settings-nav、weight-trend 會開 */
 const FILES = {
   'src/useTraining.ts': [...TRAIN, ...ANALYSIS],
   'src/trainingSync.ts': [...TRAIN, ...ANALYSIS],
@@ -54,8 +56,8 @@ const FILES = {
   'src/lib/exerciseCatalog.ts': [...TRAIN, ...ANALYSIS],
   'src/lib/restTimer.ts': TRAIN,
   'src/lib/recovery.ts': ANALYSIS,
-  'src/lib/strength.ts': ANALYSIS,
-  'src/lib/weightTrend.ts': [...ANALYSIS, 'weight-trend'],
+  'src/lib/strength.ts': [...TRAIN, ...ANALYSIS],
+  'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend'],
   'src/lib/baseline.ts': SETTINGS,
 }
 
@@ -67,10 +69,10 @@ const IGNORED = [
   /^e2e\/smoke\.json$/, /^e2e\/shots\//, /^src\/lib\/.*\.test\.ts$/,
 ]
 
-/** 回傳 { ignore } | { css } | { full: 原因 } | { specs: [名稱…] } */
+/** 回傳 { ignore } | { full: 原因 } | { specs: [名稱…] } */
 function classify(file) {
   if (IGNORED.some((re) => re.test(file))) return { ignore: true }
-  if (file === 'src/app.css') return { css: true }
+  if (file === 'src/app.css') return { full: 'src/app.css（可能動到全域規則或 token，從路徑分辨不出來）' }
   const spec = file.match(/^e2e\/([^/]+)\.spec\.ts$/)
   if (spec) return { specs: [spec[1]] }
   const screen = file.match(/^src\/screens\/([^/]+)\.tsx$/)
@@ -115,25 +117,17 @@ if (forced !== null) {
 
 const reasons = []
 const specs = new Set()
-let cssTouched = false
 if (gitFailure) {
   reasons.push(`${gitFailure}，無法判斷改了什麼`)
 } else {
   for (const f of changed) {
     const c = classify(f)
     if (c.full) reasons.push(c.full)
-    else if (c.css) cssTouched = true
     else if (c.specs) c.specs.forEach((s) => specs.add(s))
-  }
-  if (cssTouched && specs.size === 0 && reasons.length === 0) {
-    reasons.push('src/app.css 是唯一改動的 src 檔，沒有別的檔可以界定範圍')
   }
 }
 
 const full = reasons.length > 0
-if (!full && cssTouched) {
-  console.warn('!!! 警告 app.css changed: 若動的是全域規則或 token，請改跑全量 `npm run e2e`')
-}
 
 /* 已刪除的 spec 不能傳給 playwright（會變成「No tests found」） */
 const list = [...specs].filter((s) => existsSync(new URL(`../e2e/${s}.spec.ts`, import.meta.url)))

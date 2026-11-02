@@ -10,7 +10,7 @@
 - 測試（各 spec 涵蓋範圍、偶發紅清單、歷次跑測紀錄在 wiki `e2e-reference`，這裡只留規則；**每輪跑測紀錄寫那頁，不寫回這裡**）：
   - `npx vitest run`＝邏輯層（動公式、捨入、日期必跑）。**在 Git Bash 下跑會整批炸成「N files failed, 0 tests run」，而且會表現成 flaky（重跑就綠）——那是環境不是測試，用 PowerShell 跑**（全域 `windows-shell-ledger` 有全文；別再為它去查 vitest 設定）。
   - `npm run e2e`＝UI 回歸，fetch 全 stub 不打真後端。**e2e 條數用 `npx playwright test --list` 實測，不要用「舊數字＋本輪新增」外推**——條數就是這樣一路從 57 漂到 65。
-  - **開發中只跑受影響的檔，push 前（Pre-Push Checklist）才跑全量**——全量約 12 分鐘（2026-10-27 實測 377 條 738 秒，已排滿 2 個 worker、沒有長尾可拆，慢在條數乘每條固定開銷，所以省時間只能靠少跑）。`npm run e2e:affected` 依改動檔自動挑 spec（`--dry` 先預覽，動到共用檔自動升全量）；`npm run e2e:smoke` 只跑 `e2e/smoke.json` 的 55 條核心路徑（約 1.5 分鐘，不能取代 push 前全量）。
+  - **開發中只跑受影響的檔，push 前（Pre-Push Checklist）才跑全量**——全量約 12 分鐘（2026-10-27 實測 377 條 738 秒，已排滿 2 個 worker、沒有長尾可拆，慢在條數乘每條固定開銷，所以省時間只能靠少跑）。`npm run e2e:affected` 依改動檔自動挑 spec（`--dry` 先預覽；表上沒有的檔與 `app.css` 自動升全量，表上的訓練相關 `src/lib` 檔照表縮小）；`npm run e2e:smoke` 只跑 `e2e/smoke.json` 的 55 條核心路徑（約 1.5 分鐘，不能取代 push 前全量）。
   - 手動選檔的做法：在 `e2e/` 搜這次動到的 class、`data-screen`、aria-label 出現在哪些 spec 就跑哪些；**動到共用的東西（`SpringSheet`、`DateStrip`、`app.css` 的全域 token 或元件通用規則、`src/lib/`、`App.tsx`、`e2e/harness.ts`／`stub.ts`／`fixtures.ts`）一律跑全量**，因為影響面看不出來。
   - 單跑一條：`npx playwright test interaction -g "關鍵字"`。要重複單跑 `tally.spec.ts` 時，過濾字串寫 `tally.spec`——寫 `tally` 會比對到 repo 路徑而把整套都跑進去。
   - **e2e 跑的是 build 後的靜態 preview（port 5501），不是 dev server**——所以它會自己先 build 一次，也不會跟你開著的 `npm run dev`（5500）搶 port，兩邊可以同時開。
