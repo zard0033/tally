@@ -4282,3 +4282,62 @@ test('同步完一組後換開另一組：按鈕不沿用「已同步 ✓」', a
   await openSetSheet(page, 0)
   await expect(setSheet(page).locator('.set-sync'), '回到剛同步的那組仍是已同步').toHaveText('已同步 ✓')
 })
+
+/* placeholder 也是文字，要過 4.5:1：動作庫／選動作的搜尋欄跟食物搜尋欄（.search-box）一樣用 --ink-muted，
+   不是瀏覽器預設的淺灰（約 2.9:1）。 */
+test('動作搜尋欄的 placeholder 用 --ink-muted，不是瀏覽器預設的淺灰', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  const colors = await library(page).getByRole('searchbox', { name: '搜尋動作' }).evaluate((input) => {
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--ink-muted)'
+    document.body.appendChild(probe)
+    const muted = getComputedStyle(probe).color
+    probe.remove()
+    return { placeholder: getComputedStyle(input, '::placeholder').color, muted }
+  })
+  expect(colors.placeholder).toBe(colors.muted)
+})
+
+/* 2026-11-02 整體盤點：locked 時有標題的 sheet，關閉鈕原本看起來能按、按了沒反應。 */
+test('sheet 鎖住時關閉鈕是 disabled，解鎖後恢復', async ({ page }) => {
+  await openApp(page, {}, CARDIO_LIB)
+  await openTraining(page)
+  await startBlank(page)
+  await addCardio(page, '跑步機坡度健走')
+  await expect.poll(async () => (await trainRows(page, 'workout_exercises')).length).toBe(1)
+  await openCardioSheet(page, '跑步機坡度健走')
+  await cardioField(page, '分鐘').fill('30')
+  const sheet = cardioSheet(page)
+  const close = sheet.getByRole('button', { name: '關閉', exact: true })
+  await expect(close).toBeEnabled()
+
+  const release = await holdQueueLock(page)
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = () => {
+      throw new DOMException('模擬的容量已滿', 'QuotaExceededError')
+    }
+  })
+  await sheet.getByRole('button', { name: '儲存' }).click()
+  await expect(close, '寫入中鎖住').toBeDisabled()
+  await release()
+  await expect(sheet.getByRole('alert')).toContainText('這筆沒有存下來')
+  await expect(close, '失敗後可以關').toBeEnabled()
+})
+
+/* CardioSheet 的註解說列 id 當 key 不夠：關閉動畫還沒跑完就重開同一張，會沿用上一份草稿。 */
+test('編輯動作 sheet 關閉動畫中重開同一筆：不沿用上一份草稿', async ({ page }) => {
+  await openApp(page, {}, LIBRARY_FIX)
+  await openTraining(page)
+  await openLibrary(page)
+  const row = library(page).locator('.tr-row', { hasText: '坐姿划船' })
+  await row.click()
+  await expect(editSheet(page)).toBeVisible()
+  const name = editSheet(page).getByRole('textbox', { name: '名稱' })
+  await name.fill('打到一半的草稿')
+  await editSheet(page).getByRole('button', { name: '關閉', exact: true }).click()
+  await row.click({ timeout: 1500 })
+  await expect(editSheet(page)).toBeVisible()
+  await expect(editSheet(page).getByRole('textbox', { name: '名稱' })).toHaveValue('坐姿划船')
+})

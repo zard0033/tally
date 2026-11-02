@@ -17,6 +17,11 @@ export interface FoodForm {
 
 export const BLANK_FOOD_FORM: FoodForm = { name: '', vendor: '', kcal: '', protein: '', fat: '', carb: '' }
 
+/** 熱量與三大營養素的上界，對齊 DB（schema.sql foods）：protein／fat／carb 是 `numeric(6,2)`、kcal 是
+ *  `numeric(7,2)`，取嚴的那個當統一門檻。少了它，手滑多打一個 0 會讓 Postgres 回 numeric field overflow，
+ *  使用者看到的是一句資料庫原文。就地編輯（ItemEditor）用同一個常數與同一句話。 */
+export const MACRO_MAX = 9999.99
+
 const fieldNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
 /** 選填數值留空當 0——無糖飲料的蛋白質與脂肪本來就是 0，不必逼人打出來 */
 const fieldOptNum = (v: string): number => (v.trim() === '' ? 0 : Number(v.trim()))
@@ -40,7 +45,9 @@ export function validateFoodForm(form: FoodForm): { food: ValidatedFood } | { er
   const carb = fieldOptNum(form.carb)
   if (!name) return { error: '品名要填' }
   if (!Number.isFinite(kcal) || kcal < 0) return { error: '熱量要填數字' }
+  if (kcal > MACRO_MAX) return { error: `熱量要填 0 到 ${MACRO_MAX} 之間的數字` }
   if ([protein, fat, carb].some((n) => !Number.isFinite(n) || n < 0)) return { error: '營養素要填數字或留空' }
+  if ([protein, fat, carb].some((n) => n > MACRO_MAX)) return { error: `營養素要填 0 到 ${MACRO_MAX} 之間的數字或留空` }
   return { food: { name, vendor, kcal, protein, fat, carb } }
 }
 

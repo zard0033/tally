@@ -62,7 +62,7 @@ export interface LogSheetProps {
    * 送出「加入」——rows 已經是組好的完整 NewIntake（含 eaten_on／meal／營養快照)，
    * LogSheet 自己從 foods 查表組出來，App 只管持久化＋重新載入當天＋標記剛加入的 id。
    * 失敗時 rejects，由 LogSheet 自己接住顯示「存不進去：」＋不清空已選＋按鈕變重試
-   * （跟 legacy withBusy 的行為一致，這類寫入失敗不是全域 Notice）。
+   * （這類寫入失敗不是全域 Notice）。
    */
   onCreateIntake: (rows: NewIntake[]) => Promise<void>
   /** 新增食物到食品庫；成功回傳新列（含 id），LogSheet 自己決定要不要把它選起來。 */

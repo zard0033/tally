@@ -100,7 +100,6 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         return next
       })
     setHiddenIds((prev) => new Set(prev).add(f.id))
-    window.clearTimeout(undoTimer.current)
     try {
       const archivedFood = await onArchiveFood(f)
       // 成功後 App 已把它濾出 foods，隱藏功成身退；留著的話之後復原回來還是看不到
@@ -110,6 +109,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       setEditingId((cur) => (cur === f.id ? null : cur))
       setArchived((prev) => (prev ? [archivedFood, ...prev] : prev))
       setUndo({ food: archivedFood })
+      // 計時器等成功才換：A 的提示還在時封存 B 失敗，A 的 5 秒要照走，不然提示永遠不消失
+      window.clearTimeout(undoTimer.current)
       undoTimer.current = window.setTimeout(() => setUndo(null), 5000)
     } catch {
       unhide()

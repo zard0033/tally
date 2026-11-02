@@ -812,3 +812,23 @@ test('封存請求還在路上時改編輯別列：成功回來不關掉別列�
   await expect(page.locator('.lib-edit'), '別列的編輯區不該被關掉').toHaveCount(1)
   await expect(page.locator('.lib-edit input').first()).toHaveValue('別列的草稿')
 })
+
+/* A 的復原提示還在時封存 B 而且失敗：A 的 5 秒計時不能被 B 的失敗清掉，
+   否則提示永遠不消失、新增鈕也跟著被藏住。 */
+test('復原提示還在時封存另一筆失敗：提示照原本的 5 秒消失，新增鈕回來', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const nameOf = async (n: number) => ((await rows(page).nth(n).locator('.nm').textContent()) ?? '').trim()
+  const a = await nameOf(0)
+  const b = await nameOf(1)
+  await rows(page).first().locator(`[aria-label="封存 ${a}"]`).click()
+  await expect(page.locator('.undo-pill')).toBeVisible()
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'foods', method: 'PATCH' }
+  })
+  await page.locator(`[aria-label="封存 ${b}"]`).click()
+  await expect.poll(async () => (await foodWrites(page)).length, { message: 'B 的封存要送出（並被伺服器拒絕）' }).toBe(2)
+
+  await expect(page.locator('.undo-pill'), 'A 的復原提示應該在 5 秒後消失').toHaveCount(0, { timeout: 8000 })
+  await expect(page.locator('.lib-fab'), '提示消失後新增鈕要回來').toBeVisible()
+})

@@ -1187,3 +1187,131 @@ test('減少動態：開著再多拉、放手 → 直接回到開啟位置', asy
   const between = xs.filter((x) => x < -56.5 && x > -85.5)
   expect(between, '減少動態不該跑 spring').toEqual([])
 })
+
+/* 登出要清掉月份小點的快取：換人（另一個分頁登入時，supabase-js 會經 BroadcastChannel 通知
+   這個分頁 SIGNED_IN，整個 App 不重載）之後，上一個帳號的小點不能留著，抓過的月份也要能重抓。
+   可觀察的結果是：重新登入後，目前這個月的小點查詢會再打一次。 */
+test('登出後再登入：月份小點重新查詢，不沿用上一個帳號抓過的月份', async ({ page }) => {
+  await openApp(page)
+  const monthFetches = () =>
+    page.evaluate((month) => {
+      const all = (window as unknown as { __allFetches: string[] }).__allFetches
+      return all.filter((u) => u.includes('/rest/v1/intake') && u.includes('select=eaten_on') && u.includes(`gte.${month}-01`)).length
+    }, TODAY.slice(0, 7))
+  await expect.poll(monthFetches, { message: '開機後應該查過目前這個月的小點' }).toBe(1)
+  const authKey = await page.evaluate(() => Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k)) ?? '')
+  expect(authKey).not.toBe('')
+
+  await page.locator('.tab[aria-label="設定"]').click()
+  await page.locator('.settings .signout').click()
+  await expect(page.locator('#view-login')).toHaveCount(1)
+
+  // 另一個分頁登入：經 BroadcastChannel 通知這個分頁（頁面不重載，App 的記憶體狀態整個留著）
+  await page.evaluate(
+    ({ key, userId }) => {
+      const now = Math.floor(Date.now() / 1000)
+      const session = {
+        access_token: 'stub-token-2',
+        refresh_token: 'stub-refresh-2',
+        expires_in: 3600,
+        expires_at: now + 3600,
+        token_type: 'bearer',
+        user: { id: userId, aud: 'authenticated', email: 'stub@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() },
+      }
+      new BroadcastChannel(key).postMessage({ event: 'SIGNED_IN', session })
+    },
+    { key: authKey, userId: USER_ID },
+  )
+  await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
+  await page.waitForSelector('.gauge-num', { timeout: 5000 })
+  await expect.poll(monthFetches, { message: '重新登入後目前這個月的小點要重查（登出時快取沒清）' }).toBe(2)
+})
+
+/* 減少動態漏掉的動畫（DESIGN「互動與動效」）。這幾個元素不好走到（lazy 的骨架、掃描填入、按住的當下），
+   所以放探針元素讀 computed style；另一條在一般模式下跑同一組探針，證明選擇器真的有命中。 */
+async function motionProbes(page: Page) {
+  return page.evaluate(() => {
+    const add = (html: string) => {
+      const host = document.createElement('div')
+      host.innerHTML = html
+      document.body.appendChild(host)
+      return host
+    }
+    const anim = (host: HTMLElement, sel: string) => getComputedStyle(host.querySelector(sel)!).animationName
+    return {
+      skeleton: anim(add('<div class="trend-skel"></div>'), '.trend-skel'),
+      sub: anim(add('<div class="ex-head"><div class="sub"></div></div>'), '.sub'),
+      scanName: anim(add('<div class="form-lock scan-filled"><div class="field-float"><input id="p-name" /></div></div>'), 'input'),
+      scanMacro: anim(add('<div class="form-lock scan-filled"><div class="form-macros"><div class="field-float"><input id="p-fat" /></div></div></div>'), 'input'),
+    }
+  })
+}
+
+test('一般模式：探針命中動畫（下一條的對照組）', async ({ page }) => {
+  await openApp(page)
+  expect(await motionProbes(page)).toEqual({ skeleton: 'skeleton-breathe', sub: 'sub-in', scanName: 'value-in', scanMacro: 'value-in' })
+})
+
+test('減少動態：骨架呼吸、動作卡副標位移、掃描填入淡入都關掉', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openApp(page)
+  expect(await motionProbes(page)).toEqual({ skeleton: 'none', sub: 'none', scanName: 'none', scanMacro: 'none' })
+})
+
+test('按住組數值的縮放：一般模式有，減少動態沒有', async ({ page }) => {
+  const pressedTransform = async () => {
+    await page.evaluate(() => {
+      const b = document.createElement('button')
+      b.className = 'tr-val'
+      b.id = 'probe-val'
+      b.style.cssText = 'position:fixed;top:200px;left:50px;width:80px;z-index:9999'
+      document.body.appendChild(b)
+    })
+    await page.mouse.move(90, 220)
+    await page.mouse.down()
+    await page.waitForTimeout(250)
+    const t = await page.locator('#probe-val').evaluate((el) => getComputedStyle(el).transform)
+    await page.mouse.up()
+    await page.locator('#probe-val').evaluate((el) => el.remove())
+    return t
+  }
+  await openApp(page)
+  expect(await pressedTransform(), '一般模式要有按下回饋').not.toBe('none')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await pressedTransform(), '減少動態不該縮放').toBe('none')
+})
+
+/* 2026-11-02 整體盤點：動作卡進度點吃到時間軸 .dot 的 margin-top，比文字中線低 2.5px；
+   熱量欄的 90ms 延遲輸給帶 :not() 的動畫簡寫，品名與熱量同時淡入；著作權標示對比不足。 */
+test('視覺規則：進度點不偏移、熱量欄延遲生效、著作權標示用 --ink-muted', async ({ page }) => {
+  await openApp(page)
+  const r = await page.evaluate(() => {
+    const add = (html: string) => {
+      const host = document.createElement('div')
+      host.innerHTML = html
+      document.body.appendChild(host)
+      return host
+    }
+    const muted = add('<span style="color:var(--ink-muted)"></span>').querySelector('span')!
+    const credit = add('<p class="settings-credit"></p>').querySelector('p')!
+    const viewer = add('<p class="ex-viewer-credit"></p>').querySelector('p')!
+    const dot = add('<div class="ex-head"><span class="dots"><span class="dot"></span></span></div>').querySelector('.dot')!
+    const kcal = add('<div class="form-lock scan-filled"><div class="field-float"><input id="p-kcal" /></div></div>').querySelector('input')!
+    return {
+      dotMargin: getComputedStyle(dot).marginTop,
+      kcalDelay: getComputedStyle(kcal).animationDelay,
+      credit: getComputedStyle(credit).color === getComputedStyle(muted).color,
+      viewer: getComputedStyle(viewer).color === getComputedStyle(muted).color,
+    }
+  })
+  expect(r).toEqual({ dotMargin: '0px', kcalDelay: '0.09s', credit: true, viewer: true })
+})
+
+/* generic 的 <div> 禁止用 aria-label 命名，要有 role（LogSheet 的 .pick-line、.macro-line 已經這樣做）。 */
+test('今日頁熱量與三大營養素的數字：aria-label 掛在 role=group 上', async ({ page }) => {
+  await openApp(page)
+  await expect(page.locator('.gauge-side.pair')).toHaveAttribute('role', 'group')
+  const vals = page.locator('.macros .val.pair')
+  await expect(vals).toHaveCount(3)
+  for (let i = 0; i < 3; i++) await expect(vals.nth(i)).toHaveAttribute('role', 'group')
+})

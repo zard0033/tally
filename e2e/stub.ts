@@ -279,9 +279,14 @@ export async function seedFetchStub(
         if (table === 'profile') return json(fix.profile)
         if (table === 'weight') return json(fix.weight)
         if (table === 'foods') return json(fix.foods)
-        // 訓練表（階段 2）：stub 不看 filter／range，回該表目前的全部列（fixture ＋ 已落地的寫入）。
-        // 單頁就回完（列數 < pageSize），執行期的分頁迴圈一頁就停。
-        if (TRAINING_TABLES.includes(table)) return json([...trainStore[table].values()])
+        // 訓練表（階段 2）：stub 不看 filter，回該表目前的全部列（fixture ＋ 已落地的寫入）。
+        // 認 offset／limit（分頁）：執行期的分頁迴圈停在空頁，stub 若每頁都回整份就停不下來。
+        if (TRAINING_TABLES.includes(table)) {
+          const qs = new URL(u).searchParams
+          const offset = Number(qs.get('offset') ?? 0)
+          const limit = qs.get('limit') === null ? Infinity : Number(qs.get('limit'))
+          return json([...trainStore[table].values()].slice(offset, offset + limit))
+        }
         if (table === 'intake') {
           /* 實測維持熱量卡的區間查詢：認的是「select 欄位含 eaten_on 且不含 meal」，不認欄位順序
              （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。

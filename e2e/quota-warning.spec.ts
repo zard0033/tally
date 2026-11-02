@@ -32,6 +32,8 @@ test('逐筆超標預警與底部確認列——熱量脂肪推過線後，delta
   await expect(macroLine).toBeVisible()
   await expect(macroLine).toContainText('蛋白')
   await expect(macroLine.locator('span', { hasText: '蛋白' })).not.toHaveClass(/over/)
+  // 「超出目標 126 克」會被讀成超出了 126 克，文案與今日頁同一句
+  await expect(macroLine).toHaveAttribute('aria-label', /脂肪 [\d.]+ 克，已超出，目標 \d+ 克/)
   await expect(macroLine.locator('span.over', { hasText: '脂' })).toBeVisible()
 
   // 逐筆超標預警：全部食物已經被推到超標基準之上，未勾選列的 kc 應該變色，

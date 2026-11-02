@@ -17,6 +17,7 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import { isPlannable } from '@/lib/dates'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { byQuotaFit, defaultQty, overQuotaAmounts, pickTotals, recentStats } from '@/lib/foodPicks'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
@@ -148,7 +149,7 @@ export default function LogSheet(props: LogSheetProps) {
 
   const foodById = (id: number): Food | undefined => foods.find((f) => f.id === id)
 
-  /* 開啟時重置整個 sheet 的本地狀態——對齊 legacy openSheet 每次都是一份新的 state.sheet */
+  /* 開啟時重置整個 sheet 的本地狀態：每次打開都是一份新的 */
   useEffect(() => {
     if (!open) return
     setMeal(initialMeal)
@@ -266,7 +267,7 @@ export default function LogSheet(props: LogSheetProps) {
          下次開啟時 open 的 reset effect 會處理 */
     } catch (e) {
       setBusy(false)
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(friendlyError(errMsg(e)))
     }
   }
 
@@ -289,7 +290,7 @@ export default function LogSheet(props: LogSheetProps) {
       setBusy(false)
     } catch (e) {
       setBusy(false)
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(friendlyError(errMsg(e)))
     }
   }
 
@@ -478,7 +479,7 @@ export default function LogSheet(props: LogSheetProps) {
                   <div
                     role="group"
                     className="macro-line"
-                    aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
+                    aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '已超出，目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '已超出，目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
                   >
                     <span aria-hidden="true">
                       蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}

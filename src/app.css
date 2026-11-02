@@ -365,9 +365,6 @@ button { -webkit-user-select: none; user-select: none; }
 .seg button:active { opacity: .6; }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* 與 .sheet-error 共用色與字級，只有外距分岔——兩份幾乎相同的規則是樣式漂移的起點
-   （precommit review 抓到：改錯誤文字顏色時很容易只改到其中一個） */
-.ed-error { margin: var(--s-2) 0 0; }
 
 /* ── 待記錄餐次（整行可點） ── */
 .todo-row { display: flex; align-items: center; justify-content: space-between;
@@ -535,7 +532,7 @@ button { -webkit-user-select: none; user-select: none; }
 .settings .signout:active { opacity: .5; }
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 第三方素材致謝（動作示意圖 © Gym visual，著作權人要求每次使用都附標示） */
-.settings-credit { margin: var(--s-6) 0 0; font-size: var(--t-xs); color: var(--ink-faint); text-align: center; line-height: 1.5; }
+.settings-credit { margin: var(--s-6) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
 
 /* ═══════════ 設定頁入口列表（v2.22，取代第一版唯讀 dl） ═══════════ */
 .entry-list { border-radius: var(--r-tab); overflow: clip;
@@ -593,7 +590,7 @@ button { -webkit-user-select: none; user-select: none; }
    同 undo pill 的處理（--ink 底 ＋ --paper 字）。 */
 .info-popup { max-width: 264px; padding: var(--s-3); border-radius: var(--r-tab);
   background: var(--ink); color: var(--paper); font-size: var(--t-xs); line-height: 1.6;
-  box-shadow: 0 8px 24px rgb(61 34 16 / .24);
+  box-shadow: var(--shadow-2);
   /* 明釘層級而不是靠 Portal 的 DOM 順序：本頁現在沒有別的浮層，但「更新身體數據」sheet
      （.scrim 10／.sheet 11）就掛在同一棵樹下，隔壁頁已經有會蓋過來的東西。12 疊在 sheet 上。 */
   z-index: 12; }
@@ -706,7 +703,7 @@ button { -webkit-user-select: none; user-select: none; }
 .lib-fab { position: fixed; right: var(--s-5); bottom: calc(var(--s-5) + var(--s-4)); z-index: 5;
   width: 56px; height: 56px; border-radius: var(--r-pill); border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 16px rgba(28,112,89,.35); }
+  background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-2); }
 .lib-fab svg { width: 22px; height: 22px; stroke-width: 2.2; }
 .lib-fab:active { opacity: .8; }
 .lib-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1131,7 +1128,7 @@ button { -webkit-user-select: none; user-select: none; }
    把人家的 `padding: 0 var(--s-5) var(--s-4)` 一起吃進來，表單這排左右內縮了一版才被看出來。
    純掛勾的 class 也是 class，全域 CSS 底下一樣會被別人的樣式打到。 */
 .form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: value-in 340ms var(--ease) both; }
-.form-lock.scan-filled > .field-float input { animation-delay: 90ms; }
+.form-lock.scan-filled > .field-float input:not([id$="vendor"]) { animation-delay: 90ms; }
 .form-lock.scan-filled .form-macros .field-float:nth-child(1) input { animation-delay: 180ms; }
 .form-lock.scan-filled .form-macros .field-float:nth-child(2) input { animation-delay: 240ms; }
 .form-lock.scan-filled .form-macros .field-float:nth-child(3) input { animation-delay: 300ms; }
@@ -1239,6 +1236,9 @@ button { -webkit-user-select: none; user-select: none; }
      而辨識期間整張表單的空欄位都在呼吸。**關成 none 而不是 .01ms**——灰條要留著（它是
      「這裡還沒有值」的資訊），只是不要動。 */
   .form-lock[disabled] .field-float:has(input:placeholder-shown)::after { animation: none; opacity: .8; }
+  .trend-skel { animation: none; }
+  /* 權重要對齊那條帶 :not() 的動畫規則，少一段就輸給它、等於沒寫 */
+  .form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: none; }
 }
 
 /* ═══ 訓練分頁（階段 2；樣式來自已核可的 _design-sample/training.html，token 一律引用） ═══ */
@@ -1370,7 +1370,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-head .prog { display: inline-flex; align-items: center; gap: var(--s-2); }
 .ex-head .prog > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-head .dots { display: inline-flex; flex-shrink: 0; gap: var(--s-1); }
-.ex-head .dot { width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--fill);
+.ex-head .dot { width: 7px; height: 7px; margin-top: 0; border-radius: var(--r-pill); background: var(--fill);
   box-shadow: inset 0 0 0 1px var(--rule-field); }
 .ex-head .dot.is-done { background: var(--accent); box-shadow: none; }
 /* margin-right 15px＝(44−14)/2：箭頭放進 44px 寬的格子，中心才跟替換、移除兩顆 44px 鈕等距 */
@@ -1404,8 +1404,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-zoom:active .ex-thumb { opacity: .6; }
 .ex-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 .ex-zoom-badge { position: absolute; right: 1px; bottom: 1px; width: 20px; height: 20px; padding: var(--s-1); box-sizing: border-box;
-  border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none;
-  fill: none; stroke: var(--ink-muted); stroke-width: 2.4; stroke-linecap: round; }
+  border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); pointer-events: none; }
 .ex-head > .ex-zoom { width: 44px; height: 44px; margin-right: var(--s-1); }
 .ex-head > .ex-zoom .ex-zoom-badge { right: 0; bottom: 0; width: 16px; height: 16px; padding: 3px; }
 /* 編輯動作 sheet 最上面的示意圖列：縮圖（點了開放大檢視）＋一行淡色說明 */
@@ -1418,7 +1417,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   background: var(--fill); object-fit: cover; outline: 1px solid var(--rule-subtle); outline-offset: -1px; }
 .ex-viewer-fig figcaption { margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs);
   text-align: center; }
-.ex-viewer-credit { margin: 0; font-size: var(--t-xs); color: var(--ink-faint); text-align: center; }
+.ex-viewer-credit { margin: 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; }
 /* 列表類畫面（動作庫、加動作、課表編輯、訓練中）底部的著作權標示（GymVisualCredit）；用 --ink-muted：
    這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
@@ -1506,6 +1505,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
    選擇器權重相同，要排在上面的按下規則之後才壓得過 */
 @media (prefers-reduced-motion: reduce) {
   .tr-all:active, .tr-all[data-pressed], .tr-check:active, .tr-check[data-pressed] { transform: none; }
+  /* 這兩條要排在原規則之後：權重相同時後面的贏，所以放這裡，不放前面那個區塊 */
+  .tr-val:active { transform: none; }
+  .ex-head .sub { animation: none; }
 }
 /* 同步剩餘組數：被改到的列淡綠閃一下（逐列錯開 50ms，延遲由元件內聯給） */
 .set.is-synced { animation: set-flash 700ms var(--ease) both; }
@@ -1609,6 +1611,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-search svg { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
 .tr-search input { flex: 1; min-width: 0; border: none; background: none; font-family: var(--font-body);
   font-size: var(--t-md); color: var(--ink); outline: none; }
+/* placeholder 也是文字，要過 4.5:1（同 .search-box） */
+.tr-search input::placeholder { color: var(--ink-muted); }
 .tr-summary { text-align: center; padding: var(--s-2) 0 var(--s-3); }
 .tr-summary .big { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero); line-height: .95; }

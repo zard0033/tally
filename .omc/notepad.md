@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-02）：整體清理 B1–B6＋批次 1–4 準備 push。全量（`484bcad`）397 條 396 過，紅的是偶發清單上的日期快取 5；之後的 stale closure 修正只跑 `FoodLibrary` 對應 spec。清單與「要真機確認」在 wiki `cleanup-inventory`。v2.106–v2.108 也尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。
-下一步：①真機驗 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
+現況（2026-11-02）：盤點第二輪（v2.111、探針退場第一步）已 push。全量 415 條 412 過；`recovery-foreground`、`training` 逐組單點現在穩定或高頻紅，舊版也一樣，要先查（見 `e2e-reference`）。**探針頁先別開**：`/tally/_probe/` 還要補清 IndexedDB／localStorage。尚未真機驗：飲食列吸回、左滑手感、分頁指示器、iOS 鍵盤、v2.106–v2.111。
+下一步：①wiki `cleanup-inventory`「下一輪」8 項 ②真機驗 ③階段 1（`suggestWeight`，預期值手算）④餐建議樣張 ⑤每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -64,4 +64,7 @@
 [追加 2026-11-02] 使用者裁決續做清理批次 2、3、4，全部做完、全量綠後 push。
 ### 2026-11-02 05:16
 [追加 2026-11-02] 整體盤點修 B1–B6（使用者選「B1–B6＋批次 1」），清單在 wiki `cleanup-inventory`。
+### 2026-11-02 08:29
+[追加 2026-11-02] 使用者裁決：其餘 18 個疑似 bug 續修（DESIGN v2.111）；探針頁開始退場第一步。
+[待決 2026-11-02] Settings 手刻 sheet 留到 B3 看樣張再改。探針第二步：先補清 IndexedDB／localStorage，使用者手機開過 /tally/_probe/（主畫面圖示也要）才刪資料夾。push 前 review 的非阻擋項在 wiki `cleanup-inventory`「下一輪」。
 

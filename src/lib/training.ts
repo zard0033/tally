@@ -401,7 +401,7 @@ export interface RowOp {
   table: TrainingTable
   rowId: string
   payload?: Record<string, unknown>
-  /** insert 專用：id 已存在就不動它（upsert 的 ignoreDuplicates）。預填與補齊預設動作用，離線時不能蓋掉伺服器上被改過的列。 */
+  /** insert 專用：id 已存在就不動它（upsert 的 ignoreDuplicates）。預填與自動補預設動作用，離線時不能蓋掉伺服器上被改過的列。 */
   ignoreDuplicates?: boolean
 }
 

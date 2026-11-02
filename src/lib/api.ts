@@ -25,14 +25,14 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 })
 
 /* 逾時是必要件不是保險：連上了但不回的失敗形態，fetch 對它永遠不 reject。
-   數值照 legacy DB_TIMEOUT。只掛在資料 CRUD 上，auth 呼叫（signInWithOAuth/getSession）不掛。
+   只掛在資料 CRUD 上，auth 呼叫（signInWithOAuth/getSession）不掛。
    AbortSignal.timeout 逾時產生 DOMException{name:'TimeoutError'}，postgrest-js 組出的
    error.message 形如 'TimeoutError: signal timed out'（不是 AbortError），unwrap() 原樣拋出，
-   App 的 friendlyError 靠這個字串辨識。 */
+   lib/errors 的 friendlyError 靠這個字串辨識。 */
 const DB_TIMEOUT = 8000
 const dbSignal = () => AbortSignal.timeout(DB_TIMEOUT)
 
-/** {data,error} 一律在這裡拆開丟出，呼叫端只管 try/catch，跟 legacy db() 的用法一致。 */
+/** {data,error} 一律在這裡拆開丟出，呼叫端只管 try/catch。 */
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message)
   if (result.data === null) throw new Error('Supabase 回傳空資料')
@@ -298,7 +298,7 @@ export interface NewWeight {
 /**
  * 同一天再記一次是覆蓋，不是新增一筆——schema 有 unique(user_id, measured_on)。
  * onConflict 不可省：主鍵是 identity id、body 沒帶 id，預設的衝突目標綁在主鍵上永遠不會命中，
- * 接著就會撞上那條 unique 約束報 23505（legacy 已修過這個 bug，語意照搬）。
+ * 接著就會撞上那條 unique 約束報 23505。
  */
 export async function upsertWeight(weight: NewWeight): Promise<void> {
   const { error } = await supabase

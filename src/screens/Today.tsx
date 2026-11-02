@@ -9,6 +9,7 @@ import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import DateStrip from '@/components/DateStrip'
 import { DeleteIcon } from '@/components/DeleteIcon'
 import { isPlannable, weekdayDate } from '@/lib/dates'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
 import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
@@ -100,7 +101,7 @@ export default function Today(props: TodayProps) {
       await send()
       setEditErr((prev) => (prev?.id === id ? null : prev))
     } catch (e) {
-      setEditErr({ id, msg: e instanceof Error ? e.message : String(e) })
+      setEditErr({ id, msg: friendlyError(errMsg(e)) })
       /* 訊息要有地方顯示，把那一列拉回來——但**不能蓋掉使用者這期間已經切去的別列**：
          這是 async 回呼的典型競態（送出 A 之後、reject 之前使用者點開了 B），窗口窄但
          代價是把他正在操作的編輯區突然關掉（precommit review 抓到）。 */
@@ -168,6 +169,7 @@ export default function Today(props: TodayProps) {
           </div>
           <div
             className="gauge-side pair"
+            role="group"
             aria-label={eatenKcal === null ? undefined : `已攝取 ${eatenKcal} 大卡，目標 ${targetKcal} 大卡`}
           >
             <span aria-hidden="true">
@@ -205,6 +207,7 @@ export default function Today(props: TodayProps) {
               </div>
               <div
                 className="val pair"
+                role="group"
                 /* 「超出目標 126 克」會被讀成「超出了 126 克」，但 126 是目標值本身。
                    拆成兩個子句消歧義（v2.20，同樣的寫法要記得同步 LogSheet 的 macro-line）。 */
                 aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克`}

@@ -37,7 +37,7 @@ type SpringSheetProps = SheetName & {
   initialFocus?: RefObject<HTMLElement | null>
   /** 關閉後焦點回到哪；不給＝回到開啟前聚焦的元素。Safari 點按鈕不會讓它取得焦點，所以由「點哪顆開的」那端指定。 */
   finalFocus?: RefObject<HTMLElement | null>
-  /** 鎖住關閉：Escape、點 scrim、下滑手勢都不收（辨識中這類「誤關代價高」的時段）。關閉鈕由呼叫端自己 disable。 */
+  /** 鎖住關閉：Escape、點 scrim、下滑手勢都不收（辨識中這類「誤關代價高」的時段）。標題列的關閉鈕也一起 disable；沒有標題的 sheet，關閉鈕由呼叫端自己 disable。 */
   locked?: boolean
   /** 把 popup 節點交出去（店家 Autocomplete 的 Portal 要指到這裡）。 */
   popupRef?: RefObject<HTMLDivElement | null>
@@ -195,7 +195,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
                 <Dialog.Title className="sheet-title" render={<h2 />}>
                   {title}
                 </Dialog.Title>
-                <Dialog.Close className="icon-btn" aria-label="關閉">
+                <Dialog.Close className="icon-btn" aria-label="關閉" disabled={locked}>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6 6l12 12M18 6L6 18" />
                   </svg>

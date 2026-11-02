@@ -12,18 +12,29 @@ export function useMonthMarks(rows: IntakeRow[] | null, currentDate: string) {
   /* 畫面上讀過品項的日子，本機的「有沒有紀錄」比月份查詢新：查詢在飛的期間使用者刪光了某天，
      回來的結果不可以把剛移掉的小點加回去（review 抓到）。 */
   const localMarksRef = useRef<Map<string, boolean>>(new Map())
+  /* 登出就加一。查詢在飛時登出了，回來的是上一個帳號的日期，不採用（同 trainingRuntime 的 generation）。 */
+  const generationRef = useRef(0)
   const loadMonthMarks = useCallback((key: MonthKey) => {
     if (loadedMonthsRef.current.has(key)) return
     loadedMonthsRef.current.add(key)
+    const gen = generationRef.current
     const { from, to } = monthBounds(key)
     listIntakeDates(from, to)
       .then((dates) => {
+        if (gen !== generationRef.current) return
         const fresh = [...dates].filter((d) => localMarksRef.current.get(d) !== false)
         setMarkedDates((prev) => new Set([...prev, ...fresh]))
       })
       .catch(() => {
-        loadedMonthsRef.current.delete(key)
+        if (gen === generationRef.current) loadedMonthsRef.current.delete(key)
       })
+  }, [])
+  /* 登出：小點是上一個帳號的，抓過的月份也不能再當成「已抓」。 */
+  const resetMonthMarks = useCallback(() => {
+    generationRef.current++
+    loadedMonthsRef.current.clear()
+    localMarksRef.current.clear()
+    setMarkedDates(new Set())
   }, [])
   /* 目前這一天的增刪即時反映在小點：rows 變了就把這天加進／移出集合（含刪除的樂觀移除與復原）。
      rows 為 null＝載入中，不動。 */
@@ -39,5 +50,5 @@ export function useMonthMarks(rows: IntakeRow[] | null, currentDate: string) {
       return next
     })
   }, [rows, currentDate])
-  return { markedDates, loadMonthMarks }
+  return { markedDates, loadMonthMarks, resetMonthMarks }
 }

@@ -29,7 +29,8 @@ function fakeBackend() {
     if (!m) tables.set(t, (m = new Map()))
     return m
   }
-  const state = { online: true, fetches: 0, writes: [] as string[], readError: false }
+  /** maxRows：伺服器單次回應上限（PostgREST 的 max_rows），低於請求的 range 就只回上限那麼多列。 */
+  const state = { online: true, fetches: 0, writes: [] as string[], readError: false, maxRows: Number.POSITIVE_INFINITY }
   const down = () => Promise.reject(new TypeError('Load failed'))
 
   const writeChain = (apply: (id: string) => unknown[]): SenderChain => {
@@ -62,7 +63,7 @@ function fakeBackend() {
             else if (state.readError) p = Promise.resolve({ data: null, error: { message: 'permission denied' } })
             else {
               const rows = [...store(table).values()].sort((x, y) => x.id.localeCompare(y.id))
-              p = Promise.resolve({ data: rows.slice(lo, hi + 1), error: null })
+              p = Promise.resolve({ data: rows.slice(lo, Math.min(hi + 1, lo + state.maxRows)), error: null })
             }
             return p.then(f, r)
           },
@@ -123,7 +124,23 @@ describe('load', () => {
     const v = await t.rt.load(U1)
     expect(v.db.exercises.map((r) => r.id)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5'])
     expect(v.source).toBe('server')
-    expect(t.backend.state.fetches).toBe(3 + 5) // exercises 三頁、其餘五張各一頁（有氧併入動作後不再讀 cardio_sessions）
+    expect(t.backend.state.fetches).toBe(4 + 5) // exercises 兩頁滿＋一頁不滿＋一頁空（停在空頁）、其餘五張各一頁空頁（有氧併入動作後不再讀 cardio_sessions）
+  })
+
+  it('伺服器單次上限低於 pageSize 也要抓完（停在空頁、offset 跟實際列數走）', async () => {
+    const t = setup({ pageSize: 10 })
+    t.backend.state.maxRows = 3
+    t.backend.seed('exercises', ...['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7'].map((id) => exercise(id)))
+    const v = await t.rt.load(U1)
+    expect(v.db.exercises.map((r) => r.id)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7'])
+    expect(v.source).toBe('server')
+  })
+
+  it('伺服器一直有資料（異常）：超過分頁上限就當讀取失敗，不無窮迴圈', async () => {
+    const t = setup({ pageSize: 1 })
+    t.backend.seed('exercises', ...Array.from({ length: 30 }, (_, i) => exercise(`e${String(i).padStart(2, '0')}`)))
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('empty') // 殘缺的一份不採用
   })
 
   it('讀到後寫進本機：離線重開（新實例、同一份儲存）仍讀得到，標示為 cache', async () => {
@@ -157,6 +174,15 @@ describe('load', () => {
     const v = await t.open().load(U1)
     expect(v.source).toBe('cache')
     expect(v.db.exercises).toHaveLength(1)
+  })
+
+  it('記憶體裡是別的帳號的伺服器資料，session 卻不是這個帳號：回空畫面，不能標成 server', async () => {
+    const t = setup()
+    t.backend.seed('exercises', exercise('e1'))
+    expect((await t.rt.load(U1)).source).toBe('server')
+    const v = await t.rt.load('user-2') // session 仍是 U1 → SessionMismatch
+    expect(v.db.exercises).toEqual([])
+    expect(v.source).toBe('empty')
   })
 
   it('別的帳號的底不借用', async () => {

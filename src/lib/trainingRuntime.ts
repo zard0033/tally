@@ -92,6 +92,9 @@ export const BASE_STORAGE_KEY = 'training-base'
 /** 單一請求的逾時。 */
 const FETCH_TIMEOUT_MS = 8000
 
+/** 單張表最多翻幾頁。二十頁（預設兩萬列）還沒抓完就是哪裡錯了。 */
+const MAX_PAGES = 20
+
 /** 目前的 session 不是這個帳號（或沒有 session）。與「連不上」分開：前者不該預填。 */
 class SessionMismatch extends Error {
   constructor() {
@@ -180,19 +183,22 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
     const entries = await Promise.all(
       TRAINING_TABLES.map(async (table) => {
         const rows: Row[] = []
-        for (let from = 0; ; from += pageSize) {
+        /* **停在空頁，不停在「不滿一頁」；offset 跟著實際拿到的列數走**（spec.md 分頁慣例、同 api.ts 的 listIntakeKcal）：
+           伺服器的 max_rows 若低於 pageSize，第一頁就會不滿 pageSize，用「不滿一頁」判結束會靜默少拿。
+           代價是每張表多一趟請求（最後那頁一定是空的）。 */
+        for (let page = 0; page < MAX_PAGES; page++) {
           const r = await client
             .from(table)
             .select('*')
             .order('id')
-            .range(from, from + pageSize - 1)
+            .range(rows.length, rows.length + pageSize - 1)
             .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS))
           if (r.error) throw new Error(`${table}：${r.error.message}`)
-          const page = Array.isArray(r.data) ? (r.data as Row[]) : []
-          rows.push(...page)
-          if (page.length < pageSize) break
+          const got = Array.isArray(r.data) ? (r.data as Row[]) : []
+          if (got.length === 0) return [table, rows] as const
+          rows.push(...got)
         }
-        return [table, rows] as const
+        throw new Error(`${table}：分頁超過上限`) // 寧可讀取失敗退回本機底，也不採用殘缺的一份
       }),
     )
     return Object.fromEntries(entries) as unknown as TrainingDb
@@ -276,6 +282,11 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
         if (e instanceof SessionMismatch) {
           await readCachedBase(userId)
           if (base && base.userId === userId) source = 'cache'
+          else {
+            // 記憶體裡可能還是別的帳號的 server 底：不能讓這個帳號的空畫面掛著 'server'
+            base = null
+            source = 'empty'
+          }
           return composeView(userId)
         }
         // 讀不到伺服器：退回本機底；本機也沒有就是 empty

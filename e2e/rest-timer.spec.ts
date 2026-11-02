@@ -624,3 +624,25 @@ test('有氧卡：沒有組、全部完成、新增一組；點它開的是有�
   await expect(bar(page)).toBeVisible()
   await expect(ask(page)).toBeVisible()
 })
+
+/* 問題列 0.6 秒後卸載，焦點要先交給還在的鈕，不然鍵盤使用者掉回 body。超時狀態只有「收起」一顆。 */
+test('超時狀態用鍵盤答 RPE：問題列收起後焦點交給「收起」', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await expect(ask(page)).toBeVisible()
+  await jump(page, 113_000)
+  await expect(bar(page)).toHaveAttribute('data-rest', 'over')
+  await chip(page, '1 下').focus()
+  await chip(page, '1 下').press('Enter')
+  await expect(bar(page).getByRole('button', { name: '收起' })).toBeFocused()
+})
+
+test('倒數中用鍵盤答 RPE：問題列收起後焦點交給「略過休息」', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  for (const n of [0, 1, 2]) await tick(page, n)
+  await chip(page, '1 下').focus()
+  await chip(page, '1 下').press('Enter')
+  await expect(btn(page, '略過休息')).toBeFocused()
+})

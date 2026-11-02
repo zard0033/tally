@@ -1,7 +1,6 @@
 /* 登入頁。v2.0 極簡化（Meta splash 式，DESIGN.md P2）：48px 幾何 T mark＋問句置中，
    CTA 沉到底部拇指區。Wordmark（「Tally」字樣）全產品不出現，只活在 index.html 的 title。
-   OAuth 走 supabase-js 的 signInWithOAuth（PKCE，detectSessionInUrl 自動處理回跳），
-   legacy 手刻的 hash 解析／implicit flow 整段作廢，不在這裡搬。 */
+   OAuth 走 supabase-js 的 signInWithOAuth（PKCE，detectSessionInUrl 自動處理回跳）。 */
 import { useState } from 'react'
 import { signInWithGoogle } from '@/lib/api'
 

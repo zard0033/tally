@@ -29,12 +29,12 @@ export default function RestBar({ timer, ask, onPick }: { timer: RestTimer; ask:
   useEffect(() => {
     if (ask) setTall(true)
   }, [ask])
-  // 點了 chip 之後焦點若還在問題列裡（0.6 秒後它就卸載），交給「略過休息」，鍵盤與讀屏使用者不會掉回文件開頭
+  // 點了 chip 之後焦點若還在問題列裡（0.6 秒後它就卸載），交給這一列最後一顆鈕（倒數中是「略過休息」、超時是「收起」），鍵盤與讀屏使用者不會掉回文件開頭
   const picked = ask?.picked != null
   useEffect(() => {
     if (!picked) return
     const el = barRef.current
-    if (el?.querySelector('.rest-ask')?.contains(document.activeElement)) el.querySelector<HTMLElement>('.rest-row button[aria-label="略過休息"]')?.focus()
+    if (el?.querySelector('.rest-ask')?.contains(document.activeElement)) el.querySelector<HTMLElement>('.rest-row button:last-child')?.focus()
   }, [picked])
   const { endAt, now } = timer
   const remaining = endAt === null ? 0 : remainingMs(endAt, now)

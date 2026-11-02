@@ -5,13 +5,12 @@ import QtyStepper from '@/components/QtyStepper'
 import SegmentedControl from '@/components/SegmentedControl'
 import { num } from '@/lib/formulas'
 import { MEALS, type MealKey } from '@/lib/meals'
+import { MACRO_MAX } from '@/lib/foodForm'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 
 /* 就地編輯區的數字欄標籤。與新增食物表單同一組字（DESIGN.md「新增食物表單欄位」），
    單位帶在 label 上而不是欄位旁——欄位窄，額外的單位字會擠掉輸入空間。 */
 type DetailKey = 'kcal' | 'protein' | 'fat' | 'carb'
-/** 上界對齊 DB：那四欄最嚴的是 `numeric(6,2)`，能放到 9999.99 */
-const MACRO_MAX = 9999.99
 const DETAIL_LABEL: Record<DetailKey, string> = {
   kcal: '熱量（卡）',
   protein: '蛋白質 g',

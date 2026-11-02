@@ -34,6 +34,7 @@ import {
 import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -56,20 +57,6 @@ interface Notice {
   onAction: () => void
 }
 
-/** 原始錯誤訊息（'Failed to fetch'、'signal timed out'、TimeoutError…）對使用者沒有意義，
- *  換成看得懂的話。AbortSignal.timeout 產生的是 DOMException{name:'TimeoutError'}，
- *  postgrest-js 組出的 message 形如 'TimeoutError: signal timed out'——三種寫法都要接住
- *  （precommit review 抓到只認 AbortError 會讓逾時原文直接見人）。 */
-function friendlyError(message: string): string {
-  if (message.includes('TimeoutError') || message.includes('AbortError') || message.includes('signal timed out')) {
-    return '網路沒回應，請確認連線是否正常'
-  }
-  if (message.includes('Failed to fetch') || message.includes('TypeError')) {
-    return '連不上網路，請確認 Wi-Fi 或行動網路'
-  }
-  return message
-}
-
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
 
@@ -84,8 +71,6 @@ const BOOT_SLOW_MS = 5000
 const FAST_BOOT_MS = 2000
 
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
-
-const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
 /** 把「待刪那一筆」從 rows 濾掉——這是把 rows 放進畫面的唯一合法方式，不論 rows 是
  *  剛 fetch 回來的、還是從快取取出的。快取本身永遠存**原始**（未濾除）的 rows，
@@ -353,7 +338,7 @@ export default function App() {
   )
 
 
-  const { markedDates, loadMonthMarks } = useMonthMarks(rows, currentDate)
+  const { markedDates, loadMonthMarks, resetMonthMarks } = useMonthMarks(rows, currentDate)
 
   const openSheet = useCallback((meal: MealKey) => {
     setSheetMeal(meal)
@@ -500,7 +485,7 @@ export default function App() {
 
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
-   * 按鈕變重試，跟 legacy 的 withBusy 行為一致（跟上面 deleteIntake 的全域 Notice 不同）。 */
+   * 按鈕變重試（跟上面 deleteIntake 的全域 Notice 不同）。 */
   const handleCreateIntake = useCallback(
     async (newRows: NewIntake[]) => {
       // 先結清待刪：底下的 loadDay() 會整包換掉 rows，undo 的快照就過期了
@@ -671,6 +656,7 @@ export default function App() {
         setNotice(null)
         setSheetOpen(false)
         setTab('today')
+        resetMonthMarks()
         cacheRef.current.clear() // 換帳號後別讓上一個帳號的快取資料在切日期時冒出來
         prefetchingRef.current.clear()
       } else if (s) {
@@ -689,7 +675,7 @@ export default function App() {
       clearTimeout(fastTimer)
       sub.subscription.unsubscribe()
     }
-  }, [setFoods])
+  }, [setFoods, resetMonthMarks])
 
   /* 網路回來（AC 4）。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
    * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。兩種情形：

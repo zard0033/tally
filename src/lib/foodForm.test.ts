@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NO_VENDOR, byFoodName, foodMatches, groupByVendor, readingToForm, type LabelReading } from './foodForm'
+import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, byFoodName, foodMatches, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -90,5 +90,26 @@ describe('groupByVendor', () => {
     const list = [f('b', null), f('a', null)]
     groupByVendor(list)
     expect(list.map((x) => x.name)).toEqual(['b', 'a'])
+  })
+})
+
+describe('validateFoodForm', () => {
+  const ok = { ...BLANK_FOOD_FORM, name: '雞胸', kcal: '120', protein: '25' }
+
+  it('品名與熱量必填，營養素留空當 0', () => {
+    expect(validateFoodForm(ok)).toEqual({ food: { name: '雞胸', vendor: null, kcal: 120, protein: 25, fat: 0, carb: 0 } })
+    expect(validateFoodForm({ ...ok, name: ' ' })).toEqual({ error: '品名要填' })
+    expect(validateFoodForm({ ...ok, kcal: '' })).toEqual({ error: '熱量要填數字' })
+    expect(validateFoodForm({ ...ok, kcal: '-1' })).toEqual({ error: '熱量要填數字' })
+    expect(validateFoodForm({ ...ok, fat: 'x' })).toEqual({ error: '營養素要填數字或留空' })
+  })
+
+  it('上界對齊 DB 的 numeric(6,2)（9999.99）：剛好在界上可以，多一點就擋在送出前', () => {
+    expect(MACRO_MAX).toBe(9999.99)
+    expect('food' in validateFoodForm({ ...ok, kcal: '9999.99', protein: '9999.99', fat: '9999.99', carb: '9999.99' })).toBe(true)
+    expect(validateFoodForm({ ...ok, kcal: '10000' })).toEqual({ error: '熱量要填 0 到 9999.99 之間的數字' })
+    for (const key of ['protein', 'fat', 'carb'] as const) {
+      expect(validateFoodForm({ ...ok, [key]: '10000' })).toEqual({ error: '營養素要填 0 到 9999.99 之間的數字或留空' })
+    }
   })
 })

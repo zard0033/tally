@@ -325,3 +325,74 @@ test('連按：兩筆都失敗，畫面回到原本的值，之後再按同一�
   await page.locator(`${ROW} .qty-btn`).last().click()
   await expect.poll(async () => (await patches(page)).length, { message: '失敗後再按 + 要送得出去' }).toBe(3)
 })
+
+/* 寫入失敗的訊息：網路類換成白話，伺服器回的業務訊息維持原樣（讀取與刪除早就是這樣，
+   存檔與就地編輯原本直接秀 'TypeError: Load failed'）。 */
+const setDown = (page: Page, down: boolean) =>
+  page.evaluate((d) => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = d
+  }, down)
+
+test('就地編輯斷網失敗：訊息是白話，不是 TypeError 原文', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await setDown(page, true)
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  const err = page.locator(`${ROW} .ed-error`)
+  await expect(err).toBeVisible()
+  await expect(err).toContainText('連不上網路')
+  await expect(err).not.toContainText('TypeError')
+  await expect(err).not.toContainText('Load failed')
+})
+
+test('就地編輯伺服器回業務訊息：維持原文', async ({ page }) => {
+  await openApp(page)
+  await expand(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'PATCH' }
+  })
+  await page.locator(`${ROW} .qty-btn`).last().click()
+  await expect(page.locator(`${ROW} .ed-error`)).toContainText('模擬的寫入失敗')
+})
+
+test('記錄食物存檔斷網失敗：訊息是白話，不是 TypeError 原文', async ({ page }) => {
+  await openApp(page)
+  await page.click('button.cta')
+  const sheet = page.locator('[data-screen="log-sheet"]')
+  await expect(sheet).toBeVisible()
+  await sheet.locator('.food-row', { hasText: '雞胸餐盒' }).first().click()
+  await setDown(page, true)
+  await sheet.locator('.pick-bar .pick-bar-btn').click()
+  const err = sheet.locator('.sheet-error')
+  await expect(err).toBeVisible()
+  await expect(err).toContainText('連不上網路')
+  await expect(err).not.toContainText('TypeError')
+  await expect(err).not.toContainText('Load failed')
+})
+
+test('記錄食物存檔伺服器回業務訊息：維持原文', async ({ page }) => {
+  await openApp(page)
+  await page.click('button.cta')
+  const sheet = page.locator('[data-screen="log-sheet"]')
+  await sheet.locator('.food-row', { hasText: '雞胸餐盒' }).first().click()
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'POST' }
+  })
+  await sheet.locator('.pick-bar .pick-bar-btn').click()
+  await expect(sheet.locator('.sheet-error')).toContainText('模擬的寫入失敗')
+})
+
+test('記錄食物裡新增食物斷網失敗：訊息是白話', async ({ page }) => {
+  await openApp(page)
+  await page.click('button.cta')
+  const sheet = page.locator('[data-screen="log-sheet"]')
+  await sheet.getByPlaceholder(/搜尋/).first().fill('測試用新食物')
+  await sheet.locator('.add-food-row').click()
+  await sheet.locator('#f-kcal').fill('200')
+  await setDown(page, true)
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
+  const err = sheet.locator('.sheet-error')
+  await expect(err).toBeVisible()
+  await expect(err).toContainText('連不上網路')
+  await expect(err).not.toContainText('TypeError')
+})
