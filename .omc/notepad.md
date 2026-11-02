@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-02）：整體 code 盤點完成、未改 code，清單在 wiki `cleanup-inventory`，等使用者選。基線全量 381 條 377 過 4 偶發（重跑 20 次全過），見 `e2e-reference`。v2.106–v2.108 尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。全量在 push 後背景跑（push 前 affected／smoke，SW、離線佇列例外）。
-下一步：①依清單修 bug／清理 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
+現況（2026-11-02）：整體清理 B1–B6＋批次 1–4 已 commit，尚未 push；全量 e2e 與 push 前 review 進行中。清單與「要真機確認」在 wiki `cleanup-inventory`。v2.106–v2.108 也尚未真機驗；「尾巴與 sheet RPE 不同步」stub 下重現不出來，再現請記兩邊值與線上／離線。全量平常在 push 後背景跑（push 前 affected／smoke，SW、離線佇列例外）。
+下一步：①push 後真機驗 ②階段 1（spec 階段 4 丙；動 `strength.ts` 的 `suggestWeight`，預期值手算）③核可餐建議樣張 ④每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

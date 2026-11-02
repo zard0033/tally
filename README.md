@@ -41,7 +41,7 @@ The bar for sharing UI between screens is that the same set of fields or the sam
 
 ### 392 end-to-end tests, and when they all run
 
-The suite is 392 browser tests across 20 files, plus 800 unit tests covering the formulas, dates, rounding, image sizing, the offline write queue, and the label-reading and weight-sync Edge Functions.
+The suite is 392 browser tests across 20 files, plus 901 unit tests covering the formulas, dates, rounding, image sizing, the offline write queue, and the label-reading and weight-sync Edge Functions.
 
 Any UI change used to run the entire browser suite, which took under two minutes at around 100 tests. A full run now takes about 12 minutes, so a script picks the specs from the changed files, using a hand-maintained table, and that subset has to pass before a push. When a change touches too much to tell, a small core-path set runs instead. "The relevant tests passed" is the most common way a regression gets shipped, so the full suite stays, but it now runs right after the push. Pushing to main deploys straight away, so a failure it catches may already be live. With one user I accept that, since I skipped the 12-minute gate on several rounds anyway, and the [run log](.omc/wiki/e2e-reference.md) says which. Changes to the service worker or the offline write queue are hard to undo, so those still run the full suite first.
 

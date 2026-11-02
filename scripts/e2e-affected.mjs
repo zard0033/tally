@@ -29,14 +29,14 @@ const SHEETS = ['spring-sheet', 'sync-sheet']
 
 /* 動作庫／食品庫的入口列在設定頁，settings-nav 守「三個入口都進得去」，所以兩個庫多帶它 */
 const SCREENS = {
-  TrainingSession: TRAIN, SetSheet: TRAIN, CardioSheet: TRAIN, ExercisePicker: TRAIN,
+  TrainingSession: TRAIN, ExerciseCard: TRAIN, SetSheet: TRAIN, CardioSheet: TRAIN, ExercisePicker: TRAIN,
   ExerciseEditSheet: TRAIN, ExerciseLibrary: [...TRAIN, 'settings-nav'], FinishSheet: TRAIN,
   StartSheet: TRAIN, SyncSheet: TRAIN, RoutineEditor: TRAIN, RoutineNameSheet: TRAIN,
   RoutineTargetSheet: TRAIN,
   Training: [...TRAIN, ...ANALYSIS], // 訓練分析的入口列在訓練頁
   Analysis: ANALYSIS,
   // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
-  Today: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
+  Today: [...FOOD, ...SHEETS], ItemEditor: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
   // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
   Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
   Login: ['interaction'],

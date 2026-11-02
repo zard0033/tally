@@ -10,7 +10,6 @@ import type { Session } from '@supabase/supabase-js'
 import {
   AUTH_STORAGE_KEY,
   BackendUnreachableError,
-  createFood as apiCreateFood,
   createIntake as apiCreateIntake,
   deleteIntake as apiDeleteIntake,
   getLatestWeight,
@@ -20,26 +19,21 @@ import {
   listIntake,
   onAuthStateChange,
   signOut as apiSignOut,
-  updateFood as apiUpdateFood,
   updateIntakeDetail as apiUpdateIntakeDetail,
   updateIntakeMeal as apiUpdateIntakeMeal,
   updateIntakeQty as apiUpdateIntakeQty,
   updateProfile as apiUpdateProfile,
   upsertWeight as apiUpsertWeight,
-  type Food,
   type IntakeDetailPatch,
   type IntakeRow,
-  type NewFood,
   type NewIntake,
   type NewWeight,
   type ProfileRow,
   type Weight,
-  listIntakeDates,
 } from '@/lib/api'
 import { DUR, EASE, sec } from '@/lib/durations'
-import { byFoodName } from '@/lib/foodForm'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
-import { localDate, maxPlanDate, monthBounds, shiftDate, type MonthKey } from '@/lib/dates'
+import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -47,8 +41,12 @@ import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
 import Settings from '@/screens/Settings'
 import Training from '@/screens/Training'
+import BootScreen, { type BootStatus } from '@/components/BootScreen'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TabBar, { type Tab } from '@/components/TabBar'
+import { useMonthMarks } from '@/components/useMonthMarks'
+import { useViewportInsets } from '@/components/useViewportInsets'
+import { useFoods } from '@/useFoods'
 import { useTraining } from '@/useTraining'
 
 interface Notice {
@@ -84,9 +82,6 @@ const BOOT_SLOW_MS = 5000
  *  supabase-js 的退避裡（後端連不上時約 26 秒，探針 1 實測）——就先拿本機那份進外殼，不再等
  *  （spec.md 階段 1 甲 AC 2）。比 BOOT_SLOW_MS 短，所以有本機 session 時不會走到「連線比平常慢」。 */
 const FAST_BOOT_MS = 2000
-
-/** 開機畫面的三種樣子。unreachable＝getSession 明確回報後端連不上（不是沒登入）。 */
-type BootStatus = 'loading' | 'slow' | 'unreachable'
 
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -141,7 +136,7 @@ export default function App() {
   const [weight, setWeight] = useState<Weight | null>(null)
   const [targets, setTargets] = useState<Targets | null>(null)
   const [rows, setRows] = useState<IntakeRow[] | null>(null)
-  const [foods, setFoods] = useState<Food[] | null>(null)
+  const { foods, setFoods, handleCreateFood, handleUpdateFood, handleArchiveFood, handleUnarchiveFood } = useFoods()
 
   const [tab, setTab] = useState<Tab>('today')
   /** 設定頁的次級頁面（每日目標／食品庫管理／體重趨勢）自己有返回鍵，主 navbar 同時
@@ -294,10 +289,10 @@ export default function App() {
     }
     // 日期走顯式參數（跟 loadDay 對稱）——closure 抓 currentDate 曾造成
     // 「歷史日存設定後畫面日期與資料錯位」，precommit review 抓到的，別改回去
-  }, [showNotice, prefetchAdjacent])
+  }, [showNotice, prefetchAdjacent, setFoods])
 
   /* 開機 effect 要呼叫最新的 load，但不能把 load 放進它的依賴——那個 effect 一重跑就會重讀
-     localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 依賴保持空陣列。 */
+     localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 只依賴引用穩定的 setter。 */
   const loadRef = useRef(load)
   useEffect(() => {
     loadRef.current = load
@@ -358,42 +353,7 @@ export default function App() {
   )
 
 
-  /* 週列／月曆的小點（v2.53）：有飲食紀錄的日子。按「月」抓、抓過的月不重抓（loadedMonthsRef 去重，
-     失敗就放掉去重旗標讓下次再試）。失敗靜默——小點是附帶資訊，彈錯誤畫面是過度反應，
-     而且離線時整頁本來就已經有提示。沒載到的月份沒有小點，**不是「那個月沒紀錄」**。
-     之後在目前這一天做的增刪（見下面的 effect）直接改這份集合，不重撈。 */
-  const [markedDates, setMarkedDates] = useState<ReadonlySet<string>>(() => new Set())
-  const loadedMonthsRef = useRef<Set<MonthKey>>(new Set())
-  /* 畫面上讀過品項的日子，本機的「有沒有紀錄」比月份查詢新：查詢在飛的期間使用者刪光了某天，
-     回來的結果不可以把剛移掉的小點加回去（review 抓到）。 */
-  const localMarksRef = useRef<Map<string, boolean>>(new Map())
-  const loadMonthMarks = useCallback((key: MonthKey) => {
-    if (loadedMonthsRef.current.has(key)) return
-    loadedMonthsRef.current.add(key)
-    const { from, to } = monthBounds(key)
-    listIntakeDates(from, to)
-      .then((dates) => {
-        const fresh = [...dates].filter((d) => localMarksRef.current.get(d) !== false)
-        setMarkedDates((prev) => new Set([...prev, ...fresh]))
-      })
-      .catch(() => {
-        loadedMonthsRef.current.delete(key)
-      })
-  }, [])
-  /* 目前這一天的增刪即時反映在小點：rows 變了就把這天加進／移出集合（含刪除的樂觀移除與復原）。
-     rows 為 null＝載入中，不動。 */
-  useEffect(() => {
-    if (rows === null) return
-    const has = rows.length > 0
-    localMarksRef.current.set(currentDate, has)
-    setMarkedDates((prev) => {
-      if (prev.has(currentDate) === has) return prev
-      const next = new Set(prev)
-      if (has) next.add(currentDate)
-      else next.delete(currentDate)
-      return next
-    })
-  }, [rows, currentDate])
+  const { markedDates, loadMonthMarks } = useMonthMarks(rows, currentDate)
 
   const openSheet = useCallback((meal: MealKey) => {
     setSheetMeal(meal)
@@ -536,54 +496,7 @@ export default function App() {
     }
   }, [commitDelete])
 
-  /* iOS 鍵盤佔掉的高度 → CSS 變數 `--kb`，給貼底的 `.sheet` 當 `bottom` 用。
-     鍵盤彈出時 **layout viewport 不變**，只有 visual viewport 縮小，所以
-     `position: fixed; bottom: 0` 的 sheet 底緣仍然落在鍵盤底下——真機回報的
-     「新增食物表單的蛋白質／脂肪／碳水那排被『加入食品庫』按鈕壓掉、只露一條邊」
-     就是這麼來的：可捲區 `.form-wrap` 明明是 `flex:1`，但它算的是那個沒縮水的高度，
-     內容沒溢出、於是也捲不動。iOS 表單列上下箭頭「跳得不順」是同一個病灶的表徵
-     ——焦點其實跳對了，只是跳到看不見的地方。
-
-     `offsetTop` 要一起扣：iOS 會把 visual viewport 往上推，只看 height 會少算那一段。
-
-     **桌面不是靠 `if (!vv) return` 那道 guard 走掉的**（實測：桌面 WebKit 有
-     `visualViewport`，`height === innerHeight`、`offsetTop === 0`）——它照樣跑 `sync()`，
-     只是沒有鍵盤、算出來恆為 `0px`，結果等同於沒有這個變數。guard 只擋真的缺這支 API
-     的舊瀏覽器。這兩件事結果一樣但機制不同，別再寫成「桌面沒有這個 API」（review 抓到）。
-     **這條只能真機驗**——桌面產生不出鍵盤，`--kb` 永遠是 0，模擬不出那個狀態。
-
-     **上面那段描述的效果，在 vaul 的兩個 sheet 上要到 v2.34 才第一次真的發生**：v2.32～v2.33
-     期間 vaul 的 `repositionInputs` 用 inline style 蓋著它，這裡算得再對也寫不進版面。
-     全文（含關掉 flag 的兩個代價）在 app.css `.sheet` 那段。這個 effect 本身沒有改動——
-     它一直是對的，只是沒被套用。
-
-     **第二個變數 `--vvtop`（v2.35）＝ `vv.offsetTop`，補的是完全不同的一件事**：欄位在
-     表單下半部時，iOS 為了讓它露出來會**把整個 layout viewport 往上捲**，而
-     `position: fixed` 是釘在 layout viewport 上的，sheet 因此整個被推出可見區。
-     **`--kb` 管高度、`--vvtop` 管位移，兩者互不取代**——真機實測：品名欄 `vvTop=0`
-     一切正常，碳水欄整個畫面上移。
-     **只有貼著可見區邊緣的 fixed 元素要補 `--vvtop`**（`.sheet` 貼底是目前唯一一個）；
-     `.scrim` 那種 `inset: 0` 撐滿全屏的不必——可見區永遠是 layout viewport 的子集，
-     它照樣蓋得住（review 抓到我一開始把 scrim 也算進受害者）。
-     **新增貼邊的 fixed 元素時記得比照辦理**，這條在 iOS 上只有真機看得出來。 */
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const sync = () => {
-      const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      document.documentElement.style.setProperty('--kb', `${Math.round(hidden)}px`)
-      document.documentElement.style.setProperty('--vvtop', `${Math.round(vv.offsetTop)}px`)
-    }
-    sync()
-    vv.addEventListener('resize', sync)
-    vv.addEventListener('scroll', sync)
-    return () => {
-      vv.removeEventListener('resize', sync)
-      vv.removeEventListener('scroll', sync)
-      document.documentElement.style.removeProperty('--kb')
-      document.documentElement.style.removeProperty('--vvtop')
-    }
-  }, [])
+  useViewportInsets()
 
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
@@ -602,37 +515,6 @@ export default function App() {
     },
     [loadDay, commitDelete, currentDate],
   )
-
-  const handleCreateFood = useCallback(async (food: NewFood): Promise<Food> => {
-    const created = await apiCreateFood(food)
-    setFoods((prev) => [...(prev ?? []), created].sort(byFoodName))
-    return created
-  }, [])
-
-  /* 食品庫管理頁的就地編輯：只動品名／店家／營養值，archived 不在 patch 裡。
-   * App 的 foods（今日頁挑選清單）跟著更新同一筆，不必整包重撈。 */
-  const handleUpdateFood = useCallback(async (id: number, patch: Partial<NewFood>): Promise<void> => {
-    await apiUpdateFood(id, patch)
-    setFoods((prev) => prev?.map((f) => (f.id === id ? { ...f, ...patch } : f)) ?? prev)
-  }, [])
-
-  /** 封存：從「使用中」清單移除（今日頁picker 不該再挑到它），回傳封存後的完整列
-   *  給 FoodLibrary 的復原用——復原不必重新整包撈食品庫。呼叫端已經握著完整的 Food
-   *  物件（就是清單裡點下封存那一列），直接收下來用，不必再回頭用 setFoods 的 updater
-   *  當「順便讀一下目前 foods」的手段——updater 是否同步執行是 React 的最佳化細節，
-   *  不是合約，拿它當讀取管道會在極少數時機（DB 已寫入成功後）踩到「找不到就 throw」，
-   *  造成資料庫已封存、畫面卻回滾成失敗的不同步（precommit-review 抓到）。 */
-  const handleArchiveFood = useCallback(async (food: Food): Promise<Food> => {
-    await apiUpdateFood(food.id, { archived: true })
-    setFoods((prev) => prev?.filter((f) => f.id !== food.id) ?? prev)
-    return { ...food, archived: true }
-  }, [])
-
-  /** 復原：解封存，插回「使用中」清單並保持排序。 */
-  const handleUnarchiveFood = useCallback(async (food: Food): Promise<void> => {
-    await apiUpdateFood(food.id, { archived: false })
-    setFoods((prev) => [...(prev ?? []).filter((f) => f.id !== food.id), { ...food, archived: false }].sort(byFoodName))
-  }, [])
 
   /* 單筆 intake 的就地編輯（份量、餐別）共用這一條：先送出再更新畫面，跟
    * handleCreateIntake/handleCreateFood 同一套慣例——失敗 reject 給呼叫端就地顯示
@@ -807,7 +689,7 @@ export default function App() {
       clearTimeout(fastTimer)
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [setFoods])
 
   /* 網路回來（AC 4）。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
    * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。兩種情形：
@@ -836,30 +718,7 @@ export default function App() {
   }, [session, load, currentDate])
 
   if (session === undefined) {
-    return (
-      <div className="screen">
-        <div className="notice" role="status">
-          {bootStatus === 'unreachable' ? (
-            <>
-              <p className="headline">連不上後端</p>
-              <p>可能是網路不通，或 Supabase 專案被閒置暫停。到 dashboard 按 Resume。</p>
-            </>
-          ) : (
-            <p className="muted">{bootStatus === 'slow' ? '連線比平常慢，還在等後端回應…' : '載入中…'}</p>
-          )}
-          {/* 「慢」也要有出口：連上了但永不回應時 fetch 不會 reject，getSession 不會 settle，
-              bootStatus 永遠到不了 unreachable（review H1）。standalone 的 PWA 沒有網址列也沒有
-              下拉重整，沒有這顆鈕就只能強制關閉 App。
-              重新載入而不是再叫一次 getSession：supabase-js 對同一顆 refresh token 的失敗有
-              60 秒冷卻，再叫只會立刻拿到同一個失敗；reload 才清得掉記憶體裡的冷卻。 */}
-          {bootStatus !== 'loading' && (
-            <button className="action-btn" type="button" onClick={() => location.reload()}>
-              重新載入
-            </button>
-          )}
-        </div>
-      </div>
-    )
+    return <BootScreen bootStatus={bootStatus} />
   }
 
   if (!session) return <Login error={loginError} />
