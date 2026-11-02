@@ -1,6 +1,5 @@
 /* 日期處理：一律用本地時區。toISOString() 是 UTC，台灣早上 8 點前會把「今天」算成前一天。
-   localDate／shiftDate 照 legacy/app.js 逐字搬；ageFromYear 是 2026-08-03 重新設計，
-   刻意偏離 legacy 的 ageOn（只問出生年，不比對月/日），理由見 ageFromYear 的函式註解。 */
+   ageFromYear 是 2026-08-03 重新設計，只問出生年、不比對月/日，理由見 ageFromYear 的函式註解。 */
 
 /** 本地時區的 yyyy-mm-dd。不帶參數＝今天。 */
 export function localDate(d: Date = new Date()): string {

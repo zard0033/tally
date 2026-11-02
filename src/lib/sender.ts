@@ -26,7 +26,7 @@ export interface SenderChain extends PromiseLike<SenderResponse> {
   abortSignal(signal: AbortSignal): SenderChain
 }
 
-export interface SenderTable {
+interface SenderTable {
   upsert(values: Record<string, unknown>, options: { onConflict: string; ignoreDuplicates?: boolean }): SenderChain
   update(values: Record<string, unknown>): SenderChain
   delete(): SenderChain

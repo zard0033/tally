@@ -1,12 +1,10 @@
 /* 記一筆 sheet：SpringSheet 承載（全站精緻度 B1b，原為 vaul Drawer），清單多選／搜尋／份量 stepper／新增食物／確認列。
-   行為與視覺依 DESIGN.md 元件規則表（2026-07-31 起是唯一真相來源，原本對齊的
-   sample-log-entry.html 樣張已隨該日的樣張退場一併移除），程式邏輯照 legacy/app.js
-   的「記一筆 sheet」整段（openSheet／sheetListHtml／onSheetClick／onSheetInput／
-   onSheetChange／submitPicks／submitFood）逐條搬，計算全部交給 src/lib 不重新推導。
+   行為與視覺依 DESIGN.md 元件規則表（2026-07-31 起是唯一真相來源），
+   計算全部交給 src/lib 不重新推導。
 
    vanilla 版的兩個坑（sheet 整塊重繪咬 click、注音組字被打斷）源自 renderSheet() 用
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
-   在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要 legacy 那套
+   在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import FoodFormFields from '@/components/FoodFormFields'
@@ -183,7 +181,7 @@ export default function LogSheet(props: LogSheetProps) {
   const sheetRef = useRef<HTMLDivElement | null>(null)
 
   /* 「常吃」＝該餐別歷史出現次數，順便記住每樣最近一次的份量——LogSheetProps 只給當天
-     dayData，這份跨日期的歷史不在 props 契約裡（見回報「共用檔缺口清單」），這裡直接讀
+     dayData，這份跨日期的歷史不在 props 契約裡，這裡直接讀
      lib/api 既有的 listRecentIntake（唯讀查詢，不改動 App 的資料流／不寫其他檔案）。
      撈不到就靜靜略過「常吃」分段，不擋清單其他功能可用。 */
   const [recent, setRecent] = useState<Map<MealKey, number[]> | null>(null)
@@ -338,9 +336,7 @@ export default function LogSheet(props: LogSheetProps) {
     try {
       const created = await onCreateFood(validated.food)
       /* 新增完直接選起來，回清單由底部確認列承接——這顆按鈕只承諾「加入食品庫」，
-         真正記進 intake 仍要按「加入」，兩件事分開才不會以為記完就關掉 app（跟 legacy
-         submitFood 行為一致；sample-log-entry.html A-6 的按鈕文案「加入食品庫並記一筆」
-         與此不同，取捨與理由見回報「與樣張／legacy 的偏差」） */
+         真正記進 intake 仍要按「加入」，兩件事分開才不會以為記完就關掉 app */
       setPicks((prev) => new Map(prev).set(created.id, 1))
       setQtyDrafts((prev) => new Map(prev).set(created.id, '1'))
       setView('list')
@@ -483,176 +479,174 @@ export default function LogSheet(props: LogSheetProps) {
 
   const contentAriaLabel = view === 'list' ? (meal ? mealLabel(meal) : '記一筆') : '新增食物'
 
+  /* locked={scanBusy}：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
+     而誤關的代價是那張照片白拍。辨識逾時（函式端 45 秒）保證最壞情況不會被關太久。 */
   return (
-    <>
-      {/* locked={scanBusy}：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
-          而誤關的代價是那張照片白拍。逾時 15 秒保證最壞情況不會被關太久。 */}
-      <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy}>
-        {view === 'list' ? (
-          <>
-            <SheetGrabZone className="chip-bar">
-              {/* 選中態用 aria-pressed，不是 aria-current，容器也不是 tablist
-                  （2026-08-05 補；Today.tsx 的餐別分段控制器早一輪就是這樣，那裡的註解
-                  已標記這排 chip 有同樣的問題）。這排 chip 選的是「這筆要記到哪一餐」，
-                  按下去改的是資料值，不是換頁——aria-current 的規範語意是「目前所在的
-                  頁面／步驟／位置」，用在這裡是誤用。
-                  **role="tab" 一併拿掉**：tab 角色的選中態屬性是 aria-selected，而完整的
-                  APG tablist 契約還要 roving tabindex ＋ 方向鍵導航 ＋ aria-controls 指向
-                  tabpanel。半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟——這是
-                  Today.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
-              <div className="chiprow" role="group" aria-label="餐別">
-                {MEALS.map((m) => (
-                  <button
-                    key={m.key}
-                    className="chip"
-                    type="button"
-                    aria-pressed={meal === m.key}
-                    onClick={() => setMeal(m.key)}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-              <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </SheetGrabZone>
-
-            <div className="search-wrap">
-              <div className="search-box">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="M20 20l-4-4" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="搜尋品名或店家"
-                  aria-label="搜尋食物"
-                  value={query}
-                  onChange={handleQueryChange}
-                  onCompositionStart={handleCompositionStart}
-                  onCompositionEnd={handleCompositionEnd}
-                />
-              </div>
-            </div>
-
-            <div className="food-scroll">
-              {picks.size > 0 && (
-                <>
-                  <div className="sect-lb">已選</div>
-                  <ul className="food-list">{pickedFoods.map((f) => renderFoodRow(f, true, handlers))}</ul>
-                </>
-              )}
-              {browseBody}
-            </div>
-
-            {picks.size > 0 && (
-              <div className="pick-bar">
-                {err && (
-                  <p className="sheet-error" role="alert">
-                    存不進去：{err}
-                  </p>
-                )}
-                {/* role="group"：generic 的 <div> 禁止用 aria-label 命名（ARIA naming
-                    prohibited），子元素又全部 aria-hidden，沒有 role 這條 aria-label
-                    很可能整段被螢幕閱讀器忽略（precommit review 抓到，2026-08-01） */}
-                <div role="group" className="pick-line" aria-label={`${totals.n} 樣，共 ${Math.round(totals.kcal)} 大卡，${right.ariaLabel}`}>
-                  <span className="sub" aria-hidden="true">
-                    {totals.n} 樣 · {Math.round(totals.kcal)} 卡
-                    {right.deltaText && <span className="over-delta"> {right.deltaText}</span>}
-                  </span>
-                  {right.remainText && (
-                    <span className="remain" aria-hidden="true">
-                      {right.remainText}
-                    </span>
-                  )}
-                </div>
-                {/* 蛋白/脂/碳三個誠實數字，判定規則跟今日頁的三大營養素條同一條（DESIGN.md
-                    「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——
-                    不是這裡不判定，是蛋白質那格本來就不該判（DESIGN.md v2.10「底部確認列」條）。
-                    role="group"：同上，generic <div> 不能靠 aria-label 命名。 */}
-                {(() => {
-                  const fatOver = macroExceeds(combined.fat, targets.fat)
-                  const carbOver = macroExceeds(combined.carb, targets.carb)
-                  return (
-                    <div
-                      role="group"
-                      className="macro-line"
-                      aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
-                    >
-                      <span aria-hidden="true">
-                        蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}
-                        <span className="add">(+{Math.round(totals.protein)})</span>
-                      </span>
-                      <span className={fatOver ? 'over' : undefined} aria-hidden="true">
-                        脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}
-                        <span className="add">(+{Math.round(totals.fat)})</span>
-                      </span>
-                      <span className={carbOver ? 'over' : undefined} aria-hidden="true">
-                        碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}
-                        <span className="add">(+{Math.round(totals.carb)})</span>
-                      </span>
-                    </div>
-                  )
-                })()}
-                <button className="pick-bar-btn" type="button" disabled={busy} onClick={() => void submitPicks()}>
-                  {busy ? '加入中…' : err ? '重試' : '加入'}
+    <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy}>
+      {view === 'list' ? (
+        <>
+          <SheetGrabZone className="chip-bar">
+            {/* 選中態用 aria-pressed，不是 aria-current，容器也不是 tablist
+                （2026-08-05 補；Today.tsx 的餐別分段控制器早一輪就是這樣，那裡的註解
+                已標記這排 chip 有同樣的問題）。這排 chip 選的是「這筆要記到哪一餐」，
+                按下去改的是資料值，不是換頁——aria-current 的規範語意是「目前所在的
+                頁面／步驟／位置」，用在這裡是誤用。
+                **role="tab" 一併拿掉**：tab 角色的選中態屬性是 aria-selected，而完整的
+                APG tablist 契約還要 roving tabindex ＋ 方向鍵導航 ＋ aria-controls 指向
+                tabpanel。半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟——這是
+                Today.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
+            <div className="chiprow" role="group" aria-label="餐別">
+              {MEALS.map((m) => (
+                <button
+                  key={m.key}
+                  className="chip"
+                  type="button"
+                  aria-pressed={meal === m.key}
+                  onClick={() => setMeal(m.key)}
+                >
+                  {m.label}
                 </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <SheetGrabZone className="sheet-head">
-              <span className="sheet-title">新增食物</span>
-              <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={onClose}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </SheetGrabZone>
-            <div className="back-row">
-              {/* scanBusy 也要吃：按下去會把 FoodFormFields 整層卸載，而辨識還在跑（元件內另有卸載守衛把
-                  晚到的結果丟掉，但讓使用者按得到一顆「按了等於白拍」的鈕本身就是壞體驗）。 */}
-              <button className="back-btn" type="button" disabled={scanBusy} onClick={backToList}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M15 6l-6 6 6 6" />
-                </svg>
-                返回搜尋
-              </button>
+              ))}
             </div>
+            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </SheetGrabZone>
 
-            <div className="form-wrap">
-              {/* portalContainer 傳 sheetRef：選單掛在 sheet 裡、stacking 跟著 sheet（vaul 時代是
-                  必須的——body 被設成 pointer-events:none，見元件檔頭與 DESIGN.md「店家欄位」條）。
-                  vendorAutoFocus：品名已經是搜尋字串帶進來的，下一個該落焦的是店家。 */}
-              <FoodFormFields
-                form={foodForm}
-                onChange={setFoodForm}
-                idPrefix="f-"
-                vendorOptions={vendorOptions}
-                portalContainer={sheetRef}
-                vendorAutoFocus
-                onScan={scanLabel}
-                onBusyChange={setScanBusy}
+          <div className="search-wrap">
+            <div className="search-box">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6" />
+                <path d="M20 20l-4-4" />
+              </svg>
+              <input
+                type="text"
+                placeholder="搜尋品名或店家"
+                aria-label="搜尋食物"
+                value={query}
+                onChange={handleQueryChange}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
               />
             </div>
+          </div>
 
-            <div className="confirm-wrap">
+          <div className="food-scroll">
+            {picks.size > 0 && (
+              <>
+                <div className="sect-lb">已選</div>
+                <ul className="food-list">{pickedFoods.map((f) => renderFoodRow(f, true, handlers))}</ul>
+              </>
+            )}
+            {browseBody}
+          </div>
+
+          {picks.size > 0 && (
+            <div className="pick-bar">
               {err && (
                 <p className="sheet-error" role="alert">
-                  {err}
+                  存不進去：{err}
                 </p>
               )}
-              <button className="pick-bar-btn" type="button" disabled={busy || scanBusy} onClick={() => void submitFoodForm()}>
-                {busy ? '加入中…' : '加入食品庫'}
+              {/* role="group"：generic 的 <div> 禁止用 aria-label 命名（ARIA naming
+                  prohibited），子元素又全部 aria-hidden，沒有 role 這條 aria-label
+                  很可能整段被螢幕閱讀器忽略（precommit review 抓到，2026-08-01） */}
+              <div role="group" className="pick-line" aria-label={`${totals.n} 樣，共 ${Math.round(totals.kcal)} 大卡，${right.ariaLabel}`}>
+                <span className="sub" aria-hidden="true">
+                  {totals.n} 樣 · {Math.round(totals.kcal)} 卡
+                  {right.deltaText && <span className="over-delta"> {right.deltaText}</span>}
+                </span>
+                {right.remainText && (
+                  <span className="remain" aria-hidden="true">
+                    {right.remainText}
+                  </span>
+                )}
+              </div>
+              {/* 蛋白/脂/碳三個誠實數字，判定規則跟今日頁的三大營養素條同一條（DESIGN.md
+                  「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——
+                  不是這裡不判定，是蛋白質那格本來就不該判（DESIGN.md v2.10「底部確認列」條）。
+                  role="group"：同上，generic <div> 不能靠 aria-label 命名。 */}
+              {(() => {
+                const fatOver = macroExceeds(combined.fat, targets.fat)
+                const carbOver = macroExceeds(combined.carb, targets.carb)
+                return (
+                  <div
+                    role="group"
+                    className="macro-line"
+                    aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '超出目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '超出目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
+                  >
+                    <span aria-hidden="true">
+                      蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}
+                      <span className="add">(+{Math.round(totals.protein)})</span>
+                    </span>
+                    <span className={fatOver ? 'over' : undefined} aria-hidden="true">
+                      脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}
+                      <span className="add">(+{Math.round(totals.fat)})</span>
+                    </span>
+                    <span className={carbOver ? 'over' : undefined} aria-hidden="true">
+                      碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}
+                      <span className="add">(+{Math.round(totals.carb)})</span>
+                    </span>
+                  </div>
+                )
+              })()}
+              <button className="pick-bar-btn" type="button" disabled={busy} onClick={() => void submitPicks()}>
+                {busy ? '加入中…' : err ? '重試' : '加入'}
               </button>
             </div>
-          </>
-        )}
-      </SpringSheet>
-    </>
+          )}
+        </>
+      ) : (
+        <>
+          <SheetGrabZone className="sheet-head">
+            <span className="sheet-title">新增食物</span>
+            <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </SheetGrabZone>
+          <div className="back-row">
+            {/* scanBusy 也要吃：按下去會把 FoodFormFields 整層卸載，而辨識還在跑（元件內另有卸載守衛把
+                晚到的結果丟掉，但讓使用者按得到一顆「按了等於白拍」的鈕本身就是壞體驗）。 */}
+            <button className="back-btn" type="button" disabled={scanBusy} onClick={backToList}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              返回搜尋
+            </button>
+          </div>
+
+          <div className="form-wrap">
+            {/* portalContainer 傳 sheetRef：選單掛在 sheet 裡、stacking 跟著 sheet（vaul 時代是
+                必須的——body 被設成 pointer-events:none，見元件檔頭與 DESIGN.md「店家欄位」條）。
+                vendorAutoFocus：品名已經是搜尋字串帶進來的，下一個該落焦的是店家。 */}
+            <FoodFormFields
+              form={foodForm}
+              onChange={setFoodForm}
+              idPrefix="f-"
+              vendorOptions={vendorOptions}
+              portalContainer={sheetRef}
+              vendorAutoFocus
+              onScan={scanLabel}
+              onBusyChange={setScanBusy}
+            />
+          </div>
+
+          <div className="confirm-wrap">
+            {err && (
+              <p className="sheet-error" role="alert">
+                {err}
+              </p>
+            )}
+            <button className="pick-bar-btn" type="button" disabled={busy || scanBusy} onClick={() => void submitFoodForm()}>
+              {busy ? '加入中…' : '加入食品庫'}
+            </button>
+          </div>
+        </>
+      )}
+    </SpringSheet>
   )
 }

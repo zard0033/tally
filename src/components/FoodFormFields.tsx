@@ -9,9 +9,8 @@
    `foodForm.ts` 檔頭那句「UI 留在各自的 screen」隨本檔作廢。
 
    `portalContainer` 不是可有可無的裝飾：店家下拉的 Portal 若掛在預設的 document.body，
-   在 vaul Drawer 裡會被 Radix Dialog 的 `pointer-events: none` 擋掉——選單看得到、點不到
-   （真機與 e2e 都撞過，見 DESIGN.md「店家欄位」條）。**放在 sheet 裡用就一定要傳**；
-   不在 sheet 裡（食品庫的就地編輯）留空走預設即可。 */
+   會落在 sheet 的疊層之外；掛進 sheet 裡，stacking 才跟著 sheet（見 DESIGN.md「店家欄位」條）。
+   **放在 sheet 裡用就一定要傳**；不在 sheet 裡（食品庫的就地編輯）留空走預設即可。 */
 import { useEffect, useRef, useState } from 'react'
 import { Autocomplete } from '@base-ui/react/autocomplete'
 import { readingToForm, type FoodForm, type LabelReading } from '@/lib/foodForm'
@@ -101,8 +100,9 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   }, [])
 
   /* 辨識是非同步的，而 `form` 這個 prop 會被閉包凍在「按下按鈕那一刻」。直接用它去組
-     `{...form, ...patch}`，使用者在等待期間打的字會整組被還原——**包含辨識根本沒讀的店家欄**，
-     而那正是我們刻意留給他邊等邊填的地方。所以合併時一律讀 ref 的最新值，不讀閉包裡那份。 */
+     `{...form, ...patch}`，等待期間改到的欄位會整組被還原。所以合併時一律讀 ref 的最新值，
+     不讀閉包裡那份。目前辨識中整組 fieldset 都鎖住（含店家欄），等待期間打不了字，
+     這條是保險（e2e/food-library.spec.ts 的「AI 辨識輸入」段有說明）。 */
   const formRef = useRef(form)
   formRef.current = form
 
@@ -145,7 +145,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
       // 已經卸載就整包丟掉：寫進去會蓋掉使用者這期間換到的另一筆食物（見 aliveRef 註解）。
       if (!aliveRef.current) return
       setScanError('')
-      // formRef 不是 form：等待期間打的字要留著（見上方註解）。辨識讀到的欄位仍以辨識為準
+      // formRef 不是 form：保險，等待期間若有欄位被改到要留著（見上方註解）。辨識讀到的欄位仍以辨識為準
       // ——使用者按的就是「AI 辨識輸入」，那是他要的；而且結果是草稿，不滿意可以再改。
       onChange({ ...formRef.current, ...patch })
       setJustFilled(true)
@@ -229,10 +229,9 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
           <button
             type="button"
             className="scan-btn"
-            disabled={scanning}
             onClick={() => fileRef.current?.click()}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
               <circle cx="12" cy="12.5" r="3.2" />
             </svg>
@@ -259,7 +258,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
             <Autocomplete.Input id={id('vendor')} placeholder=" " ref={vendorInputRef} />
             <label htmlFor={id('vendor')}>店家</label>
             <Autocomplete.Portal container={portalContainer}>
-              <Autocomplete.Positioner sideOffset={4} className="vendor-positioner">
+              <Autocomplete.Positioner sideOffset={4}>
                 <Autocomplete.Popup className="vendor-popup">
                   <Autocomplete.Empty className="vendor-empty">沒有符合的店家，直接送出就會新增</Autocomplete.Empty>
                   <Autocomplete.List className="vendor-list">

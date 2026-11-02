@@ -1,7 +1,5 @@
-/* 資料層：改用 supabase-js（取代 legacy/app.js 手接的約 80 行 REST + OAuth）。
-   session 存取／refresh／逾期偵測交給 supabase-js 內建的 autoRefreshToken／persistSession，
-   legacy 手刻的 session store、refreshSession、validToken、consumeAuthRedirect 因此整段作廢，
-   不在這裡搬——這是「換底層函式庫」帶來的刻意行為變更，不是遺漏。
+/* 資料層：用 supabase-js。
+   session 存取／refresh／逾期偵測交給 supabase-js 內建的 autoRefreshToken／persistSession。
    lib 內禁止碰 window／document：組 redirectTo 這種事留給呼叫端（UI／入口層）做，
    這裡只接受組好的字串。 */
 import {

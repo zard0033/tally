@@ -164,7 +164,7 @@ export const EXTRA_EXERCISES: readonly CatalogExercise[] = [
   { key: 'power-clean', name: '爆發式高翻', muscle_group: 'other' },
   { key: 'turkish-get-up', name: '土耳其起立', muscle_group: 'other' },
   { key: 'kettlebell-swing', name: '單臂壺鈴擺盪', muscle_group: 'other' },
-  // 有氧：名稱與 CARDIO_KIND_LABEL 一致（單元測試鎖住）；接在最後，前面 150 個的順序不動
+  // 有氧：接在最後，前面 150 個的順序不動
   { key: 'incline-walk', name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk' },
   { key: 'boxing-cardio', name: '有氧拳擊', muscle_group: 'other', kind: 'boxing' },
 ]
@@ -206,7 +206,7 @@ export function hasCatalogImage(row: Row): boolean {
   return key !== null && !NO_IMAGE_KEYS.has(key)
 }
 
-/** 動作庫「補齊預設動作」要寫的列：目錄裡、這個帳號還沒有的。每列都帶 `kind`（重訓的寫 'strength'，與伺服器 default 相同；
+/** 開 App 自動補預設動作（autoSeedOps）要寫的列：目錄裡、這個帳號還沒有的。每列都帶 `kind`（重訓的寫 'strength'，與伺服器 default 相同；
  *  一律帶才不會同一個函式產出兩種形狀的列，本機疊上佇列時也看得到類型）。「已有」有兩種：
  *  ① 確定性 id 已在（含已封存的、改過名的預設動作）；
  *  ② **名稱與既有任何動作重複**（`foldName`：全形半形、大小寫、空白都視為同名；含已封存的）——
@@ -302,7 +302,7 @@ const BODYWEIGHT_KEYS = [
 /** 有氧：沒有組、沒有重量（spec「有氧併入動作」D1），不給重量建議。 */
 const CARDIO_KEYS = ['incline-walk', 'boxing-cardio'] as const
 
-export const CUSTOM_WEIGHT_STEP = 2.5
+const CUSTOM_WEIGHT_STEP = 2.5
 
 const STEP_BY_KEY: ReadonlyMap<string, number | null> = new Map<string, number | null>([
   ...BARBELL_KEYS.map((k): [string, number | null] => [k, 5]),
@@ -325,7 +325,7 @@ export const WEIGHT_STEP_KEYS: readonly string[] = [
 ]
 
 /** 肌群的單字（沒有圖的動作用它當縮圖）。 */
-export const MUSCLE_GLYPH: Readonly<Record<MuscleGroup, string>> = {
+const MUSCLE_GLYPH: Readonly<Record<MuscleGroup, string>> = {
   chest: '胸',
   back: '背',
   legs: '腿',

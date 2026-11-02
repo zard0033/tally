@@ -54,7 +54,6 @@ import {
   emptyTrainingDb,
   filterExercises,
   finishWorkoutOps,
-  formatLastSets,
   isBackfilled,
   lastCompletedSets,
   parentRefs,
@@ -823,21 +822,6 @@ describe('finishWorkoutOps', () => {
   it('補記的時長超出範圍：丟錯，不默默改', () => {
     const w = { ...workout('w', '2026-10-10'), started_at: backfillTimes('2026-10-10', null).started_at }
     expect(() => finishWorkoutOps({ workout: w, now, minutes: 5000 })).toThrow()
-  })
-})
-
-describe('formatLastSets', () => {
-  it('各組一樣：合成「重量 × 次數 × 組數」', () => {
-    expect(formatLastSets([{ weight_kg: 60, reps: 12 }, { weight_kg: 60, reps: 12 }, { weight_kg: 60, reps: 12 }])).toBe('60 kg × 12 × 3')
-    expect(formatLastSets([{ weight_kg: 22.5, reps: 10 }])).toBe('22.5 kg × 10 × 1')
-  })
-
-  it('各組不一樣：逐組列', () => {
-    expect(formatLastSets([{ weight_kg: 60, reps: 10 }, { weight_kg: 62.5, reps: 8 }])).toBe('60 × 10 · 62.5 × 8')
-  })
-
-  it('沒有歷史：空字串（畫面不顯示「上次」）', () => {
-    expect(formatLastSets([])).toBe('')
   })
 })
 

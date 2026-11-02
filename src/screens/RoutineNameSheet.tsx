@@ -2,7 +2,7 @@
    改名不走這裡（編輯頁的名稱欄就地改）。為什麼先問名稱才建：課表只能封存、不能真刪，
    「按了＋就建一份叫新課表的」放棄時會留下一筆永遠清不掉的垃圾。
    欄位狀態放在 RoutineNameForm：每次打開都是一份新的草稿。規則同 ExerciseEditSheet。
-   走自製的 SpringSheet（全站精緻度改版 B0 的試點之一：有輸入欄，用來驗 iOS 鍵盤）。 */
+   走 SpringSheet（有輸入欄，iOS 鍵盤要真機驗）。 */
 import { useRef, useState } from 'react'
 import SpringSheet from '@/components/SpringSheet'
 import { checkRoutineName, createRoutineOps, type RowOp } from '@/lib/training'

@@ -1,5 +1,5 @@
-/* 餐別常數與預設餐別判斷。純函式、不碰 DOM。照 legacy/app.js 的 MEALS／
-   mealLabel／defaultMeal 逐字搬語意。三個畫面（Today／LogSheet）都要用到同一份
+/* 餐別常數與預設餐別判斷。純函式、不碰 DOM。
+   Today／LogSheet 等畫面都要用到同一份
    餐別清單與標籤，集中在這裡，避免各自重複一份會走鐘的常數。 */
 
 export type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snack'

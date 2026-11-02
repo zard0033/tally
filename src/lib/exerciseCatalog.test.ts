@@ -12,7 +12,7 @@ import {
   WEIGHT_STEP_KEYS,
   weightStep,
 } from './exerciseCatalog'
-import { CARDIO_KIND_LABEL, MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
+import { MUSCLE_GROUPS, PRESET_EXERCISES, foldName, presetExerciseId, type Row } from './training'
 
 // 不引入 node 模組（tsconfig 只有 vite/client 型別）：用 Vite 的 glob 讀圖——`?inline` 給 base64 data URI，可以算大小、驗檔頭
 const images = import.meta.glob<string>('../assets/exercises/*.jpg', { eager: true, query: '?inline', import: 'default' })
@@ -70,13 +70,12 @@ describe('動作目錄', () => {
     for (const r of catalogToAdd('u1', [])) expect(r.tips).toBeNull()
   })
 
-  it('有氧動作只有兩個、接在最後：跑步機坡度健走、有氧拳擊，肌群＝其他，名稱與 CARDIO_KIND_LABEL 一致', () => {
+  it('有氧動作只有兩個、接在最後：跑步機坡度健走、有氧拳擊，肌群＝其他', () => {
     expect(EXERCISE_CATALOG.filter((p) => p.kind !== undefined)).toEqual([
       { key: 'incline-walk', name: '跑步機坡度健走', muscle_group: 'other', kind: 'incline_walk' },
       { key: 'boxing-cardio', name: '有氧拳擊', muscle_group: 'other', kind: 'boxing' },
     ])
     expect(EXERCISE_CATALOG.slice(150).map((p) => p.key)).toEqual(['incline-walk', 'boxing-cardio'])
-    expect(CARDIO_KIND_LABEL).toEqual({ incline_walk: '跑步機坡度健走', boxing: '有氧拳擊' })
   })
 })
 

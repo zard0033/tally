@@ -6,7 +6,7 @@
 import { hasCatalogImage } from '@/lib/exerciseCatalog'
 import type { Row } from '@/lib/training'
 
-export const GYM_VISUAL_CREDIT = '© Gym visual — https://gymvisual.com/'
+const GYM_VISUAL_CREDIT = '© Gym visual — https://gymvisual.com/'
 
 interface GymVisualCreditProps {
   /** 這個畫面列出的動作；沒有任何預設動作（沒有圖）就不印。不給＝一定印。 */

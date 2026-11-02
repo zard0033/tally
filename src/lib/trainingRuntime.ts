@@ -5,7 +5,7 @@
  *
  * 為什麼要有「本機底」：佇列只存**尚未同步的變更**。離線時要看到動作庫、要點、上次的值，
  * 以及重開 App 後進行中的訓練，`applyQueue` 需要一份離線也在的底。一個人、量很小，所以每次載入
- * 整包拉回 7 張表、存進本機，離線時以它為底疊上佇列——不做按日期的分段查詢。
+ * 整包拉回 6 張表、存進本機，離線時以它為底疊上佇列——不做按日期的分段查詢。
  * 成長成本：workout_sets 約每年數千列，分頁拉取（pageSize）；真的慢了再改成只拉近期＋按需補歷史。
  *
  * 底的新鮮度：送成功的條目會就地併進底（不必重拉），所以 flush 之後離線也不會看到剛送出的列消失。 */
@@ -39,7 +39,7 @@ export interface ReaderBuilder extends PromiseLike<{ data: unknown; error: { mes
   abortSignal(signal: AbortSignal): ReaderBuilder
 }
 
-export interface ReaderClient {
+interface ReaderClient {
   from(table: string): { select(columns: string): ReaderBuilder }
 }
 
@@ -71,7 +71,7 @@ export interface TrainingView {
 }
 
 export interface TrainingRuntime {
-  /** 重新讀伺服器；讀不到就退回本機底。一個動作都沒有時（伺服器、本機底都算）預填 16 個。 */
+  /** 重新讀伺服器；讀不到就退回本機底。一個動作都沒有時（伺服器、本機底都算）預填整份動作目錄（152 個）。 */
   load(userId: string): Promise<TrainingView>
   /** 不碰網路：記憶體或本機底，疊上佇列。 */
   view(userId: string): Promise<TrainingView>
@@ -138,7 +138,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
   let source: TrainingView['source'] = 'empty'
   let cacheError = false
   /** 主動登出（clearAll）就加一。進行中的 load 讀回來時世代變了＝那是登出前的帳號，不採用、不預填——
-   *  否則登出後還在路上的讀取會把底與 16 筆預填寫回裝置。 */
+   *  否則登出後還在路上的讀取會把底與預填的動作寫回裝置。 */
   let generation = 0
   // 對本機底的讀改寫排成一條鏈：flush 途中每送成功一條就會併一次，不能彼此交錯
   let chain: Promise<unknown> = Promise.resolve()

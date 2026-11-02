@@ -1,7 +1,6 @@
 /* 三個畫面（Today／LogSheet／Settings）的 props 契約。
    原則：資料讀取與 mutation 全部下沉到 App.tsx（呼叫 src/lib/api.ts），
-   screens 純呈現＋互動——改資料流只動這個檔案與 App.tsx，screens 本身不必跟著改，
-   後續各 screen 的實作 agent 也因此不需要碰共用檔。
+   screens 純呈現＋互動——改資料流只動這個檔案與 App.tsx，screens 本身不必跟著改。
 
    本檔只定義「跨畫面共用」的形狀；畫面自己內部才需要的本地 UI state
    （例如 LogSheet 的搜尋字、已選清單、qty 輸入草稿）不在這裡，那是各 screen 自己的事。 */
@@ -19,14 +18,13 @@ import type { TrainingView } from '@/lib/trainingRuntime'
  * []＝「讀到了，但這天什麼都沒記」。這個三態區分是 DESIGN.md「載入態」那條規則的核心，
  * 不能用 rows.length === 0 去合併判斷。
  */
-export interface DayData {
+interface DayData {
   date: string
   rows: IntakeRow[] | null
 }
 
 export interface TodayProps {
   dayData: DayData
-  profile: ProfileRow
   targets: Targets
   currentDate: string
   /** 選了某天（週列／月曆）；App 內部已擋看超過明天與非法日期，Today 只管呼叫。 */
@@ -35,10 +33,9 @@ export interface TodayProps {
   markedDates: ReadonlySet<string>
   /** 日期元件目前需要哪個月的小點資料（週列涵蓋的月份、月曆翻到的月份）。 */
   onViewMonth: (key: MonthKey) => void
-  /** 開記一筆 sheet；CTA 沒有預設餐別時由 Today 自己呼叫 lib/meals 的 defaultMeal() 決定。 */
+  /** 開記一筆 sheet 並預選該餐別；底部 CTA 在 App 層，由 App 帶 lib/meals 的 defaultMeal()。 */
   onOpenSheet: (meal: MealKey) => void
-  /** 刪除單筆 intake；失敗會由 App 轉成全域 Notice 畫面（跟 legacy 的 deleteIntake 一致），
-   *  Today 只需要在按下時給出當下的 loading／disabled 回饋。 */
+  /** 刪除單筆 intake；App 先樂觀移除並開復原提示，送出失敗才還原那一列、轉成全域 Notice 畫面。 */
   onDeleteIntake: (id: number) => void
   /** 剛加入成功的 intake id，用來做「短暫高亮後淡出」；App 會在約 1.3s 後自動清空這個集合。 */
   justAddedIds: ReadonlySet<number>

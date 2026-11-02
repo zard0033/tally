@@ -535,9 +535,7 @@ function ItemEditor({
   const savedQty = useRef(qty)
   /* 餐別也走樂觀：按下當場就渲染成選中，不等往返。原本 aria-current 綁 row.meal（伺服器
      真值）＋ disabled 只改 cursor，於是慢網路下按「晚餐」畫面上一個 pixel 都不會變，
-     使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。專案在隔壁對
-     同一情境已有相反裁決：.item-delete:disabled 設 opacity .6，註解寫「破壞性動作＋慢網路，
-     按下去毫無變化的話很容易再按第二次」。 */
+     使用者會重按（hallmark 與 impeccable 兩個獨立 reviewer 撞在同一條）。 */
   const [localMeal, setLocalMeal] = useState<MealKey>(row.meal as MealKey)
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState('')
@@ -586,7 +584,7 @@ function ItemEditor({
   }
 
   /* 品名與四個營養數字：**改的是這一筆，不是食品庫**（去皮、少醬、店家給多了）。
-     每欄 blur 時各自 commit 一次、只送有變的那一欄，與 qty 的 onBlur 同一套慣例——
+     每欄 blur 時各自 commit 一次、只送有變的那一欄，份量欄的 onBlur 也是同一套（與 savedQty 比對，沒變不送）——
      不做「儲存」按鈕，編輯區沒有送出的概念，每個動作都是即時的。
      草稿初始值用**有效品名**（可能來自 foods），所以「打開沒改就關掉」要靠下面那個
      相等比對擋掉，否則會把 foods 的品名白白複製進 name 快照欄、無謂地讓它脫鉤。 */
@@ -743,7 +741,7 @@ function ItemEditor({
         {/* 餐別是互斥的四選一，用分段控制器而不是記一筆 sheet 那排可捲動的 pill chip。
             **選中態用 aria-pressed，不用 aria-current**：後者的規範語意是「目前所在的
             頁面／步驟／位置」，用在一個按下去會改變資料值的控制項上是誤用（a11y 稽核
-            抓到；LogSheet 既有的同款 chip 也有一樣的問題，範圍外，記進待決）。
+            抓到；LogSheet 那排 chip 已比照改好）。
             沒有升級成 radiogroup 是刻意的取捨：APG 的 radiogroup 契約要 roving tabindex
             ＋方向鍵導航，半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟。
             另配字重 600 當非顏色訊號——選中的白塊對軌道只有 1.18:1（v2.68 改版後；原為 --accent-soft 對 --card 1.22:1）。
@@ -895,7 +893,6 @@ function MealNode({
                       transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
                     >
                       <SwipeRow
-                        key={r.id}
                         row={r}
                         name={name}
                         vendor={dup}

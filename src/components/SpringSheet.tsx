@@ -50,7 +50,7 @@ export function SheetGrabZone({ className, children }: { className?: string; chi
   )
 }
 
-const screenH = () => (typeof window === 'undefined' ? 800 : window.innerHeight)
+const screenH = () => window.innerHeight
 
 export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, finalFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
   const reduced = useReducedMotion()

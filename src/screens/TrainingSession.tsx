@@ -418,66 +418,64 @@ function ExerciseCard(p: ExerciseCardProps) {
       {/* 排序中整段不掛 AnimatePresence：沒有退場動畫，收合在同一次 commit 完成。dnd-kit 在 beforedragstart 之後
           等 React 渲染完才量尺寸並凍結被拖那張的寬高，退場動畫還在跑的話量到的是展開時的高度 */}
       {!sorting && (
-        <>
-          <AnimatePresence initial={false}>
-            {open && (
-              <motion.div
-                key="body"
-                className="ex-body"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={spring}
-                style={{ overflow: 'hidden' }}
-              >
-                {exercise && <TipsStrip name={name} exercise={exercise} onSave={p.onSaveTips} />}
-                <div className="set-head">
-                  <span aria-hidden="true">組</span>
-                  <span aria-hidden="true">重量 kg</span>
-                  <span aria-hidden="true">次數</span>
-                  <button
-                    className={`tr-all${allDone ? ' is-on' : ''}`}
-                    type="button"
-                    aria-pressed={allDone}
-                    aria-label={allDone ? '取消全部完成' : '全部完成'}
-                    disabled={sets.length === 0}
-                    onClick={p.onToggleAll}
-                    {...allPress}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />
-                    </svg>
-                  </button>
-                </div>
-                {/* initial={false}：卡片展開時已有的組不跑進場，只有展開之後才新增／刪掉的才動 */}
-                <AnimatePresence initial={false}>
-                  {sets.map((s, i) => (
-                    <motion.div key={s.id} className="set-slot" initial={rowMotion.initial} animate={rowMotion.animate} exit={rowMotion.exit}>
-                      <SetRow
-                        set={s}
-                        no={i + 1}
-                        canDelete={sets.length > 1}
-                        swipeOpen={p.swipeId === s.id}
-                        flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
-                        cascadeIndex={p.cascade.includes(s.id) ? p.cascade.indexOf(s.id) : null}
-                        onSwipe={(o) => p.onSwipe(s.id, o)}
-                        onEdit={(opener) => p.onEditSet(s.id, opener)}
-                        onToggle={() => p.onToggleSet(s)}
-                        onDelete={() => p.onDeleteSet(s.id)}
-                      />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                <button className="tr-addset" type="button" onClick={p.onAddSet}>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="body"
+              className="ex-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={spring}
+              style={{ overflow: 'hidden' }}
+            >
+              {exercise && <TipsStrip name={name} exercise={exercise} onSave={p.onSaveTips} />}
+              <div className="set-head">
+                <span aria-hidden="true">組</span>
+                <span aria-hidden="true">重量 kg</span>
+                <span aria-hidden="true">次數</span>
+                <button
+                  className={`tr-all${allDone ? ' is-on' : ''}`}
+                  type="button"
+                  aria-pressed={allDone}
+                  aria-label={allDone ? '取消全部完成' : '全部完成'}
+                  disabled={sets.length === 0}
+                  onClick={p.onToggleAll}
+                  {...allPress}
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" />
+                    <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />
                   </svg>
-                  新增一組
                 </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
+              </div>
+              {/* initial={false}：卡片展開時已有的組不跑進場，只有展開之後才新增／刪掉的才動 */}
+              <AnimatePresence initial={false}>
+                {sets.map((s, i) => (
+                  <motion.div key={s.id} className="set-slot" initial={rowMotion.initial} animate={rowMotion.animate} exit={rowMotion.exit}>
+                    <SetRow
+                      set={s}
+                      no={i + 1}
+                      canDelete={sets.length > 1}
+                      swipeOpen={p.swipeId === s.id}
+                      flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
+                      cascadeIndex={p.cascade.includes(s.id) ? p.cascade.indexOf(s.id) : null}
+                      onSwipe={(o) => p.onSwipe(s.id, o)}
+                      onEdit={(opener) => p.onEditSet(s.id, opener)}
+                      onToggle={() => p.onToggleSet(s)}
+                      onDelete={() => p.onDeleteSet(s.id)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <button className="tr-addset" type="button" onClick={p.onAddSet}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                新增一組
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       )}
     </section>
   )
@@ -632,9 +630,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     setPicker(true)
   }
 
-  // 只有有氧動作的卡能開：checkCardio 對非有氧回「請選有氧類型」，而這張 sheet 沒有類型可選
   const openCardio = (item: WorkoutExerciseDetail) => {
-    if (!isCardioCard(item)) return
     setCardioId(item.entry.id)
     setCardioLast(cardioLastMinutes(db, String(item.entry.exercise_id), workout.id))
     setCardioSession((n) => n + 1)

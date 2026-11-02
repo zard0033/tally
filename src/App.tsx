@@ -134,8 +134,7 @@ export default function App() {
      就已逾時作廢，光等它們落地會永遠等不到。記下來，等它們結束後若離線旗標還在就補撈一次。 */
   const refetchAfterPendingRef = useRef(false)
   /* 使用者按了登出。SIGNED_OUT 事件不分主動被動，靠這個旗標分流（AC 13）：主動不顯示
-     「登入已過期」；被動時離線佇列要保留、主動才清（lib/queue.ts 的 signOutPlan／clear）。
-     佇列實例與這裡的接線等階段 2 第一個呼叫者出現再做，現在只把分流立起來。 */
+     「登入已過期」；被動時離線佇列要保留、主動才清（lib/queue.ts 的 signOutPlan／clear，接線見 signOutNow）。 */
   const userSignOutRef = useRef(false)
 
   const [currentDate, setCurrentDate] = useState<string>(() => localDate())
@@ -229,9 +228,8 @@ export default function App() {
     [prefetchDate],
   )
 
-  /* 照 legacy load()：profile／最新體重／當日 intake／食品庫並行撈。
-   * 食品庫在這裡一起撈（跟 legacy 開 sheet 時才撈不同）是委派指示的明確要求——
-   * 讓 LogSheet 拿到現成的 foods prop，不必自己管一份載入狀態，
+  /* profile／最新體重／當日 intake／食品庫並行撈。
+   * 食品庫在這裡一起撈，讓 LogSheet 拿到現成的 foods prop，不必自己管一份載入狀態，
    * 代價是開機多打一支 API，量體（23 筆）小到可以忽略。 */
   const load = useCallback(async (date: string) => {
     /* 靠本機 session 進來、refresh 還卡著（見 bootedFromLocalRef）：請求要等 supabase-js 的退避
@@ -410,8 +408,8 @@ export default function App() {
   }, [])
   const closeSheet = useCallback(() => setSheetOpen(false), [])
 
-  /* 刪除失敗跟 legacy 一致：轉全域 Notice，不是就地錯誤——這是讀寫失敗分流的例外，
-   * 因為刪除沒有「已選內容」需要保留，直接回今天重試就好 */
+  /* 刪除失敗轉全域 Notice，不是就地錯誤——這是讀寫失敗分流的例外，
+   * 因為刪除沒有「已選內容」需要保留，重試就重撈正在看的那天 */
   /* 還原一律是「把那一筆插回**目前**的清單」，不是套用一份刪除當下的整包快照。
      快照做法在連續刪兩筆時會錯：刪 A → 5 秒內刪 B → A 送出失敗 → 畫面被還原成
      「A、B 都在」，但 B 其實仍在待刪且隨後真的會被刪掉，使用者看到的是假的復活
@@ -917,7 +915,6 @@ export default function App() {
         ) : tab === 'today' ? (
           <Today
             dayData={{ date: currentDate, rows }}
-            profile={profile}
             targets={targets}
             currentDate={currentDate}
             markedDates={markedDates}
@@ -981,8 +978,8 @@ export default function App() {
       </main>
 
       {/* 底部列（v2.3）：分頁 pill 靠左、56px 圓形主 CTA 靠右，同列取代 v2.2 的上下兩段
-          （138px→約 72px，時間軸多出 84px）。CTA 只在今日頁渲染，設定頁右端留空——
-          這是預期行為，不是漏放。分頁改純圖示：同列已有主 CTA，兩顆帶字分頁塞不下，
+          （138px→約 72px，時間軸多出 84px）。CTA 只在今日頁與訓練頁渲染，設定頁右端留空——
+          這是預期行為，不是漏放。分頁改純圖示：同列已有主 CTA，三顆帶字分頁塞不下，
           aria-label 補無障礙名稱。 */}
       {/* 底部列本身是純版面容器（div），<nav> 只包分頁——CTA 是「開記一筆表單」的動作，
           不是導覽項；把它放進 aria-label="主要導覽" 的 landmark 裡，讀屏使用者跳到導覽時
@@ -992,7 +989,7 @@ export default function App() {
       <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
         <nav className="tabbar" aria-label="主要導覽">
           {/* 選中態指示器（v2.5）：只在被選中的那顆 .tab 裡渲染 <motion.span layoutId>，
-              兩顆分頁共用同一個 layoutId——切換時上一顆卸載、下一顆掛載發生在同一次
+              各分頁共用同一個 layoutId——切換時上一顆卸載、下一顆掛載發生在同一次
               React commit，motion 的 projection 系統把這當成「同一個元素移動」，
               自動在兩個掛載點之間做 FLIP（只動 transform），接管掉原本瞬跳的底色／邊框。
               --dur-mid（220ms）是 DESIGN.md「中等位移」級距，EASE 沿用全站的

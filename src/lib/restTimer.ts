@@ -10,9 +10,9 @@ export const REST_SEC = 90
 /** −15／＋15 秒。 */
 export const REST_ADJUST_SEC = 15
 /** 剩餘時間的上限：＋15 加到超過這個值就夾在這個值。 */
-export const REST_MAX_MS = 600_000
+const REST_MAX_MS = 600_000
 /** 歸零後多久內回到前景，還算「準時看到」（播提示音、自動收起）；超過就只顯示已過多久，不補響。 */
-export const REST_ON_TIME_MS = 2_000
+const REST_ON_TIME_MS = 2_000
 /** 準時歸零後條停留多久自動收起（從 endAt 起算）。 */
 export const REST_AUTO_HIDE_MS = 3_000
 

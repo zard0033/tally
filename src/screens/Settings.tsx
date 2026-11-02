@@ -2,13 +2,12 @@
    （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。v2.99 起分兩組加小標，不再五列平鋪：
    「目標與身體」（每日目標、更新身體數據、體重趨勢）與「資料庫」（食品庫管理、動作庫管理，都是自己的目錄，
    日常靠選擇器就地使用，整理才進管理頁；動作庫管理是 v2.96 從訓練頁搬來的）。「更新身體數據」不另做頁面，沿用
-   既有的獨立 sheet 覆蓋層（地基裁決：編輯與記體重不共用 LogSheet 的 Drawer），因為
+   既有的獨立 sheet 覆蓋層（地基裁決：編輯與記體重不共用 LogSheet 的 sheet），因為
    DailyGoal 頁裡的「更新身體數據」連結也要能開同一個 sheet，所以 sheet 狀態留在這層
    路由元件管理，往下傳一個 openBodyUpdate callback。
 
-   唯一的落地差異（沿用自舊版）：legacy 用 `#sheet-root.closing .sheet` 這個
-   id-scoped 選擇器做退場動畫，但 id="sheet-root" 已經被 LogSheet 佔用，這裡改用
-   另一個 id 掛容器，退場動畫直接用 inline style 套用同一組 keyframes。 */
+   這張 sheet 的容器 id 是 settings-sheet-root，退場動畫直接用 inline style 套
+   sheet-out／scrim-out 這組 keyframes。 */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import { listWeights, type Weight } from '@/lib/api'
@@ -23,7 +22,7 @@ const WeightTrend = lazy(() => import('./WeightTrend')) // recharts 不進主 bu
 
 type View = 'list' | 'goal' | 'library' | 'exercises' | 'trend'
 
-/** 動效時長讀 app.css 的 token，reduced-motion 時降到近乎 0（跟 LogSheet 同一來源）。 */
+/** 動效時長讀 app.css 的 token，reduced-motion 時降到近乎 0。 */
 function tokenMs(name: string, fallback: number): number {
   if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return 0.01
   const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name))

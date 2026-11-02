@@ -17,9 +17,9 @@ export interface FoodForm {
 
 export const BLANK_FOOD_FORM: FoodForm = { name: '', vendor: '', kcal: '', protein: '', fat: '', carb: '' }
 
-export const fieldNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
+const fieldNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
 /** 選填數值留空當 0——無糖飲料的蛋白質與脂肪本來就是 0，不必逼人打出來 */
-export const fieldOptNum = (v: string): number => (v.trim() === '' ? 0 : Number(v.trim()))
+const fieldOptNum = (v: string): number => (v.trim() === '' ? 0 : Number(v.trim()))
 
 export interface ValidatedFood {
   name: string

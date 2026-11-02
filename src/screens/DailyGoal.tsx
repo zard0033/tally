@@ -80,17 +80,17 @@ const reqNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
 
 /** 即時預覽用：把 draft 表單字串盡量轉成 Profile 餵給 computeTargets，算不出來（欄位
  *  還沒填完）就讓它自然變成 NaN——呼叫端用 Number.isFinite 判斷要不要顯示 —，不在
- *  這裡擋，那是送出時才做的事。activityFactor／proteinPerKg 由呼叫端算好傳進來
- *  （effectiveActivityFactor／effectiveProteinPerKg，跟 rate 同一套「沒碰過選單就沿用
+ *  這裡擋，那是送出時才做的事。activityFactor／proteinPerKg／rateKgPerWeek 由呼叫端算好傳進來
+ *  （effectiveActivityFactor／effectiveProteinPerKg／effectiveRateKgPerWeek，同一套「沒碰過選單就沿用
  *  原始值」的規則，不是單純讀 draft 的選單字串）。 */
-function draftToProfile(d: DraftForm, activityFactor: number, proteinPerKg: number): Profile {
+function draftToProfile(d: DraftForm, activityFactor: number, proteinPerKg: number, rateKgPerWeek: number | null): Profile {
   return {
     birth_year: reqNum(d.birthYear),
     height_cm: reqNum(d.height),
     activity_factor: activityFactor,
     sex: d.sex,
     goal: d.goal,
-    rate_kg_per_week: d.goal === 'maintain' ? null : rateMonthlyToWeekly(Number(d.rateChoice)),
+    rate_kg_per_week: rateKgPerWeek,
     protein_g_per_kg: proteinPerKg,
     use_custom_targets: false,
     custom_kcal: null,
@@ -192,7 +192,7 @@ export default function DailyGoal(props: DailyGoalProps) {
   const rawPreview = draft.useCustom
     ? null
     : computeTargets(
-        { ...draftToProfile(draft, effectiveActivityFactor(), effectiveProteinPerKg()), rate_kg_per_week: effectiveRateKgPerWeek() },
+        draftToProfile(draft, effectiveActivityFactor(), effectiveProteinPerKg(), effectiveRateKgPerWeek()),
         num(latestWeight.weight_kg),
         latestWeight.body_fat_pct,
       )

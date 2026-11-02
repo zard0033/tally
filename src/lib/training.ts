@@ -2,7 +2,7 @@
  *
  * 範圍：只有純函式，禁沾 DOM／supabase（這層未來要原樣帶去 React Native）。資料列的形狀照 DDL
  * （snake_case 欄位），讓佇列條目的 payload、伺服器回的列、畫面讀的列是同一個形狀、不必來回轉。
- * 接線（IndexedDB adapter、Supabase sender、App.tsx）不在這裡，等 UI 步驟。 */
+ * 接線（IndexedDB adapter、Supabase sender、App.tsx）不在這裡。 */
 
 import type { OnParentDelete, QueueEntry, RowRef } from './queue'
 import { localDate } from './dates'
@@ -180,7 +180,7 @@ export interface PrefillSet {
   readonly reps: number
 }
 
-export const DEFAULT_TARGET_SETS = 3
+const DEFAULT_TARGET_SETS = 3
 
 const startedMs = (w: Row): number => {
   const ms = Date.parse(String(w.started_at))
@@ -647,15 +647,6 @@ export function finishWorkoutOps(args: { workout: Row; now: Date; minutes: numbe
 /** 重量的顯示：最多兩位小數、不補零（60、62.5、22.25）。 */
 export const formatKg = (n: number): string => String(Number(n.toFixed(2)))
 
-/** 「上次 60 kg × 12 × 3」：各組一樣就合成一句，不一樣就逐組列。沒有歷史回空字串。 */
-export function formatLastSets(sets: readonly PrefillSet[]): string {
-  if (sets.length === 0) return ''
-  const kg = formatKg
-  const same = sets.every((s) => s.weight_kg === sets[0].weight_kg && s.reps === sets[0].reps)
-  if (same) return `${kg(sets[0].weight_kg)} kg × ${sets[0].reps} × ${sets.length}`
-  return sets.map((s) => `${kg(s.weight_kg)} × ${s.reps}`).join(' · ')
-}
-
 /* ═══════════ 補記過去日子（AC 8a） ═══════════ */
 
 /** 補記不跑計時：started_at＝該日本機 12:00，ended_at＝started_at＋手填分鐘（略過＝null＝相等）。
@@ -1014,14 +1005,9 @@ export function startWorkoutFromRoutineOps(args: {
 
 /* ═══════════ 有氧（AC 10–12） ═══════════ */
 
-/** 現在只有兩種，不做「新類型」入口（使用者裁決）。存的是代碼、畫面顯示名稱；要加一種＝在這裡加一行。 */
-export const CARDIO_KINDS = ['incline_walk', 'boxing'] as const
+/** 現在只有兩種，不做「新類型」入口（使用者裁決）。存的是代碼；要加一種＝在這裡加一行。 */
+const CARDIO_KINDS = ['incline_walk', 'boxing'] as const
 export type CardioKind = (typeof CARDIO_KINDS)[number]
-
-export const CARDIO_KIND_LABEL: Readonly<Record<CardioKind, string>> = {
-  incline_walk: '跑步機坡度健走',
-  boxing: '有氧拳擊',
-}
 
 type CardioOptional = 'speed_kmh' | 'incline_pct' | 'est_kcal'
 

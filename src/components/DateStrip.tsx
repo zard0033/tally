@@ -125,7 +125,6 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
      點**目前已選的那天**會收合（使用者 2026-10-28：這是一個會發生的動作，要保留），焦點回標題。
      被點的那顆格子不會卸載（同一個月的格子沒有換 key），焦點本來就在它身上，所以不用 refocus；週列選日期照舊（週列換週時選中那顆是新元素）。 */
   const pick = (iso: string) => {
-    if (iso > max) return
     if (iso === date) {
       if (open) {
         refocus.current = 'title'

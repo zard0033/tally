@@ -4,7 +4,7 @@ import { dayIndex, rangeStart, type TrendRange } from './weightTrend'
 import { completedSessions, type Row, type TrainingDb } from './training'
 
 /** 只信 10 下以內：次數越高 Epley 估得越不準。 */
-export const E1RM_MAX_REPS = 10
+const E1RM_MAX_REPS = 10
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
@@ -108,10 +108,10 @@ export interface ChartPoint extends StrengthPoint {
 /* ═══════════ 重量建議（B；雙重進階的簡化版）═══════════ */
 
 /** 沒有課表目標次數時，用多少下當「做到了」的門檻（使用者 2026-10-20 裁決 12）。 */
-export const DEFAULT_SUGGEST_REPS = 12
+const DEFAULT_SUGGEST_REPS = 12
 
 /** 建議需要至少幾次有已打勾組的訓練（不含進行中的這一次）。 */
-export const SUGGEST_MIN_SESSIONS = 2
+const SUGGEST_MIN_SESSIONS = 2
 
 export type WeightSuggestion =
   | { readonly kind: 'suggest'; readonly weight_kg: number; readonly reason: string }

@@ -31,7 +31,7 @@ export interface WeightPoint {
 export const WINDOW_DAYS = 28
 
 /** 單日合計低於這個數視為「沒記完」：不進平均、不算有記天數。 */
-export const MIN_DAY_KCAL = 1000
+const MIN_DAY_KCAL = 1000
 
 /** 資料夠不夠的三道門檻，改數字要連 spec.md 一起改。 */
 export const BASELINE_NEEDS = { loggedDays: 21, weighIns: 4, weightSpanDays: 14 } as const

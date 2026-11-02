@@ -11,7 +11,7 @@ import { localDate } from './dates'
 export const RECOVERY_GROUPS = MUSCLE_GROUPS.filter((g): g is Exclude<MuscleGroup, 'other'> => g !== 'other')
 export type RecoveryGroup = (typeof RECOVERY_GROUPS)[number]
 
-export type RecoveryState = 'recovering' | 'ready' | 'none'
+type RecoveryState = 'recovering' | 'ready' | 'none'
 
 export interface MuscleRecovery {
   readonly group: RecoveryGroup
@@ -32,7 +32,7 @@ export interface MuscleRecovery {
 const HOUR_MS = 3600_000
 
 /** RPE ≥ 9（還能再做 1 下以內）算近力竭。 */
-export const NEAR_FAILURE_RPE = 9
+const NEAR_FAILURE_RPE = 9
 
 /** 一個肌群練了 n 組後的恢復窗口（小時）。n 以 10 為界；下半身基準 48、其餘 24，量大加 24，近力竭再加 24。 */
 export function recoveryWindowHours(group: RecoveryGroup, sets: number, nearFailure = false): number {
