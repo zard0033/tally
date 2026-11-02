@@ -14,6 +14,7 @@ import SubPageTop from '@/components/SubPageTop'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { num } from '@/lib/formulas'
+import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparklinePoints } from '@/lib/weightTrend'
 import DailyGoal from './DailyGoal'
 import ExerciseLibrary from './ExerciseLibrary'
 import FoodLibrary from './FoodLibrary'
@@ -35,17 +36,6 @@ const scrimFadeMs = () => tokenMs('--dur-fast', 100)
 function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
   const v = ref.current?.value.trim() ?? ''
   return v === '' ? NaN : Number(v)
-}
-
-/** sparkline 用：weight_kg 折線，寬 120 高 32 的 viewBox 內線性映射。少於 2 筆畫不出線，
- *  呼叫端自己判斷要不要渲染。 */
-function sparklinePoints(weights: Weight[]): string {
-  const values = weights.map((w) => Number(w.weight_kg))
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
-  const stepX = values.length > 1 ? 120 / (values.length - 1) : 0
-  return values.map((v, i) => `${(i * stepX).toFixed(1)},${(28 - ((v - min) / span) * 24).toFixed(1)}`).join(' ')
 }
 
 export default function Settings(props: SettingsProps) {
@@ -117,11 +107,11 @@ export default function Settings(props: SettingsProps) {
     const on = wDate.current?.value.trim() ?? ''
     const fatVal = wFat.current?.value.trim() ?? ''
 
-    if (!Number.isFinite(kg) || kg <= 0) return setErr('體重要填數字')
+    if (!isValidWeightKg(kg)) return setErr('體重要填數字')
     if (!on) return setErr('量測日要填')
     const fat = fatVal === '' ? null : Number(fatVal)
-    if (fat !== null && (!Number.isFinite(fat) || fat < 3 || fat > 70)) {
-      return setErr('體脂要填 3–70 之間的數字，或留空')
+    if (fat !== null && !isValidBodyFatPct(fat)) {
+      return setErr(`體脂要填 ${BODY_FAT_MIN}–${BODY_FAT_MAX} 之間的數字，或留空`)
     }
 
     setBusy(true)

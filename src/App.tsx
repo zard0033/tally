@@ -111,7 +111,7 @@ export default function App() {
   const [bootStatus, setBootStatus] = useState<BootStatus>('loading')
   /* 訓練資料（階段 2）。與飲食資料完全分開載入、分開失敗：健身房沒網路時飲食那邊會亮「讀不到」，
      訓練分頁不能跟著壞——它靠本機底與佇列照常用。所以下面的 render 把訓練分支放在飲食的
-     failed／ready 判斷之前。 */
+     notice／ready 判斷之前。 */
   const training = useTraining(session ? session.user.id : null)
   // 訓練分頁的日期與「開始訓練」sheet 由這裡持有：主 CTA 在底部列裡，要知道選到哪天、能不能開始
   const [trainingDate, setTrainingDate] = useState<string>(() => localDate())
@@ -147,7 +147,6 @@ export default function App() {
   /** 設定頁的次級頁面（每日目標／食品庫管理／體重趨勢）自己有返回鍵，主 navbar 同時
    *  存在會讓人以為還在設定頁根層——Settings 進出次級頁時回報，這裡據此隱藏底部列。 */
   const [settingsSubView, setSettingsSubView] = useState(false)
-  const [failed, setFailed] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -187,7 +186,6 @@ export default function App() {
   const showNotice = useCallback(
     (headline: string, detail: string | undefined, actionLabel: string, onAction: () => void) => {
       setNotice({ headline, detail, actionLabel, onAction })
-      setFailed(true)
     },
     [],
   )
@@ -274,7 +272,6 @@ export default function App() {
       // 留一條例外就等著哪天有人加一個不必切分頁的存檔入口時漏掉它（review 指出）
       setRows(filterPendingRow(r, date, pendingDelete.current))
       setFoods(f)
-      setFailed(false)
       setNotice(null)
       cacheRef.current.set(date, r) // 也覆寫快取——這條路徑也會被 handleSaveProfile／
       // handleSaveWeight 呼叫（設定改動後重算），r 是這一天的最新狀態，讓快取跟著更新
@@ -300,8 +297,7 @@ export default function App() {
   }, [showNotice, prefetchAdjacent])
 
   /* 開機 effect 要呼叫最新的 load，但不能把 load 放進它的依賴——那個 effect 一重跑就會重讀
-     localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 依賴保持空陣列
-     （同 loadDayRef 的作法）。 */
+     localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 依賴保持空陣列。 */
   const loadRef = useRef(load)
   useEffect(() => {
     loadRef.current = load
@@ -310,7 +306,7 @@ export default function App() {
   /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變。
    *  這是「快取沒命中」的路徑，goToDate 命中快取時完全繞過這支函式。 */
   const loadDay = useCallback(
-    async (date: string = currentDate) => {
+    async (date: string) => {
       setRows(null)
       try {
         const r = await listIntake(date)
@@ -328,7 +324,6 @@ export default function App() {
            （畫面藏著、伺服器還在，跟樂觀刪除本來就是同一個方向），而且不會讓使用者
            單純切走再切回來就把一筆還在 undo 窗內的東西弄假成真地刪掉。 */
         setRows(filterPendingRow(r, date, pendingDelete.current))
-        setFailed(false)
         setNotice(null)
         prefetchAdjacent(date)
       } catch (e) {
@@ -337,7 +332,7 @@ export default function App() {
         showNotice('讀不到這天的紀錄', friendlyError(errMsg(e)), '重試', () => void loadDay(date))
       }
     },
-    [currentDate, showNotice, prefetchAdjacent],
+    [showNotice, prefetchAdjacent],
   )
 
   const goToDate = useCallback(
@@ -353,7 +348,6 @@ export default function App() {
          *  不 setRows(null)，主數字不掉回 —、時間軸不出現「載入中…」。這是這次改動
          *  唯一的目的：使用者按下箭頭時資料已經在手上。 */
         setRows(filterPendingRow(cached, iso, pendingDelete.current))
-        setFailed(false)
         setNotice(null)
         prefetchAdjacent(iso)
       } else {
@@ -423,19 +417,13 @@ export default function App() {
     })
   }, [])
 
-  /* commitDelete 不能把 loadDay 直接放進自己的 deps：loadDay 的 identity 隨 currentDate
-     變（它把 currentDate 當預設參數關進 closure），若 commitDelete 也跟著變，
-     下面 pagehide／visibilitychange 那個 effect的 cleanup 會在**單純換日期**時被觸發
-     （cleanup 在依賴改變時一樣會跑，不是只有真正卸載才跑）——cleanup 最後一行的
-     flush() 因此在每次換日期都偷跑一次真的 DELETE，等於繞了一圈把「換日期不再結清」
-     這條規則悄悄破了（真機第四輪這條 e2e 一開始就是被這裡絆倒，不是被日期效果絆倒）。
-     用 ref 把 loadDay 的最新版本存住、只在真正呼叫的當下讀，commitDelete 的 identity
-     就只跟著 restore／showNotice 走（兩者 deps 都是 []，形同永遠不變）。 */
-  const loadDayRef = useRef<(date?: string) => Promise<void>>(async () => {})
-  useEffect(() => {
-    loadDayRef.current = loadDay
-  }, [loadDay])
-
+  /* commitDelete 的 deps 必須全部是穩定的（restore／showNotice／loadDay 的 deps 都不含
+     currentDate）：它的 identity 一旦隨換日期改變，下面 pagehide／visibilitychange 那個
+     effect 的 cleanup 會在**單純換日期**時被觸發（cleanup 在依賴改變時一樣會跑，不是只有
+     真正卸載才跑）——cleanup 最後一行的 flush() 因此在每次換日期都偷跑一次真的 DELETE，
+     等於悄悄破了「換日期不再結清」這條規則（真機第四輪這條 e2e 一開始就是被這裡絆倒）。
+     所以 loadDay 不可以再把 currentDate 放進 deps（日期一律走參數），要用「正在看哪天」
+     就讀 currentDateRef。 */
   const commitDelete = useCallback(async () => {
     const p = pendingDelete.current
     if (!p) return
@@ -459,9 +447,9 @@ export default function App() {
          重試重撈的是**正在看的那天**：帶 p.date 的話，人已在別天時 loadDay 會先清空 rows、
          再被日期檢查擋下，notice 沒人清，畫面就卡死在這裡（2026-11-02 盤點抓到）。 */
       if (p.date === currentDateRef.current) restore(p)
-      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDayRef.current(currentDateRef.current))
+      showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDay(currentDateRef.current))
     }
-  }, [restore, showNotice])
+  }, [restore, showNotice, loadDay])
 
   const handleDeleteIntake = useCallback(
     (id: number) => {
@@ -606,13 +594,13 @@ export default function App() {
       if (pendingDelete.current) await commitDelete()
       const created = await apiCreateIntake(newRows)
       setSheetOpen(false)
-      await loadDay()
+      await loadDay(currentDate)
       const ids = new Set(created.map((r) => r.id))
       setJustAddedIds(ids)
       if (flashTimer.current !== undefined) window.clearTimeout(flashTimer.current)
       flashTimer.current = window.setTimeout(() => setJustAddedIds(new Set()), 1300)
     },
-    [loadDay, commitDelete],
+    [loadDay, commitDelete, currentDate],
   )
 
   const handleCreateFood = useCallback(async (food: NewFood): Promise<Food> => {
@@ -798,7 +786,6 @@ export default function App() {
         setTargets(null)
         setRows(null)
         setFoods(null)
-        setFailed(false)
         setNotice(null)
         setSheetOpen(false)
         setTab('today')
@@ -877,7 +864,7 @@ export default function App() {
 
   if (!session) return <Login error={loginError} />
 
-  const ready = profile !== null && targets !== null && weight !== null
+  const ready = profile !== null && targets !== null && weight !== null && foods !== null
   // 全站精緻度 B1a：飲食分頁的底部列浮在內容上、內容經過時霧化；訓練與設定等各自批次再接
   const barShown = !settingsSubView && !trainingFullPage
   const floatingBar = barShown && tab === 'today'
@@ -899,7 +886,7 @@ export default function App() {
             discardImpact={training.discardImpact}
             onRetry={training.retry}
           />
-        ) : failed && notice ? (
+        ) : notice ? (
           <div className="notice">
             <p className="headline">{notice.headline}</p>
             {notice.detail && <p>{notice.detail}</p>}
@@ -987,11 +974,11 @@ export default function App() {
       {barShown && (
       <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
         <TabBar tab={tab} onChange={setTab} />
-        {/* !failed 不可少：ready 只看 profile/targets/weight，初次載入成功之後才發生的失敗
+        {/* !notice 不可少：ready 只看 profile/targets/weight/foods，初次載入成功之後才發生的失敗
             （loadDay 掛掉、刪除送不出去）不會讓 ready 轉 false。CTA 搬出 Today 之前是跟著
             Today 一起被錯誤畫面換掉的，搬到底部列之後就沒人管它了——會在「讀不到這天的
             紀錄」的畫面上留一顆綠色加號，按下去用過期的 rows 開表單（review 抓到）。 */}
-        {tab === 'today' && ready && !failed && (
+        {tab === 'today' && ready && !notice && (
           <button className="cta" type="button" aria-label="記一筆" onClick={() => openSheet(defaultMeal())}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
@@ -999,7 +986,7 @@ export default function App() {
           </button>
         )}
         {/* 訓練分頁的主 CTA：開「開始訓練」sheet。明天（含以後）不能開始——不能預排訓練（樣張 A2）。
-            不依賴飲食資料的 ready／failed：健身房沒網路時飲食那邊壞了，訓練照常能開始。 */}
+            不依賴飲食資料的 ready／notice：健身房沒網路時飲食那邊壞了，訓練照常能開始。 */}
         {tab === 'training' && trainingDate <= localDate() && (
           <button className="cta" type="button" aria-label="開始訓練" onClick={() => setTrainingStartOpen(true)}>
             <svg viewBox="0 0 24 24" aria-hidden="true">

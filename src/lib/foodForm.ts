@@ -108,6 +108,26 @@ export function foodToForm(f: { name: string; vendor: string | null; kcal: numbe
 /** 食品庫的排序：依品名，中文照 zh-Hant 排。 */
 export const byFoodName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'zh-Hant')
 
+/** vendor 為 null 的食物在食品庫裡歸的那一組。 */
+export const NO_VENDOR = '未標店家'
+
+/** 依店家分組，未標店家的排最後——它不是一個真的店家名，跟著筆畫排序沒有意義。 */
+export function groupByVendor<F extends { name: string; vendor: string | null }>(foods: F[]): { vendor: string; items: F[] }[] {
+  const map = new Map<string, F[]>()
+  for (const f of [...foods].sort(byFoodName)) {
+    const key = f.vendor ?? NO_VENDOR
+    const list = map.get(key)
+    if (list) list.push(f)
+    else map.set(key, [f])
+  }
+  const named = [...map.entries()]
+    .filter(([v]) => v !== NO_VENDOR)
+    .sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant-u-co-stroke'))
+  const rest = map.get(NO_VENDOR)
+  return [...named, ...(rest ? [[NO_VENDOR, rest] as [string, F[]]] : [])]
+    .map(([vendor, items]) => ({ vendor, items }))
+}
+
 /* 同時比對品名與店家——五筆「雞胸餐盒」其中三筆完全同名，只靠店家區分 */
 export function foodMatches(f: { name: string; vendor: string | null }, q: string): boolean {
   const s = q.trim().toLowerCase()

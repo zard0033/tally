@@ -15,6 +15,7 @@ import {
   monthTitle,
   shiftDate,
   weekDates,
+  weekSwipeTarget,
   weekdayDate,
 } from './dates'
 
@@ -187,5 +188,28 @@ describe('isMonthBeyond', () => {
     expect(isMonthBeyond('2026-11', '2026-10-31')).toBe(true) // 今天 10/30 → 明天 10/31，11 月整個超過
     expect(isMonthBeyond('2026-11', '2026-11-01')).toBe(false) // 今天 10/31 → 明天 11/1，11 月可看
     expect(isMonthBeyond('2026-10', '2026-10-14')).toBe(false)
+  })
+})
+
+/* 週列左右滑切週。2026-10-30 是週五、11/02 週一、11/03 週二；上界 max 用 11/03（＝明天）。 */
+describe('weekSwipeTarget', () => {
+  it('上界夠遠：就是 ±7 天', () => {
+    expect(weekSwipeTarget('2026-10-30', 1, '2026-12-31')).toBe('2026-11-06')
+    expect(weekSwipeTarget('2026-10-30', -1, '2026-12-31')).toBe('2026-10-23')
+  })
+  it('往後切越過上界 → 夾到上界，而且上界在不同一週才算數', () => {
+    // 10/30（週五）+7 = 11/06 > 11/03 → 夾成 11/03；11/03 在 11/02 那週，10/30 在 10/26 那週
+    expect(weekSwipeTarget('2026-10-30', 1, '2026-11-03')).toBe('2026-11-03')
+  })
+  it('夾完還在同一週 → null（沒有下一週可切）', () => {
+    // 11/02 +7 = 11/09 > 11/03 → 夾成 11/03，與 11/02 同週
+    expect(weekSwipeTarget('2026-11-02', 1, '2026-11-03')).toBeNull()
+  })
+  it('已經站在上界 → null', () => {
+    expect(weekSwipeTarget('2026-11-03', 1, '2026-11-03')).toBeNull()
+  })
+  it('往前沒有下界；跨年也對', () => {
+    expect(weekSwipeTarget('2026-11-03', -1, '2026-11-03')).toBe('2026-10-27')
+    expect(weekSwipeTarget('2026-01-01', -1, '2026-11-03')).toBe('2025-12-25')
   })
 })

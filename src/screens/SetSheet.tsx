@@ -16,8 +16,12 @@ import { catalogKey, muscleGroupLabel, weightStep } from '@/lib/exerciseCatalog'
 import { suggestWeight, type WeightSuggestion } from '@/lib/strength'
 import {
   RPE_SHEET_VALUES,
+  clampSetReps,
+  clampSetWeight,
   exerciseDisplayName,
   formatKg,
+  parseSetReps,
+  parseSetWeight,
   remainingSetsAfter,
   removeSetOps,
   syncSetsForwardOps,
@@ -46,18 +50,6 @@ interface SetSheetProps {
   /** 刪除成功後（這一組已不存在），呼叫端要把焦點落點改到還在的元素。 */
   onDeleted: () => void
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100
-const parseWeight = (raw: string): number | null => {
-  const n = Number(raw.trim().replace(',', '.'))
-  return raw.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 1000 ? round2(n) : null
-}
-const parseReps = (raw: string): number | null => {
-  const n = Number(raw.trim())
-  return raw.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 999 ? n : null
-}
-const clampWeight = (n: number) => Math.min(1000, Math.max(0, round2(n)))
-const clampReps = (n: number) => Math.min(999, Math.max(0, n))
 
 interface SetView {
   setId: string
@@ -289,8 +281,8 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               value={weight}
               text={formatKg(weight)}
               inputMode="decimal"
-              parse={parseWeight}
-              clamp={clampWeight}
+              parse={parseSetWeight}
+              clamp={clampSetWeight}
               onChange={(v) => patch({ weight_kg: v })}
             />
           </div>
@@ -303,8 +295,8 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               value={reps}
               text={String(reps)}
               inputMode="numeric"
-              parse={parseReps}
-              clamp={clampReps}
+              parse={parseSetReps}
+              clamp={clampSetReps}
               onChange={(v) => patch({ reps: v })}
             />
           </div>

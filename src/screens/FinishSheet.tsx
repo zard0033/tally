@@ -4,7 +4,7 @@
    不再提供第二次，所以不會連按存出兩份。輸入欄字級 16px；sheet 規則同 StartSheet。 */
 import { useRef, useState } from 'react'
 import SpringSheet from '@/components/SpringSheet'
-import { checkRoutineName } from '@/lib/training'
+import { checkRoutineName, MAX_WORKOUT_MINUTES, parseWorkoutMinutes } from '@/lib/training'
 
 export interface FinishLine {
   name: string
@@ -30,15 +30,6 @@ interface FinishSheetProps {
   onFinish: (minutes: number | null) => void
   /** 回 true＝已存下（寫入失敗的說明由呼叫端放在 `error`）。名稱已通過檢查、已去掉前後空白。 */
   onSaveRoutine: (name: string) => Promise<boolean>
-}
-
-/** 空白＝略過；否則 0–1440 的數字。回 undefined 表示不合法。 */
-function parseMinutes(raw: string): number | null | undefined {
-  const t = raw.trim()
-  if (t === '') return null
-  const n = Number(t)
-  if (!Number.isFinite(n) || n < 0 || n > 1440) return undefined
-  return n
 }
 
 export default function FinishSheet({
@@ -83,7 +74,7 @@ export default function FinishSheet({
       saving.current = false
     }
   }
-  const parsed = backfill ? parseMinutes(raw) : null
+  const parsed = backfill ? parseWorkoutMinutes(raw) : null
   const invalid = backfill && parsed === undefined
   const facts = [
     '總訓練量',
@@ -128,7 +119,7 @@ export default function FinishSheet({
             aria-invalid={invalid}
             onChange={(e) => setRaw(e.target.value)}
           />
-          {invalid && <span className="hint is-error">時長要在 0–1440 分鐘之間</span>}
+          {invalid && <span className="hint is-error">{`時長要在 0–${MAX_WORKOUT_MINUTES} 分鐘之間`}</span>}
         </label>
       )}
 

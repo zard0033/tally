@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { QueueEntry } from './queue'
 import { localDate } from './dates'
 import {
+  MAX_SET_REPS,
+  MAX_SET_WEIGHT,
+  MAX_WORKOUT_MINUTES,
+  clampSetReps,
+  clampSetWeight,
+  parseSetReps,
+  parseSetWeight,
+  parseWorkoutMinutes,
   MUSCLE_GROUPS,
   RPE_CHIPS,
   RPE_SHEET_VALUES,
@@ -1873,5 +1881,80 @@ describe('workoutsOn：只有一張有氧卡的訓練（AC 9：已完成列表�
 
   it('混了重訓、兩張有氧卡、只有重訓、沒有動作、動作庫找不到那列：都不是（照舊顯示動作數與組數）', () => {
     expect([solo.mixed, solo['two-cardio'], solo.strength, solo.none, solo.ghost]).toEqual([null, null, null, null, null])
+  })
+})
+
+/* ═══════════ 組編輯 sheet 的欄位規則／補記時長 ═══════════ */
+
+describe('組編輯的上限（對齊 DDL）', () => {
+  it('重量 ≤ 1000、次數 ≤ 999、補記時長 ≤ 1440', () => {
+    expect(MAX_SET_WEIGHT).toBe(1000)
+    expect(MAX_SET_REPS).toBe(999)
+    expect(MAX_WORKOUT_MINUTES).toBe(1440)
+  })
+})
+
+describe('parseSetWeight', () => {
+  it.each([
+    ['60', 60],
+    ['62,5', 62.5], // 逗號當小數點
+    [' 62.256 ', 62.26], // 取到兩位
+    ['0', 0],
+    ['1000', 1000],
+  ])('%j → %j', (raw, want) => {
+    expect(parseSetWeight(raw)).toBe(want)
+  })
+  it.each(['', '   ', 'abc', '-1', '1000.01', 'Infinity'])('%j 不合法 → null', (raw) => {
+    expect(parseSetWeight(raw)).toBeNull()
+  })
+})
+
+describe('parseSetReps', () => {
+  it.each([
+    ['12', 12],
+    [' 8 ', 8],
+    ['0', 0],
+    ['999', 999],
+  ])('%j → %j', (raw, want) => {
+    expect(parseSetReps(raw)).toBe(want)
+  })
+  it.each(['', '   ', 'x', '-1', '12.5', '1000'])('%j 不合法 → null', (raw) => {
+    expect(parseSetReps(raw)).toBeNull()
+  })
+})
+
+describe('clampSetWeight／clampSetReps', () => {
+  it('重量夾在 0–1000 並取到兩位', () => {
+    expect(clampSetWeight(-5)).toBe(0)
+    expect(clampSetWeight(1500)).toBe(1000)
+    expect(clampSetWeight(62.504)).toBe(62.5)
+    expect(clampSetWeight(60 + 2.5)).toBe(62.5)
+  })
+  it('次數夾在 0–999', () => {
+    expect(clampSetReps(-1)).toBe(0)
+    expect(clampSetReps(1000)).toBe(999)
+    expect(clampSetReps(12)).toBe(12)
+  })
+})
+
+describe('parseWorkoutMinutes', () => {
+  it('空白＝略過（null）', () => {
+    expect(parseWorkoutMinutes('')).toBeNull()
+    expect(parseWorkoutMinutes('   ')).toBeNull()
+  })
+  it('0–1440 的數字原樣回傳', () => {
+    expect(parseWorkoutMinutes('45')).toBe(45)
+    expect(parseWorkoutMinutes('0')).toBe(0)
+    expect(parseWorkoutMinutes('1440')).toBe(1440)
+    expect(parseWorkoutMinutes('90.5')).toBe(90.5)
+  })
+  it.each(['1441', '-1', 'abc'])('%j 不合法 → undefined', (raw) => {
+    expect(parseWorkoutMinutes(raw)).toBeUndefined()
+  })
+})
+
+describe('backfillTimes 的時長錯誤訊息', () => {
+  it('帶出上限與傳入值', () => {
+    expect(() => backfillTimes('2026-10-10', 1441)).toThrow('時長要在 0–1440 分鐘：1441')
   })
 })

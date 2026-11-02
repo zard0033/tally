@@ -18,6 +18,7 @@ import {
   baselineWithFallback,
   dailyKcalFromRows,
   expectedWeeklyChangeKg,
+  insufficientShortfalls,
   type BaselineResult,
   type ShownBaseline,
 } from '@/lib/baseline'
@@ -194,23 +195,22 @@ function implausibleText(r: Extract<BaselineResult, { status: 'implausible' }>):
 
 /** 同一件事的短版，給依據行用：已經有「近 28 天資料不足」開頭，不必再把有幾天、需要幾天講第二遍。 */
 function lackShort(r: Extract<BaselineResult, { status: 'insufficient' }>): string {
-  const lack: string[] = []
-  if (r.loggedDays < BASELINE_NEEDS.loggedDays) lack.push(`記錄還差 ${BASELINE_NEEDS.loggedDays - r.loggedDays} 天`)
-  if (r.weighIns < BASELINE_NEEDS.weighIns) lack.push(`體重還差 ${BASELINE_NEEDS.weighIns - r.weighIns} 筆`)
-  else if (r.weightSpanDays < BASELINE_NEEDS.weightSpanDays) lack.push(`體重要橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上`)
-  return lack.join('、')
+  return insufficientShortfalls(r).map((s) => {
+    switch (s.kind) {
+      case 'loggedDays': return `記錄還差 ${s.need - s.have} 天`
+      case 'weighIns': return `體重還差 ${s.need - s.have} 筆`
+      case 'weightSpanDays': return `體重要橫跨 ${s.need} 天以上`
+    }
+  }).join('、')
 }
 
 /** 資料不足時說清楚缺什麼，不給數字。 */
 function lackText(r: Extract<BaselineResult, { status: 'insufficient' }>): string {
-  const lack: string[] = []
-  if (r.loggedDays < BASELINE_NEEDS.loggedDays) {
-    lack.push(`記錄還差 ${BASELINE_NEEDS.loggedDays - r.loggedDays} 天（近 ${WINDOW_DAYS} 天有記 ${r.loggedDays} 天，需要 ${BASELINE_NEEDS.loggedDays}）`)
-  }
-  if (r.weighIns < BASELINE_NEEDS.weighIns) {
-    lack.push(`體重還差 ${BASELINE_NEEDS.weighIns - r.weighIns} 筆（有 ${r.weighIns} 筆，需要 ${BASELINE_NEEDS.weighIns}）`)
-  } else if (r.weightSpanDays < BASELINE_NEEDS.weightSpanDays) {
-    lack.push(`體重要橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上（現在 ${r.weightSpanDays} 天）`)
-  }
-  return lack.join('；') + '。'
+  return insufficientShortfalls(r).map((s) => {
+    switch (s.kind) {
+      case 'loggedDays': return `記錄還差 ${s.need - s.have} 天（近 ${WINDOW_DAYS} 天有記 ${s.have} 天，需要 ${s.need}）`
+      case 'weighIns': return `體重還差 ${s.need - s.have} 筆（有 ${s.have} 筆，需要 ${s.need}）`
+      case 'weightSpanDays': return `體重要橫跨 ${s.need} 天以上（現在 ${s.have} 天）`
+    }
+  }).join('；') + '。'
 }

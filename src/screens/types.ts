@@ -53,8 +53,8 @@ export interface LogSheetProps {
   open: boolean
   /** 目前選中的餐別 chip；null 代表尚未決定（理論上 open=false 時才會是 null）。 */
   meal: MealKey | null
-  /** 食品庫；null＝還沒載完（App 開機時與 profile／weight 一起撈，理由見 App.tsx 內註記）。 */
-  foods: Food[] | null
+  /** 食品庫。App 開機時與 profile／weight 一起撈，`ready` 把它算進去，所以 sheet 掛載時一定有值（理由見 App.tsx 內註記）。 */
+  foods: Food[]
   dayData: DayData
   targets: Targets
   onClose: () => void
@@ -75,7 +75,7 @@ export interface SettingsProps {
   latestWeight: Weight
   /** 使用中的食品庫（已排除封存），與 LogSheet 共用同一份 App state——食品庫管理頁的
    *  「使用中」分頁直接拿這份，不必自己重撈一次。 */
-  foods: Food[] | null
+  foods: Food[]
   /** 儲存身體參數編輯（含自訂目標覆寫）。失敗 rejects，Settings 自己接住顯示錯誤。 */
   onSaveProfile: (patch: Partial<ProfileRow>) => Promise<void>
   /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fmt1, isoOfDay, niceDomain, rangeStart, trendPoints, trendXAxis, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { BODY_FAT_MAX, BODY_FAT_MIN, fmt1, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendXAxis, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
 import { dayIndex } from './dates'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
@@ -131,5 +131,37 @@ describe('trendXAxis', () => {
     expect(ax.ticks).toEqual([100, 150, 200])
     expect(trendXAxis(null, []).domain).toEqual(['auto', 'auto'])
     expect(ax.tickFormatter(dayIndex('2026-09-06'))).toBe('9/6')
+  })
+})
+
+describe('sparklinePoints', () => {
+  it('寬 120 高 32：x 等距、y 以最小/最大線性映射到 28..4（大的在上）', () => {
+    // 70、72、71：stepX 60；y = 28 - (v-70)/2*24 → 28、4、16
+    expect(sparklinePoints([{ weight_kg: 70 }, { weight_kg: 72 }, { weight_kg: 71 }]))
+      .toBe('0.0,28.0 60.0,4.0 120.0,16.0')
+  })
+  it('全部同值（span 0）不除以零，貼底線 28', () => {
+    expect(sparklinePoints([{ weight_kg: 70 }, { weight_kg: 70 }])).toBe('0.0,28.0 120.0,28.0')
+  })
+  it('weight_kg 是字串（numeric 欄位從 API 回來的形狀）也能算', () => {
+    expect(sparklinePoints([{ weight_kg: '70.5' }, { weight_kg: '71.5' }])).toBe('0.0,28.0 120.0,4.0')
+  })
+})
+
+describe('記體重的門檻', () => {
+  it('體重必須大於 0 的有限數字', () => {
+    expect(isValidWeightKg(0.1)).toBe(true)
+    expect(isValidWeightKg(0)).toBe(false)
+    expect(isValidWeightKg(-1)).toBe(false)
+    expect(isValidWeightKg(Number.NaN)).toBe(false)
+    expect(isValidWeightKg(Infinity)).toBe(false)
+  })
+  it('體脂率 3–70（含兩端）', () => {
+    expect([BODY_FAT_MIN, BODY_FAT_MAX]).toEqual([3, 70])
+    expect(isValidBodyFatPct(3)).toBe(true)
+    expect(isValidBodyFatPct(70)).toBe(true)
+    expect(isValidBodyFatPct(2.9)).toBe(false)
+    expect(isValidBodyFatPct(70.1)).toBe(false)
+    expect(isValidBodyFatPct(Number.NaN)).toBe(false)
   })
 })

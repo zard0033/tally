@@ -104,3 +104,24 @@ export const trendXAxis = (dom: [number, number] | null, ticks: number[]) => ({
 
 /** 趨勢圖的數值顯示：一位小數。 */
 export const fmt1 = (n: number) => n.toFixed(1)
+
+/** sparkline 用：weight_kg 折線，寬 120 高 32 的 viewBox 內線性映射（y 留上下各 4）。
+ *  少於 2 筆畫不出線，呼叫端自己判斷要不要渲染。 */
+export function sparklinePoints(weights: Pick<TrendRow, 'weight_kg'>[]): string {
+  const values = weights.map((w) => Number(w.weight_kg))
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const stepX = values.length > 1 ? 120 / (values.length - 1) : 0
+  return values.map((v, i) => `${(i * stepX).toFixed(1)},${(28 - ((v - min) / span) * 24).toFixed(1)}`).join(' ')
+}
+
+/** 記體重時體脂率可接受的範圍（%）。 */
+export const BODY_FAT_MIN = 3
+export const BODY_FAT_MAX = 70
+
+/** 體重要是大於 0 的有限數字。 */
+export const isValidWeightKg = (kg: number): boolean => Number.isFinite(kg) && kg > 0
+
+/** 體脂率要是 BODY_FAT_MIN–BODY_FAT_MAX 之間的有限數字（留空由呼叫端處理，不在這裡判）。 */
+export const isValidBodyFatPct = (fat: number): boolean => Number.isFinite(fat) && fat >= BODY_FAT_MIN && fat <= BODY_FAT_MAX

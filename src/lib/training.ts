@@ -648,10 +648,47 @@ export function finishWorkoutOps(args: { workout: Row; now: Date; minutes: numbe
 /** 重量的顯示：最多兩位小數、不補零（60、62.5、22.25）。 */
 export const formatKg = (n: number): string => String(Number(n.toFixed(2)))
 
+/* ═══════════ 組編輯 sheet 的欄位規則 ═══════════ */
+
+/** 上限對齊 DDL（workout_sets：weight_kg between 0 and 1000、reps between 0 and 999，spec.md）。
+ *  次數上限數值上等於 MAX_TARGET_REPS，但那是 workout_routine_exercises.target_reps（下限 1）
+ *  的上限，是另一個欄位，不共用常數。 */
+export const MAX_SET_WEIGHT = 1000
+export const MAX_SET_REPS = 999
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** 重量輸入 → 數字（容許逗號小數點、取到兩位）；空白、非數字、負數、超過上限回 null。 */
+export const parseSetWeight = (raw: string): number | null => {
+  const n = Number(raw.trim().replace(',', '.'))
+  return raw.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= MAX_SET_WEIGHT ? round2(n) : null
+}
+/** 次數輸入 → 整數；空白、非整數、負數、超過上限回 null。 */
+export const parseSetReps = (raw: string): number | null => {
+  const n = Number(raw.trim())
+  return raw.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= MAX_SET_REPS ? n : null
+}
+/** ± 按鈕的結果夾回 0–上限（不合法的輸入走 parse 放回原值，這裡只管按鈕）。 */
+export const clampSetWeight = (n: number) => Math.min(MAX_SET_WEIGHT, Math.max(0, round2(n)))
+export const clampSetReps = (n: number) => Math.min(MAX_SET_REPS, Math.max(0, n))
+
 /* ═══════════ 補記過去日子（AC 8a） ═══════════ */
 
+/** 補記時長的上限（分鐘）＝一天。 */
+export const MAX_WORKOUT_MINUTES = 1440
+
+const minutesInRange = (n: number) => Number.isFinite(n) && n >= 0 && n <= MAX_WORKOUT_MINUTES
+
+/** 補記時長的輸入：空白＝略過（null）；否則 0–MAX_WORKOUT_MINUTES 的數字。回 undefined 表示不合法。 */
+export function parseWorkoutMinutes(raw: string): number | null | undefined {
+  const t = raw.trim()
+  if (t === '') return null
+  const n = Number(t)
+  return minutesInRange(n) ? n : undefined
+}
+
 /** 補記不跑計時：started_at＝該日本機 12:00，ended_at＝started_at＋手填分鐘（略過＝null＝相等）。
- *  performed_on 就是傳進來的那天。日期不合法（含 2026-02-31 這種）或分鐘超出 0–1440 都丟錯，不默默修正。 */
+ *  performed_on 就是傳進來的那天。日期不合法（含 2026-02-31 這種）或分鐘超出 0–MAX_WORKOUT_MINUTES 都丟錯，不默默修正。 */
 export function backfillTimes(
   performedOn: string,
   minutes: number | null,
@@ -660,8 +697,8 @@ export function backfillTimes(
   if (!m) throw new Error(`日期格式不對：${performedOn}`)
   const start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0)
   if (localDate(start) !== performedOn) throw new Error(`不存在的日期：${performedOn}`)
-  if (minutes !== null && !(Number.isFinite(minutes) && minutes >= 0 && minutes <= 1440)) {
-    throw new Error(`時長要在 0–1440 分鐘：${minutes}`)
+  if (minutes !== null && !minutesInRange(minutes)) {
+    throw new Error(`時長要在 0–${MAX_WORKOUT_MINUTES} 分鐘：${minutes}`)
   }
   const end = new Date(start.getTime() + (minutes ?? 0) * 60_000)
   return { started_at: start.toISOString(), ended_at: end.toISOString() }

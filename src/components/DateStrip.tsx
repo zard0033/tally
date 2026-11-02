@@ -31,8 +31,8 @@ import {
   monthGrid,
   monthKeyOf,
   monthTitle,
-  shiftDate,
   weekDates,
+  weekSwipeTarget,
   weekdayDate,
   type MonthKey,
 } from '@/lib/dates'
@@ -276,11 +276,9 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
                 const dy = e.clientY - s.y
                 if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return
                 swipedAt.current = Date.now()
-                /* 往未來滑夾到上界（明天）而不是整個丟掉：從上週的週五往左滑，+7 天會越界，
-                   丟掉的話永遠滑不回本週。夾完還在同一週＝沒有「下一週」可切，不動。 */
-                const step = shiftDate(date, dx < 0 ? 7 : -7)
-                const target = step > max ? max : step
-                if (target === date || weekDates(target)[0] === week[0]) return
+                // 往左滑＝下一週；夾上界與「夾完同週不動」的規則在 weekSwipeTarget
+                const target = weekSwipeTarget(date, dx < 0 ? 1 : -1, max)
+                if (target === null) return
                 refocus.current = 'day'
                 onSelect(target)
               }}

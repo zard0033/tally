@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byFoodName, foodMatches, readingToForm, type LabelReading } from './foodForm'
+import { NO_VENDOR, byFoodName, foodMatches, groupByVendor, readingToForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -68,5 +68,26 @@ describe('byFoodName', () => {
     expect(byFoodName({ name: '雞胸' }, { name: '雞胸' })).toBe(0)
     const sorted = [{ name: 'b' }, { name: 'a' }].sort(byFoodName)
     expect(sorted.map((x) => x.name)).toEqual(['a', 'b'])
+  })
+})
+
+describe('groupByVendor', () => {
+  const f = (name: string, vendor: string | null) => ({ name, vendor })
+  it('NO_VENDOR 就是畫面上的「未標店家」', () => {
+    expect(NO_VENDOR).toBe('未標店家')
+  })
+  it('店家照筆畫序（八方 2 畫在三商 3 畫前，與碼位序相反）、未標店家固定最後，組內依品名', () => {
+    const groups = groupByVendor([f('e', '三商'), f('b', null), f('d', '八方'), f('a', null), f('c', '三商')])
+    expect(groups.map((g) => g.vendor)).toEqual(['八方', '三商', NO_VENDOR])
+    expect(groups.map((g) => g.items.map((x) => x.name))).toEqual([['d'], ['c', 'e'], ['a', 'b']])
+  })
+  it('只有未標店家 → 一組；空清單 → 沒有組', () => {
+    expect(groupByVendor([f('a', null)])).toEqual([{ vendor: NO_VENDOR, items: [f('a', null)] }])
+    expect(groupByVendor([])).toEqual([])
+  })
+  it('不改動傳進來的陣列', () => {
+    const list = [f('b', null), f('a', null)]
+    groupByVendor(list)
+    expect(list.map((x) => x.name)).toEqual(['b', 'a'])
   })
 })

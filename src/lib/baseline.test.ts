@@ -8,6 +8,7 @@ import {
   dailyKcalFromRows,
   estimateMaintenance,
   expectedWeeklyChangeKg,
+  insufficientShortfalls,
   type DailyKcal,
   type WeightPoint,
 } from './baseline'
@@ -399,5 +400,26 @@ describe('baselineFetchRange', () => {
     expect(end).toBe('2026-10-11')
     // 窗首 2026-09-14，再往前 90 天
     expect(from).toBe(shiftDate('2026-09-14', -LOOKBACK_DAYS))
+  })
+})
+
+describe('insufficientShortfalls', () => {
+  const insufficient = (loggedDays: number, weighIns: number, weightSpanDays: number) =>
+    ({ status: 'insufficient', loggedDays, weighIns, weightSpanDays }) as const
+
+  it('記錄天數與體重筆數都不夠 → 兩項，順序固定；跨度不再補一句', () => {
+    expect(insufficientShortfalls(insufficient(18, 2, 0))).toEqual([
+      { kind: 'loggedDays', have: 18, need: 21 },
+      { kind: 'weighIns', have: 2, need: 4 },
+    ])
+  })
+  it('筆數夠了、跨度只有 9 天 → 缺跨度', () => {
+    expect(insufficientShortfalls(insufficient(21, 4, 9))).toEqual([{ kind: 'weightSpanDays', have: 9, need: 14 }])
+  })
+  it('只缺體重筆數（記錄與跨度都夠）', () => {
+    expect(insufficientShortfalls(insufficient(25, 3, 20))).toEqual([{ kind: 'weighIns', have: 3, need: 4 }])
+  })
+  it('邊界值剛好達標 → 沒有缺項', () => {
+    expect(insufficientShortfalls(insufficient(21, 4, 14))).toEqual([])
   })
 })

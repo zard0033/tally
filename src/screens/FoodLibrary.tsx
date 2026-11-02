@@ -14,11 +14,11 @@ import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
-import { BLANK_FOOD_FORM, byFoodName, foodMatches, foodToForm, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
+import { BLANK_FOOD_FORM, foodMatches, foodToForm, groupByVendor, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
 export interface FoodLibraryProps {
   /** 使用中的食品庫（App 既有 state，已排除封存）。 */
-  foods: Food[] | null
+  foods: Food[]
   onCreateFood: (food: NewFood) => Promise<Food>
   onUpdateFood: (id: number, patch: Partial<NewFood>) => Promise<void>
   onArchiveFood: (food: Food) => Promise<Food>
@@ -27,23 +27,6 @@ export interface FoodLibraryProps {
 }
 
 type Tab = 'active' | 'archived'
-
-/** 依店家分組，未標店家的排最後——它不是一個真的店家名，跟著筆畫排序沒有意義。 */
-function groupByVendor(foods: Food[]): { vendor: string; items: Food[] }[] {
-  const map = new Map<string, Food[]>()
-  for (const f of [...foods].sort(byFoodName)) {
-    const key = f.vendor ?? '未標店家'
-    const list = map.get(key)
-    if (list) list.push(f)
-    else map.set(key, [f])
-  }
-  const named = [...map.entries()]
-    .filter(([v]) => v !== '未標店家')
-    .sort((a, b) => a[0].localeCompare(b[0], 'zh-Hant-u-co-stroke'))
-  const rest = map.get('未標店家')
-  return [...named, ...(rest ? [['未標店家', rest] as [string, Food[]]] : [])]
-    .map(([vendor, items]) => ({ vendor, items }))
-}
 
 const EDIT_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 /* 座標比原稿整體位移 (-0.5, +3.5)：原本的筆畫範圍是 x5–20 / y2–15，重心落在 (12.5, 8.5)，

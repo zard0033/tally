@@ -112,6 +112,16 @@ export function weekDates(iso: string): string[] {
   return Array.from({ length: 7 }, (_, i) => shiftDate(monday, i))
 }
 
+/** 週列切週的目標日：往後（1）或往前（-1）七天；回 null＝沒有可切的週，不動。
+ *  往未來滑夾到上界 max 而不是整個丟掉：從上週的週五往後切，+7 天會越界，丟掉的話永遠
+ *  切不回本週。夾完還在同一週（或夾完就是原日期）＝沒有「下一週」可切，回 null。 */
+export function weekSwipeTarget(date: string, direction: 1 | -1, max: string): string | null {
+  const step = shiftDate(date, direction * 7)
+  const target = step > max ? max : step
+  if (target === date || weekDates(target)[0] === weekDates(date)[0]) return null
+  return target
+}
+
 /** 月曆格：前面補 null 到該月 1 號所在的星期，之後是整個月的每一天；不補尾巴（格線自己換行）。 */
 export function monthGrid(key: MonthKey): (string | null)[] {
   const { from, to } = monthBounds(key)

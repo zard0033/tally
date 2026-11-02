@@ -286,3 +286,19 @@ export function baselineWithFallback(
   }
   return { current, shown: best }
 }
+
+/** 資料不足時缺哪一項。畫面依 kind 各自組文案（長版／短版），判定只在 insufficientShortfalls 寫一次。 */
+export type BaselineShortfall =
+  | { kind: 'loggedDays'; have: number; need: number }
+  | { kind: 'weighIns'; have: number; need: number }
+  | { kind: 'weightSpanDays'; have: number; need: number }
+
+/** 缺的項目，順序固定：記錄天數、體重筆數、體重跨度。**跨度只在筆數夠了才算缺**——筆數不夠時
+ *  跨度必然也不夠（不足 2 筆算 0），兩句並列只是把同一件事講兩遍。 */
+export function insufficientShortfalls(r: Extract<BaselineResult, { status: 'insufficient' }>): BaselineShortfall[] {
+  const out: BaselineShortfall[] = []
+  if (r.loggedDays < BASELINE_NEEDS.loggedDays) out.push({ kind: 'loggedDays', have: r.loggedDays, need: BASELINE_NEEDS.loggedDays })
+  if (r.weighIns < BASELINE_NEEDS.weighIns) out.push({ kind: 'weighIns', have: r.weighIns, need: BASELINE_NEEDS.weighIns })
+  else if (r.weightSpanDays < BASELINE_NEEDS.weightSpanDays) out.push({ kind: 'weightSpanDays', have: r.weightSpanDays, need: BASELINE_NEEDS.weightSpanDays })
+  return out
+}

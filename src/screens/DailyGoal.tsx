@@ -20,6 +20,7 @@ import {
   type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
+import { checkBodyBasics, checkCustomTargets } from '@/lib/goalForm'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import MaintenanceCard from './MaintenanceCard'
@@ -220,10 +221,8 @@ export default function DailyGoal(props: DailyGoalProps) {
       const proteinG = reqNum(draft.customProtein)
       const fatG = reqNum(draft.customFat)
       const carbG = reqNum(draft.customCarb)
-      if (!Number.isFinite(kcal) || kcal <= 0) return setErr('熱量要填數字')
-      if (![proteinG, fatG, carbG].every((n) => Number.isFinite(n) && n >= 0)) {
-        return setErr('蛋白質／脂肪／碳水都要填數字')
-      }
+      const invalid = checkCustomTargets({ kcal, proteinG, fatG, carbG })
+      if (invalid) return setErr(invalid)
       setBusy(true)
       setErr(null)
       try {
@@ -257,12 +256,9 @@ export default function DailyGoal(props: DailyGoalProps) {
     // 補填跟這次計算無關的資料。
     if (bodyFatPct === null) {
       const birthYear = reqNum(draft.birthYear)
-      const thisYear = new Date().getFullYear()
-      if (!Number.isFinite(birthYear) || birthYear < 1900 || birthYear > thisYear) {
-        return setErr('出生年要填合理的西元年')
-      }
       const height = reqNum(draft.height)
-      if (!Number.isFinite(height) || height <= 0) return setErr('身高要填數字')
+      const invalid = checkBodyBasics({ birthYear, height }, new Date().getFullYear())
+      if (invalid) return setErr(invalid)
       patchBase.birth_year = birthYear
       patchBase.height_cm = height
       patchBase.sex = draft.sex
