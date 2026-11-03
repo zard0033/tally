@@ -3754,7 +3754,8 @@ test('有氧 sheet 寫入失敗：寫入中關不掉；失敗的說明留在 she
   await expect(save, '寫入中').toBeDisabled()
   await page.keyboard.press('Escape')
   await page.waitForTimeout(400) // 沒有事件可等的反向斷言：sheet 若會關，這段時間內就開始收了
-  await expect(sheet, '寫入中鎖住，Escape 關不掉——失敗的說明才有地方出現').toBeVisible()
+  // 看 pointerEvents 不看 toBeVisible：收合要 0.8 秒，開始收了這時也還看得見（2026-11-03 查到這條一直沒驗到）
+  expect(await sheet.evaluate((n) => (n as HTMLElement).style.pointerEvents), '寫入中鎖住，Escape 關不掉——失敗的說明才有地方出現').not.toBe('none')
   await release()
 
   await expect(sheet.getByRole('alert')).toContainText('這筆沒有存下來')

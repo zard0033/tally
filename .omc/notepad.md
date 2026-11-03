@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-03）：`d2ee2f8` 已上線（v2.112–v2.114），push 後全量 426 條 425 過，紅的是偶發清單上的有氧 sheet 寫入失敗（可能 sheet 真的自己關了，待查）。探針退場第二步做完，已 commit **未 push**（刪 `public/_probe/`，全量 426 條全綠）。
-下一步：①push 探針刪除 ②查有氧 sheet 失敗後自己關 ③真機驗（收合時捲動鎖、連按不穿透）④階段 1（`suggestWeight`）⑤餐建議樣張。
+現況（2026-11-03）：探針退場第二步（`b7ae7fc`）與有氧 sheet `locked` 晚一步的修正已 push，**全量 e2e 待確認**。
+下一步：①真機驗（收合時捲動鎖、連按不穿透、第二下按住跨過 300ms）②階段 1（`suggestWeight`，預期值手算）③餐建議樣張 ④每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

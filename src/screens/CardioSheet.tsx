@@ -50,10 +50,14 @@ interface FormProps {
 
 function CardioForm({ entry, exercise, lastMinutes, onClose, onWrite, onBusy }: FormProps) {
   const [draft, setDraft] = useState<CardioDraft>(() => cardioEntryDraft(entry, exercise))
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusyState] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => onBusy(busy), [busy, onBusy])
+  // 同一批更新通知 sheet：用 effect 回報的話，按鈕已 disabled、sheet 還沒鎖住，這個空檔按 Escape 會把 sheet 關掉、填的值跟著不見
+  const setBusy = (b: boolean) => {
+    setBusyState(b)
+    onBusy(b)
+  }
   // 寫入途中這張卡被移除（別的裝置）時表單會卸載：不放開的話 sheet 會一直鎖著關不掉
   useEffect(() => () => onBusy(false), [onBusy])
 

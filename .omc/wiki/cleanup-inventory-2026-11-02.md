@@ -100,7 +100,7 @@ schemaVersion: 1
 ## 等使用者決定
 
 - `Settings.tsx:142-187` 改用 `SpringSheet`：理由（id 衝突）已失效，可連帶刪約十處 CSS 與狀態，但動效和 iOS 鍵盤會變，spec 排在 B3
-- `public/_probe/` 退場：spec 規定先推自我解除的 `sw.js`，等手機開過一次才刪，要使用者配合
+- `public/_probe/` 退場：2026-11-03 結案，見上面「探針頁退場」
 - `index.css` 的 shadcn 模板 token：`app.css:11-12` 註明機制留給未來元件，只省幾 KB，未建議動
 - `app.css:1684-1689` 的 `.tr-field select`：箭頭色寫死，改了幾何會變，要截圖
 - `.action-btn` 與 `.pick-bar-btn`、`.search-box` 與 `.tr-search`：已分岔，要先定一個值才能併

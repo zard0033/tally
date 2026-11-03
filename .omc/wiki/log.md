@@ -165,3 +165,7 @@
 - **Pages:** lesson-flaky-root-cause-2026-11-03.md
 - **Summary:** Created new page "lesson-flaky-root-cause 把「偶發紅」查到底的三條通則（2026-11-03）"
 
+## [2026-11-03T06:17:16.065Z] query
+- **Pages:** lesson-cardio-merge-2026-10-22.md, open-failures.md, lesson-sync-sheet-review-sheet-2026-10-15.md, e2e-reference.md, cleanup-inventory-2026-11-02.md
+- **Summary:** Query "有氧 sheet 寫入失敗 CardioSheet" → 5 results (of 23 total)
+

@@ -30,7 +30,6 @@ schemaVersion: 1
 | `training.spec`「訓練中排序（指標拖曳）…被拖的卡是收合後的高度」 | dnd-kit 位置觀測非同步，斷言已改輪詢（DESIGN v2.71）。2026-10-22 又紅過一次，單跑 5 次全過。 |
 | `rest-timer`「休息條答 9 之後，組編輯 sheet 裡 RPE 9 是高亮的」 | 逾時，單跑 8 次與整檔重跑都過。 |
 | `interaction`「日期快取 5 — 慢請求…」 | 2026-11-02（週一）全量紅一次：點日期格前等元素穩定逾時 5 秒。單跑 12 次、整檔跑都過。週一往前一天會跨週要開月曆，多一段動畫，負載下可能逾時，這只是推論。 |
-| `training.spec`「有氧 sheet 寫入失敗…」 | 2026-11-02 批次 4 後全量紅一次（「失敗後可以再試」找不到儲存鈕），單跑 8 次全過。2026-11-03 `d2ee2f8` 全量又紅一次，同一行同症狀，單跑 15 次全過。**線索**：失敗說明與「填的值不丟」都過了，下一步 sheet 才不見，畫面停在訓練頁，所以可能是 sheet 真的自己關了，不只是測試賽跑；會丟掉使用者填的值。原因未查。 |
 
 ## 各 spec 涵蓋範圍
 
@@ -38,9 +37,11 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-03 `training`「有氧 sheet 寫入失敗」查明，移出偶發清單：**是真 bug。** `CardioForm` 用 `useEffect` 回報 busy，effect 觸發的上層更新是非同步排程的，有一段空檔按鈕已 disabled、`SpringSheet` 的 `locked` 還是 false，這時按 Escape 會把 sheet 關掉，失敗時填的值跟著不見。改成同一批更新回報（比照 `SyncSheet`）。對照：4 個燒 CPU 的行程＋頁內日誌下重複 40 次，舊寫法紅 5 次（日誌 `locked=false reason=escape-key`），修正版全綠（40 次都是 `locked=true`）。測試原本用 `toBeVisible` 驗不到，收合要 0.8 秒，開始收了也還看得見，改驗 `pointerEvents`。沒跑全量。
+
 2026-11-03 刪除 `public/_probe/` 後全量（未 commit，動到 `vite.config.ts` 要 push 前綠）：426 條 15.2 分鐘，全綠。
 
-2026-11-03 push 後全量（`d2ee2f8`）：426 條 15.3 分鐘，425 過 1 紅（`training` 有氧 sheet 寫入失敗，見偶發清單）。
+2026-11-03 push 後全量（`d2ee2f8`）：426 條 15.3 分鐘，425 過 1 紅（`training` 有氧 sheet 寫入失敗，查明見上一筆）。
 
 2026-11-03 push 前 review 修正：`e2e/harness.ts` 新增 `armClickDuringClose`，收合中的點擊在頁內排程，不用 `waitForTimeout` 再 `mouse.click`；唯一例外是搶焦點那條，合成事件重現不了，用真滑鼠。修正後全量 426 條 15.2 分鐘全綠。
 
