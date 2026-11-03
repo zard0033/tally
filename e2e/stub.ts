@@ -92,10 +92,16 @@ export async function seedFetchStub(
         __dataDown: boolean
         /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
         __kcalFail: boolean
+        /* 區間查詢要回的列，蓋掉 fix.kcalWindow：測試中途換帳號用。 */
+        __kcalWindow: { eaten_on: string; qty: number; kcal: number }[] | null
+        /* 有值時區間查詢等它 resolve 才回，用來造「查詢在飛」。要回哪一份在等之前就決定了（查詢送出當下的帳號）。 */
+        __kcalHold: Promise<void> | null
       }
       w.__authMode = authMode
       w.__dataDown = dataDown
       w.__kcalFail = false
+      w.__kcalWindow = null
+      w.__kcalHold = null
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
@@ -298,7 +304,9 @@ export async function seedFetchStub(
             const qs = new URL(u).searchParams
             const offset = Number(qs.get('offset') ?? 0)
             const limit = qs.get('limit') === null ? Infinity : Number(qs.get('limit'))
-            return json(fix.kcalWindow.slice(offset, offset + limit))
+            const kcalWindow = w.__kcalWindow ?? fix.kcalWindow
+            if (w.__kcalHold) await w.__kcalHold
+            return json(kcalWindow.slice(offset, offset + limit))
           }
           // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)

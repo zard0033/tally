@@ -184,7 +184,7 @@
 
 ### 決定與限制
 
-- **用圖表套件，不手畫 SVG**（使用者 2026-10-20 選定：「有套件就用套件，比較漂亮」）：recharts 3.x（peer 含 React 19）。代價＝bundle 變大；**用 `React.lazy` 把趨勢頁切成獨立 chunk**，不進主 bundle，precache 只多 1–2 個檔案（SW 曾因項數卡 activating，要重跑 `service-worker.spec`）。
+- **用圖表套件，不手畫 SVG**（使用者 2026-10-20 選定：「有套件就用套件，比較漂亮」）：recharts 3.x（peer 含 React 19）。代價＝bundle 變大；**用 `React.lazy` 把趨勢頁切成獨立 chunk**，不進主 bundle，precache 只多 1–2 個檔案（2026-10 記的「SW 因項數卡 activating」已查明是測試讀到過時的值，見 DESIGN v2.114，要重跑 `service-worker.spec`）。
 - 純運算（7 日平均、範圍切片、軸範圍）放 `src/lib/weightTrend.ts`，不沾 DOM，附 vitest。
 - **刻意不做**：目標體重線、縮放／平移、與熱量並排（階段 4 才做）、把圖放上今日頁。
 - 手畫的 `sparklinePoints`（設定頁入口那條）不動。

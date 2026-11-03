@@ -20,7 +20,9 @@ schemaVersion: 1
 
 **第二輪（2026-11-02）已處理**：清單上其餘疑似 bug、視覺項目與舊註解都修了（DESIGN v2.111）。清單實際是 24 項（不是當時回報的 21 項，少算 3 個待確認）。**清單沒修完的一項**：`ExerciseEditSheet` 關閉動畫中重開沿用草稿。新測試修前就綠，但它用 `locator.click`，會等點得到才出手，點擊可能落在卸載之後，所以**沒有證明不存在**；讀碼推演反而認為存在。要改用 `page.mouse.click`（比照 `interaction.spec.ts` 那條）重測，紅了就照 `CardioSheet` 加 `session` key。
 
-**下一輪（push 前 review 的非阻擋項，程式碼都還沒動）**：① `FoodLibrary`（新增與編輯）、`Settings`、`DailyGoal` 共 5 處寫入失敗仍顯示原始錯誤，要改 `friendlyError(errMsg(e))`。② 探針 `index.html` 要多清 `indexedDB probe` 與 `localStorage probe_first_run`，**要趕在手機開探針頁之前**。③ `.icon-btn:disabled` 沒有樣式，關閉鈕鎖住時外觀不變，掃描最長鎖 45 秒。④ `MAX_PAGES`：實際上限 19,000 列（第 20 次要讀到空頁），到時會誤報「連不上伺服器」；放寬上限、加 `console.warn`，數字沒有實測來源，要標成假設。⑤ 登出小點的測試只守住 `loadedMonthsRef.clear()`，要改成第二個帳號回不同日期，並補「查詢在飛時登出」。⑥ `ExerciseEditSheet` 重測（見上）。⑦ README 與 CLAUDE.md 的「約 12 分鐘」已是 14.5 分鐘以上。⑧ `recovery-foreground` 與 `training` 逐組單點現在穩定或高頻紅（見 `e2e-reference`），已上線版本也一樣，要先查。
+**第三輪（2026-11-03，DESIGN v2.112）已處理「下一輪」8 項**：① 5 處寫入失敗改 `friendlyError`。② 探針多清 `indexedDB probe` 與 `localStorage probe_first_run`，一次性實測只清探針、正式站資料不動，**手機現在可以開 `/tally/_probe/` 了**。③ `.icon-btn:disabled`（`opacity: .35`）。④ `trainingRuntime` 的 `MAX_PAGES` 20→100 並加 `console.warn`；**100 是假設值**，依據只有用量：線上 `workout_sets` 94 列、累積 22 天，舊上限 19,000 列照這速度約 12 年才碰到，不急。`api.ts` 那份沒動（查詢有日期範圍）。⑤ 登出小點改兩帳號不同日期，加查詢在飛，mutation 三處都紅。⑥ 改由 `SpringSheet` 統一處理（見下面）。⑦ README、CLAUDE.md 改約 15 分鐘。⑧ 兩條都是測試問題，原因見 `e2e-reference`。
+
+**收合吃點擊（2026-11-03 使用者裁決要修，DESIGN v2.113）**：收合的約 1 秒內，Base UI 的 `InternalBackdrop` 蓋滿全螢幕，點頁面內容會被吃掉。改 `modal={open}`，頭 300ms 另加透明罩 `.sheet-close-guard` 擋連按的第二下（push 前 review 抓到穿透；內部背板沒有 `z-index`，壓不住上層 sheet）；每次打開換 key 重掛 Dialog，留在 sheet 裡的草稿不沿用（`FinishSheet` 的狀態在 `SpringSheet` 之上，例外）。捲動鎖提早解除、300ms 是假設值，都要真機看。
 
 **還沒處理**：`prefersReducedMotion`、`errText` 多份（低價值，刻意不動）；`FoodFormFields` 的 `portalContainer` 是否還需要沒有實測；打字到一半時前一筆失敗會洗掉輸入、卸載後立刻重開份量編輯（修法前就有，範圍窄）。`Settings` 手刻 sheet 使用者決定留到 B3。
 

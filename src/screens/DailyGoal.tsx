@@ -20,6 +20,7 @@ import {
   type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { checkBodyBasics, checkCustomTargets } from '@/lib/goalForm'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
@@ -236,7 +237,7 @@ export default function DailyGoal(props: DailyGoalProps) {
         setBusy(false)
       } catch (e) {
         setBusy(false)
-        setErr(e instanceof Error ? e.message : String(e))
+        setErr(friendlyError(errMsg(e)))
       }
       return
     }
@@ -271,7 +272,7 @@ export default function DailyGoal(props: DailyGoalProps) {
       setBusy(false)
     } catch (e) {
       setBusy(false)
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(friendlyError(errMsg(e)))
     }
   }
 

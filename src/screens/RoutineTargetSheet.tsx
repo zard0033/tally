@@ -1,6 +1,6 @@
 /* 課表動作的預設組次 sheet：組數（必填）、次數（選填）。
    這兩個值只在該動作從沒做過時才用；有歷史就一律取上次實際完成的值（AC 5）。課表不存重量。
-   entry 為 null＝關著。表單以 entry id 當 key，每次打開都是新的草稿。 */
+   entry 為 null＝關著。表單放在 SpringSheet 裡，每次打開都重掛，是新的草稿。 */
 import { useState } from 'react'
 import SpringSheet from '@/components/SpringSheet'
 import {

@@ -13,6 +13,7 @@ import GymVisualCredit from '@/components/GymVisualCredit'
 import SubPageTop from '@/components/SubPageTop'
 import { listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { num } from '@/lib/formulas'
 import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparklinePoints } from '@/lib/weightTrend'
 import DailyGoal from './DailyGoal'
@@ -122,7 +123,7 @@ export default function Settings(props: SettingsProps) {
       closeSheet()
     } catch (e) {
       setBusy(false)
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(friendlyError(errMsg(e)))
     }
   }
 

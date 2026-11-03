@@ -161,3 +161,7 @@
 - **Pages:** lesson-cleanup-review-push-review-2026-11-02.md
 - **Summary:** Created new page "lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）"
 
+## [2026-11-03T02:00:19.344Z] ingest
+- **Pages:** lesson-flaky-root-cause-2026-11-03.md
+- **Summary:** Created new page "lesson-flaky-root-cause 把「偶發紅」查到底的三條通則（2026-11-03）"
+

@@ -14,6 +14,7 @@ import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, foodMatches, foodToForm, groupByVendor, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
 export interface FoodLibraryProps {
@@ -88,7 +89,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       setEditBusy(false)
     } catch (e) {
       setEditBusy(false)
-      setEditErr(e instanceof Error ? e.message : String(e))
+      setEditErr(friendlyError(errMsg(e)))
     }
   }
 
@@ -164,7 +165,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       setAddBusy(false)
     } catch (e) {
       setAddBusy(false)
-      setAddErr(e instanceof Error ? e.message : String(e))
+      setAddErr(friendlyError(errMsg(e)))
     }
   }
 

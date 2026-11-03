@@ -4,9 +4,10 @@
    這整個檔案的存在理由：拖曳／動畫這種要反覆試的東西，在 tally.spec.ts 那串累積狀態的
    15 條路徑裡除錯，一輪 20 秒起跳，而且斷言會建在上一條留下的狀態上。 */
 import { expect, test, type Page } from '@playwright/test'
+import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
 import { FIX, TODAY, TOMORROW, USER_ID, YDAY } from './fixtures'
 import {
-  check, currentIso, deleteViaTap, gotoDate, grabPoint, leg, must, mustText, nextDay, numFrom, openApp, prevDay, rowState,
+  armClickDuringClose, centerOf, check, closeClickResult, currentIso, deleteViaTap, gotoDate, grabPoint, leg, must, mustText, nextDay, numFrom, openApp, prevDay, rowState,
   shiftIso, slowDrag, waitCount,
 } from './harness'
 import { seedFetchStub, type AuthMode } from './stub'
@@ -1081,9 +1082,8 @@ test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，�
     .toBeLessThanOrEqual(1)
 })
 
-/* review 抓到（B1b）：SpringSheet 的關閉是 spring、約 1.1 秒才卸載，這段時間 scrim 還鋪滿全螢幕，
-   按「加入」之後馬上點別的東西會被它吃掉（vaul 是 280ms）。用 mouse.click 的座標點，不用 locator.click——
-   後者會等「點得到」才出手，剛好把這個問題遮住。 */
+/* review 抓到（B1b）：SpringSheet 的關閉是 spring、約 0.8 秒才卸載，這段時間 scrim 還鋪滿全螢幕，
+   按「加入」之後馬上點別的東西會被它吃掉（vaul 是 280ms）。頭 300ms 由透明罩擋連按，過了就要點得到。 */
 test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會被 scrim 吃掉', async ({ page }) => {
   await openApp(page)
   await page.click('button.cta')
@@ -1091,10 +1091,9 @@ test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會�
   await page.waitForTimeout(800)
   await page.locator('.food-row').first().click()
   await page.waitForSelector('.pick-bar')
-  const tab = (await page.locator('.tab[aria-label="設定"]').boundingBox())!
+  await armClickDuringClose(page, 'log-sheet', await centerOf(page.locator('.tab[aria-label="設定"]')), SHEET_CLOSE_GUARD_MS + 60)
   await page.click('.pick-bar-btn')
-  await page.waitForTimeout(300) // sheet 才收到一半，DOM 還在
-  await page.mouse.click(tab.x + tab.width / 2, tab.y + tab.height / 2)
+  expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中').toBe(true)
   await expect(page.locator('[data-screen="settings"]'), '收合中的點擊被 scrim 吃掉了').toBeVisible({ timeout: 1500 })
 })
 
@@ -1190,23 +1189,18 @@ test('減少動態：開著再多拉、放手 → 直接回到開啟位置', asy
 
 /* 登出要清掉月份小點的快取：換人（另一個分頁登入時，supabase-js 會經 BroadcastChannel 通知
    這個分頁 SIGNED_IN，整個 App 不重載）之後，上一個帳號的小點不能留著，抓過的月份也要能重抓。
-   可觀察的結果是：重新登入後，目前這個月的小點查詢會再打一次。 */
-test('登出後再登入：月份小點重新查詢，不沿用上一個帳號抓過的月份', async ({ page }) => {
-  await openApp(page)
-  const monthFetches = () =>
-    page.evaluate((month) => {
-      const all = (window as unknown as { __allFetches: string[] }).__allFetches
-      return all.filter((u) => u.includes('/rest/v1/intake') && u.includes('select=eaten_on') && u.includes(`gte.${month}-01`)).length
-    }, TODAY.slice(0, 7))
-  await expect.poll(monthFetches, { message: '開機後應該查過目前這個月的小點' }).toBe(1)
-  const authKey = await page.evaluate(() => Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k)) ?? '')
-  expect(authKey).not.toBe('')
+   兩個帳號回不同日期才驗得到結果：只數查詢次數的話，拿掉「清小點」照樣綠。 */
+const dayCell = (page: Page, iso: string) => page.locator(`.datectl > :not([data-leaving]) [data-date="${iso}"]`)
+const kcalRow = (iso: string) => ({ eaten_on: iso, qty: 1, kcal: 100 })
 
+const signOutFromSettings = async (page: Page) => {
   await page.locator('.tab[aria-label="設定"]').click()
   await page.locator('.settings .signout').click()
   await expect(page.locator('#view-login')).toHaveCount(1)
+}
 
-  // 另一個分頁登入：經 BroadcastChannel 通知這個分頁（頁面不重載，App 的記憶體狀態整個留著）
+/** 另一個分頁登入：經 BroadcastChannel 通知這個分頁（頁面不重載，App 的記憶體狀態整個留著）。 */
+const signInFromOtherTab = async (page: Page, authKey: string) => {
   await page.evaluate(
     ({ key, userId }) => {
       const now = Math.floor(Date.now() / 1000)
@@ -1224,7 +1218,75 @@ test('登出後再登入：月份小點重新查詢，不沿用上一個帳號�
   )
   await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
   await page.waitForSelector('.gauge-num', { timeout: 5000 })
-  await expect.poll(monthFetches, { message: '重新登入後目前這個月的小點要重查（登出時快取沒清）' }).toBe(2)
+}
+
+const readAuthKey = async (page: Page) => {
+  const authKey = await page.evaluate(() => Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k)) ?? '')
+  expect(authKey).not.toBe('')
+  return authKey
+}
+
+test('登出換帳號：上一個帳號的小點消失，第二個帳號的日期要出現', async ({ page }) => {
+  // 這個月裡兩個不是今天的日子（今天的小點由當天的品項決定，不看月份查詢）
+  const month = TODAY.slice(0, 7)
+  const [first, second] = ['01', '02', '03'].map((d) => `${month}-${d}`).filter((iso) => iso !== TODAY)
+  await openApp(page, {}, { ...FIX, kcalWindow: [kcalRow(first)] })
+  await page.locator('.datectl-title').click()
+  await expect(dayCell(page, first), '第一個帳號的日期要有小點').toHaveClass(/is-marked/)
+  const authKey = await readAuthKey(page)
+
+  await signOutFromSettings(page)
+  await page.evaluate((rows) => {
+    ;(window as unknown as { __kcalWindow: unknown }).__kcalWindow = rows
+  }, [kcalRow(second)])
+  await signInFromOtherTab(page, authKey)
+
+  await page.locator('.datectl-title').click()
+  await expect(dayCell(page, second), '第二個帳號的日期要有小點（登出時沒清抓過的月份，就不會重查）').toHaveClass(/is-marked/)
+  await expect(dayCell(page, first), '上一個帳號的小點不能留著').not.toHaveClass(/is-marked/)
+})
+
+test('月份小點查詢在飛時登出：晚到的結果是上一個帳號的，不採用', async ({ page }) => {
+  // 往前兩個月：週列跨月時開機就可能查過上個月，再往前才一定還沒查過
+  const d = new Date(`${TODAY}T00:00:00`)
+  const twoMonthsAgo = new Date(d.getFullYear(), d.getMonth() - 2, 15)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const staleDay = `${twoMonthsAgo.getFullYear()}-${p(twoMonthsAgo.getMonth() + 1)}-15`
+  const monthFetches = () =>
+    page.evaluate((month) => {
+      const all = (window as unknown as { __allFetches: string[] }).__allFetches
+      // 只數第一頁：同一次查詢翻第二頁不算「重查」
+      return all.filter((u) => u.includes('/rest/v1/intake') && u.includes('select=eaten_on') && u.includes(`gte.${month}-01`) && u.includes('offset=0')).length
+    }, staleDay.slice(0, 7))
+  const toStaleMonth = async () => {
+    await page.locator('.datectl-title').click()
+    await page.getByRole('button', { name: '上個月' }).click()
+    await page.getByRole('button', { name: '上個月' }).click()
+    await expect(dayCell(page, staleDay)).toBeVisible()
+  }
+
+  await openApp(page)
+  const authKey = await readAuthKey(page)
+  await page.evaluate((rows) => {
+    const w = window as unknown as { __kcalWindow: unknown; __kcalHold: Promise<void> | null; __kcalRelease: () => void }
+    w.__kcalWindow = rows
+    w.__kcalHold = new Promise((resolve) => { w.__kcalRelease = resolve })
+  }, [kcalRow(staleDay)])
+  await toStaleMonth()
+  await expect.poll(monthFetches, { message: '前提：登出前查詢已送出、還卡著沒回' }).toBe(1)
+
+  await signOutFromSettings(page)
+  await page.evaluate(() => {
+    const w = window as unknown as { __kcalWindow: unknown; __kcalHold: unknown; __kcalRelease: () => void }
+    w.__kcalWindow = []
+    w.__kcalHold = null
+    w.__kcalRelease()
+  })
+  await signInFromOtherTab(page, authKey)
+
+  await toStaleMonth()
+  await expect.poll(monthFetches, { message: '新帳號要重查這個月，才看得出舊結果有沒有混進來' }).toBeGreaterThanOrEqual(2)
+  await expect(dayCell(page, staleDay), '晚到的結果是上一個帳號的，不該變成小點').not.toHaveClass(/is-marked/)
 })
 
 /* 減少動態漏掉的動畫（DESIGN「互動與動效」）。這幾個元素不好走到（lazy 的骨架、掃描填入、按住的當下），

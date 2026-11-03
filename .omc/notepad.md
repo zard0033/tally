@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-02）：盤點第二輪（v2.111、探針退場第一步）已 push。全量 415 條 412 過；`recovery-foreground`、`training` 逐組單點現在穩定或高頻紅，舊版也一樣，要先查（見 `e2e-reference`）。**探針頁先別開**：`/tally/_probe/` 還要補清 IndexedDB／localStorage。尚未真機驗：飲食列吸回、左滑手感、分頁指示器、iOS 鍵盤、v2.106–v2.111。
-下一步：①wiki `cleanup-inventory`「下一輪」8 項 ②真機驗 ③階段 1（`suggestWeight`，預期值手算）④餐建議樣張 ⑤每日目標 UX。
+現況（2026-11-03）：「下一輪」8 項＋收合吃點擊（v2.113）＋SW 查明（v2.114）都做完並 push，**全量 e2e 待確認**。SW 卡 `activating` 是測試讀到過時值，SW 沒問題。探針頁等 push 上線後才能開。
+下一步：①手機開 `/tally/_probe/` 再刪資料夾 ②真機驗（收合時捲動鎖提早解除、連按不穿透、第二下按住跨過 300ms）③階段 1（`suggestWeight`）④餐建議樣張 ⑤每日目標 UX。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -52,8 +52,7 @@
 - `.tr-check:active`／`.tr-all:active` 與 `[data-pressed]` 並存：左滑超過 10px 後勾還縮著。修法：`:active` 只留給鍵盤（`:focus-visible:active`）。
 - 佇列格式認不得時每次操作都丟錯、沒有出路（要不要做「原樣備份、清空重來」的逃生口）。
 - 寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」；sheet 關閉後焦點落到 body。
-- 新版 SW 偶發卡在 activating：與 precache 項數有關（460 項會卡，311／159 項穩），根因未查；該 spec 不能用 `--repeat-each`。
-- e2e 偶發紅（原因與做法看 wiki `e2e-reference`）：`tally.spec` 的 `.undo-bar` 一族、`settings-nav`、`spring-sheet`、`food-library` 焦點、`recovery-foreground`。
+- e2e 偶發紅（原因與做法看 wiki `e2e-reference`）：`tally.spec` 的 `.undo-bar` 一族、`settings-nav`、`spring-sheet`、`food-library` 焦點。
 - 主 repo `npm audit` 有 1 critical／13 high（與功能無關）。
 - 其餘 v2.91–v2.93 review 的 LOW 條目在 git 歷史，真機驗完再看。
 
@@ -66,5 +65,8 @@
 [追加 2026-11-02] 整體盤點修 B1–B6（使用者選「B1–B6＋批次 1」），清單在 wiki `cleanup-inventory`。
 ### 2026-11-02 08:29
 [追加 2026-11-02] 使用者裁決：其餘 18 個疑似 bug 續修（DESIGN v2.111）；探針頁開始退場第一步。
-[待決 2026-11-02] Settings 手刻 sheet 留到 B3 看樣張再改。探針第二步：先補清 IndexedDB／localStorage，使用者手機開過 /tally/_probe/（主畫面圖示也要）才刪資料夾。push 前 review 的非阻擋項在 wiki `cleanup-inventory`「下一輪」。
-
+[待決 2026-11-02] Settings 手刻 sheet 留到 B3 看樣張再改。探針第二步：這批 push 上線後，使用者手機開過 /tally/_probe/（主畫面圖示也要）才刪資料夾；確定手機沒開過就直接刪。
+[裁決 2026-11-03] `MAX_PAGES` 100 是假設值，使用者說先忽略，別再提。
+[追加 2026-11-03] 使用者裁決：修 sheet 收合時吃點擊（DESIGN v2.113）、查 SW 卡 activating（DESIGN v2.114，SW 沒問題）。
+[待決 2026-11-03] `SHEET_CLOSE_GUARD_MS` 300 是假設值（Android 雙擊間隔），iOS 真機連按會不會穿透要看。
+[未修 2026-11-03] push 前 review 的 LOW：FoodLibrary 寫入還在路上時關掉再開別筆，前一筆回來會關掉新草稿（LogSheet 同款，原本就有、現在視窗變大）；FinishSheet 的狀態在 SpringSheet 之上，收合重開不重置；減少動態時 sheet 立刻卸載，透明罩跟著沒了，連按照舊穿透。

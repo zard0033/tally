@@ -147,3 +147,15 @@ test('設定頁底部有動作示意圖的著作權標示', async ({ page }) => 
   await openSettings(page)
   await expect(page.locator('.settings-credit')).toHaveText('動作示意圖 © Gym visual — https://gymvisual.com/')
 })
+
+test('更新身體數據時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
+  await openApp(page)
+  await openSettings(page)
+  await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+  await page.locator('#w-kg').fill('75')
+  await page.evaluate(() => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = true
+  })
+  await page.locator('#settings-sheet-root .pick-bar-btn').click()
+  await expect(page.locator('#settings-sheet-root .sheet-error')).toHaveText('連不上網路，請確認 Wi-Fi 或行動網路')
+})

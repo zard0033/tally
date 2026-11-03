@@ -7,11 +7,12 @@
 
    生命週期：`open` 由呼叫端控制；元件自己多一個 `present`（還在畫面上）。open 變 false 時先跑關閉 spring，
    跑完才讓 Dialog 卸載——這是 Base UI 偵測不到 JS 動畫的情況，所以不靠它的 CSS 動畫偵測，自己決定何時卸。
+   收合約 0.8 秒，頭 SHEET_CLOSE_GUARD_MS 由一層透明罩擋連按的第二下，之後頁面就點得到。
    `y`＝距離完全展開的下移量（px）：0 完全展開、頂高＝完全在畫面下方。 */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { Dialog } from '@base-ui/react/dialog'
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type PanInfo } from 'motion/react'
-import { SPRING_SHEET_CLOSE, SPRING_SHEET_OPEN } from '@/lib/durations'
+import { SHEET_CLOSE_GUARD_MS, SPRING_SHEET_CLOSE, SPRING_SHEET_OPEN } from '@/lib/durations'
 import { shouldDismiss } from '@/lib/sheetPhysics'
 
 /** 讀屏念的名稱二選一：給 `title` 就渲染標題列、以標題為準（aria-labelledby）；沒有標題列的 sheet 才給 `label`（aria-label）。 */
@@ -63,6 +64,20 @@ const screenH = () => window.innerHeight
 export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, finalFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
   const reduced = useReducedMotion()
   const [present, setPresent] = useState(open)
+  // 每次打開都重掛整個 Dialog：收合中重開時它還沒卸載，不重掛會沿用上一次的草稿，焦點也不會回到 sheet 裡
+  const [session, setSession] = useState(0)
+  const [wasOpen, setWasOpen] = useState(open)
+  const [closeGuard, setCloseGuard] = useState(false)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    setCloseGuard(!open)
+    if (open) setSession((n) => n + 1)
+  }
+  useEffect(() => {
+    if (!closeGuard) return
+    const t = setTimeout(() => setCloseGuard(false), SHEET_CLOSE_GUARD_MS)
+    return () => clearTimeout(t)
+  }, [closeGuard])
   // 起點放在畫面下方：第一次畫出來就在外面，不會在 0 的位置閃一幀
   const y = useMotionValue(screenH())
   const popupRef = useRef<HTMLDivElement | null>(null)
@@ -121,6 +136,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
       if (node) {
         heightRef.current = node.offsetHeight
         y.set(node.offsetHeight)
+        releaseVelocity.current = 0 // 下滑關閉中途重開：上一次手勢的速度不帶到下一次
         run(0, SPRING_SHEET_OPEN)
       }
     },
@@ -137,7 +153,7 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
 
   // motion 在 pointerdown 的當下就停掉進行中的動畫；沒有真的拖動（單純點一下）就不會有 onDragEnd，
   // 動畫會停在半路。所以放手後若沒拖過，自己把 sheet 接回 0。關閉中（open 已是 false）整個不接手，
-  // 否則 sheet 卡在半路、Dialog 還開著，就是一個關不掉的 modal。
+  // 否則 sheet 會卡在半路、永遠不卸載。
   const onGrabPointerDown = (e: ReactPointerEvent) => {
     if (!openRef.current || lockedRef.current) return
     dragged.current = false
@@ -155,13 +171,21 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
 
   return (
     <Dialog.Root
+      key={session}
       open={present}
+      /* 收合中就不是 modal：Base UI 在 modal 時有一層蓋滿全螢幕的內部背板，留著的話收合全程點頁面都會被吃掉 */
+      modal={open}
       onOpenChange={(next) => {
-        if (!next && !locked) onClose() // Escape、點 scrim、關閉鈕：交給呼叫端，之後 open 變 false 才跑關閉 spring
+        // Escape、點 scrim、關閉鈕：交給呼叫端，之後 open 變 false 才跑關閉 spring。
+        // 收合中不再呼叫：這時不是 modal，點頁面任何地方都會走到這裡，呼叫端的 onClose 不該再跑一次
+        if (!next && !locked && openRef.current) onClose()
       }}
     >
       <Dialog.Portal>
-        {/* 關閉 spring 要約 1 秒才卸載，期間 scrim 與 popup 不吃點擊：按「加入」後馬上點別的東西不該被擋 */}
+        {/* 擋連按的第二下：關閉鈕底下可能就是選動作的列或移除鈕，穿透了不會有確認。不靠 Base UI 的內部背板，
+            它沒有 z-index，壓不住底下另一張 sheet 與底部分頁列 */}
+        {closeGuard && <div className="sheet-close-guard" aria-hidden="true" />}
+        {/* 關閉 spring 約 0.8 秒才卸載，期間 scrim 與 popup 不吃點擊：按「加入」後馬上點別的東西不該被擋 */}
         <Dialog.Backdrop className="scrim" render={<motion.div style={{ opacity: backdrop, pointerEvents: open ? undefined : 'none' }} />} />
         <Dialog.Popup
           ref={attach}
@@ -169,7 +193,14 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
           aria-label={title ? undefined : label}
           data-screen={screen}
           initialFocus={initialFocus}
-          finalFocus={finalFocus}
+          finalFocus={
+            finalFocus &&
+            (() => {
+              // 收合中使用者已經點去別處（例如搜尋框）就不搶回來：傳 ref 的話 Base UI 不看這件事，一律還焦點
+              const active = document.activeElement
+              return !active || active === document.body || popupRef.current?.contains(active) ? finalFocus.current : false
+            })
+          }
           render={
             <motion.div
               style={{ y, pointerEvents: open ? undefined : 'none' }}

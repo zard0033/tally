@@ -832,3 +832,36 @@ test('復原提示還在時封存另一筆失敗：提示照原本的 5 秒消�
   await expect(page.locator('.undo-pill'), 'A 的復原提示應該在 5 秒後消失').toHaveCount(0, { timeout: 8000 })
   await expect(page.locator('.lib-fab'), '提示消失後新增鈕要回來').toBeVisible()
 })
+
+/* 寫入失敗要說人話：網路斷線的原文（Load failed、Failed to fetch）對使用者沒有意義（lib/errors 的 friendlyError）。 */
+const OFFLINE_TEXT = '連不上網路，請確認 Wi-Fi 或行動網路'
+const dropNetwork = (page: Page) =>
+  page.evaluate(() => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = true
+  })
+
+test('就地編輯時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const first = rows(page).first()
+  const name = ((await first.locator('.nm').textContent()) ?? '').trim()
+  await first.locator(`[aria-label="編輯 ${name}"]`).click()
+  const editor = first.locator('.lib-edit')
+  await editor.locator('#le-kcal').fill('321')
+  await dropNetwork(page)
+  await editor.locator('.pick-bar-btn').click()
+  await expect(editor.locator('.sheet-error')).toHaveText(OFFLINE_TEXT)
+})
+
+test('新增食物時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await page.locator('#lf-name').fill('斷網時新增的食物')
+  await page.locator('#lf-kcal').fill('200')
+  await dropNetwork(page)
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
+  await expect(sheet.locator('.sheet-error')).toHaveText(OFFLINE_TEXT)
+})

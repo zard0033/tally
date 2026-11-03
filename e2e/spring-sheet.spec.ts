@@ -3,7 +3,8 @@
    三種結果（慢拖回彈／拖過門檻關／輕甩關）、背景 inert、焦點、減少動態。
    **鍵盤升起時的位置（`--kb`／`--vvtop`）桌面測不出來，只能真機驗**（DESIGN v2.34–v2.35 同一條限制）。 */
 import { test, expect, type Page, type Locator } from '@playwright/test'
-import { openApp } from './harness'
+import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
+import { armClickDuringClose, centerOf, closeClickResult, openApp } from './harness'
 
 const sheet = (page: Page) => page.locator('[data-screen="start-sheet"]')
 const scrim = (page: Page) => page.locator('.scrim')
@@ -87,6 +88,51 @@ test('點 scrim 關閉', async ({ page }) => {
   await settled(sheet(page))
   await page.mouse.click(200, 60) // sheet 上方露出的區域
   await expect(sheet(page)).toHaveCount(0)
+})
+
+/* 收合約 0.8 秒，頭 300ms 擋連按（training.spec 的「第二下不會穿透」守），之後頁面要能點：scrim 與 popup 自己關掉
+   pointerEvents 還不夠，Base UI 在 modal 時另有一層蓋滿全螢幕的內部背板。 */
+test('收合中點頁面內容：點得到，不用等收合跑完', async ({ page }) => {
+  await openStartSheet(page)
+  await settled(sheet(page))
+  const point = await centerOf(page.locator('[data-action="open-analysis"]'))
+  await armClickDuringClose(page, 'start-sheet', point, SHEET_CLOSE_GUARD_MS + 60)
+  await sheet(page).getByRole('button', { name: '關閉' }).click()
+  expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中').toBe(true)
+  await expect(page.locator('[data-screen="analysis"]'), '這一下被吃掉了').toBeVisible()
+  await expect(sheet(page)).toHaveCount(0)
+})
+
+test('收合一開始點頁面內容：這一下被擋住，連按關閉不會穿透', async ({ page }) => {
+  await openStartSheet(page)
+  await settled(sheet(page))
+  const point = await centerOf(page.locator('[data-action="open-analysis"]'))
+  await armClickDuringClose(page, 'start-sheet', point, 100)
+  await sheet(page).getByRole('button', { name: '關閉' }).click()
+  const { sheetStillThere, elapsedMs } = await closeClickResult(page)
+  expect(sheetStillThere, '前提：點擊落在收合中').toBe(true)
+  expect(elapsedMs, '前提：點擊落在透明罩還在的時候（機器太忙會超過，紅在這裡才不會誤報穿透）').toBeLessThan(SHEET_CLOSE_GUARD_MS)
+  await expect(sheet(page)).toHaveCount(0)
+  await expect(page.locator('[data-screen="analysis"]'), '第二下穿透了').toHaveCount(0)
+})
+
+test('收合中重開：回到定位、焦點在 sheet 裡、背景鎖回去，之後照常收得掉', async ({ page }) => {
+  await openStartSheet(page)
+  await settled(sheet(page))
+  const point = await centerOf(page.locator('button.cta[aria-label="開始訓練"]'))
+  await armClickDuringClose(page, 'start-sheet', point, SHEET_CLOSE_GUARD_MS + 60)
+  await sheet(page).getByRole('button', { name: '關閉' }).click()
+  expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中').toBe(true)
+  await page.waitForTimeout(1200) // 比收合久：點擊沒接到的話 sheet 這時已經卸載
+  await expect(sheet(page), '收合中點開啟鈕要能重開').toHaveCount(1)
+  await settled(sheet(page))
+  expect(Math.abs(await ty(sheet(page))), '重開後要回到 0').toBeLessThan(1)
+  expect(await sheet(page).evaluate((n) => n.contains(document.activeElement)), '焦點要在 sheet 裡').toBe(true)
+  expect(await page.evaluate(() => document.body.style.overflow), '背景要鎖回去').toBe('hidden')
+
+  await page.keyboard.press('Escape')
+  await expect(sheet(page)).toHaveCount(0)
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden')
 })
 
 test('標題列的關閉鈕關閉', async ({ page }) => {
@@ -292,6 +338,12 @@ test('AI 辨識中：Escape、點 scrim、下滑都收不掉記一筆 sheet；�
   }, SCAN_BODY)
   await page.locator('[data-testid="f-scan-input"]').setInputFiles(PNG)
   await expect(page.locator('#f-vendor'), '辨識沒開始（欄位沒鎖住）').toBeDisabled()
+
+  // 鎖住時關閉鈕按了沒反應，外觀要看得出來（最長鎖 45 秒）
+  const close = logSheet(page).locator('.icon-btn[aria-label="關閉"]').first()
+  await expect(close).toBeDisabled()
+  await expect(close, '關閉鈕鎖住時要淡掉').toHaveCSS('opacity', '0.35')
+  await expect(close).toHaveCSS('cursor', 'default')
 
   // 辨識中欄位全 disabled、焦點會掉到 body，Escape 到不了 Dialog；先把焦點放回 sheet，測的才是「鎖住」而不是「沒收到按鍵」
   await logSheet(page).focus()

@@ -4,7 +4,7 @@
    拳擊＝分鐘＋預估熱量。**分鐘欄是空的**（加卡時不預填分鐘，填了才算有記錄），有歷史時 placeholder 寫「上次 N」。沒有備註、沒有「刪除這筆」——移除走卡片頭的 ✕ 移除鈕（同其他動作）。
    呼叫端只能拿有氧動作的卡來開（`isCardioExercise` 先守門）：checkCardio 對非有氧回「請選有氧類型」，這張沒有類型可選。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
-   欄位狀態放在 CardioForm、以 session 當 key：每次打開都是一份新的草稿。 */
+   欄位狀態放在 CardioForm：SpringSheet 每次打開都重掛，所以是一份新的草稿。 */
 import { useEffect, useState } from 'react'
 import SpringSheet from '@/components/SpringSheet'
 import {
@@ -26,8 +26,6 @@ interface CardioSheetProps {
   exercise: Row | null
   /** 這個動作上次的分鐘（`cardioLastMinutes`，呼叫端在開 sheet 當下取）；null＝沒有歷史，分鐘欄不放提示。 */
   lastMinutes: number | null
-  /** 每次打開加一：當表單的 key。用列 id 當 key 不夠——關閉動畫還沒跑完就再打開同一張卡，會沿用上一份草稿。 */
-  session: number
   onClose: () => void
   onWrite: (ops: RowOp[]) => Promise<void>
 }
@@ -134,7 +132,7 @@ function CardioForm({ entry, exercise, lastMinutes, onClose, onWrite, onBusy }: 
   )
 }
 
-export default function CardioSheet({ open, entry, exercise, lastMinutes, session, onClose, onWrite }: CardioSheetProps) {
+export default function CardioSheet({ open, entry, exercise, lastMinutes, onClose, onWrite }: CardioSheetProps) {
   const [busy, setBusy] = useState(false)
   const title = exercise ? String(exercise.name) : '有氧'
 
@@ -142,7 +140,6 @@ export default function CardioSheet({ open, entry, exercise, lastMinutes, sessio
     <SpringSheet open={open} onClose={onClose} title={title} screen="cardio-sheet" fit locked={busy}>
       {entry && (
         <CardioForm
-          key={session}
           entry={entry}
           exercise={exercise}
           lastMinutes={lastMinutes}

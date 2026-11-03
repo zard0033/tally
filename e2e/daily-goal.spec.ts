@@ -509,3 +509,32 @@ test('實測維持熱量：天天有記只是體重太少 ⇒ 說「多量幾次
   await expect(card(page)).toContainText('多量幾次體重')
   await expect(card(page), '天天都有記，不該叫人去「接回記錄」').not.toContainText('接回記錄')
 })
+
+/* 寫入失敗要說人話：公式與自訂目標是兩條存檔路徑，各自有 catch。 */
+const OFFLINE_TEXT = '連不上網路，請確認 Wi-Fi 或行動網路'
+const dropNetwork = (page: Page) =>
+  page.evaluate(() => {
+    ;(window as unknown as { __dataDown: boolean }).__dataDown = true
+  })
+
+test('公式目標存檔時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+  await page.locator('#g-rate').selectOption('1')
+  await dropNetwork(page)
+  await page.locator('.confirm-wrap .pick-bar-btn').click()
+  await expect(page.locator('.sheet-error')).toHaveText(OFFLINE_TEXT)
+})
+
+test('自訂目標存檔時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+  await page.locator('.goal-seg-wrap .seg button', { hasText: '自訂目標' }).click()
+  await page.locator('#g-custom-kcal').fill('2000')
+  await page.locator('#g-custom-protein').fill('150')
+  await page.locator('#g-custom-fat').fill('60')
+  await page.locator('#g-custom-carb').fill('200')
+  await dropNetwork(page)
+  await page.locator('.confirm-wrap .pick-bar-btn').click()
+  await expect(page.locator('.sheet-error')).toHaveText(OFFLINE_TEXT)
+})

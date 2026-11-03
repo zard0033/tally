@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { KeyValueStore } from './queueStore'
 import type { SenderChain } from './sender'
 import { BASE_STORAGE_KEY, createTrainingRuntime, type ReaderBuilder, type TrainingClient } from './trainingRuntime'
@@ -137,10 +137,22 @@ describe('load', () => {
   })
 
   it('伺服器一直有資料（異常）：超過分頁上限就當讀取失敗，不無窮迴圈', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const t = setup({ pageSize: 1 })
+    t.backend.seed('exercises', ...Array.from({ length: 130 }, (_, i) => exercise(`e${String(i).padStart(3, '0')}`)))
+    const v = await t.rt.load(U1)
+    expect(v.source).toBe('empty') // 殘缺的一份不採用
+    // 畫面只會說連不上伺服器，真正的原因要留在 console 才查得到
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('exercises'))
+    warn.mockRestore()
+  })
+
+  it('二十頁以上的正常資料要抓完：舊上限 20 頁會把它當成讀取失敗', async () => {
     const t = setup({ pageSize: 1 })
     t.backend.seed('exercises', ...Array.from({ length: 30 }, (_, i) => exercise(`e${String(i).padStart(2, '0')}`)))
     const v = await t.rt.load(U1)
-    expect(v.source).toBe('empty') // 殘缺的一份不採用
+    expect(v.source).toBe('server')
+    expect(v.db.exercises).toHaveLength(30)
   })
 
   it('讀到後寫進本機：離線重開（新實例、同一份儲存）仍讀得到，標示為 cache', async () => {

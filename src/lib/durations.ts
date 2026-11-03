@@ -21,6 +21,11 @@ export const EASE = [0.4, 0, 0.2, 1] as const
 /** motion 吃的是秒 */
 export const sec = (ms: number) => ms / 1000
 
+/** sheet 開始收合後，繼續擋住頁面點擊多久（SpringSheet）：連按兩下的第二下不能穿透到底下的控制項。
+ *  **假設值**：取自 Android 的 DOUBLE_TAP_TIMEOUT（AOSP ViewConfiguration.java，300ms），iOS 查不到官方數字、也沒有實測手指連按的間隔。
+ *  另一個依據是動畫：SPRING_SHEET_CLOSE 跑到 300ms 時已收約 96%，這時放開視覺上 sheet 幾乎不見了。 */
+export const SHEET_CLOSE_GUARD_MS = 300
+
 /** 組編輯 sheet 的 ± 數字翻動：spec.md 動效表指定 120ms，落在 fast（100）與 base（160）之間，不是階梯的一級，單獨命名。 */
 export const NUMBER_FLIP_MS = 120
 

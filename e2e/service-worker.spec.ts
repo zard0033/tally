@@ -241,11 +241,16 @@ test('新版 SW 裝好就接手，並把頁面重新載入成新版（AC 6）', 
     .poll(() => page.evaluate(() => (window as unknown as { __marker?: number }).__marker ?? null).catch(() => null), { timeout: 20_000 })
     .toBeNull()
 
-  // 重載後：新版是 active、沒有 waiting 卡著、只剩一個 precache
+  // 重載後：新版是 active、沒有 waiting 卡著、只剩一個 precache。
+  // 要另開分頁問：clientsClaim 在 activate 期間就觸發重載，WebKit 給重載後這一頁的 ServiceWorker 物件有時停在 activating、
+  // 之後不再更新（2026-11-03 實測：這時 SW 自己報 activated、fetch 7ms 回 200、別的分頁讀到 activated）。
+  // 這條以前被當成「SW 卡住」，單跑紅一半。真的卡住時新分頁一樣讀到 activating，所以驗得到
+  const fresh = await page.context().newPage()
+  await fresh.goto(`${ORIGIN}/tally/`)
   await expect
     .poll(
       () =>
-        page
+        fresh
           .evaluate(async () => {
             const reg = await navigator.serviceWorker.getRegistration('/tally/')
             return { waiting: reg?.waiting?.state ?? null, active: reg?.active?.state ?? null, caches: (await caches.keys()).length }

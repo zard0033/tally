@@ -833,6 +833,8 @@ button { -webkit-user-select: none; user-select: none; }
   background: color-mix(in srgb, var(--ink) 55%, transparent);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   -webkit-appearance: none; appearance: none; }
+/* SpringSheet 收合頭 300ms 的透明罩：要高過所有 sheet 與底部分頁列 */
+.sheet-close-guard { position: fixed; inset: 0; z-index: 20; }
 /* 進場動畫只給 Settings 的手刻 sheet——其餘 sheet 的 scrim 由 SpringSheet 的 opacity 跟著 y 驅動。
    base class 掛動畫會跟它們打架，真機退場時 scrim 分區變色（頂部延遲）就是這麼來的，別加回去 */
 #settings-sheet-root .scrim { animation: scrim-in var(--dur-sheet) var(--ease-sheet) both; }
@@ -903,6 +905,7 @@ button { -webkit-user-select: none; user-select: none; }
   -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 .icon-btn svg { width: 18px; height: 18px; }
 .icon-btn:active { opacity: .5; }
+.icon-btn:disabled { opacity: .35; cursor: default; }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* chip 列與關閉鈕同一行：清單屏沒有標題列，關閉鈕併進來省掉一整行 52px */

@@ -128,10 +128,9 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const [setTarget, setSetTarget] = useState<SetTarget | null>(null)
   const [setOpen, setSetOpen] = useState(false)
   const setOpener = useRef<HTMLElement | null>(null)
-  // 有氧 sheet：記卡的 id、每次 render 從 detail 取那一列（存檔後卡片與下次打開都是新值）；session 當表單 key
+  // 有氧 sheet：記卡的 id、每次 render 從 detail 取那一列（存檔後卡片與下次打開都是新值）
   const [cardioId, setCardioId] = useState<string | null>(null)
   const [cardioOpen, setCardioOpen] = useState(false)
-  const [cardioSession, setCardioSession] = useState(0)
   // 分鐘欄的「上次 N」：開 sheet 當下取一次（排除這次訓練），sheet 開著時不隨寫入變
   const [cardioLast, setCardioLast] = useState<number | null>(null)
   const [finish, setFinish] = useState(false)
@@ -236,7 +235,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const openCardio = (item: WorkoutExerciseDetail) => {
     setCardioId(item.entry.id)
     setCardioLast(cardioLastMinutes(db, String(item.entry.exercise_id), workout.id))
-    setCardioSession((n) => n + 1)
     setCardioOpen(true)
   }
   const cardioItem = cardioId ? exercises.find((e) => e.entry.id === cardioId) : undefined
@@ -503,7 +501,6 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
         entry={cardioItem?.entry ?? null}
         exercise={cardioItem?.exercise ?? null}
         lastMinutes={cardioLast}
-        session={cardioSession}
         onClose={() => setCardioOpen(false)}
         onWrite={onWrite}
       />

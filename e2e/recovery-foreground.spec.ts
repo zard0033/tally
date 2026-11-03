@@ -34,6 +34,10 @@ test('肌群狀態：回到前景（visibilitychange）重取現在，恢復中�
   await expect(shoulder).toHaveAttribute('data-state', 'recovering')
   await expect(shoulder.locator('.an-state')).toContainText('12')
 
+  // 撥快 13 小時會讓種好的 session（1 小時後到期）過期，回前景時 supabase-js 要 refresh。真實世界 refresh 會成功；
+  // stub 預設擋下 /auth/v1/，那會被踢回登入頁，這條就變成在跟登出賽跑（2026-11-03 查到的 10 次全紅）
+  await page.evaluate(() => { (window as unknown as { __authMode: string }).__authMode = 'ok' })
+
   // 時間過了 13 小時，但沒有回前景的事件：畫面仍是舊的
   const p = await page.evaluate(() => Date.now())
   await page.clock.setFixedTime(p + 13 * HOUR)

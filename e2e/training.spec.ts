@@ -2,7 +2,8 @@
    第一次開時預填 16 個動作。開始訓練／記組／離線記錄在後面的段落補。
    fetch 全 stub；注意 stub 的寫入不落地（寫進去的列下一次 GET 不會出現）。 */
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { gotoDate, leg, openApp, shiftIso, slowDrag } from './harness'
+import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
+import { armClickDuringClose, centerOf, closeClickResult, gotoDate, leg, openApp, shiftIso, slowDrag } from './harness'
 import { FIX, TODAY } from './fixtures'
 import { SEEDED_FIX } from './seeded'
 
@@ -2947,6 +2948,9 @@ test('全部完成：逐組進行中單點一組，換色不被逐組的延遲�
   await expect(stat(page, 'sets')).toHaveText('3/3') // 資料已落地，逐組的 class 還掛著（約 540ms 內）
   // 在頁內同一個 tick 裝監聽、直接點：Playwright 的 click() 要等 actionability，可能慢過逐組 class 的存活時間（約 540ms），
   // 那樣量到的 0 是空過（mutation 驗證時拿掉 endCascade 照樣綠）。所以同時回報點下去當下 class 還在不在，當作測試自己的前提
+  // 第 3 組的換色要先走完 120ms 的延遲才能點：還在延遲裡時顏色根本沒變，取消完成後目標色等於現在的顏色，
+  // 瀏覽器不會起新的 transition，量不到東西（2026-11-03 查到的高頻紅，那段空窗使用者看不出差別，不是產品問題）。
+  // 用 MutationObserver 在 done 拿掉的當下讀 getAnimations，不等 transitionrun：事件排到下一幀才發，機器忙時 160ms 的 transition 可能已經結束
   const { hadClass, delay } = await page
     .locator('.ex .set')
     .nth(2)
@@ -2955,16 +2959,27 @@ test('全部完成：逐組進行中單點一組，換色不被逐組的延遲�
       (el) =>
         new Promise<{ hadClass: boolean; delay: number }>((resolve) => {
           const row = el.closest('.set') as HTMLElement
-          const hadClass = row.classList.contains('is-cascade')
-          const timer = setTimeout(() => resolve({ hadClass, delay: -2 }), 1500)
-          el.addEventListener('transitionrun', function on(e) {
-            if ((e as TransitionEvent).propertyName !== 'background-color') return
-            el.removeEventListener('transitionrun', on)
-            clearTimeout(timer)
-            const tr = el.getAnimations().find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
-            resolve({ hadClass, delay: Number(tr?.effect?.getTiming().delay ?? -1) })
-          })
-          el.click()
+          const colorTransition = () =>
+            el.getAnimations().find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
+          const clickAndMeasure = () => {
+            const hadClass = row.classList.contains('is-cascade')
+            const timer = setTimeout(() => resolve({ hadClass, delay: -2 }), 1500)
+            new MutationObserver((_, observer) => {
+              if (row.classList.contains('done')) return
+              observer.disconnect()
+              clearTimeout(timer)
+              resolve({ hadClass, delay: Number(colorTransition()?.effect?.getTiming().delay ?? -1) })
+            }).observe(row, { attributes: true, attributeFilter: ['class'] })
+            el.click()
+          }
+          const running = colorTransition()
+          if (running && Number(running.currentTime ?? 0) < Number(running.effect?.getTiming().delay ?? 0)) {
+            el.addEventListener('transitionstart', function on(e) {
+              if ((e as TransitionEvent).propertyName !== 'background-color') return
+              el.removeEventListener('transitionstart', on)
+              clickAndMeasure()
+            })
+          } else clickAndMeasure()
         }),
     )
   expect(hadClass, '前提：點下去的當下，這一列還掛著逐組的 class（不然這條測試什麼都沒驗）').toBe(true)
@@ -4326,18 +4341,70 @@ test('sheet 鎖住時關閉鈕是 disabled，解鎖後恢復', async ({ page }) 
   await expect(close, '失敗後可以關').toBeEnabled()
 })
 
-/* CardioSheet 的註解說列 id 當 key 不夠：關閉動畫還沒跑完就重開同一張，會沿用上一份草稿。 */
+/* 收合動畫中重開同一張：Dialog 還沒卸載，沒有重掛會沿用上一份草稿（SpringSheet 每次打開換 key）。 */
 test('編輯動作 sheet 關閉動畫中重開同一筆：不沿用上一份草稿', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
   await openLibrary(page)
   const row = library(page).locator('.tr-row', { hasText: '坐姿划船' })
+  const point = await centerOf(row)
   await row.click()
   await expect(editSheet(page)).toBeVisible()
   const name = editSheet(page).getByRole('textbox', { name: '名稱' })
   await name.fill('打到一半的草稿')
+  await armClickDuringClose(page, 'exercise-edit', point, SHEET_CLOSE_GUARD_MS + 60)
   await editSheet(page).getByRole('button', { name: '關閉', exact: true }).click()
-  await row.click({ timeout: 1500 })
-  await expect(editSheet(page)).toBeVisible()
+  expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中（不然這條什麼都沒驗）').toBe(true)
+  await page.waitForTimeout(1200) // 比收合久：點擊沒接到的話 sheet 這時已經卸載
+  await expect(editSheet(page), '收合中點動作列要能重開').toBeVisible()
   await expect(editSheet(page).getByRole('textbox', { name: '名稱' })).toHaveValue('坐姿划船')
+})
+
+/* 疊在選動作 sheet 上的檢視器。選動作的列一點就選定，「替換為…」模式還會直接換掉動作，所以穿透的代價最高。 */
+async function openViewerOverPicker(page: Page, zoom: 'leg-press' | 'first-row' = 'leg-press') {
+  await openApp(page, {}, SEEDED_FIX)
+  await openTraining(page)
+  await startBlank(page)
+  await page.locator('.tr-bottom .tr-secondary').click()
+  const picker = page.locator('[data-screen="exercise-picker"]')
+  await (zoom === 'first-row' ? picker.locator('.ex-zoom').first() : picker.getByRole('button', { name: '放大腿推舉的示意圖' })).click()
+  await expect(viewer(page)).toBeVisible()
+  await page.waitForTimeout(900) // 等開啟 spring 落定，關閉鈕的座標才準
+}
+
+test('檢視器關閉鈕連按兩下：第二下不會穿透選到底下的動作', async ({ page }) => {
+  await openViewerOverPicker(page)
+  const close = viewer(page).getByRole('button', { name: '關閉', exact: true })
+  const point = await centerOf(close)
+  expect(
+    await page.evaluate(({ x, y }) => document.elementsFromPoint(x, y).some((e) => e.closest('.tr-row-main')), point),
+    '前提：關閉鈕正下方就是一列動作（不然這條什麼都沒驗）',
+  ).toBe(true)
+  await armClickDuringClose(page, 'exercise-viewer', point, 150)
+  await close.click()
+  const { sheetStillThere, elapsedMs } = await closeClickResult(page)
+  expect(sheetStillThere, '前提：第二下落在收合中').toBe(true)
+  expect(elapsedMs, '前提：第二下落在透明罩還在的時候（機器太忙會超過，紅在這裡才不會誤報穿透）').toBeLessThan(SHEET_CLOSE_GUARD_MS)
+  await expect(viewer(page)).toHaveCount(0)
+  // 看 pointerEvents 不看節點還在不在：選單就算被關，也要再 0.8 秒才卸載，count 會在這段空檔誤過
+  expect(
+    await page.locator('[data-screen="exercise-picker"]').evaluate((n) => (n as HTMLElement).style.pointerEvents),
+    '選動作 sheet 不該被第二下關掉',
+  ).not.toBe('none')
+  await expect(page.locator('.ex'), '不該多出動作').toHaveCount(0)
+})
+
+/* 用真滑鼠：合成的事件序列（pointerdown 到 click 加 focus）重現不了搶焦點，傳 ref 版本照樣綠（2026-11-03 實測）。 */
+test('檢視器收合中點搜尋框：收合結束後焦點留在搜尋框，不被搶回縮圖', async ({ page }) => {
+  await openViewerOverPicker(page, 'first-row') // 搜尋框跟著清單捲，要開最上面那列才看得到它
+  const search = page.locator('[data-screen="exercise-picker"] input[aria-label="搜尋動作"]')
+  const point = await centerOf(search)
+  await viewer(page).getByRole('button', { name: '關閉', exact: true }).click()
+  await page.waitForTimeout(SHEET_CLOSE_GUARD_MS + 60)
+  await expect(viewer(page), '前提：點擊落在收合中（卸載前才有搶焦點的問題）').toHaveCount(1)
+  await page.mouse.click(point.x, point.y)
+  await expect(search).toBeFocused()
+  await expect(viewer(page)).toHaveCount(0)
+  await page.waitForTimeout(100)
+  await expect(search).toBeFocused()
 })

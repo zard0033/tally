@@ -7,7 +7,7 @@
 
    所以：既有那串原樣保留，新的互動路徑寫成各自獨立的 test()，開場呼叫 openApp() 一行到位。
    跑單一條：npx playwright test -g "關鍵字" */
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { FIX, TODAY, USER_ID } from './fixtures'
 import { seedFetchStub, type StubOptions } from './stub'
 
@@ -164,4 +164,41 @@ export async function grabPoint(page: Page, n = 0) {
   const box = await page.locator('.timeline .item-content').nth(n).boundingBox()
   expect(box, '拿不到品項座標').not.toBeNull()
   return { x: box!.x + box!.width - 20, y: box!.y + box!.height / 2 }
+}
+
+/** 預約：sheet 一開始收合（popup 的 pointerEvents 變 none），過 afterMs 就對這個座標點一下。
+ *  整段在頁內跑，不用 waitForTimeout 再 mouse.click：全量跑時機器滿載，Playwright 來回的時間可能比收合還久，
+ *  點擊落在卸載之後就驗不到收合中的情境了。用 elementFromPoint 取目標，所以蓋在上面的背板一樣會把這一下吃掉。
+ *  先呼叫這支、再觸發關閉，結果由 closeClickResult 取。 */
+export async function armClickDuringClose(page: Page, screen: string, point: { x: number; y: number }, afterMs: number) {
+  await page.evaluate(
+    ({ screen, point, afterMs }) => {
+      const sheet = document.querySelector<HTMLElement>(`[data-screen="${screen}"]`)!
+      ;(window as unknown as { __closeClick: Promise<{ sheetStillThere: boolean; elapsedMs: number }> }).__closeClick = new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (sheet.style.pointerEvents !== 'none') return
+          observer.disconnect()
+          const start = performance.now()
+          setTimeout(() => {
+            const hit = document.elementFromPoint(point.x, point.y) as HTMLElement | null
+            resolve({ sheetStillThere: sheet.isConnected, elapsedMs: Math.round(performance.now() - start) })
+            // 焦點比照真實點擊：Safari 點按鈕不會取得焦點、原本的焦點掉到 body。SVG 沒有 .click()，所以發事件
+            ;(document.activeElement as HTMLElement | null)?.blur()
+            hit?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+          }, afterMs)
+        })
+        observer.observe(sheet, { attributes: true, attributeFilter: ['style'] })
+      })
+    },
+    { screen, point, afterMs },
+  )
+}
+
+export const closeClickResult = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __closeClick: Promise<{ sheetStillThere: boolean; elapsedMs: number }> }).__closeClick)
+
+/** 元素中心點，給 armClickDuringClose 用。 */
+export async function centerOf(locator: Locator) {
+  const box = (await locator.boundingBox())!
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }

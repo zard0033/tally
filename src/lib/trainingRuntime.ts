@@ -92,8 +92,10 @@ export const BASE_STORAGE_KEY = 'training-base'
 /** 單一請求的逾時。 */
 const FETCH_TIMEOUT_MS = 8000
 
-/** 單張表最多翻幾頁。二十頁（預設兩萬列）還沒抓完就是哪裡錯了。 */
-const MAX_PAGES = 20
+/** 單張表最多翻幾頁，到頂當讀取失敗（寧可退回本機底，也不採用殘缺的一份）。預設一頁千列、最後一次要讀到空頁，
+ *  實際上限約 99,000 列。**100 是假設值**，沒有實測過這麼多列的載入時間；依據只有用量：
+ *  2026-11-03 線上 workout_sets 94 列、累積 22 天。 */
+const MAX_PAGES = 100
 
 /** 目前的 session 不是這個帳號（或沒有 session）。與「連不上」分開：前者不該預填。 */
 class SessionMismatch extends Error {
@@ -198,7 +200,9 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
           if (got.length === 0) return [table, rows] as const
           rows.push(...got)
         }
-        throw new Error(`${table}：分頁超過上限`) // 寧可讀取失敗退回本機底，也不採用殘缺的一份
+        // 畫面只會說連不上伺服器，真正的原因留在 console
+        console.warn(`${table}：分頁超過上限（${MAX_PAGES} 頁）`)
+        throw new Error(`${table}：分頁超過上限`)
       }),
     )
     return Object.fromEntries(entries) as unknown as TrainingDb
