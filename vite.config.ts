@@ -51,7 +51,7 @@ export default defineConfig({
        - injectRegister false：註冊由 src/registerSW.ts 自己呼叫，dev 與 e2e 不註冊。
        - manifest false：沿用 public/manifest.webmanifest。
        - 只 precache 同源外殼，沒有 runtime route，Supabase 請求不被攔。
-       - woff2 要列進來，否則離線掉字型；jpg 是動作示意縮圖（149 張約 1MB，離線健身房要看得到）；_probe 是拋棄式探針頁，不進快取。
+       - woff2 要列進來，否則離線掉字型；jpg 是動作示意縮圖（149 張約 1MB，離線健身房要看得到）。
        - **gif（動作示意動畫，149 個共約 14MB）刻意不在 globPatterns 裡、不進 precache**：體積太大，首次安裝要多下載約 14MB、也佔手機儲存（之後更新只重抓內容變了的檔）。
          （2026-10-19 當時的理由「項數太多 SW 會卡在 activating」不成立：2026-11-03 查明那是測試讀到頁面上過時的 state，164 項也一樣紅。）離線時檢視器退回靜態縮圖（ExerciseViewer）。
        - wav 只有一個：組間休息的提示音（src/assets/rest-chime.wav，約 15KB），離線健身房也要響，所以進 precache。
@@ -71,9 +71,9 @@ export default defineConfig({
           manifest: false,
           workbox: {
             globPatterns: ['**/*.{js,css,html,svg,png,jpg,wav,webmanifest,woff2}'],
-            globIgnores: ['_probe/**', 'reset.html'],
+            globIgnores: ['reset.html'],
             navigateFallback: 'index.html',
-            navigateFallbackDenylist: [/\/_probe\//, /\/reset(\.html)?(\?|$)/],
+            navigateFallbackDenylist: [/\/reset(\.html)?(\?|$)/],
             ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^v$/],
             cleanupOutdatedCaches: true,
             skipWaiting: true,

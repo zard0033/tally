@@ -124,7 +124,7 @@ test('首次安裝後，伺服器關掉也能開 App；快取只含同源外殼�
   expect(urls.length).toBeGreaterThan(0)
   expect(urls.every((u) => u.startsWith('/tally/'))).toBe(true)
   expect(urls.some((u) => u.endsWith('.woff2'))).toBe(true) // 字型要在，否則離線掉字
-  expect(urls.some((u) => u.includes('_probe') || u.endsWith('reset.html'))).toBe(false)
+  expect(urls.some((u) => u.endsWith('reset.html'))).toBe(false)
 
   await stopServer()
   // 伺服器真的連不上了，之後的成功才算是 SW 供應的

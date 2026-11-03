@@ -26,7 +26,7 @@ schemaVersion: 1
 
 **還沒處理**：`prefersReducedMotion`、`errText` 多份（低價值，刻意不動）；`FoodFormFields` 的 `portalContainer` 是否還需要沒有實測；打字到一半時前一筆失敗會洗掉輸入、卸載後立刻重開份量編輯（修法前就有，範圍窄）。`Settings` 手刻 sheet 使用者決定留到 B3。
 
-**探針頁退場**：第一步已做，`sw.js` 與 `index.html` 換成自我解除版，只動探針自己的 SW 與 `probe-v1`，因為 CacheStorage 與 `getRegistrations()` 是整個源站共用，舊 SW 的 `activate` 確實會刪正式站快取（一次性測試實測）。第二步要等使用者手機開過 `/tally/_probe/` 才刪資料夾（主畫面若有探針圖示，那一份儲存分開，也要開一次再刪圖示；開之前先做上面 ②），到時順手拿掉 `vite.config.ts` 與 `e2e/service-worker.spec.ts` 對 `_probe` 的參照。`src/components/` 的新檔不在 `e2e:affected` 的表上，改了會升全量，是刻意的（共用元件影響面看不出來）。
+**探針頁退場（2026-11-03 結案）**：使用者手機開過、看到清除完成，`public/_probe/` 與 `vite.config.ts`、`service-worker.spec.ts` 的參照都拿掉了。以下是當時的做法：第一步已做，`sw.js` 與 `index.html` 換成自我解除版，只動探針自己的 SW 與 `probe-v1`，因為 CacheStorage 與 `getRegistrations()` 是整個源站共用，舊 SW 的 `activate` 確實會刪正式站快取（一次性測試實測）。第二步要等使用者手機開過 `/tally/_probe/` 才刪資料夾（主畫面若有探針圖示，那一份儲存分開，也要開一次再刪圖示；開之前先做上面 ②），到時順手拿掉 `vite.config.ts` 與 `e2e/service-worker.spec.ts` 對 `_probe` 的參照。`src/components/` 的新檔不在 `e2e:affected` 的表上，改了會升全量，是刻意的（共用元件影響面看不出來）。
 
 **要真機確認**：飲食列放手吸回（B5）、左滑手感（`swipePhysics`）、分頁指示器滑動（`TabBar`）、iOS 鍵盤（`useViewportInsets`）。
 

@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-03）：「下一輪」8 項＋收合吃點擊（v2.113）＋SW 查明（v2.114）都做完並 push，**全量 e2e 待確認**。SW 卡 `activating` 是測試讀到過時值，SW 沒問題。探針頁等 push 上線後才能開。
-下一步：①手機開 `/tally/_probe/` 再刪資料夾 ②真機驗（收合時捲動鎖提早解除、連按不穿透、第二下按住跨過 300ms）③階段 1（`suggestWeight`）④餐建議樣張 ⑤每日目標 UX。
+現況（2026-11-03）：`d2ee2f8` 已上線（v2.112–v2.114），push 後全量 426 條 425 過，紅的是偶發清單上的有氧 sheet 寫入失敗（可能 sheet 真的自己關了，待查）。探針退場第二步做完，已 commit **未 push**（刪 `public/_probe/`，全量 426 條全綠）。
+下一步：①push 探針刪除 ②查有氧 sheet 失敗後自己關 ③真機驗（收合時捲動鎖、連按不穿透）④階段 1（`suggestWeight`）⑤餐建議樣張。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -65,7 +65,7 @@
 [追加 2026-11-02] 整體盤點修 B1–B6（使用者選「B1–B6＋批次 1」），清單在 wiki `cleanup-inventory`。
 ### 2026-11-02 08:29
 [追加 2026-11-02] 使用者裁決：其餘 18 個疑似 bug 續修（DESIGN v2.111）；探針頁開始退場第一步。
-[待決 2026-11-02] Settings 手刻 sheet 留到 B3 看樣張再改。探針第二步：這批 push 上線後，使用者手機開過 /tally/_probe/（主畫面圖示也要）才刪資料夾；確定手機沒開過就直接刪。
+[待決 2026-11-02] Settings 手刻 sheet 留到 B3 看樣張再改。
 [裁決 2026-11-03] `MAX_PAGES` 100 是假設值，使用者說先忽略，別再提。
 [追加 2026-11-03] 使用者裁決：修 sheet 收合時吃點擊（DESIGN v2.113）、查 SW 卡 activating（DESIGN v2.114，SW 沒問題）。
 [待決 2026-11-03] `SHEET_CLOSE_GUARD_MS` 300 是假設值（Android 雙擊間隔），iOS 真機連按會不會穿透要看。
