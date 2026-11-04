@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-03）：探針退場第二步（`b7ae7fc`）與有氧 sheet `locked` 晚一步的修正已 push，**全量 e2e 待確認**。
+現況（2026-11-04）：`d4880a7` 已上線，探針退場與有氧 sheet 修正都完成。push 後全量 426 條 425 過，紅的是 `inline-edit` 連按，查明是測試賽跑、產品沒問題；測試修正已 commit、**未 push**，沒再跑全量。
 下一步：①真機驗（收合時捲動鎖、連按不穿透、第二下按住跨過 300ms）②階段 1（`suggestWeight`，預期值手算）③餐建議樣張 ④每日目標 UX。
 
 ## Working Memory
@@ -52,7 +52,7 @@
 - `.tr-check:active`／`.tr-all:active` 與 `[data-pressed]` 並存：左滑超過 10px 後勾還縮著。修法：`:active` 只留給鍵盤（`:focus-visible:active`）。
 - 佇列格式認不得時每次操作都丟錯、沒有出路（要不要做「原樣備份、清空重來」的逃生口）。
 - 寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」；sheet 關閉後焦點落到 body。
-- e2e 偶發紅（原因與做法看 wiki `e2e-reference`）：`tally.spec` 的 `.undo-bar` 一族、`settings-nav`、`spring-sheet`、`food-library` 焦點。
+- e2e 偶發紅：清單、原因與做法只看 wiki `e2e-reference`。
 - 主 repo `npm audit` 有 1 critical／13 high（與功能無關）。
 - 其餘 v2.91–v2.93 review 的 LOW 條目在 git 歷史，真機驗完再看。
 

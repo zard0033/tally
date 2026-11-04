@@ -275,6 +275,20 @@ test('份量欄打字後送出失敗：回到改之前的值，不留剛打的�
 
 /* 連按時前一筆還在路上（2026-11-02 push 前 review 抓到）。比對基準若用「存成功的值」，
    按 + 再按 − 會被當成沒變而不送，資料庫停在 + 的結果、畫面卻顯示 −。 */
+/* 連按兩下：在頁內連發，兩下之間只隔一個 task。Playwright 的 click 要來回，機器滿載時兩下可能隔到 500ms 以上，
+   前一筆早就回來了，就不是「前一筆還在路上」（2026-11-03 量到：第一筆失敗退回 1 才按第二下，送的是 2、畫面也是 2）。 */
+const pressStepsFast = (page: Page, first: 'plus' | 'minus', second: 'plus' | 'minus') =>
+  page.evaluate(
+    async ({ sel, first, second }) => {
+      const all = document.querySelectorAll<HTMLElement>(sel)
+      const press = (k: 'plus' | 'minus') => (k === 'minus' ? all[0] : all[all.length - 1]).click()
+      press(first)
+      await new Promise((r) => setTimeout(r))
+      press(second)
+    },
+    { sel: `${ROW} .qty-btn`, first, second },
+  )
+
 const slowWrites = (page: Page, ms: number) =>
   page.evaluate((delay) => {
     ;(window as unknown as { __writeDelayMs: number }).__writeDelayMs = delay
@@ -284,8 +298,7 @@ test('連按：按 + 再按 − 時前一筆還沒回來，兩筆都要送，最
   await openApp(page)
   await expand(page)
   await slowWrites(page, 400)
-  await page.locator(`${ROW} .qty-btn`).last().click()
-  await page.locator(`${ROW} .qty-btn`).first().click()
+  await pressStepsFast(page, 'plus', 'minus')
   await expect.poll(async () => (await patches(page)).length, { message: '兩筆都要送出' }).toBe(2)
   expect((await patches(page)).at(-1)?.body, '最後一筆要是改回來的 1').toEqual({ qty: 1 })
   await page.waitForTimeout(1000) // 兩筆都落定
@@ -299,8 +312,7 @@ test('連按：前一筆失敗、後一筆成功，畫面停在成功的值', as
   await page.evaluate(() => {
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'PATCH' }
   })
-  await page.locator(`${ROW} .qty-btn`).last().click()
-  await page.locator(`${ROW} .qty-btn`).last().click()
+  await pressStepsFast(page, 'plus', 'plus')
   await expect.poll(async () => (await patches(page)).length).toBe(2)
   await page.waitForTimeout(1000) // 兩筆都落定
   await expect(page.locator(`${ROW} .qty-value`), '第二筆成功，伺服器上是 3').toHaveValue('3')
@@ -313,8 +325,7 @@ test('連按：兩筆都失敗，畫面回到原本的值，之後再按同一�
   await page.evaluate(() => {
     ;(window as unknown as { __rejectWrite: Record<string, number> | null }).__rejectWrite = { intake: 500 }
   })
-  await page.locator(`${ROW} .qty-btn`).last().click()
-  await page.locator(`${ROW} .qty-btn`).last().click()
+  await pressStepsFast(page, 'plus', 'plus')
   await expect.poll(async () => (await patches(page)).length).toBe(2)
   await page.waitForTimeout(800) // 兩筆都落定
   await expect(page.locator(`${ROW} .qty-value`), '兩筆都失敗要回到 1').toHaveValue('1')

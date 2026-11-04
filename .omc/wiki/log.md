@@ -169,3 +169,7 @@
 - **Pages:** lesson-cardio-merge-2026-10-22.md, open-failures.md, lesson-sync-sheet-review-sheet-2026-10-15.md, e2e-reference.md, cleanup-inventory-2026-11-02.md
 - **Summary:** Query "有氧 sheet 寫入失敗 CardioSheet" → 5 results (of 23 total)
 
+## [2026-11-04T02:13:32.096Z] query
+- **Pages:** e2e-reference.md, lesson-flaky-root-cause-2026-11-03.md, verified-testing-e2e-mutation.md, cleanup-inventory-2026-11-02.md, lesson-cleanup-review-push-review-2026-11-02.md, status-facts-edge-function.md
+- **Summary:** Query "連按 測試賽跑 pressStepsFast 偶發紅 滿載" → 6 results (of 23 total)
+
