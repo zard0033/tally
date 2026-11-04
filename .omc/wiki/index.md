@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 37 pages | Last updated: 2026-11-04T02:12:36.391Z
+> 38 pages | Last updated: 2026-11-04T06:10:47.953Z
 
 ## debugging
 
@@ -20,6 +20,7 @@
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）
+- [lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）](lesson-meal-suggest-2026-11-04.md) — # lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
 - [lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）](lesson-presence-animation-mutation-2026-10-27.md) — # lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）
 - [lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）](lesson-recharts-trend-chart-recharts-2026-10-20.md) — # lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）

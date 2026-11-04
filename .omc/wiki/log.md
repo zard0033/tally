@@ -173,3 +173,11 @@
 - **Pages:** e2e-reference.md, lesson-flaky-root-cause-2026-11-03.md, verified-testing-e2e-mutation.md, cleanup-inventory-2026-11-02.md, lesson-cleanup-review-push-review-2026-11-02.md, status-facts-edge-function.md
 - **Summary:** Query "連按 測試賽跑 pressStepsFast 偶發紅 滿載" → 6 results (of 23 total)
 
+## [2026-11-04T02:29:33.926Z] query
+- **Pages:** phase2-round1-log-2-2026-10-13-14.md, e2e-reference.md, lesson-rpe-expansion-rpe-push-review-2026-10-28.md, cleanup-inventory-2026-11-02.md
+- **Summary:** Query "階段 1 suggestWeight RPE 重量建議 餐建議樣張" → 4 results (of 37 total)
+
+## [2026-11-04T06:10:47.859Z] ingest
+- **Pages:** lesson-meal-suggest-2026-11-04.md
+- **Summary:** Created new page "lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）"
+

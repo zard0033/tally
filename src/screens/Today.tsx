@@ -12,8 +12,9 @@ import { isPlannable, weekdayDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
-import { macroExceeds, num, pct, sumIntake } from '@/lib/formulas'
+import { macroExceeds, macroGap, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
+import { suggestLabel, type RepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
 import ItemEditor from './ItemEditor'
 import type { TodayProps } from './types'
 
@@ -45,6 +46,10 @@ export default function Today(props: TodayProps) {
     onUpdateIntakeQty,
     onUpdateIntakeMeal,
     onUpdateIntakeDetail,
+    repeatByMeal,
+    repeatBusyKey,
+    repeatErr,
+    onAddRepeat,
   } = props
 
   const rows = dayData.rows
@@ -197,6 +202,8 @@ export default function Today(props: TodayProps) {
           const macroOver = key !== 'protein' && cur !== null && macroExceeds(cur, target)
           const curTxt = cur === null ? '—' : cur.toFixed(1)
           const tgtTxt = String(Math.round(target))
+          // 歷史日不顯示：缺口問的是「還能補多少」，過去的日子沒有這個問題
+          const gap = isPast || cur === null ? null : macroGap(cur, target)
           return (
             <div className={`macro${macroOver ? ' over' : ''}`} key={key}>
               <div className="lbl">{MACRO_LABEL[key]}</div>
@@ -210,12 +217,13 @@ export default function Today(props: TodayProps) {
                 role="group"
                 /* 「超出目標 126 克」會被讀成「超出了 126 克」，但 126 是目標值本身。
                    拆成兩個子句消歧義（v2.20，同樣的寫法要記得同步 LogSheet 的 macro-line）。 */
-                aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克`}
+                aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克${gap === null ? '' : `，還差 ${gap} 克`}`}
               >
                 <span aria-hidden="true">
                   <span className="cur">{curTxt}</span>
                   <span className="sep">/</span>
                   <span className="tgt">{tgtTxt}</span>
+                  {gap !== null && <span className="gap">差 {gap}</span>}
                 </span>
               </div>
             </div>
@@ -239,6 +247,10 @@ export default function Today(props: TodayProps) {
             handleChangeMeal,
             handleChangeDetail,
             editErr,
+            repeatByMeal,
+            onAddRepeat,
+            repeatBusyKey,
+            repeatErr,
           })
         )}
       </div>
@@ -258,6 +270,10 @@ interface TimelineHelpers {
   handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
   handleChangeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   editErr: { id: number; msg: string } | null
+  repeatByMeal: RepeatByMeal
+  onAddRepeat: (date: string, s: RepeatSuggestion) => void
+  repeatBusyKey: string | null
+  repeatErr: { key: string; msg: string } | null
 }
 
 /* 一列品項。位移層是 motion.div（純 transform，不動 layout），刪除鈕壓在它底下，
@@ -505,6 +521,7 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
           <MealNode
             key={`${meal.key}-${date}`}
             meal={meal}
+            date={date}
             items={items}
             nextDone={nextDone}
             isLast={i === MEALS.length - 1}
@@ -534,6 +551,7 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
    才會觸發退場動畫。`AnimatePresence` 的 `initial={false}` 保證重掛不會誤放進場動畫。 */
 function MealNode({
   meal,
+  date,
   items,
   nextDone,
   isLast,
@@ -541,6 +559,7 @@ function MealNode({
   h,
 }: {
   meal: Meal
+  date: string
   items: IntakeRow[]
   nextDone: boolean
   isLast: boolean
@@ -555,6 +574,8 @@ function MealNode({
     if (prevHasItems && !hasItems) setLingering(true)
   }
   const done = hasItems || lingering
+  const suggestion = h.repeatByMeal[meal.key]
+  const repeatKey = `${date}|${meal.key}`
 
   return (
     <div className="node">
@@ -611,16 +632,73 @@ function MealNode({
             </ul>
           </>
         ) : (
-          <button className="todo-row" type="button" onClick={() => h.onOpenSheet(meal.key)}>
-            <span className="lb">{meal.label}</span>
-            <span className="chev" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </span>
-          </button>
+          <>
+            <button className="todo-row" type="button" onClick={() => h.onOpenSheet(meal.key)}>
+              <span className="lb">{meal.label}</span>
+              <span className="chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
+            </button>
+            {suggestion && (
+              <SuggestRow
+                suggestion={suggestion}
+                mealLabel={meal.label}
+                busy={h.repeatBusyKey === repeatKey}
+                locked={h.repeatBusyKey !== null}
+                err={h.repeatErr?.key === repeatKey ? h.repeatErr.msg : null}
+                onAdd={() => h.onAddRepeat(date, suggestion)}
+              />
+            )}
+          </>
         )}
       </div>
     </div>
+  )
+}
+
+/* 待記錄那一列底下的一行建議：放不下的品項寧可截斷也不長高（sheet 與加入後的時間軸都看得到全部）。
+   只有寫入失敗時多一行錯誤，卡片還在、按鈕變重試。
+   鎖住用 aria-disabled，不用 disabled：按下去那顆鈕馬上就鎖，disabled 會讓焦點掉回 body，失敗轉「重試」時鍵盤使用者就迷路了。 */
+function SuggestRow({
+  suggestion,
+  mealLabel,
+  busy,
+  locked,
+  err,
+  onAdd,
+}: {
+  suggestion: RepeatSuggestion
+  mealLabel: string
+  busy: boolean
+  locked: boolean
+  err: string | null
+  onAdd: () => void
+}) {
+  const label = suggestLabel(suggestion)
+  const kcal = Math.round(suggestion.kcal)
+  return (
+    <>
+      <div className="sg">
+        <span className="sg-src">上次</span>
+        <span className="sg-items">{label}</span>
+        <span className="sg-kc">{kcal}</span>
+        <button
+          className="sg-add"
+          type="button"
+          aria-disabled={locked || undefined}
+          aria-label={busy ? '正在加入…' : `${err ? '重試加入' : '加入'}上次的${mealLabel}：${label}，${kcal} 卡`}
+          onClick={locked ? undefined : onAdd}
+        >
+          {busy ? '加入中…' : err ? '重試' : '加入'}
+        </button>
+      </div>
+      {err && (
+        <p className="sheet-error" role="alert">
+          存不進去：{err}
+        </p>
+      )}
+    </>
   )
 }

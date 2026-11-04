@@ -22,7 +22,7 @@ const TRAIN = ['training', 'rest-timer', 'spring-sheet', 'sync-sheet', 'weight-s
 const ANALYSIS = ['analysis', 'recovery-foreground']
 const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
-  'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align',
+  'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest',
 ]
 const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend']
 const SHEETS = ['spring-sheet', 'sync-sheet']
@@ -59,6 +59,8 @@ const FILES = {
   'src/lib/strength.ts': [...TRAIN, ...ANALYSIS],
   'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend'],
   'src/lib/baseline.ts': SETTINGS,
+  'src/lib/mealSuggest.ts': FOOD,
+  'src/useRepeatHistory.ts': FOOD,
 }
 
 /* 不影響任何 e2e 的路徑：文件、狀態、腳本、建置產物、後端定義（e2e 的 fetch 全 stub）、

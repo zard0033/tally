@@ -9,6 +9,7 @@ import type { Food, IntakeDetailPatch, IntakeRow, NewFood, NewIntake, NewWeight,
 import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
+import type { RepeatByMeal, RepeatSuggestion } from '@/lib/mealSuggest'
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
 
@@ -47,6 +48,14 @@ export interface TodayProps {
   /** 改這一筆自己的品名／營養值（去皮、少醬那種當天調整），不動食品庫。
    *  一次一欄，失敗處理同 onUpdateIntakeQty。 */
   onUpdateIntakeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
+  /** 這一天各餐的建議（該餐已有紀錄就沒有那一格）。沒資料或查詢失敗就是空物件。 */
+  repeatByMeal: RepeatByMeal
+  /** 進行中的一鍵操作：加入是「日期|餐別」，復原是別的值；非 null 時所有建議都不能按。 */
+  repeatBusyKey: string | null
+  /** 一鍵加入的失敗，key 同上。存在 App：切分頁、切日再回來都要還在。 */
+  repeatErr: { key: string; msg: string } | null
+  /** 一鍵加入建議的全部品項。進行中與失敗都由 App 記著，從上面兩個 prop 下發；復原提示也是 App 開。 */
+  onAddRepeat: (date: string, s: RepeatSuggestion) => void
 }
 
 export interface LogSheetProps {
@@ -57,6 +66,8 @@ export interface LogSheetProps {
   foods: Food[]
   dayData: DayData
   targets: Targets
+  /** 跟今日頁同一份建議，建議段從這裡取。 */
+  repeatByMeal: RepeatByMeal
   onClose: () => void
   /**
    * 送出「加入」——rows 已經是組好的完整 NewIntake（含 eaten_on／meal／營養快照)，

@@ -35,6 +35,13 @@ export interface StubOptions {
   /** 資料請求（/rest/v1/）全部連不上、認證端點照常——模擬「token 有效但沒網路」（一小時內再開 App）。
    *  跟 authMode 不同：不種過期 session，所以不會走離線優先那條。測試中途改 `window.__dataDown` 模擬網路回來。 */
   dataDown?: boolean
+  /** 餐建議的回看查詢回 500。要從開機就失敗才需要這個選項；測試中途改 `window.__repeatFail` 模擬恢復。 */
+  repeatFail?: boolean
+  /** intake 寫入真的落地（預設不落地）：由 fix.intake／intakeYday／repeatWindow 起頭，POST 與 DELETE 改得到
+   *  之後的 GET，驗「寫入後重撈」「復原」「切走切回不復活」用。PATCH 不落地。 */
+  intakePersist?: boolean
+  /** 開機就要停住的日期（見 __holdIntake）：開機時的預取測試來不及從外面設。 */
+  holdIntake?: string[]
 }
 
 export type AuthMode = 'down' | 'hang' | 'ok' | 'revoked'
@@ -47,7 +54,7 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, intakePersist, holdIntake }) => {
       const stored: Record<string, unknown> = {
         access_token: 'stub-token',
         refresh_token: 'stub-refresh',
@@ -96,9 +103,26 @@ export async function seedFetchStub(
         __kcalWindow: { eaten_on: string; qty: number; kcal: number }[] | null
         /* 有值時區間查詢等它 resolve 才回，用來造「查詢在飛」。要回哪一份在等之前就決定了（查詢送出當下的帳號）。 */
         __kcalHold: Promise<void> | null
+        /* 設 true＝餐建議的回看查詢回 500（見 StubOptions.repeatFail）。 */
+        __repeatFail: boolean
+        /* 餐建議的回看查詢回應過幾次（要回應前才 +1），斷言「失敗了也沒事」要等到它。 */
+        __repeatServed: number
+        /* 當日清單查詢的一次性注入（intakePersist 才有），放這個日期進去、用掉就清：
+           __holdIntake＝快照在收到當下就定了、停住等 __releaseIntake() 才回，造「舊 GET 在寫入之後才落地」；
+           __failIntake＝回 500，造「寫入成功但重撈失敗」（postgrest-js 只重試 503／520，所以 500 只打一次）。 */
+        __holdIntake: Set<string>
+        __heldIntake: (() => void)[]
+        __releaseIntake: () => void
+        __failIntake: Set<string>
       }
       w.__authMode = authMode
       w.__dataDown = dataDown
+      w.__repeatFail = repeatFail
+      w.__repeatServed = 0
+      w.__holdIntake = new Set(holdIntake)
+      w.__heldIntake = []
+      w.__releaseIntake = () => w.__heldIntake.splice(0).forEach((release) => release())
+      w.__failIntake = new Set()
       w.__kcalFail = false
       w.__kcalWindow = null
       w.__kcalHold = null
@@ -152,6 +176,23 @@ export async function seedFetchStub(
         const p = (n: number) => String(n).padStart(2, '0')
         return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
       })()
+
+      /* intakePersist 的假資料表。fix.intake／intakeYday 沒有 eaten_on，由這裡依日期蓋上。 */
+      let intakeStore: Record<string, unknown>[] = intakePersist
+        ? [
+            ...fix.intake.map((r) => ({ ...r, eaten_on: today })),
+            ...fix.intakeYday.map((r) => ({ ...r, eaten_on: yday })),
+            ...fix.repeatWindow,
+          ]
+        : []
+      let nextIntakeId = 900
+      /* 組 foods 關聯：先查 fix.foods，查不到再查 repeatWindow 同 food_id 的列——封存食物只放在 repeatWindow，
+         因為 foods 查詢不看 filter，放進 fix.foods 就會被當成使用中的食物回給 listFoods。 */
+      const intakeFoodsJoin = (foodId: unknown) => {
+        const food = (fix.foods as Record<string, unknown>[]).find((f) => f.id === foodId)
+        if (food) return { name: food.name, vendor: food.vendor, archived: food.archived ?? false }
+        return fix.repeatWindow.find((r) => r.food_id === foodId)?.foods ?? null
+      }
 
       const real = window.fetch.bind(window)
       // @ts-expect-error — 刻意覆寫全域 fetch，型別對不上是預期的
@@ -272,6 +313,28 @@ export async function seedFetchStub(
             const rec = Array.isArray(body) ? body[0] : body
             return json([{ id: 999, ...(rec as Record<string, unknown>) }], 201)
           }
+          if (table === 'intake' && intakePersist) {
+            if (method === 'PATCH') {
+              const id = Number(new URL(u).searchParams.get('id')?.replace(/^eq\./, ''))
+              intakeStore = intakeStore.map((r) => (r.id === id ? { ...r, ...(body as Record<string, unknown>) } : r))
+              return new Response(null, { status: 204 })
+            }
+            if (method === 'POST') {
+              // 同一批的 created_at 相同（比照 DB 的交易時間），時間軸順序要靠 id
+              const created_at = new Date().toISOString()
+              const rows = (Array.isArray(body) ? body : [body]) as Record<string, unknown>[]
+              const added = rows.map((r) => ({ ...r, id: nextIntakeId++, created_at, foods: intakeFoodsJoin(r.food_id) }))
+              intakeStore.push(...added)
+              return json(added.map(({ id }) => ({ id })), 201)
+            }
+            if (method === 'DELETE') {
+              // new URL 已解碼：.in() 送的是 id=in.%281%2C2%29
+              const filter = new URL(u).searchParams.get('id') ?? ''
+              const ids = (filter.startsWith('in.(') ? filter.slice(4, -1).split(',') : [filter.replace(/^eq\./, '')]).map(Number)
+              intakeStore = intakeStore.filter((r) => !ids.includes(r.id as number))
+              return new Response(null, { status: 204 })
+            }
+          }
           if (table === 'intake' && method === 'POST') {
             const rows = Array.isArray(body) ? body : [body]
             return json(
@@ -308,6 +371,17 @@ export async function seedFetchStub(
             if (w.__kcalHold) await w.__kcalHold
             return json(kcalWindow.slice(offset, offset + limit))
           }
+          /* 餐建議的回看查詢：select 含 meal、且是區間條件。沒有這條會落到最下面回 fix.history，列沒有
+             eaten_on，App 算建議時會崩。不記 __intakeCalls：那是給「當日清單打了幾次」計次用的。 */
+          if (selectCols.includes('meal') && path.includes('eaten_on=gte.')) {
+            w.__repeatServed++
+            if (w.__repeatFail) return json({ message: '模擬的讀取失敗' }, 500)
+            const range = new URL(u).searchParams.getAll('eaten_on')
+            const from = range.find((c) => c.startsWith('gte.'))?.slice(4) ?? ''
+            const to = range.find((c) => c.startsWith('lte.'))?.slice(4) ?? '9999'
+            const source = intakePersist ? intakeStore : fix.repeatWindow
+            return json(source.filter((r) => (r.eaten_on as string) >= from && (r.eaten_on as string) <= to))
+          }
           // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)
           if (m) {
@@ -315,6 +389,12 @@ export async function seedFetchStub(
             if (intakeDelayMs) await new Promise((r) => setTimeout(r, intakeDelayMs))
             // 延遲期間才斷線：造「慢請求晚到才失敗」，開頭那道檢查攔不到
             if (intakeDelayMs && w.__dataDown) throw new TypeError('Load failed')
+            if (intakePersist) {
+              if (w.__failIntake.delete(m[1])) return json({ message: '模擬的讀取失敗' }, 500)
+              const snapshot = intakeStore.filter((r) => r.eaten_on === m[1])
+              if (w.__holdIntake.delete(m[1])) await new Promise<void>((release) => w.__heldIntake.push(release))
+              return json(snapshot)
+            }
             if (m[1] === today) return json(fix.intake)
             if (m[1] === yday) return json(fix.intakeYday)
             return json([])
@@ -333,6 +413,9 @@ export async function seedFetchStub(
       authMode: opts.authMode ?? null,
       unparseableSession: opts.unparseableSession ?? false,
       dataDown: opts.dataDown ?? false,
+      repeatFail: opts.repeatFail ?? false,
+      intakePersist: opts.intakePersist ?? false,
+      holdIntake: opts.holdIntake ?? [],
     },
   )
 }

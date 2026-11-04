@@ -21,6 +21,7 @@ import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { byQuotaFit, defaultQty, overQuotaAmounts, pickTotals, recentStats } from '@/lib/foodPicks'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
+import { mergeByFood, type RepeatItem } from '@/lib/mealSuggest'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
@@ -118,8 +119,22 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
   )
 }
 
+/* 建議品項顯示、確認列、寫入一律用來源列的快照，不是食品庫現值：兩個入口的數字才會一樣。 */
+function suggestedFood(item: RepeatItem): Food {
+  return {
+    id: item.food_id,
+    name: item.label,
+    vendor: item.vendor,
+    kcal: item.kcal,
+    protein: item.protein,
+    fat: item.fat,
+    carb: item.carb,
+    archived: item.archived,
+  }
+}
+
 export default function LogSheet(props: LogSheetProps) {
-  const { open, meal: initialMeal, foods, dayData, targets, onClose, onCreateIntake, onCreateFood } = props
+  const { open, meal: initialMeal, foods, dayData, targets, repeatByMeal, onClose, onCreateIntake, onCreateFood } = props
 
   const [meal, setMeal] = useState<MealKey | null>(initialMeal)
   const [view, setView] = useState<View>('list')
@@ -147,7 +162,13 @@ export default function LogSheet(props: LogSheetProps) {
   const [lastQty, setLastQty] = useState<Map<string, number>>(new Map())
   const recentFetchedRef = useRef(false)
 
-  const foodById = (id: number): Food | undefined => foods.find((f) => f.id === id)
+  /* 從建議段勾起來的品項留一份快照：封存的食物 foods 查不到，切餐別後建議段也換了，
+     沒有這份就會從已選、小計、寫入靜默消失。取消勾選就清掉。 */
+  const [suggestSnaps, setSuggestSnaps] = useState<Map<number, { food: Food; name: string | null }>>(new Map())
+  const pickedListRef = useRef<HTMLUListElement | null>(null)
+  const focusPickedRef = useRef(false)
+
+  const foodById = (id: number): Food | undefined => suggestSnaps.get(id)?.food ?? foods.find((f) => f.id === id)
 
   /* 開啟時重置整個 sheet 的本地狀態：每次打開都是一份新的 */
   useEffect(() => {
@@ -156,6 +177,7 @@ export default function LogSheet(props: LogSheetProps) {
     setView('list')
     setPicks(new Map())
     setQtyDrafts(new Map())
+    setSuggestSnaps(new Map())
     setQuery('')
     setFilterQuery('')
     setBusy(false)
@@ -163,6 +185,13 @@ export default function LogSheet(props: LogSheetProps) {
     setFoodForm(BLANK_FOOD_FORM)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  /* 「全選」那顆鈕會隨建議段一起消失，焦點要接到已選段，否則鍵盤使用者原地迷路。 */
+  useEffect(() => {
+    if (!focusPickedRef.current) return
+    focusPickedRef.current = false
+    pickedListRef.current?.querySelector('button')?.focus()
+  }, [picks])
 
   useEffect(() => {
     if (!open || recentFetchedRef.current) return
@@ -194,6 +223,11 @@ export default function LogSheet(props: LogSheetProps) {
           nd.delete(id)
           return nd
         })
+        setSuggestSnaps((s) => {
+          const ns = new Map(s)
+          ns.delete(id)
+          return ns
+        })
       } else {
         const q = defaultQty(lastQty, meal, id)
         next.set(id, q)
@@ -201,6 +235,13 @@ export default function LogSheet(props: LogSheetProps) {
       }
       return next
     })
+  }
+
+  function pickSuggested(item: RepeatItem) {
+    setErr(null)
+    setPicks((prev) => new Map(prev).set(item.food_id, item.qty))
+    setQtyDrafts((prev) => new Map(prev).set(item.food_id, String(item.qty)))
+    setSuggestSnaps((prev) => new Map(prev).set(item.food_id, { food: suggestedFood(item), name: item.name }))
   }
 
   function stepQty(id: number, dir: 1 | -1) {
@@ -259,7 +300,7 @@ export default function LogSheet(props: LogSheetProps) {
     for (const [id, qty] of picks) {
       const f = foodById(id)
       if (!f) continue
-      rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb })
+      rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null })
     }
     try {
       await onCreateIntake(rows)
@@ -353,15 +394,48 @@ export default function LogSheet(props: LogSheetProps) {
       </>
     )
   } else {
+    /* 建議段：該餐已有紀錄或沒有來源時 repeatByMeal 就沒有這一餐。沒有「已選用」狀態：勾了進已選、
+       取消回來，全靠這裡每次重算。同一食物不同時出現在建議與常吃／全部，所以兩段都要先濾再取。 */
+    const suggestion = meal ? repeatByMeal[meal] : undefined
+    const suggestItems = suggestion ? mergeByFood(suggestion.items).filter((i) => !picks.has(i.food_id)) : []
+    const suggestIds = new Set(suggestItems.map((i) => i.food_id))
+    /* 預覽（逐筆超標）與勾下去的份量同源，都是建議量，不是「該餐上次的份量」。 */
+    const suggestHandlers: FoodRowHandlers = {
+      ...handlers,
+      onToggle: (id) => {
+        const item = suggestItems.find((i) => i.food_id === id)
+        if (item) pickSuggested(item)
+      },
+      defaultQty: (id) => suggestItems.find((i) => i.food_id === id)?.qty ?? 1,
+    }
     const recentIds = (meal ? recent?.get(meal) : undefined) ?? []
     const recentFoods = recentIds
-      .filter((id) => !picks.has(id))
+      .filter((id) => !picks.has(id) && !suggestIds.has(id))
       .map(foodById)
       .filter((f): f is Food => !!f)
       .slice(0, 5)
-    const restFoods = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && !recentFoods.includes(f)), overAmounts)
+    const restFoods = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
     browseBody = (
       <>
+        {suggestItems.length > 0 && (
+          <>
+            <div className="sect-lb sect-suggest">
+              <span>建議</span>
+              <button
+                className="sect-act"
+                type="button"
+                aria-label={`全選建議的 ${suggestItems.length} 樣`}
+                onClick={() => {
+                  focusPickedRef.current = true
+                  suggestItems.forEach(pickSuggested)
+                }}
+              >
+                全選
+              </button>
+            </div>
+            <ul className="food-list">{suggestItems.map((i) => renderFoodRow(suggestedFood(i), false, suggestHandlers))}</ul>
+          </>
+        )}
         {recentFoods.length > 0 && (
           <>
             <div className="sect-lb">{meal ? mealLabel(meal) : ''}常吃</div>
@@ -374,7 +448,7 @@ export default function LogSheet(props: LogSheetProps) {
             <ul className="food-list">{restFoods.map((f) => renderFoodRow(f, false, handlers))}</ul>
           </>
         )}
-        {recentFoods.length === 0 && restFoods.length === 0 && (
+        {suggestItems.length === 0 && recentFoods.length === 0 && restFoods.length === 0 && (
           <p className="muted">食品庫還是空的。在上面搜尋框輸入品名就能新增第一筆。</p>
         )}
       </>
@@ -383,10 +457,11 @@ export default function LogSheet(props: LogSheetProps) {
 
   const contentAriaLabel = view === 'list' ? (meal ? mealLabel(meal) : '記一筆') : '新增食物'
 
-  /* locked={scanBusy}：辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
-     而誤關的代價是那張照片白拍。辨識逾時（函式端 45 秒）保證最壞情況不會被關太久。 */
+  /* 辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
+     而誤關的代價是那張照片白拍。辨識逾時（函式端 45 秒）保證最壞情況不會被關太久。
+     寫入中也鎖：關掉再按今日頁卡片的「加入」，同餐就兩份；失敗時已選與錯誤也才有地方留著。不會永遠鎖住：請求有 DB_TIMEOUT，但 token 過期又連不上時要先等 refresh 退避，最壞約 26 秒。 */
   return (
-    <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy}>
+    <SpringSheet open={open} onClose={onClose} label={contentAriaLabel} screen="log-sheet" initialFocus={sheetRef} popupRef={sheetRef} locked={scanBusy || busy}>
       {view === 'list' ? (
         <>
           <SheetGrabZone className="chip-bar">
@@ -412,7 +487,7 @@ export default function LogSheet(props: LogSheetProps) {
                 </button>
               ))}
             </div>
-            <button className="icon-btn" type="button" aria-label="關閉" onClick={onClose}>
+            <button className="icon-btn" type="button" aria-label="關閉" disabled={busy} onClick={onClose}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
@@ -441,7 +516,7 @@ export default function LogSheet(props: LogSheetProps) {
             {picks.size > 0 && (
               <>
                 <div className="sect-lb">已選</div>
-                <ul className="food-list">{pickedFoods.map((f) => renderFoodRow(f, true, handlers))}</ul>
+                <ul className="food-list" ref={pickedListRef}>{pickedFoods.map((f) => renderFoodRow(f, true, handlers))}</ul>
               </>
             )}
             {browseBody}
@@ -506,7 +581,7 @@ export default function LogSheet(props: LogSheetProps) {
         <>
           <SheetGrabZone className="sheet-head">
             <span className="sheet-title">新增食物</span>
-            <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy} onClick={onClose}>
+            <button className="icon-btn" type="button" aria-label="關閉" disabled={scanBusy || busy} onClick={onClose}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>

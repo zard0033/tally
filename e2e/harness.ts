@@ -22,6 +22,16 @@ export async function openApp(page: Page, opts: StubOptions = {}, fix: typeof FI
   await page.waitForSelector('.gauge-num', { timeout: 5000 })
 }
 
+/** 同 openApp，但把「今天」釘在 iso（早上 9 點，之後時間照常流動）：週一、週六、跨月這類規則不能賭跑測當天。
+ *  先裝時鐘再種 stub，順序不可反——stub 的 session 到期時間要用同一個時鐘算。跳時間不要用 fastForward（見 CLAUDE.md）。 */
+export async function openAppAt(page: Page, iso: string, opts: StubOptions = {}, fix: typeof FIX = FIX) {
+  await page.clock.install({ time: new Date(`${iso}T09:00:00`) })
+  await seedFetchStub(page, fix, iso, USER_ID, opts)
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('#view-app:not([hidden])', { timeout: 5000 })
+  await page.waitForSelector('.gauge-num', { timeout: 5000 })
+}
+
 /* ── 日期元件（v2.53：週列＋月曆，取代 ‹ 日期 › 膠囊） ──────────────────────────
    v2.53 之前這裡的測試都是點「前一天／後一天」。那兩顆鈕沒了，改走下面三支 helper——
    **它們從畫面上讀目前選中的日期再算目標，不依賴「今天是星期幾」**：今天若是週一，

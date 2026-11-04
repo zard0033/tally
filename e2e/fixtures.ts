@@ -68,6 +68,8 @@ export const FIX = {
   workout_sets: [] as Record<string, unknown>[],
   // listIntakeKcal（實測維持熱量卡）的回應；預設空＝資料不足。要驗有結果的測試自己展開 FIX 覆寫。
   kcalWindow: [] as { eaten_on: string; qty: number; kcal: number }[],
+  // listIntakeForRepeat（餐建議的回看查詢）的回應；預設空＝沒有建議。形狀見 src/lib/mealSuggest.ts 的 RepeatSourceRow。
+  repeatWindow: [] as Record<string, unknown>[],
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。
   // 8 筆涵蓋：同一店家多筆食物（減醣廚房、全家各兩筆，測店家 Autocomplete 去重）、
   // vendor 為 null（乳清／地瓜／香蕉三筆，測「留空仍可送出」與去重時 null 不算進選項）。

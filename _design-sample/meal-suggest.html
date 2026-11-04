@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>樣張（第二版）— 餐建議：一行建議＋缺口放進營養素條</title>
+<title>樣張（第三版）— 餐建議：一行建議＋缺口放進營養素條</title>
 <link rel="stylesheet" href="../src/app.css" />
 <style>
   /* ── 樣張外殼（只給這頁看用，不進產品） ── */
@@ -43,6 +43,9 @@
   /* sheet 裡的建議（框架只畫外形，真實 sheet 是 SpringSheet） */
   .mock-sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 64px; background: var(--card);
     border-radius: 24px 24px 0 0; box-shadow: var(--shadow-3); display: flex; flex-direction: column; overflow: hidden; }
+  /* 真實 sheet 的 svg 樣式掛在 .sheet 底下、chip 是 button；樣張的外形要自己補，否則勾選圈變黑點、chip 字偏上 */
+  .mock-sheet svg { stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .mock-chips .chip { display: inline-flex; align-items: center; }
   .mock-handle { width: 36px; height: 5px; border-radius: 3px; background: var(--rule); margin: 8px auto 0; }
   .mock-scroll { flex: 1; min-height: 0; overflow: hidden; padding: 0 var(--s-5); }
   .mock-chips { display: flex; gap: var(--s-2); padding: var(--s-3) 0; }
@@ -168,7 +171,7 @@
         </div>
       </div>
     </div></div>
-    <div class="frame-note"><b>建議的品項就是平常那種列</b>，只是被排到最上面、段標用 accent 色，一眼找得到；點哪一項就勾哪一項（跟平常一樣）。段標右邊的「<b>全選</b>」一次勾起這幾項（早餐三樣不用點三次；<b>這是我加的，你不要可以拿掉</b>）。沒有建議就整段不出現；搜尋時收起。</div>
+    <div class="frame-note"><b>建議的品項就是平常那種列</b>，只是被排到最上面、段標用 accent 色，一眼找得到；點哪一項就勾哪一項（跟平常一樣）。段標右邊的「<b>全選</b>」一次勾起這幾項（早餐三樣不用點三次；<b>使用者 2026-11-04 決定留著</b>）。沒有建議就整段不出現；搜尋時收起。</div>
   </div>
 
   <!-- ④ sheet：選用之後 -->

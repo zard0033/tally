@@ -4,7 +4,7 @@
    E2E seam：本檔完全不碰 window.fetch／XHR／WebSocket，所有 IO 都經 supabase-js
    （內部走 fetch）。只要外部把 window.fetch 換掉並在 localStorage 種好
    `sb-<ref>-auth-token`，這裡從開機判斷到 CRUD 全部離線可跑，不需要真網路。 */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Session } from '@supabase/supabase-js'
 import {
@@ -12,6 +12,7 @@ import {
   BackendUnreachableError,
   createIntake as apiCreateIntake,
   deleteIntake as apiDeleteIntake,
+  deleteIntakes,
   getLatestWeight,
   getProfile,
   getSession,
@@ -35,6 +36,7 @@ import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
+import { repeatToIntake, suggestRepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -46,6 +48,7 @@ import BootScreen, { type BootStatus } from '@/screens/BootScreen'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TabBar, { type Tab } from '@/screens/TabBar'
 import { useMonthMarks } from '@/useMonthMarks'
+import { useRepeatHistory } from '@/useRepeatHistory'
 import { useViewportInsets } from '@/useViewportInsets'
 import { useFoods } from '@/useFoods'
 import { useTraining } from '@/useTraining'
@@ -59,6 +62,11 @@ interface Notice {
 
 /** 刪除的可復原窗。5 秒：夠看到「已刪除」並反悔，又不會久到讓人以為沒刪成功 */
 const UNDO_MS = 5000
+/** 一鍵加入的復原窗從 POST 成功起算，重撈慢的話開條時已經過了一段；至少留這麼久才按得到。
+ *  取 UNDO_MS 的一半是假設值，沒有實測依據。 */
+const REPEAT_UNDO_MIN_MS = UNDO_MS / 2
+/** 進行中的一鍵操作是復原時的鍵。不是「日期|餐別」，所以沒有哪張卡片會顯示「加入中…」，但全部都鎖住。 */
+const REPEAT_UNDO_KEY = 'undo'
 
 /** 開機等這麼久還沒有 session 結果，就把「載入中…」換成說明。getSession 正常只讀 localStorage、
  *  最多多一趟 refresh，到不了這裡；到了幾乎一定是 token 過期而後端沒回（supabase-js 會退避重試
@@ -75,13 +83,15 @@ const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)'
 /** 把「待刪那一筆」從 rows 濾掉——這是把 rows 放進畫面的唯一合法方式，不論 rows 是
  *  剛 fetch 回來的、還是從快取取出的。快取本身永遠存**原始**（未濾除）的 rows，
  *  濾除只在「放進畫面」這一刻做，理由是 pendingDelete 會隨時間改變（送出、復原），
- *  存濾過的版本進快取只會讓快取跟著過期。 */
+ *  存濾過的版本進快取只會讓快取跟著過期。
+ *  undoing＝復原一鍵加入已送出的那批 id，同一個理由：DELETE 回來之前快取和重撈都還有它們。 */
 function filterPendingRow(
   rows: IntakeRow[],
   date: string,
   pending: { row: IntakeRow; date: string } | null,
+  undoing: ReadonlySet<number>,
 ): IntakeRow[] {
-  return pending && pending.date === date ? rows.filter((row) => row.id !== pending.row.id) : rows
+  return rows.filter((row) => !undoing.has(row.id) && !(pending?.date === date && row.id === pending.row.id))
 }
 
 export default function App() {
@@ -146,6 +156,32 @@ export default function App() {
   const [undoOpen, setUndoOpen] = useState(false)
   const undoBtnRef = useRef<HTMLButtonElement>(null)
 
+  /* 一鍵加入的 undo 窗：跟 pendingDelete 互斥，共用 undoTimer／undoOpen／.undo-bar。跟刪除相反，列已經寫入了，
+     所以窗到期只是收掉提示條、不打網路；復原才送 DELETE。undoRepeatN 是 null＝提示條在刪除模式。 */
+  const pendingRepeat = useRef<{ ids: number[]; date: string } | null>(null)
+  const [undoRepeatN, setUndoRepeatN] = useState<number | null>(null)
+  /* 進行中的一鍵操作，同時只有一個：加入是「日期|餐別」，復原是 REPEAT_UNDO_KEY。放這裡下發，不放 Today：
+     Today 切分頁會重掛，sheet 也要知道。ref 是同步鎖（state 要等 render，擋不住同一輪的連按），兩者只由 setRepeatLock 改。 */
+  const repeatLockRef = useRef<string | null>(null)
+  const [repeatBusyKey, setRepeatBusyKey] = useState<string | null>(null)
+  const setRepeatLock = useCallback((key: string | null) => {
+    repeatLockRef.current = key
+    setRepeatBusyKey(key)
+  }, [])
+  /* 一鍵加入的失敗，鍵同上。Today 重掛、切日再回來都要還在。 */
+  const [repeatErr, setRepeatErr] = useState<{ key: string; msg: string } | null>(null)
+  /* 已送出 DELETE 的 id（復原一鍵加入、結清待刪）。DELETE 失敗才移除，成功不移除（id 不重用）：
+     回應前就發出的 loadDay／預取／refreshDay 可能在成功之後才落地，讀到的還有它們。 */
+  const undoingIdsRef = useRef<Set<number>>(new Set())
+  /* 某天的當日清單寫入成功就 +1（一鍵加入、記一筆的 POST，就地編輯的 PATCH）。GET 發出時記下、落地時比對，對不上就是寫入前的舊資料：
+     要補畫面的（load、loadDay、refreshDay）經 listIntakeFresh 重抓，不補畫面的預取丟棄。 */
+  const dayGenRef = useRef<Map<string, number>>(new Map())
+  const bumpDayGen = useCallback((date: string) => {
+    dayGenRef.current.set(date, (dayGenRef.current.get(date) ?? 0) + 1)
+  }, [])
+  /* 已送出、還沒回來的待刪 DELETE。pendingDelete 這時已經空了，但結果還沒定：要等得到才知道能不能接著寫。 */
+  const commitInflightRef = useRef<Promise<boolean> | null>(null)
+
   /* 已看過的日期快取（v2.6：切日期無感）。存原始（未濾除待刪）rows，見 filterPendingRow。
      沒有上限、不做 LRU——一次 session 看不到幾千天，淘汰只是多一套要維護的東西。
      prefetchingRef 只是「這個日期正在背景撈」的去重旗標，跟 cacheRef 分開存，
@@ -176,8 +212,10 @@ export default function App() {
   const prefetchDate = useCallback((date: string) => {
     if (cacheRef.current.has(date) || prefetchingRef.current.has(date)) return
     prefetchingRef.current.add(date)
+    const gen = dayGenRef.current.get(date)
     void listIntake(date)
       .then((r) => {
+        if (dayGenRef.current.get(date) !== gen) return
         /* 落地前再檢查一次：這支請求在飛的期間，這一天可能已經被更新的東西寫進快取了
            （commitDelete 成功後濾掉那筆、loadDay 重撈、記一筆後回填）。無條件寫入會把
            較新的內容回捲成舊快照——症狀是「已經真的刪掉的那筆，切走再切回又出現」，
@@ -205,6 +243,20 @@ export default function App() {
     [prefetchDate],
   )
 
+  /* 讀當日清單給畫面用。發出之後這天被寫過，這份（不管成敗）就是舊的，重抓；不能只丟棄：
+     loadDay 已經把 rows 清空，丟了就卡在載入中，而就地編輯成功後不會有別的 GET 來補。上限 3 次，到上限就用最後一份。 */
+  const listIntakeFresh = useCallback(async (date: string) => {
+    for (let attempt = 1; ; attempt++) {
+      const gen = dayGenRef.current.get(date)
+      try {
+        const r = await listIntake(date)
+        if (dayGenRef.current.get(date) === gen || attempt >= 3) return r
+      } catch (e) {
+        if (dayGenRef.current.get(date) === gen || attempt >= 3) throw e
+      }
+    }
+  }, [])
+
   /* profile／最新體重／當日 intake／食品庫並行撈。
    * 食品庫在這裡一起撈，讓 LogSheet 拿到現成的 foods prop，不必自己管一份載入狀態，
    * 代價是開機多打一支 API，量體（23 筆）小到可以忽略。 */
@@ -228,7 +280,7 @@ export default function App() {
     }
     try {
       loadFailedRef.current = false
-      const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntake(date), listFoods()])
+      const [p, w, r, f] = await Promise.all([getProfile(), getLatestWeight(), listIntakeFresh(date), listFoods()])
       bootedFromLocalRef.current = false // 資料回來了＝連得上，不再是離線優先狀態
       if (!p || !w) {
         const detail = !p && !w
@@ -250,7 +302,7 @@ export default function App() {
       // 濾除照樣走 filterPendingRow：目前這條路徑（開機／設定頁存檔）呼叫時待刪一定是
       // null（切到設定分頁就結清了），但「把 rows 放進畫面的唯一合法方式」是個不變式，
       // 留一條例外就等著哪天有人加一個不必切分頁的存檔入口時漏掉它（review 指出）
-      setRows(filterPendingRow(r, date, pendingDelete.current))
+      setRows(filterPendingRow(r, date, pendingDelete.current, undoingIdsRef.current))
       setFoods(f)
       setNotice(null)
       cacheRef.current.set(date, r) // 也覆寫快取——這條路徑也會被 handleSaveProfile／
@@ -274,7 +326,7 @@ export default function App() {
     }
     // 日期走顯式參數（跟 loadDay 對稱）——closure 抓 currentDate 曾造成
     // 「歷史日存設定後畫面日期與資料錯位」，precommit review 抓到的，別改回去
-  }, [showNotice, prefetchAdjacent, setFoods])
+  }, [showNotice, prefetchAdjacent, setFoods, listIntakeFresh])
 
   /* 開機 effect 要呼叫最新的 load，但不能把 load 放進它的依賴——那個 effect 一重跑就會重讀
      localStorage、重呼叫 getSession、重註冊計時器。用 ref 取，effect 只依賴引用穩定的 setter。 */
@@ -289,7 +341,7 @@ export default function App() {
     async (date: string) => {
       setRows(null)
       try {
-        const r = await listIntake(date)
+        const r = await listIntakeFresh(date)
         cacheRef.current.set(date, r) // 存原始 rows，濾除留給 filterPendingRow 在放進畫面時做
         /* 回來時人還在這一天嗎？不在就只寫快取、不動畫面。**加了快取之後這條 race 從
            罕見變成常態**：以前每次換日都要往返、延遲差不多，最後按的那天最後落地；
@@ -303,7 +355,7 @@ export default function App() {
            伺服器已經沒有」的反向不一致；濾掉同樣防得住這個不一致——只是方向相反
            （畫面藏著、伺服器還在，跟樂觀刪除本來就是同一個方向），而且不會讓使用者
            單純切走再切回來就把一筆還在 undo 窗內的東西弄假成真地刪掉。 */
-        setRows(filterPendingRow(r, date, pendingDelete.current))
+        setRows(filterPendingRow(r, date, pendingDelete.current, undoingIdsRef.current))
         setNotice(null)
         prefetchAdjacent(date)
       } catch (e) {
@@ -312,7 +364,7 @@ export default function App() {
         showNotice('讀不到這天的紀錄', friendlyError(errMsg(e)), '重試', () => void loadDay(date))
       }
     },
-    [showNotice, prefetchAdjacent],
+    [showNotice, prefetchAdjacent, listIntakeFresh],
   )
 
   const goToDate = useCallback(
@@ -327,7 +379,7 @@ export default function App() {
         /* 快取命中：直接把快取的 rows（經同一套濾除）放進畫面，完全不進載入態——
          *  不 setRows(null)，主數字不掉回 —、時間軸不出現「載入中…」。這是這次改動
          *  唯一的目的：使用者按下箭頭時資料已經在手上。 */
-        setRows(filterPendingRow(cached, iso, pendingDelete.current))
+        setRows(filterPendingRow(cached, iso, pendingDelete.current, undoingIdsRef.current))
         setNotice(null)
         prefetchAdjacent(iso)
       } else {
@@ -339,6 +391,25 @@ export default function App() {
 
 
   const { markedDates, loadMonthMarks, resetMonthMarks } = useMonthMarks(rows, currentDate)
+
+  /* 要排在 commitDelete 之前：invalidateRepeat 在它的 deps 裡。同一份下發今日頁與 sheet。 */
+  const { history: repeatHistory, invalidate: invalidateRepeat, reset: resetRepeatHistory } = useRepeatHistory(
+    targets !== null,
+    currentDate,
+  )
+  const repeatByMeal = useMemo(() => suggestRepeatByMeal(repeatHistory, currentDate, rows), [repeatHistory, currentDate, rows])
+  /* sheet 那份拿掉正在加入的那餐：今日頁的卡片要留著顯示「加入中…」，這時從 sheet 再選一次就是同餐第二份。 */
+  const sheetRepeatByMeal = useMemo(() => {
+    // 復原在途：DELETE 可能失敗，這時從 sheet 再加一次，同餐會變兩份
+    if (repeatBusyKey === REPEAT_UNDO_KEY) return {}
+    const [busyDate, busyMeal] = repeatBusyKey?.split('|') ?? []
+    if (busyDate !== currentDate) return repeatByMeal
+    const next = { ...repeatByMeal }
+    delete next[busyMeal as MealKey]
+    return next
+  }, [repeatByMeal, repeatBusyKey, currentDate])
+  /* 該餐有列了（例如改從 sheet 加入成功），之前的失敗就過期了：不清的話刪掉那筆、卡片回來時還掛著舊錯誤。 */
+  if (repeatErr && rows?.some((r) => `${currentDate}|${r.meal}` === repeatErr.key)) setRepeatErr(null)
 
   const openSheet = useCallback((meal: MealKey) => {
     setSheetMeal(meal)
@@ -369,19 +440,20 @@ export default function App() {
      等於悄悄破了「換日期不再結清」這條規則（真機第四輪這條 e2e 一開始就是被這裡絆倒）。
      所以 loadDay 不可以再把 currentDate 放進 deps（日期一律走參數），要用「正在看哪天」
      就讀 currentDateRef。 */
-  const commitDelete = useCallback(async () => {
-    const p = pendingDelete.current
-    if (!p) return
-    pendingDelete.current = null
-    window.clearTimeout(undoTimer.current)
-    setUndoOpen(false)
+  const sendPendingDelete = useCallback(async (p: NonNullable<typeof pendingDelete.current>): Promise<boolean> => {
+    // 待刪一清空，filterPendingRow 就不濾這筆了；DELETE 回來前落地的 GET 還讀得到它
+    undoingIdsRef.current.add(p.row.id)
     try {
       await apiDeleteIntake(p.row.id)
       // 真的刪成功了：快取這一天的原始 rows 裡也要把它拿掉，不然之後切回這天
       // 會命中快取、直接把已經真的刪掉的那一筆又畫回螢幕上
       const cached = cacheRef.current.get(p.date)
       if (cached) cacheRef.current.set(p.date, cached.filter((row) => row.id !== p.row.id))
+      if (p.date === currentDateRef.current) setRows((prev) => prev?.filter((row) => row.id !== p.row.id) ?? prev)
+      invalidateRepeat(p.date)
+      return true
     } catch (e) {
+      undoingIdsRef.current.delete(p.row.id)
       /* 送不出去就把那一筆放回去，不留下「看起來刪掉了其實還在」。
          **但只在使用者仍停在那一天時才還原**——待刪會跨日期存活（v2.5），計時器可能在
          使用者已經切到別天之後才觸發，此時無條件 restore 會把 A 日那筆插進 B 日的 rows，
@@ -393,8 +465,35 @@ export default function App() {
          再被日期檢查擋下，notice 沒人清，畫面就卡死在這裡（2026-11-02 盤點抓到）。 */
       if (p.date === currentDateRef.current) restore(p)
       showNotice('刪不掉這一筆', friendlyError(errMsg(e)), '重試', () => void loadDay(currentDateRef.current))
+      return false
     }
-  }, [restore, showNotice, loadDay])
+  }, [restore, showNotice, loadDay, invalidateRepeat])
+
+  /* 回傳有沒有結清：一鍵加入要靠它決定還能不能 POST。待刪是空的不等於結清，計時器可能剛送出 DELETE 還在路上，
+     失敗時那筆會放回去，所以要等到結果；前一筆也可能還沒回來，任一筆失敗都算沒結清。 */
+  const commitDelete = useCallback((): Promise<boolean> => {
+    const p = pendingDelete.current
+    if (!p) return commitInflightRef.current ?? Promise.resolve(true)
+    pendingDelete.current = null
+    window.clearTimeout(undoTimer.current)
+    setUndoOpen(false)
+    const all = Promise.all([commitInflightRef.current, sendPendingDelete(p)]).then((results) => !results.includes(false))
+    commitInflightRef.current = all
+    void all.then(() => {
+      if (commitInflightRef.current === all) commitInflightRef.current = null
+    })
+    return all
+  }, [sendPendingDelete])
+
+  /* 收掉一鍵加入的 undo 窗，不打網路（列已寫入）。先看是不是加入窗：計時器與提示條是共用的，
+     刪除窗開著時呼叫不能把刪除的計時器清掉。 */
+  const settleRepeat = useCallback(() => {
+    if (!pendingRepeat.current) return
+    pendingRepeat.current = null
+    window.clearTimeout(undoTimer.current)
+    setUndoOpen(false)
+    setUndoRepeatN(null)
+  }, [])
 
   const handleDeleteIntake = useCallback(
     (id: number) => {
@@ -403,6 +502,7 @@ export default function App() {
       // 前一筆還在 undo 窗裡就先結清它——同時只維護一個待刪，省掉一整套佇列。
       // 這條不分日期：換日期後刪第二筆一樣先把前一筆（不論哪天）真的送出去。
       if (pendingDelete.current) void commitDelete()
+      settleRepeat() // 提示條轉給這一筆，復原只救它
       // 索引與待刪都在 updater 外面算好：updater 應該是純函式，StrictMode 下 React 會
       // 刻意跑兩次來抓副作用，在裡面寫 ref 只是目前剛好無害（precommit review 指出）
       const index = rows?.findIndex((r) => r.id === id) ?? -1
@@ -413,7 +513,7 @@ export default function App() {
       window.clearTimeout(undoTimer.current)
       undoTimer.current = window.setTimeout(() => void commitDelete(), UNDO_MS)
     },
-    [commitDelete, rows, currentDate],
+    [commitDelete, settleRepeat, rows, currentDate],
   )
 
   /* 切分頁才結清待刪（v2.5：換日期不再結清，待刪要跨日期存活，計時器照跑，
@@ -425,8 +525,9 @@ export default function App() {
     if (tabRef.current !== tab) {
       tabRef.current = tab
       if (pendingDelete.current) void commitDelete()
+      settleRepeat()
     }
-  }, [tab, commitDelete])
+  }, [tab, commitDelete, settleRepeat])
 
   const undoDelete = useCallback(() => {
     const p = pendingDelete.current
@@ -442,6 +543,47 @@ export default function App() {
        這正是當初「換日期就結清」要防的事，只是這次用「不還原」而不是「先結清」來防。 */
     if (p.date === currentDate) restore(p)
   }, [restore, currentDate])
+
+  /* 復原一鍵加入。日期一律比對 p.date 與 currentDateRef（不用 closure）：復原途中可能已切到別天，別天的畫面不能動。 */
+  const sendRepeatUndo = useCallback(
+    async (p: { ids: number[]; date: string }) => {
+      const removing = new Set(p.ids)
+      const withoutThem = (list: IntakeRow[]) => list.filter((r) => !removing.has(r.id))
+      const snapshot = (cacheRef.current.get(p.date) ?? []).filter((r) => removing.has(r.id))
+      for (const id of p.ids) undoingIdsRef.current.add(id)
+      if (p.date === currentDateRef.current) setRows((prev) => prev && withoutThem(prev))
+      // 卡片這時會回來，但 DELETE 還沒落地：現在加入、接著復原失敗，同餐就兩份
+      setRepeatLock(REPEAT_UNDO_KEY)
+      try {
+        await deleteIntakes(p.ids)
+        const cached = cacheRef.current.get(p.date)
+        if (cached) cacheRef.current.set(p.date, withoutThem(cached))
+        invalidateRepeat(p.date)
+        if (p.date === currentDateRef.current) setRows((prev) => prev && withoutThem(prev))
+      } catch (e) {
+        for (const id of p.ids) undoingIdsRef.current.delete(id)
+        // 列還在伺服器上，畫面要跟著放回去
+        if (p.date === currentDateRef.current) {
+          setRows((prev) => prev && [...prev, ...snapshot.filter((r) => !prev.some((x) => x.id === r.id))])
+        }
+        showNotice('復原不了，剛加入的還在', friendlyError(errMsg(e)), '重試', () => {
+          setNotice(null)
+          void sendRepeatUndo(p)
+        })
+      } finally {
+        setRepeatLock(null)
+      }
+    },
+    [invalidateRepeat, showNotice, setRepeatLock],
+  )
+
+  const undoRepeat = useCallback(() => {
+    const p = pendingRepeat.current
+    if (!p) return
+    settleRepeat()
+    setJustAddedIds(new Set())
+    void sendRepeatUndo(p)
+  }, [settleRepeat, sendRepeatUndo])
 
   /* 被刪掉那一列連同它的刪除鈕一起離開 DOM，焦點會掉回 body，鍵盤使用者等於原地迷路、
      而且要在 5 秒內盲摸 Tab 才找得到「復原」。只在焦點真的掉了（activeElement 是 body）
@@ -468,6 +610,7 @@ export default function App() {
   useEffect(() => {
     const flush = () => {
       if (pendingDelete.current) void commitDelete()
+      settleRepeat()
     }
     const onHidden = () => {
       if (document.visibilityState === 'hidden') flush()
@@ -479,9 +622,15 @@ export default function App() {
       document.removeEventListener('visibilitychange', onHidden)
       flush()
     }
-  }, [commitDelete])
+  }, [commitDelete, settleRepeat])
 
   useViewportInsets()
+
+  const flashAdded = useCallback((ids: number[]) => {
+    setJustAddedIds(new Set(ids))
+    if (flashTimer.current !== undefined) window.clearTimeout(flashTimer.current)
+    flashTimer.current = window.setTimeout(() => setJustAddedIds(new Set()), 1300)
+  }, [])
 
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
@@ -490,15 +639,70 @@ export default function App() {
     async (newRows: NewIntake[]) => {
       // 先結清待刪：底下的 loadDay() 會整包換掉 rows，undo 的快照就過期了
       if (pendingDelete.current) await commitDelete()
+      settleRepeat()
       const created = await apiCreateIntake(newRows)
+      // 要排在 loadDay 之前：它的 GET 是寫入後才發的，不算舊資料
+      bumpDayGen(currentDate)
+      invalidateRepeat(currentDate)
       setSheetOpen(false)
       await loadDay(currentDate)
-      const ids = new Set(created.map((r) => r.id))
-      setJustAddedIds(ids)
-      if (flashTimer.current !== undefined) window.clearTimeout(flashTimer.current)
-      flashTimer.current = window.setTimeout(() => setJustAddedIds(new Set()), 1300)
+      flashAdded(created.map((r) => r.id))
     },
-    [loadDay, commitDelete, currentDate],
+    [loadDay, commitDelete, settleRepeat, invalidateRepeat, flashAdded, bumpDayGen, currentDate],
+  )
+
+  /* 重撈某一天但不進載入態。不可共用 loadDay：它無條件 setRows(null)，今日頁會閃載入中，途中切到別天還會卡住
+     （那支在 await 之後發現日期不符就 return，沒人把 rows 放回來）。
+     失敗要把快取刪掉：否則切回來會看到寫入前的 rows 和還在的建議卡，再按一次就重複寫入。 */
+  const refreshDay = useCallback(
+    async (date: string) => {
+      try {
+        const r = await listIntakeFresh(date)
+        cacheRef.current.set(date, r)
+        if (date === currentDateRef.current) setRows(filterPendingRow(r, date, pendingDelete.current, undoingIdsRef.current))
+      } catch (e) {
+        cacheRef.current.delete(date)
+        if (date === currentDateRef.current) {
+          showNotice('讀不到這天的紀錄', friendlyError(errMsg(e)), '重試', () => void loadDay(date))
+        }
+      }
+    },
+    [showNotice, loadDay, listIntakeFresh],
+  )
+
+  /* 今日頁一鍵加入。date 是點擊當下定的（途中可能切日）。進行中與失敗都記在 App，Today 只管畫：
+     鎖著時直接忽略，不回傳別餐的結果、也不顯示錯誤（鈕本來就是鎖住的樣子）。 */
+  const handleAddRepeat = useCallback(
+    async (date: string, s: RepeatSuggestion) => {
+      if (repeatLockRef.current !== null) return
+      const key = `${date}|${s.meal}`
+      setRepeatLock(key)
+      setRepeatErr(null)
+      try {
+        // 待刪送不掉，那筆會放回去：這時再 POST，同餐就是雙份。錯誤由 commitDelete 的 Notice 呈現
+        if (!(await commitDelete())) return
+        settleRepeat()
+        const created = await apiCreateIntake(repeatToIntake(s, date))
+        bumpDayGen(date)
+        const postedAt = Date.now()
+        const ids = created.map((r) => r.id)
+        invalidateRepeat(date)
+        await refreshDay(date)
+        flashAdded(ids)
+        // await 期間可能刪了別筆（提示條是那筆的，不能搶）或切走分頁（提示條定位是照今日頁算的）
+        if (pendingDelete.current || tabRef.current !== 'today') return
+        pendingRepeat.current = { ids, date }
+        setUndoRepeatN(ids.length)
+        setUndoOpen(true)
+        window.clearTimeout(undoTimer.current)
+        undoTimer.current = window.setTimeout(settleRepeat, Math.max(UNDO_MS - (Date.now() - postedAt), REPEAT_UNDO_MIN_MS))
+      } catch (e) {
+        setRepeatErr({ key, msg: friendlyError(errMsg(e)) })
+      } finally {
+        setRepeatLock(null)
+      }
+    },
+    [commitDelete, settleRepeat, invalidateRepeat, refreshDay, flashAdded, setRepeatLock, bumpDayGen],
   )
 
   /* 單筆 intake 的就地編輯（份量、餐別）共用這一條：先送出再更新畫面，跟
@@ -521,12 +725,14 @@ export default function App() {
     async (id: number, patch: Partial<IntakeRow>, send: () => Promise<void>) => {
       if (!rows?.some((r) => r.id === id)) return
       await send()
+      bumpDayGen(currentDate)
       const apply = (list: IntakeRow[]) => list.map((r) => (r.id === id ? { ...r, ...patch } : r))
       setRows((prev) => (prev ? apply(prev) : prev))
       const cached = cacheRef.current.get(currentDate)
       if (cached) cacheRef.current.set(currentDate, apply(cached))
+      invalidateRepeat(currentDate)
     },
-    [currentDate, rows],
+    [currentDate, rows, invalidateRepeat, bumpDayGen],
   )
   const handleUpdateIntakeQty = useCallback(
     (id: number, qty: number) => patchIntakeRow(id, { qty }, () => apiUpdateIntakeQty(id, qty)),
@@ -657,6 +863,11 @@ export default function App() {
         setSheetOpen(false)
         setTab('today')
         resetMonthMarks()
+        resetRepeatHistory()
+        settleRepeat()
+        setRepeatLock(null)
+        setRepeatErr(null)
+        undoingIdsRef.current.clear()
         cacheRef.current.clear() // 換帳號後別讓上一個帳號的快取資料在切日期時冒出來
         prefetchingRef.current.clear()
       } else if (s) {
@@ -675,7 +886,7 @@ export default function App() {
       clearTimeout(fastTimer)
       sub.subscription.unsubscribe()
     }
-  }, [setFoods, resetMonthMarks])
+  }, [setFoods, resetMonthMarks, resetRepeatHistory, settleRepeat, setRepeatLock])
 
   /* 網路回來（AC 4）。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
    * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。兩種情形：
@@ -757,6 +968,10 @@ export default function App() {
             onUpdateIntakeQty={handleUpdateIntakeQty}
             onUpdateIntakeMeal={handleUpdateIntakeMeal}
             onUpdateIntakeDetail={handleUpdateIntakeDetail}
+            repeatByMeal={repeatByMeal}
+            repeatBusyKey={repeatBusyKey}
+            repeatErr={repeatErr}
+            onAddRepeat={handleAddRepeat}
           />
         ) : (
           <Settings
@@ -795,8 +1010,13 @@ export default function App() {
             >
               {/* 「已刪除」只給讀屏（role=status 播報）。畫面上不寫——列消失本身就是回報，
                   再寫一次就得為它撐出一整條，而使用者要的是一顆「icon ＋ 復原」 */}
-              <span className="sr-only">已刪除</span>
-              <button type="button" ref={undoBtnRef} onClick={undoDelete} aria-label="復原剛刪除的一筆">
+              <span className="sr-only">{undoRepeatN === null ? '已刪除' : `已加入 ${undoRepeatN} 筆`}</span>
+              <button
+                type="button"
+                ref={undoBtnRef}
+                onClick={() => (pendingRepeat.current ? undoRepeat() : undoDelete())}
+                aria-label={undoRepeatN === null ? '復原剛刪除的一筆' : `復原剛加入的 ${undoRepeatN} 筆`}
+              >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M3 8h11a5 5 0 0 1 0 10H9" />
                   <path d="M7 4 3 8l4 4" />
@@ -866,6 +1086,7 @@ export default function App() {
           foods={foods}
           dayData={{ date: currentDate, rows }}
           targets={targets}
+          repeatByMeal={sheetRepeatByMeal}
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}
           onCreateFood={handleCreateFood}

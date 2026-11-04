@@ -16,6 +16,7 @@ import type { Profile } from './formulas'
    （precommit review 的 code 與 security 兩個維度各提了一次）。 */
 import type { MealKey } from './meals'
 import type { LabelReading } from './foodForm'
+import type { RepeatSourceRow } from './mealSuggest'
 
 /* 明確傳 storageKey：離線開機要自己讀本機 session（session.ts），讀的 key 必須與 supabase-js
    寫的是同一個。值等於它的預設，所以既有登入不受影響。 */
@@ -188,6 +189,22 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
     )
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true }) // 同批寫入的 created_at 相同，時間軸順序才穩
+    .abortSignal(dbSignal()))
+}
+
+/** 餐建議的回看查詢。不分頁：14 天遠低於單次上限 1000 列（假設，未實測）。
+ *  select 要 id 開頭且含 meal：e2e 靠這兩點把它跟 listIntakeKcal 分開（比對 `select=eaten_on`、「無 meal」）。 */
+export async function listIntakeForRepeat(from: string, to: string): Promise<RepeatSourceRow[]> {
+  return unwrap(await supabase
+    .from('intake')
+    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived)', RepeatSourceRow>(
+      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived)',
+    )
+    .gte('eaten_on', from)
+    .lte('eaten_on', to)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
     .abortSignal(dbSignal()))
 }
 
@@ -217,6 +234,8 @@ export interface NewIntake {
   protein: number
   fat: number
   carb: number
+  /** 品名快照，語意同 IntakeRow.name；null＝沿用 foods 的品名。 */
+  name: string | null
 }
 
 /** 存單份營養快照（不乘 qty）：改食物庫的營養值不該改寫過去的紀錄。 */
@@ -226,6 +245,12 @@ export async function createIntake(rows: NewIntake[]): Promise<{ id: number }[]>
 
 export async function deleteIntake(id: number): Promise<void> {
   const { error } = await supabase.from('intake').delete().eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
+/** 一次刪多筆（復原一鍵加入）。 */
+export async function deleteIntakes(ids: number[]): Promise<void> {
+  const { error } = await supabase.from('intake').delete().in('id', ids).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
 }
 

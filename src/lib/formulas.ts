@@ -196,6 +196,12 @@ export function macroExceeds(cur: number, target: number): boolean {
   return roundTo1(cur) > roundTo1(target)
 }
 
+/** 營養素條的「差 N」：目標先捨入成畫面上那個整數再減，數字才對得起來。沒有缺口（≤0、非有限）回 null。 */
+export function macroGap(cur: number, target: number): number | null {
+  const n = Math.round(Math.round(target) - cur)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /* 補記過去某天時「剩 479」是錯的語意——那天已經過完了，沒有「剩」可言，
    歷史日看的是加進去之後那天總共吃了多少。剩餘／超出不用正負號，避免「+594」
    被讀成「多攝取 594」。v2.10：熱量超標時「剩」讓位，超出量改掛在小計數字右邊

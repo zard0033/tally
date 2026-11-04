@@ -106,6 +106,11 @@ function mondayIndex(iso: string): number {
   return (new Date(y, m - 1, d).getDay() + 6) % 7
 }
 
+/** 週六、週日為真（本地日期的星期）。 */
+export function isWeekend(iso: string): boolean {
+  return mondayIndex(iso) >= 5
+}
+
 /** 含這一天的那一週，週一到週日七天。 */
 export function weekDates(iso: string): string[] {
   const monday = shiftDate(iso, -mondayIndex(iso))
