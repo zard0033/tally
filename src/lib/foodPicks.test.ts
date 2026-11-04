@@ -12,7 +12,7 @@ const C = food(3, 100, 2, 3, 15)
 const D = food(4, 10, 0, 0, 1)
 const byId = (id: number) => [A, B, C, D].find((f) => f.id === id)
 
-const T: Targets = { age: 30, bmr: null, tdee: null, kcal: 2000, protein: 120, fat: 60, carb: 250 }
+const T: Targets = { age: 30, bmr: null, tdee: null, formulaTdee: null, kcal: 2000, protein: 120, fat: 60, carb: 250 }
 const EATEN = { kcal: 1700, protein: 100, fat: 50, carb: 200 }
 
 describe('pickTotals', () => {

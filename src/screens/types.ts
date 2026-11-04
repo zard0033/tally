@@ -89,6 +89,8 @@ export interface SettingsProps {
   foods: Food[]
   /** 儲存身體參數編輯（含自訂目標覆寫）。失敗 rejects，Settings 自己接住顯示錯誤。 */
   onSaveProfile: (patch: Partial<ProfileRow>) => Promise<void>
+  /** 每日目標頁已經關了才存檔失敗，由 App 告訴使用者。 */
+  onSaveLost: (message: string) => void
   /**
    * 記體重／體脂率（「更新身體數據」入口）。user_id 由 App 補上，
    * 同一天再記是覆蓋，語意交給 lib/api.ts 的 upsertWeight（on_conflict 已處理）。

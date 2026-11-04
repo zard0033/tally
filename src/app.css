@@ -567,6 +567,7 @@ button { -webkit-user-select: none; user-select: none; }
 .entry-row .lb-sub { display: block; font-size: var(--t-xs); color: var(--ink-muted);
   margin-top: 2px; font-family: var(--font-num); font-variant-numeric: tabular-nums;
   letter-spacing: var(--track-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-row .lb-sub.lb-new { color: var(--accent); font-weight: 600; }
 .entry-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
 /* 體重趨勢入口的 sparkline：純示意，沒有座標軸／刻度，只暗示「有資料」 */
 .entry-row .spark { width: 72px; height: 24px; flex-shrink: 0; margin-left: var(--s-2); }
@@ -584,33 +585,10 @@ button { -webkit-user-select: none; user-select: none; }
   font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
 .goal-row { display: flex; align-items: center; gap: var(--s-2); min-height: 48px;
   padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle); }
-.goal-group-title + .goal-row { border-top: none; }
-/* `.lb` 一般只放純文字（最新體重／體脂率兩列就是），BMR 那列是唯一在裡面塞互動元素
-   （ⓘ Popover.Trigger）的例外——`display: flex` 是為了那顆按鈕的垂直對齊，對純文字的
-   兩列沒有視覺影響。要在別的 `.lb` 裡加圖示的話，對齊已經備好了。 */
-.goal-row .lb { flex: 1; display: flex; align-items: center; color: var(--ink-muted); }
+.goal-group-title + .goal-row, .goal-group > .goal-row:first-child { border-top: none; }
+.goal-row .lb { flex: 1; color: var(--ink-muted); }
 .goal-row .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 
-/* 說明用的 ⓘ 觸發鈕。命中區 44px、看得見的只有 16px 圖示——手法同刪除鈕的 ::before 與
-   日期膠囊：撐開命中區，不放大視覺。負的左外距把 44px 盒子往回收，讓「BMR」與圖示之間
-   的**視覺**間隔落在 6px（44px 盒內左右各 14px 留白，14-8=6）。 */
-.info-btn { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; margin: calc(var(--s-2) * -1) 0 calc(var(--s-2) * -1) calc(var(--s-2) * -1); padding: 0; border: none;
-  background: none; color: var(--ink-faint); cursor: pointer;
-  -webkit-appearance: none; appearance: none; }
-.info-btn svg { width: 16px; height: 16px; }
-.info-btn:active { opacity: .6; }
-/* 裸 button ＋ appearance: none 之後，WebKit 的預設焦點環表現不穩；這顆有鍵盤路徑
-   （Esc 關閉已有測試），焦點停在哪就必須看得見。同 .lib-fab 的規格。 */
-.info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: var(--r-pill); }
-/* 深色底：這是疊在卡片上的臨時說明，用 --card 會跟底下的卡片糊在一起分不出層。
-   同 undo pill 的處理（--ink 底 ＋ --paper 字）。 */
-.info-popup { max-width: 264px; padding: var(--s-3); border-radius: var(--r-tab);
-  background: var(--ink); color: var(--paper); font-size: var(--t-xs); line-height: 1.6;
-  box-shadow: var(--shadow-2);
-  /* 明釘層級而不是靠 Portal 的 DOM 順序：本頁現在沒有別的浮層，但「更新身體數據」sheet
-     （.scrim 10／.sheet 11）就掛在同一棵樹下，隔壁頁已經有會蓋過來的東西。12 疊在 sheet 上。 */
-  z-index: 12; }
 .goal-src { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
   background: var(--raised); }
 .goal-src .t { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
@@ -625,19 +603,58 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-src li::marker { color: var(--ink-faint); }
 
 .goal-seg-wrap { padding: 0 var(--s-5) var(--s-3); flex-shrink: 0; }
-.goal-link-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
-  width: 100%; min-height: 44px; padding: 0 var(--s-4); border: none; border-top: 1px solid var(--rule-subtle);
-  background: none; font-family: inherit; color: var(--accent); font-size: var(--t-sm); font-weight: 600;
-  cursor: pointer; -webkit-appearance: none; appearance: none; }
-.goal-link-row svg { width: 14px; height: 14px; }
-.goal-link-row:active { opacity: .6; }
 .goal-note-box { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
   background: var(--raised); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
-.goal-hero { text-align: center; padding: var(--s-4) 0; }
-.goal-hero-macros { margin-top: var(--s-2); font-size: var(--t-sm); color: var(--ink-muted);
+/* 數字固定在捲動區之上：改任何一列都看得到。 */
+.goal-hero { flex-shrink: 0; padding: var(--s-2) var(--s-5) var(--s-3); text-align: center; }
+.goal-hero-macros { margin-top: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-/* 即時預覽提示：改欄位當場算，不用先按儲存——只在公式估算態出現 */
-.goal-hero-live { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-faint); }
+.goal-hero-src { display: flex; align-items: center; justify-content: center; min-height: 20px;
+  margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-muted); }
+.goal-saved { color: var(--accent); font-weight: 600; }
+.goal-saved:not(:empty) { margin-left: var(--s-2); }
+.goal-err { flex-shrink: 0; padding: 0 var(--s-5) var(--s-2); text-align: center; }
+/* 一列：左標籤、右目前值。整列是原生 select 的命中區（透明疊在上面），iOS 叫出系統滾輪。 */
+.goal-pick { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; width: 100%;
+  padding: 0 var(--s-4); border: none; border-top: 1px solid var(--rule-subtle); background: none; color: var(--ink);
+  font-family: inherit; font-size: var(--t-base); text-align: left; cursor: pointer; }
+.goal-group > .goal-pick:first-child, .goal-group > summary.goal-pick { border-top: none; }
+.goal-pick .lb { flex: 1; min-width: 0; color: var(--ink-muted); }
+.goal-pick .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.goal-pick svg { flex-shrink: 0; width: 14px; height: 14px; color: var(--ink-faint); fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.goal-pick select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: var(--t-md); cursor: pointer; }
+.goal-pick:active { opacity: .6; }
+.goal-pick:has(select:focus-visible), .goal-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 收合區：摘要列的箭頭轉向表示展開；不用 marker，WebKit 的預設三角形對不齊。 */
+.goal-how summary { list-style: none; }
+.goal-how summary::-webkit-details-marker { display: none; }
+.goal-how[open] summary svg { transform: rotate(90deg); }
+.goal-how .goal-src { margin: var(--s-3); }
+/* 確認卡：記錄算出的數字和現在用的不同才出現，不按什麼都不變。 */
+.goal-confirm { margin: 0 0 var(--s-4); padding: var(--s-4); border-radius: var(--r-tab); background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--accent); }
+.goal-confirm-t { margin: 0; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.goal-confirm-cmp { margin: var(--s-2) 0 0; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+  font-size: var(--t-lg); font-weight: 600; color: var(--ink); }
+.goal-confirm-cmp .old { color: var(--ink-muted); font-weight: 400; }
+.goal-confirm-why { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+.goal-confirm-warn { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--over); line-height: 1.6; }
+.goal-confirm-acts { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+.goal-btn { flex: 1; min-height: 44px; border: none; border-radius: var(--r-pill); font-family: inherit;
+  font-size: var(--t-base); font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.goal-btn.primary { background: var(--accent); color: var(--on-accent); }
+.goal-btn.quiet { background: var(--fill); color: var(--ink-muted); }
+.goal-btn:active { opacity: .7; }
+.goal-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 記得越多越準：還不能改用時直接說差什麼。 */
+.goal-meter { padding: var(--s-1) var(--s-4) var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+.goal-meter-track { height: 4px; margin-bottom: var(--s-2); border-radius: 2px; background: var(--rule); overflow: hidden; }
+.goal-meter-track i { display: block; height: 100%; background: var(--accent); }
+.goal-custom { margin-bottom: var(--s-4); }
+.goal-macro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); }
+.goal-sum { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+.goal-sum b { font-family: var(--font-num); font-weight: 600; color: var(--ink); }
 
 /* ═══════════ 體重趨勢（獨立頁；recharts，spec.md「體重趨勢圖」） ═══════════
    顏色與字級全走 token：recharts 的 SVG 屬性吃不到 rem，刻度與數字標籤的字級改在這裡用 class 蓋掉。 */

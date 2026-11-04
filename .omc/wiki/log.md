@@ -181,3 +181,7 @@
 - **Pages:** lesson-meal-suggest-2026-11-04.md
 - **Summary:** Created new page "lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）"
 
+## [2026-11-04T08:27:14.261Z] ingest
+- **Pages:** lesson-daily-goal-2026-11-04.md
+- **Summary:** Created new page "lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）"
+

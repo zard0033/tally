@@ -59,6 +59,7 @@ const FILES = {
   'src/lib/strength.ts': [...TRAIN, ...ANALYSIS],
   'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend'],
   'src/lib/baseline.ts': SETTINGS,
+  'src/useMaintenanceEstimate.ts': SETTINGS,
   'src/lib/mealSuggest.ts': FOOD,
   'src/useRepeatHistory.ts': FOOD,
 }

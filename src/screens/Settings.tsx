@@ -19,6 +19,7 @@ import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparkli
 import DailyGoal from './DailyGoal'
 import ExerciseLibrary from './ExerciseLibrary'
 import FoodLibrary from './FoodLibrary'
+import { adviceOf, useMaintenanceEstimate } from '@/useMaintenanceEstimate'
 import type { SettingsProps } from './types'
 
 const WeightTrend = lazy(() => import('./WeightTrend')) // recharts 不進主 bundle
@@ -42,12 +43,15 @@ function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
 export default function Settings(props: SettingsProps) {
   const {
     profile, targets, latestWeight, foods,
-    onSaveProfile, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSignOut,
+    onSaveProfile, onSaveLost, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSignOut,
     training, onTrainingWrite, onSubViewChange,
   } = props
 
   const [view, setView] = useState<View>('list')
   const [weights, setWeights] = useState<Weight[] | null>(null)
+  // 補登舊日期的體重不會改變「最新一筆」，所以存完體重要另外觸發重算
+  const [weightSaves, setWeightSaves] = useState(0)
+  const estimate = useMaintenanceEstimate(`${weightSaves}|${latestWeight.measured_on}|${latestWeight.weight_kg}`)
 
   /* 離開這個元件（切回今日頁分頁）時要還原 navbar，不能只靠 view 變化——cleanup
    * 保證無論怎麼離開都會補一次 onSubViewChange(false)，把 navbar 還原。 */
@@ -120,6 +124,7 @@ export default function Settings(props: SettingsProps) {
     try {
       await onSaveWeight({ measured_on: on, weight_kg: kg, body_fat_pct: fat })
       refreshWeights()
+      setWeightSaves((n) => n + 1)
       closeSheet()
     } catch (e) {
       setBusy(false)
@@ -180,7 +185,7 @@ export default function Settings(props: SettingsProps) {
   if (view === 'goal') {
     return (
       <>
-        <DailyGoal profile={profile} latestWeight={latestWeight} onSaveProfile={onSaveProfile} onBack={() => setView('list')} onOpenBodyUpdate={openBodyUpdate} />
+        <DailyGoal profile={profile} latestWeight={latestWeight} estimate={estimate} onSaveProfile={onSaveProfile} onSaveLost={onSaveLost} onBack={() => setView('list')} onOpenBodyUpdate={openBodyUpdate} />
         {bodyUpdateSheet}
       </>
     )
@@ -237,6 +242,7 @@ export default function Settings(props: SettingsProps) {
               <span className="lb-sub">
                 {Math.round(targets.kcal)} 卡・蛋白 {Math.round(targets.protein)}g・脂 {Math.round(targets.fat)}g・碳水 {Math.round(targets.carb)}g
               </span>
+              {adviceOf(estimate, targets.tdee)?.kind === 'new' && <span className="lb-sub lb-new">記錄算出新的維持熱量</span>}
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>

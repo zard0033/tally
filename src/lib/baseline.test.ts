@@ -9,6 +9,8 @@ import {
   estimateMaintenance,
   expectedWeeklyChangeKg,
   insufficientShortfalls,
+  maintenanceAdvice,
+  type BaselineResult,
   type DailyKcal,
   type WeightPoint,
 } from './baseline'
@@ -421,5 +423,40 @@ describe('insufficientShortfalls', () => {
   })
   it('邊界值剛好達標 → 沒有缺項', () => {
     expect(insufficientShortfalls(insufficient(21, 4, 14))).toEqual([])
+  })
+})
+
+describe('maintenanceAdvice（每日目標頁該不該問）', () => {
+  const ok: BaselineResult = {
+    status: 'ok', maintenance: 2000, low: 1900, high: 2100, meanIntake: 2000, slopeKgPerWeek: 0, loggedDays: 24, weighIns: 6,
+  }
+  it('現用值落在範圍內不問，邊界算在內', () => {
+    expect(maintenanceAdvice(ok, 2000).kind).toBe('same')
+    expect(maintenanceAdvice(ok, 1900).kind).toBe('same')
+    expect(maintenanceAdvice(ok, 2100).kind).toBe('same')
+  })
+  it('現用值超出範圍才問，兩邊都算', () => {
+    expect(maintenanceAdvice(ok, 1899).kind).toBe('new')
+    expect(maintenanceAdvice(ok, 2101).kind).toBe('new')
+  })
+  it('體重沒雜訊時範圍收斂成一點：改用存的是捨入後的整數，不會馬上又問', () => {
+    const flat = { ...ok, maintenance: 1999.6, low: 1999.6, high: 1999.6 } as BaselineResult
+    expect(maintenanceAdvice(flat, 2000).kind).toBe('same')
+  })
+  it('記錄不夠回 lacking，不可能的結果回 suspect', () => {
+    const lacking: BaselineResult = { status: 'insufficient', loggedDays: 20, weighIns: 3, weightSpanDays: 14 }
+    const suspect: BaselineResult = { status: 'implausible', maintenance: 5760, slopeKgPerWeek: -4, reason: 'slope' }
+    expect(maintenanceAdvice(lacking, 2000)).toEqual({ kind: 'lacking', result: lacking })
+    expect(maintenanceAdvice(suspect, 2000)).toEqual({ kind: 'suspect', result: suspect })
+  })
+  it('回溯到舊的一段照樣顯示，但最新窗口不夠就是 lacking，不會變成可以改用', () => {
+    // 窗尾往前第 30～80 天天天記、體重持平；最新 28 天完全沒記
+    const old: DailyKcal[] = Array.from({ length: 50 }, (_, i) => ({ date: dayAt(30 + i), kcal: 1800 }))
+    const oldWeights: WeightPoint[] = Array.from({ length: 8 }, (_, i) => ({ date: dayAt(30 + i * 7), kg: 75 }))
+    const today = shiftDate(END, 1)
+    const { current, shown } = baselineWithFallback(old, oldWeights, today)
+    expect(shown?.stale).toBe(true)
+    expect(shown?.result.status).toBe('ok')
+    expect(maintenanceAdvice(current, 2000).kind).toBe('lacking')
   })
 })

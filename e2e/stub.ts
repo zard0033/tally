@@ -309,6 +309,11 @@ export async function seedFetchStub(
               return new Response(null, { status: 204 })
             }
           }
+          // 每日目標改了就存、存完重撈：不落地的話重撈會把剛改的值讀回舊的
+          if (table === 'profile' && method === 'PATCH') {
+            Object.assign(fix.profile[0], body as Record<string, unknown>)
+            return new Response(null, { status: 204 })
+          }
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body
             return json([{ id: 999, ...(rec as Record<string, unknown>) }], 201)

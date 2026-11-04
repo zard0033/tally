@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 38 pages | Last updated: 2026-11-04T06:10:47.953Z
+> 39 pages | Last updated: 2026-11-04T08:27:14.478Z
 
 ## debugging
 
@@ -17,6 +17,7 @@
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
 - [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
 - [lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）](lesson-cleanup-review-push-review-2026-11-02.md) — # lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）
+- [lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）](lesson-daily-goal-2026-11-04.md) — # lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）

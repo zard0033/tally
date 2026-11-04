@@ -6,7 +6,8 @@
    蛋白質 = 體重 × protein_g_per_kg；脂肪 = 體重 × FAT_G_PER_KG（固定 0.85，不隨目標變動）；
    碳水 = 扣掉蛋白質與脂肪熱量後的剩餘熱量 ÷ 4——目標（減重/維持/增肌）只影響總熱量，
    不再影響脂肪／碳水的分配比例。
-   use_custom_targets 開著時完全繞過以上公式，直接回傳 custom_* 四個數字。
+   measured_tdee 有值（使用者確認過的回推維持熱量，spec.md「每日目標改版」）時取代 BMR × 活動係數，
+   其餘照舊。use_custom_targets 開著時完全繞過以上公式，直接回傳 custom_* 四個數字。
    捨入時機：只在最終顯示時捨入，這裡的計算鏈全程不捨入。 */
 import { ageFromYear } from './dates'
 
@@ -25,12 +26,19 @@ export interface Profile {
   custom_protein_g: number | string | null
   custom_fat_g: number | string | null
   custom_carb_g: number | string | null
+  /** 使用者確認過的回推維持熱量；null／沒有＝用公式。 */
+  measured_tdee?: number | string | null
+  /** 確認那天（yyyy-mm-dd），只給畫面寫依據用。 */
+  measured_tdee_on?: string | null
 }
 
 export interface Targets {
   age: number
   bmr: number | null
+  /** 目標實際用的維持熱量：確認過的回推值，沒有就是公式值。 */
   tdee: number | null
+  /** 公式值（BMR × 活動係數），不管有沒有改用回推都照算，「改回公式」要顯示。 */
+  formulaTdee: number | null
   kcal: number
   protein: number
   fat: number
@@ -97,23 +105,6 @@ export const ACTIVITY_FACTOR_PRESETS = [1.2, 1.375, 1.55, 1.725, 1.9] as const
 /** 攝取蛋白質 g/kg 選單的四個固定值，同樣沒有自訂。 */
 export const PROTEIN_G_PER_KG_PRESETS = [1.4, 1.6, 1.8, 2.0] as const
 
-/** 讀資料庫的既有值對不上任何 preset 時（例如這輪拿掉自訂前存過的舊值，或速度換算
- *  kg/週 ↔ kg/月 有微誤差），取最接近的一個顯示——呼叫端要記得比照 xTouchedRef 的做法：
- *  使用者沒碰過選單就不要用這個近似值覆寫真實資料。 */
-export function nearestPreset(presets: readonly number[], value: number): number {
-  return presets.reduce((best, p) => (Math.abs(p - value) < Math.abs(best - value) ? p : best))
-}
-
-/** 送進公式／寫回 DB 前的最後一道防線。select 只保證「使用者動過選單」那條路徑合法，
- *  **xTouchedRef 沒被碰過時走的是 DB 原值**，那個值沒有人驗過範圍——舊版曾開放自訂輸入，
- *  也可能被手改過。夾到 preset 的上下界之間（不吸附到某一格，那會把 nearestPreset
- *  刻意避開的「悄悄覆寫真實資料」又做回來），NaN 退回第一個 preset。
- *  不假設 presets 已排序。 */
-export function clampToPresetRange(presets: readonly number[], value: number): number {
-  if (!Number.isFinite(value)) return presets[0]
-  return Math.min(Math.max(value, Math.min(...presets)), Math.max(...presets))
-}
-
 /**
  * weightKg／bodyFatPct 一律取 weight 表最新一筆（呼叫端負責查）；bodyFatPct 那一筆若沒填
  * 傳 null，不找更舊的值——體脂率會隨時間變，用舊資料騙自己比老實承認沒有更糟。
@@ -129,7 +120,7 @@ export function computeTargets(
 
   if (profile.use_custom_targets) {
     return {
-      age, bmr: null, tdee: null,
+      age, bmr: null, tdee: null, formulaTdee: null,
       kcal: num(profile.custom_kcal),
       protein: num(profile.custom_protein_g),
       fat: num(profile.custom_fat_g),
@@ -142,7 +133,8 @@ export function computeTargets(
   const bmr = bodyFatPct !== null && Number.isFinite(bodyFatPct)
     ? 370 + 21.6 * weightKg * (1 - bodyFatPct / 100) // Katch-McArdle：去脂體重
     : 10 * weightKg + 6.25 * h - 5 * age + (profile.sex === 'male' ? 5 : -161) // Mifflin-St Jeor
-  const tdee = bmr * af
+  const formulaTdee = bmr * af
+  const tdee = numOrNull(profile.measured_tdee) ?? formulaTdee
 
   // rate 缺失或非數字時刻意不 fallback 成 0——goal≠maintain 卻沒有速度是資料不完整，
   // 讓它以 NaN 傳染到 kcal，App.tsx 既有的 Number.isFinite(t.kcal) 守門會擋下並顯示
@@ -162,7 +154,7 @@ export function computeTargets(
   // 夾住比讓它算出一個誤導性的負目標誠實。
   const carb = Math.max(0, kcal - protein * 4 - fat * 9) / 4
 
-  return { age, bmr, tdee, kcal, protein, fat, carb }
+  return { age, bmr, tdee, formulaTdee, kcal, protein, fat, carb }
 }
 
 /**

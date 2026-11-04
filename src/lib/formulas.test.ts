@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACTIVITY_FACTOR_PRESETS,
-  clampToPresetRange,
   computeTargets,
   formatOverAria,
   formatOverDelta,
   macroExceeds,
-  nearestPreset,
   num,
   numOrNull,
   pct,
@@ -148,41 +145,6 @@ describe('rateWeeklyToMonthly／rateMonthlyToWeekly（kg/週 ↔ kg/月，52 週
   })
 })
 
-describe('nearestPreset（活動量／蛋白質選單拿掉自訂後，既有值取最接近的 preset）', () => {
-  it('精準命中時原樣回傳', () => {
-    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.375)).toBe(1.375)
-  })
-  it('落在中間時取最接近的一個', () => {
-    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.5)).toBe(1.55)
-    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 1.3)).toBe(1.375)
-  })
-  it('超出兩端範圍時取最近的邊界值', () => {
-    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 0.9)).toBe(1.2)
-    expect(nearestPreset(ACTIVITY_FACTOR_PRESETS, 2.5)).toBe(1.9)
-  })
-})
-
-describe('clampToPresetRange（送公式／寫回 DB 前的範圍防線）', () => {
-  it('範圍內的值原樣通過，不吸附到 preset', () => {
-    // 這條是重點：不吸附，否則 xTouchedRef「沒碰過選單就不覆寫真實值」的規則就白做了
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, 1.5)).toBe(1.5)
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, 1.2)).toBe(1.2)
-  })
-  it('超出上下界時夾到界線', () => {
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, 0.1)).toBe(1.2)
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, 99)).toBe(1.9)
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, -5)).toBe(1.2)
-  })
-  it('NaN／Infinity 退回第一個 preset，不讓 NaN 傳染進 DB', () => {
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, NaN)).toBe(1.2)
-    expect(clampToPresetRange(ACTIVITY_FACTOR_PRESETS, Infinity)).toBe(1.2)
-  })
-  it('不假設 presets 已排序', () => {
-    expect(clampToPresetRange([1.9, 1.2, 1.55], 99)).toBe(1.9)
-    expect(clampToPresetRange([1.9, 1.2, 1.55], 0)).toBe(1.2)
-  })
-})
-
 describe('pct', () => {
   it('分母為 0 回 0', () => {
     expect(pct(10, 0)).toBe(0)
@@ -240,7 +202,7 @@ describe('pickBarRight（DESIGN.md v2.10：超標時「剩」讓位給小計旁�
   })
 })
 
-const targets: Targets = { age: 0, bmr: 0, tdee: 0, kcal: 1860, protein: 126, fat: 56, carb: 214 }
+const targets: Targets = { age: 0, bmr: 0, tdee: 0, formulaTdee: 0, kcal: 1860, protein: 126, fat: 56, carb: 214 }
 
 describe('rowOverage（逐筆超標預警，DESIGN.md v2.10——不含蛋白質）', () => {
   it('三項都沒超標時全部回 0', () => {
@@ -292,5 +254,41 @@ describe('formatOverAria（口語版，三項都照唸——螢幕閱讀器沒�
   })
   it('超出量在 0.1~0.4 之間：捨到整數是 0，不該唸「超出 0 克」', () => {
     expect(formatOverAria({ kcal: 0.2, fat: 0, carb: 0 })).toBe('')
+  })
+})
+
+describe('computeTargets：measured_tdee（確認過的回推維持熱量）', () => {
+  // baseProfile：減重 0.5 kg/週 ⇒ 每天差 0.5 × 7700 ÷ 7 ＝ 550；蛋白 2.0 g/kg
+  const measured = { ...baseProfile, measured_tdee: 2000 }
+  it('有值就取代 BMR × 活動係數：目標＝2000 − 550', () => {
+    const t = computeTargets(measured, 75.95, null, today)
+    expect(t.tdee).toBe(2000)
+    expect(t.kcal).toBe(1450)
+    // 碳水＝(1450 − 75.95×2×4 − 75.95×0.85×9) ÷ 4 ＝ (1450 − 607.6 − 581.0175) ÷ 4
+    expect(t.carb).toBeCloseTo(65.3456, 3)
+  })
+  it('BMR 與公式值照算：不受回推值影響，蛋白質與脂肪也不變', () => {
+    const plain = computeTargets(baseProfile, 75.95, null, today)
+    const t = computeTargets(measured, 75.95, null, today)
+    expect(t.bmr).toBe(plain.bmr)
+    expect(t.formulaTdee).toBe(plain.tdee)
+    expect(t.protein).toBe(plain.protein)
+    expect(t.fat).toBe(plain.fat)
+  })
+  it('維持與增肌同樣吃回推值', () => {
+    expect(computeTargets({ ...measured, goal: 'maintain' }, 75.95, null, today).kcal).toBe(2000)
+    expect(computeTargets({ ...measured, goal: 'bulk' }, 75.95, null, today).kcal).toBe(2550)
+  })
+  it('PostgREST 的 numeric 字串也吃；null 與沒有這欄都走公式', () => {
+    expect(computeTargets({ ...baseProfile, measured_tdee: '2000.0' }, 75.95, null, today).tdee).toBe(2000)
+    const plain = computeTargets(baseProfile, 75.95, null, today)
+    expect(computeTargets({ ...baseProfile, measured_tdee: null }, 75.95, null, today).tdee).toBe(plain.tdee)
+    expect(plain.tdee).toBe(plain.formulaTdee)
+  })
+  it('自訂目標優先於回推值', () => {
+    const t = computeTargets({ ...measured, use_custom_targets: true, custom_kcal: 1800, custom_protein_g: 130, custom_fat_g: 60, custom_carb_g: 185 }, 75.95, null, today)
+    expect(t.kcal).toBe(1800)
+    expect(t.tdee).toBeNull()
+    expect(t.formulaTdee).toBeNull()
   })
 })

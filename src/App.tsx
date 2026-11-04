@@ -130,6 +130,12 @@ export default function App() {
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [weight, setWeight] = useState<Weight | null>(null)
   const [targets, setTargets] = useState<Targets | null>(null)
+  const profileRef = useRef(profile)
+  const weightRef = useRef(weight)
+  useEffect(() => {
+    profileRef.current = profile
+    weightRef.current = weight
+  }, [profile, weight])
   const [rows, setRows] = useState<IntakeRow[] | null>(null)
   const { foods, setFoods, handleCreateFood, handleUpdateFood, handleArchiveFood, handleUnarchiveFood } = useFoods()
 
@@ -749,13 +755,33 @@ export default function App() {
     [patchIntakeRow],
   )
 
+  /* 每日目標改了就存：成功就用送出的值更新目標，不重撈。重撈會多四支 GET，任一支失敗整頁換成 Notice、
+     打到一半的欄位不見；排隊的存檔落地時人可能已經換了日期，load 會用舊日期蓋掉畫面。 */
   const handleSaveProfile = useCallback(
     async (patch: Partial<ProfileRow>) => {
-      if (!profile) throw new Error('身體參數還沒載入')
-      await apiUpdateProfile(profile.user_id, patch)
-      await load(currentDate) // 參數變了，目標要重算；load() 保留在目前分頁，不會被丟回今日頁
+      const before = profileRef.current
+      if (!before) throw new Error('身體參數還沒載入')
+      await apiUpdateProfile(before.user_id, patch)
+      const cur = profileRef.current
+      if (!cur) return // 回來時已經登出
+      const next = { ...cur, ...patch }
+      profileRef.current = next
+      setProfile(next)
+      const w = weightRef.current
+      if (!w) return
+      const t = computeTargets(next, num(w.weight_kg), w.body_fat_pct)
+      if (Number.isFinite(t.kcal)) setTargets(t)
+      else showNotice('目標熱量算不出來', '身體參數有缺漏或格式不對，算出來的目標不是有效數字。', '重新載入', () => void load(currentDateRef.current))
     },
-    [profile, load, currentDate],
+    [load, showNotice],
+  )
+
+  /* 改完立刻離開每日目標頁，存檔才失敗：頁面已經不在，沒有地方顯示，不說就是靜默遺失。 */
+  const handleSaveLost = useCallback(
+    (message: string) => {
+      showNotice('每日目標沒有存到', `${message}。目標還是原本的，回每日目標頁再改一次。`, '知道了', () => setNotice(null))
+    },
+    [showNotice],
   )
 
   const handleSaveWeight = useCallback(
@@ -980,6 +1006,7 @@ export default function App() {
             latestWeight={weight}
             foods={foods}
             onSaveProfile={handleSaveProfile}
+            onSaveLost={handleSaveLost}
             onSaveWeight={handleSaveWeight}
             onCreateFood={handleCreateFood}
             onUpdateFood={handleUpdateFood}

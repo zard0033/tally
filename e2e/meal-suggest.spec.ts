@@ -701,7 +701,7 @@ test('清空畫面的 loadDay 在路上時 PATCH 成功：重抓補上畫面，�
   await expect(page.locator('.gauge-side .cur'), '午餐是新份量').toHaveText(String(330 + 130 * 2))
 })
 
-test('加入途中到設定頁存檔、重撈失敗：load 重抓，不留舊列與卡片（再按就是同餐兩份）', async ({ page }) => {
+test('加入途中到設定頁存體重、重撈失敗：load 重抓，不留舊列與卡片（再按就是同餐兩份）', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await setWriteDelay(page, 3000)
   await addOf(page, '早餐').click()
@@ -710,8 +710,9 @@ test('加入途中到設定頁存檔、重撈失敗：load 重抓，不留舊列
 
   await page.evaluate((d) => (window as unknown as StubWindow).__holdIntake.add(d), MON)
   await page.locator('.tab[aria-label="設定"]').click()
-  await page.locator('.entry-row', { hasText: '每日目標' }).click()
-  await page.locator('[data-screen="daily-goal"] .pick-bar-btn').click()
+  await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+  await page.locator('#w-kg').fill('75')
+  await page.locator('#settings-sheet-root .pick-bar-btn').click()
   await expect.poll(() => page.evaluate(() => (window as unknown as StubWindow).__heldIntake.length), 'load 的 GET 要停住').toBe(1)
   expect(await serverIds(page, MON), '停住的快照要早於 POST 落地，否則這段沒驗到').toHaveLength(0)
 
@@ -839,7 +840,7 @@ test('復原在途：sheet 也看不到建議段，完成後才回來', async ({
   await expect(sheetOf(page).locator('.sect-suggest')).toHaveCount(1)
 })
 
-test('加入途中到設定頁存檔：舊 GET 不蓋回，回今日頁品項還在、卡片不復活', async ({ page }) => {
+test('加入途中到設定頁存體重：舊 GET 不蓋回，回今日頁品項還在、卡片不復活', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await setWriteDelay(page, 3000)
   await addOf(page, '早餐').click()
@@ -848,8 +849,9 @@ test('加入途中到設定頁存檔：舊 GET 不蓋回，回今日頁品項還
 
   await page.evaluate((d) => (window as unknown as StubWindow).__holdIntake.add(d), MON)
   await page.locator('.tab[aria-label="設定"]').click()
-  await page.locator('.entry-row', { hasText: '每日目標' }).click()
-  await page.locator('[data-screen="daily-goal"] .pick-bar-btn').click()
+  await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+  await page.locator('#w-kg').fill('75')
+  await page.locator('#settings-sheet-root .pick-bar-btn').click()
   await expect.poll(() => page.evaluate(() => (window as unknown as StubWindow).__heldIntake.length), '舊 GET 要停住').toBe(1)
   expect(await serverIds(page, MON), '舊 GET 的快照要早於 POST 落地，否則這段沒驗到').toHaveLength(0)
 
@@ -859,8 +861,7 @@ test('加入途中到設定頁存檔：舊 GET 不蓋回，回今日頁品項還
   await page.evaluate(() => (window as unknown as StubWindow).__releaseIntake())
   await page.waitForTimeout(300)
 
-  await page.locator('[data-screen="daily-goal"] [aria-label="返回設定"]').click()
-  await page.locator('.tab[aria-label="今日"], .tab[aria-label="飲食"]').first().click()
+  await page.locator('.tab[aria-label="飲食"]').click()
   await expect(nodeOf(page, '早餐').locator('.item .nm')).toHaveText(['乳清（1匙）', '無糖豆漿'])
   await expect(cardOf(page, '早餐')).toHaveCount(0)
   expect(await intakeWrites(page, 'POST')).toHaveLength(1)

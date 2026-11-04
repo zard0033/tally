@@ -205,6 +205,23 @@ export function expectedWeeklyChangeKg(maintenance: number, targetKcal: number):
   return ((targetKcal - maintenance) * 7) / KCAL_PER_KG
 }
 
+/** 每日目標頁該怎麼跟使用者說（spec.md「每日目標改版」）：lacking＝最新窗口記錄不夠；same＝現用值在估計範圍內，
+ *  不打擾；new＝有新數字等確認；suspect＝算出來不可能是真的。**只吃最新窗口**：回溯到的舊一段不反映現在，不能改用。
+ *  「範圍內就不問」是設計決定（範圍是 ±1 個標準誤差），不是研究給的界線。 */
+export type MaintenanceAdvice =
+  | { kind: 'lacking'; result: Extract<BaselineResult, { status: 'insufficient' }> }
+  | { kind: 'suspect'; result: Extract<BaselineResult, { status: 'implausible' }> }
+  | { kind: 'same' | 'new'; result: Extract<BaselineResult, { status: 'ok' }> }
+
+export function maintenanceAdvice(current: BaselineResult, inUseTdee: number): MaintenanceAdvice {
+  if (current.status === 'insufficient') return { kind: 'lacking', result: current }
+  if (current.status === 'implausible') return { kind: 'suspect', result: current }
+  // 比捨入後的整數：改用時存的是整數，體重沒雜訊時範圍收斂成一點，不捨入的話按完「改用」卡片會馬上又跳出來
+  const inUse = Math.round(inUseTdee)
+  const inRange = inUse >= Math.round(current.low) && inUse <= Math.round(current.high)
+  return { kind: inRange ? 'same' : 'new', result: current }
+}
+
 /** 畫面真正要顯示的那一段：可能是最新窗口，也可能是回溯找到的一連串記錄。 */
 export interface ShownBaseline {
   result: Extract<BaselineResult, { status: 'ok' }>

@@ -89,6 +89,10 @@ create table weight (
 --   alter table profile add column custom_protein_g numeric(5,1) check (custom_protein_g is null or custom_protein_g between 0 and 2000);
 --   alter table profile add column custom_fat_g numeric(5,1) check (custom_fat_g is null or custom_fat_g between 0 and 2000);
 --   alter table profile add column custom_carb_g numeric(5,1) check (custom_carb_g is null or custom_carb_g between 0 and 2000);
+-- 2026-11-04 起 measured_tdee＝使用者確認過的回推維持熱量（null＝用公式），measured_tdee_on＝確認日；
+-- 範圍同 baseline.ts 的 PLAUSIBLE_MAINTENANCE。既有資料庫補這兩欄：
+--   alter table profile add column measured_tdee numeric(6,1) check (measured_tdee is null or measured_tdee between 800 and 5000);
+--   alter table profile add column measured_tdee_on date;
 create table profile (
   user_id            uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   sex                text not null check (sex in ('male','female')),
@@ -102,7 +106,9 @@ create table profile (
   custom_kcal        numeric(6,1) check (custom_kcal is null or custom_kcal between 0 and 20000),
   custom_protein_g   numeric(5,1) check (custom_protein_g is null or custom_protein_g between 0 and 2000),
   custom_fat_g       numeric(5,1) check (custom_fat_g is null or custom_fat_g between 0 and 2000),
-  custom_carb_g      numeric(5,1) check (custom_carb_g is null or custom_carb_g between 0 and 2000)
+  custom_carb_g      numeric(5,1) check (custom_carb_g is null or custom_carb_g between 0 and 2000),
+  measured_tdee      numeric(6,1) check (measured_tdee is null or measured_tdee between 800 and 5000),
+  measured_tdee_on   date
 );
 
 alter table foods   enable row level security;

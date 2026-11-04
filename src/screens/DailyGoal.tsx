@@ -1,15 +1,12 @@
-/* 每日目標頁（v2.22 起獨立成頁，取代原本擠在設定頁的唯讀 dl）：公式估算／自訂目標
-   分段控制器＋分組卡片＋即時預覽——改下面任何一格，頂部的熱量／三大營養素當場跟著
-   算，不必先按儲存。live 預覽跟送出時的驗證分開：預覽只要求「能不能算」（算不出來
-   就顯示 —），送出才擋不合理值，避免使用者打到一半（例如刪掉出生年準備打新的）
-   畫面就跳錯誤。 */
-import { useRef, useState } from 'react'
-import { Popover } from '@base-ui/react/popover'
+/* 每日目標頁（spec.md「每日目標改版」，樣張 _design-sample/daily-goal.html 方案 B）。
+
+   數字固定在上面、不隨捲動離開；每項一列，點整列叫出系統滾輪，改了就存。**只送改動的那個欄位**：
+   沒碰過的欄位根本不會寫，所以選單為了顯示取的近似值不可能蓋掉資料庫的真實值。
+   維持熱量只有一個：確認過的回推值，沒有就是公式。回推值要按「改用」才生效。 */
+import { useEffect, useRef, useState } from 'react'
 import {
   ACTIVITY_FACTOR_PRESETS,
-  clampToPresetRange,
   computeTargets,
-  nearestPreset,
   num,
   numOrNull,
   PROTEIN_G_PER_KG_PRESETS,
@@ -17,101 +14,68 @@ import {
   rateWeeklyToMonthly,
   RATE_PRESETS_KG_PER_MONTH,
   type Goal,
-  type Profile,
 } from '@/lib/formulas'
 import type { ProfileRow, Weight } from '@/lib/api'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { checkBodyBasics, checkCustomTargets } from '@/lib/goalForm'
+import { localDate, monthDay } from '@/lib/dates'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
-import MaintenanceCard from './MaintenanceCard'
+import { adviceOf, type MaintenanceEstimate } from '@/useMaintenanceEstimate'
+import MaintenanceCard, { ConfirmCard, EstimateDetail } from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
 const ACTIVITY_LABELS = ['久坐不動', '輕度活動', '中度活動', '高度活動', '非常活躍']
-const ACTIVITY_PRESETS = ACTIVITY_FACTOR_PRESETS.map((v, i) => ({ value: String(v), label: `${ACTIVITY_LABELS[i]}（${v}）` }))
-const PROTEIN_PRESETS = PROTEIN_G_PER_KG_PRESETS.map((v) => ({ value: String(v), label: `${v} g/kg` }))
-const RATE_PRESETS = RATE_PRESETS_KG_PER_MONTH.map((v) => ({ value: String(v), label: `${v} kg/月` }))
-
-/** 目標跟變化速度是兩個獨立欄位（2026-08-04 從合併的單一下拉拆開，理由見 formulas.ts
- *  該段落註解）：目標永遠顯示，速度只在非「維持」時才顯示第二個 select。 */
-const GOAL_OPTIONS: { value: Goal; label: string }[] = [
-  { value: 'cut', label: '減重' },
-  { value: 'maintain', label: '維持' },
-  { value: 'bulk', label: '增肌' },
-]
-
-interface DraftForm {
-  birthYear: string
-  height: string
-  sex: string
-  goal: Goal
-  rateChoice: string
-  activityChoice: string
-  proteinChoice: string
-  useCustom: boolean
-  customKcal: string
-  customProtein: string
-  customFat: string
-  customCarb: string
+const activityLabel = (v: number) => {
+  const i = ACTIVITY_FACTOR_PRESETS.findIndex((p) => p === v)
+  return i >= 0 ? `${ACTIVITY_LABELS[i]}（${v}）` : `${v}`
 }
+const GOAL_LABEL: Record<Goal, string> = { cut: '減重', maintain: '維持', bulk: '增肌' }
 
-function draftFrom(profile: ProfileRow): DraftForm {
-  const rateKgPerWeek = numOrNull(profile.rate_kg_per_week)
-  const rateKgPerMonth = rateKgPerWeek !== null ? rateWeeklyToMonthly(rateKgPerWeek) : RATE_PRESETS_KG_PER_MONTH[0]
-  return {
-    birthYear: String(numOrNull(profile.birth_year) ?? ''),
-    height: String(numOrNull(profile.height_cm) ?? ''),
-    sex: profile.sex,
-    goal: profile.goal,
-    rateChoice: String(nearestPreset(RATE_PRESETS_KG_PER_MONTH, rateKgPerMonth)),
-    activityChoice: String(nearestPreset(ACTIVITY_FACTOR_PRESETS, num(profile.activity_factor))),
-    proteinChoice: String(nearestPreset(PROTEIN_G_PER_KG_PRESETS, num(profile.protein_g_per_kg))),
-    useCustom: profile.use_custom_targets,
-    customKcal: String(numOrNull(profile.custom_kcal) ?? ''),
-    customProtein: String(numOrNull(profile.custom_protein_g) ?? ''),
-    customFat: String(numOrNull(profile.custom_fat_g) ?? ''),
-    customCarb: String(numOrNull(profile.custom_carb_g) ?? ''),
-  }
-}
+/** 「已儲存」閃多久：只是回報，時間是假設值，夠看到就好。 */
+const SAVED_FLASH_MS = 1500
+/** kg/週 存進 numeric(3,2) 再換回 kg/月 會有誤差（0.5 → 0.12 → 0.52），這個範圍內算同一格；格距是 0.25。 */
+const RATE_MATCH_KG_PER_MONTH = 0.03
+/** 資料庫是 numeric(3,2)：先捨入再存，存完的畫面才跟下次讀回來一樣。 */
+const weeklyRate = (kgPerMonth: number) => Math.round(rateMonthlyToWeekly(kgPerMonth) * 100) / 100
+const finiteOrNull = (n: number | null | undefined) => (n !== null && n !== undefined && Number.isFinite(n) ? n : null)
 
-/** 必填欄位：空字串要是 NaN，不能是 num() 的 0——Number('') === 0，如果拿 num() 讀空白的
- *  出生年／身高／蛋白質 g/kg，算出來的不是「算不出來」而是一個荒謬但有限的數字（出生年 0
- *  歲會讓年齡算成兩千多歲），會被下面 preview 的 Number.isFinite 守門放過，變成畫面上
- *  閃一個離譜的熱量而不是 —（precommit-review 抓到）。跟 submit() 送出時用的驗證同一把尺，
- *  只是這裡不擋、只回 NaN 讓它自然傳染。 */
+/** 空字串要是 NaN，不能是 Number('') 的 0：出生年 0 歲會讓年齡算成兩千多歲，變成閃一個離譜的熱量而不是 —。 */
 const reqNum = (v: string): number => (v.trim() === '' ? NaN : Number(v.trim()))
+const textOf = (v: unknown) => String(numOrNull(v) ?? '')
 
-/** 即時預覽用：把 draft 表單字串盡量轉成 Profile 餵給 computeTargets，算不出來（欄位
- *  還沒填完）就讓它自然變成 NaN——呼叫端用 Number.isFinite 判斷要不要顯示 —，不在
- *  這裡擋，那是送出時才做的事。activityFactor／proteinPerKg／rateKgPerWeek 由呼叫端算好傳進來
- *  （effectiveActivityFactor／effectiveProteinPerKg／effectiveRateKgPerWeek，同一套「沒碰過選單就沿用
- *  原始值」的規則，不是單純讀 draft 的選單字串）。 */
-function draftToProfile(d: DraftForm, activityFactor: number, proteinPerKg: number, rateKgPerWeek: number | null): Profile {
-  return {
-    birth_year: reqNum(d.birthYear),
-    height_cm: reqNum(d.height),
-    activity_factor: activityFactor,
-    sex: d.sex,
-    goal: d.goal,
-    rate_kg_per_week: rateKgPerWeek,
-    protein_g_per_kg: proteinPerKg,
-    use_custom_targets: false,
-    custom_kcal: null,
-    custom_protein_g: null,
-    custom_fat_g: null,
-    custom_carb_g: null,
-  }
+/** 選單的選項：DB 值對不上任何一格時（舊值、速度換算誤差）多列一項顯示真實值，不假裝它是最接近的那格。 */
+function choices(presets: readonly number[], value: number, tolerance = 0.0001) {
+  const match = presets.find((p) => Math.abs(p - value) <= tolerance)
+  if (match !== undefined || !Number.isFinite(value)) return { list: [...presets], selected: match ?? presets[0] }
+  const shown = Math.round(value * 100) / 100
+  return { list: [...presets, shown].sort((a, b) => a - b), selected: shown }
 }
 
-interface FieldOpts {
+const CHEV = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+
+interface PickRowProps {
   id: string
   label: string
-  required?: boolean
+  shown: string
   value: string
   onChange: (v: string) => void
+  children: React.ReactNode
 }
 
-function field(opts: FieldOpts) {
+/** 一列：左標籤、右目前值，整列是原生 select 的命中區，iOS 叫出系統滾輪。 */
+function PickRow({ id, label, shown, value, onChange, children }: PickRowProps) {
+  return (
+    <label className="goal-pick" htmlFor={id}>
+      <span className="lb">{label}</span>
+      <span className="val">{shown}</span>
+      {CHEV}
+      <select id={id} aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>{children}</select>
+    </label>
+  )
+}
+
+function field(opts: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="field-float" style={{ marginBottom: 0 }}>
       <input
@@ -122,10 +86,7 @@ function field(opts: FieldOpts) {
         value={opts.value}
         onChange={(e) => opts.onChange(e.target.value)}
       />
-      <label htmlFor={opts.id}>
-        {opts.label}
-        {opts.required && <span className="req">*</span>}
-      </label>
+      <label htmlFor={opts.id}>{opts.label}<span className="req">*</span></label>
     </div>
   )
 }
@@ -133,351 +94,422 @@ function field(opts: FieldOpts) {
 export interface DailyGoalProps {
   profile: ProfileRow
   latestWeight: Weight
+  estimate: MaintenanceEstimate
   onSaveProfile: (patch: Partial<ProfileRow>) => Promise<void>
+  onSaveLost: (message: string) => void
   onBack: () => void
   onOpenBodyUpdate: () => void
 }
 
 export default function DailyGoal(props: DailyGoalProps) {
-  const { profile, latestWeight, onSaveProfile, onBack, onOpenBodyUpdate } = props
+  const { profile, latestWeight, estimate, onSaveProfile, onSaveLost, onBack, onOpenBodyUpdate } = props
 
-  const [draft, setDraft] = useState<DraftForm>(() => draftFrom(profile))
-  const [busy, setBusy] = useState(false)
+  /* 還沒回來的改動疊在 profile 上：畫面當場跟著變，失敗就把那幾欄拿掉，自然退回原值。 */
+  const [local, setLocal] = useState<Partial<ProfileRow>>({})
+  const [isCustom, setIsCustom] = useState(profile.use_custom_targets)
+  const [custom, setCustom] = useState({
+    kcal: textOf(profile.custom_kcal),
+    protein: textOf(profile.custom_protein_g),
+    fat: textOf(profile.custom_fat_g),
+    carb: textOf(profile.custom_carb_g),
+  })
+  const [basics, setBasics] = useState({ birthYear: textOf(profile.birth_year), height: textOf(profile.height_cm) })
   const [err, setErr] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
 
-  /** DB 的 rate_kg_per_week 換算回 kg/月選單時，若不是剛好落在五個 preset 上（例如既有
-   *  使用者的 0.5 kg/週 ≈ 2.17 kg/月，超出這輪選單的上限 1.5），draftFrom 只能取最接近
-   *  的 preset 顯示。**這個「取最接近」只該影響選單怎麼畫，不該悄悄改掉使用者還沒碰過的
-   *  真實數值**——沒有這個 ref，live 預覽與送出都會直接拿 rateMonthlyToWeekly(draft.rateChoice)
-   *  算，使用者什麼都沒改、只是進來看一眼就按儲存，DB 裡的速度會被四捨五入成不同的值，且畫面
-   *  同時間會跟今日頁／設定頁入口顯示的目標熱量對不上（precommit-review 抓到）。只要使用者
-   *  沒有手動動過「變化速度」選單，一律沿用 profile 上的原始 rate_kg_per_week。目標欄位本身
-   *  不需要這套——goal 在 DB 裡永遠精準是 cut/maintain/bulk 三者之一，沒有「取最接近」的
-   *  近似問題。 */
-  const rateTouchedRef = useRef(false)
-  const initialRateKgPerWeek = numOrNull(profile.rate_kg_per_week)
-
-  /* 活動量／蛋白質這輪拿掉自訂選項，既有值改用「取最接近的 preset」顯示——跟上面
-   * rate_kg_per_week 同一個風險：使用者沒碰過選單就按儲存，不該讓近似值悄悄覆寫
-   * 真實資料。同一套 touched-ref 規則照搬一次。 */
-  const activityTouchedRef = useRef(false)
-  const initialActivityFactor = numOrNull(profile.activity_factor)
-  const proteinTouchedRef = useRef(false)
-  const initialProteinPerKg = numOrNull(profile.protein_g_per_kg)
-
-  const patch = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) => {
-    if (key === 'rateChoice') rateTouchedRef.current = true
-    if (key === 'activityChoice') activityTouchedRef.current = true
-    if (key === 'proteinChoice') proteinTouchedRef.current = true
-    setDraft((p) => ({ ...p, [key]: value }))
+  /* 只有離開整組欄位才檢查與儲存：依序填到一半切下一格不算，不然第一格填完就跳紅字。 */
+  const leavingForm = (e: React.FocusEvent<HTMLFormElement>) => !e.currentTarget.contains(e.relatedTarget as Node | null)
+  const editCustom = (key: keyof typeof custom) => (v: string) => {
+    setErr(null)
+    setCustom((c) => ({ ...c, [key]: v }))
+  }
+  const editBasics = (key: keyof typeof basics) => (v: string) => {
+    setErr(null)
+    setBasics((b) => ({ ...b, [key]: v }))
   }
 
-  const effectiveRateKgPerWeek = (): number | null => {
-    if (draft.goal === 'maintain') return null
-    if (!rateTouchedRef.current && initialRateKgPerWeek !== null) return initialRateKgPerWeek
-    return rateMonthlyToWeekly(Number(draft.rateChoice))
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const savedTimer = useRef<number | undefined>(undefined)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      window.clearTimeout(savedTimer.current)
+    }
+  }, [])
+
+  /* 同時只送一筆：連改時後面的併成一包，同一欄只留最後一次，回來才送下一包。 */
+  const inflightRef = useRef(false)
+  const queuedRef = useRef<Partial<ProfileRow> | null>(null)
+  /** 失敗過、還沒被後來的存檔補上的欄位：補上了錯誤才收掉，別筆成功不能把它洗掉。 */
+  const failedKeysRef = useRef(new Set<string>())
+
+  function settleFailed(keys: string[]) {
+    if (failedKeysRef.current.size === 0) return
+    for (const k of keys) failedKeysRef.current.delete(k)
+    if (failedKeysRef.current.size === 0) setErr(null)
   }
-  /* clampToPresetRange 是防禦深度，不是主要防線：選單那條路徑本來就只會給合法值，
-     夾的是「沿用 DB 原值」那條——舊版開放過自訂輸入，也可能被手改過，而那個值會直接
-     餵進 computeTargets 又原封寫回 DB。夾範圍而不吸附到某一格，是為了不破壞
-     xTouchedRef 守著的那條規則（沒碰過選單就不覆寫真實值）。 */
-  const effectiveActivityFactor = (): number =>
-    clampToPresetRange(
-      ACTIVITY_FACTOR_PRESETS,
-      !activityTouchedRef.current && initialActivityFactor !== null ? initialActivityFactor : num(draft.activityChoice),
-    )
-  const effectiveProteinPerKg = (): number =>
-    clampToPresetRange(
-      PROTEIN_G_PER_KG_PRESETS,
-      !proteinTouchedRef.current && initialProteinPerKg !== null ? initialProteinPerKg : num(draft.proteinChoice),
-    )
 
-  const rawPreview = draft.useCustom
-    ? null
-    : computeTargets(
-        draftToProfile(draft, effectiveActivityFactor(), effectiveProteinPerKg(), effectiveRateKgPerWeek()),
-        num(latestWeight.weight_kg),
-        latestWeight.body_fat_pct,
-      )
-  const preview = rawPreview && Number.isFinite(rawPreview.kcal) ? rawPreview : null
-
-  const bodyFatPct = latestWeight.body_fat_pct
-  const goal = draft.goal
-  const goalLabel = goal === 'cut' ? '減重' : goal === 'bulk' ? '增肌' : '維持'
-
-  /* 實測維持熱量卡要比的「上限」＝畫面上算出來／填的那個數，連未儲存的預覽也算
-     （改一格就看得到預期週變化）。自訂模式吃輸入框；空白、非數字、≤ 0 都當算不出來。 */
-  const customKcal = reqNum(draft.customKcal)
-  const maintenanceTarget = draft.useCustom
-    ? Number.isFinite(customKcal) && customKcal > 0 ? customKcal : null
-    : preview?.kcal ?? null
-  /* 使用者設定的每週變化（負＝減）。維持與自訂目標沒有速度可言。 */
-  const plannedRate = draft.useCustom || goal === 'maintain' ? null : effectiveRateKgPerWeek()
-  const plannedKgPerWeek = plannedRate === null ? null : goal === 'cut' ? -plannedRate : plannedRate
-
-  async function submit() {
-    if (busy) return
-    if (draft.useCustom) {
-      const kcal = reqNum(draft.customKcal)
-      const proteinG = reqNum(draft.customProtein)
-      const fatG = reqNum(draft.customFat)
-      const carbG = reqNum(draft.customCarb)
-      const invalid = checkCustomTargets({ kcal, proteinG, fatG, carbG })
-      if (invalid) return setErr(invalid)
-      setBusy(true)
-      setErr(null)
-      try {
-        await onSaveProfile({
-          use_custom_targets: true,
-          custom_kcal: kcal,
-          custom_protein_g: proteinG,
-          custom_fat_g: fatG,
-          custom_carb_g: carbG,
-        })
-        setBusy(false)
-      } catch (e) {
-        setBusy(false)
-        setErr(friendlyError(errMsg(e)))
+  async function flush() {
+    if (inflightRef.current || !queuedRef.current) return
+    const patch = queuedRef.current
+    queuedRef.current = null
+    inflightRef.current = true
+    try {
+      await onSaveProfile(patch)
+      // profile 已經是新的了：沒被後來的改動蓋掉的欄位不用再疊
+      setLocal((prev) => {
+        const next = { ...prev } as Record<string, unknown>
+        for (const [k, v] of Object.entries(patch)) if (next[k] === v) delete next[k]
+        return next as Partial<ProfileRow>
+      })
+      if (!queuedRef.current) {
+        setSaved(true)
+        window.clearTimeout(savedTimer.current)
+        savedTimer.current = window.setTimeout(() => setSaved(false), SAVED_FLASH_MS)
       }
+      const settled = Object.keys(patch)
+      // 這兩種成功會讓失敗的欄位整列消失，留著錯誤就再也收不掉
+      if (patch.goal === 'maintain') settled.push('rate_kg_per_week')
+      if (numOrNull(patch.measured_tdee) !== null) settled.push('activity_factor')
+      settleFailed(settled)
+    } catch (e) {
+      const message = friendlyError(errMsg(e))
+      if (!mountedRef.current) {
+        onSaveLost(message)
+        return
+      }
+      // 只退回值還是這筆的欄位：同一欄後面又改了的話，畫面要留著新的
+      setLocal((prev) => {
+        const next = { ...prev } as Record<string, unknown>
+        for (const [k, v] of Object.entries(patch)) if (next[k] === v) delete next[k]
+        return next as Partial<ProfileRow>
+      })
+      for (const k of Object.keys(patch)) failedKeysRef.current.add(k)
+      // 切回自動失敗＝實際目標還是自訂的，畫面要留在自訂；切到自訂失敗就留著讓人重試，填的值不能不見
+      // 後面還排著另一個「切回自動」就不拉回來：那才是使用者最後按的
+      const queued = queuedRef.current as Partial<ProfileRow> | null
+      if (patch.use_custom_targets === false && queued?.use_custom_targets !== false) setIsCustom(true)
+      setSaved(false)
+      setErr(message)
+    } finally {
+      inflightRef.current = false
+      void flush()
+    }
+  }
+
+  function save(patch: Partial<ProfileRow>) {
+    // 有欄位失敗還沒補上時留著錯誤：改別欄成功不能把它洗掉
+    if (failedKeysRef.current.size === 0) setErr(null)
+    setSaved(false)
+    setLocal((prev) => ({ ...prev, ...patch }))
+    queuedRef.current = { ...queuedRef.current, ...patch }
+    void flush()
+  }
+
+  const effective = { ...profile, ...local }
+  const weightKg = num(latestWeight.weight_kg)
+  const bodyFatPct = latestWeight.body_fat_pct
+
+  /* 算不出來（出生年還沒填完）就讓它是 NaN，畫面顯示 —，不跳錯誤：擋不合理值是失焦時才做的事。 */
+  const raw = computeTargets(
+    { ...effective, use_custom_targets: false, birth_year: reqNum(basics.birthYear), height_cm: reqNum(basics.height) },
+    weightKg,
+    bodyFatPct,
+  )
+  const preview = Number.isFinite(raw.kcal) ? raw : null
+
+  const customKcal = reqNum(custom.kcal)
+  const customValid =
+    checkCustomTargets({
+      kcal: customKcal,
+      proteinG: reqNum(custom.protein),
+      fatG: reqNum(custom.fat),
+      carbG: reqNum(custom.carb),
+    }) === null
+  const customDirty = !(
+    effective.use_custom_targets &&
+    num(effective.custom_kcal) === customKcal &&
+    num(effective.custom_protein_g) === reqNum(custom.protein) &&
+    num(effective.custom_fat_g) === reqNum(custom.fat) &&
+    num(effective.custom_carb_g) === reqNum(custom.carb)
+  )
+  const basicsDirty =
+    bodyFatPct === null && (reqNum(basics.birthYear) !== num(effective.birth_year) || reqNum(basics.height) !== num(effective.height_cm))
+  const customSum = (reqNum(custom.protein) || 0) * 4 + (reqNum(custom.fat) || 0) * 9 + (reqNum(custom.carb) || 0) * 4
+
+  const goal = effective.goal
+  const rateWeekly = numOrNull(effective.rate_kg_per_week)
+  const plannedKgPerWeek = isCustom || goal === 'maintain' || rateWeekly === null ? null : goal === 'cut' ? -rateWeekly : rateWeekly
+  const measuredOn = effective.measured_tdee_on
+  const usingMeasured = numOrNull(effective.measured_tdee) !== null
+
+  const inUseTdee = isCustom ? null : (preview?.tdee ?? null)
+  const advice = adviceOf(estimate, inUseTdee)
+  const adopted = advice?.kind === 'new' ? Math.round(advice.result.maintenance) : null
+  const afterKcal = adopted !== null
+    ? computeTargets({ ...effective, use_custom_targets: false, birth_year: reqNum(basics.birthYear), height_cm: reqNum(basics.height), measured_tdee: adopted }, weightKg, bodyFatPct).kcal
+    : null
+
+  /* 判斷一律看 effective（含還沒回來的改動），看 profile 會在請求途中做出錯的決定。 */
+  function pickMode(key: 'auto' | 'custom') {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+    failedKeysRef.current.clear()
+    setErr(null)
+    if (key === 'custom') {
+      setIsCustom(true)
+      if (customValid && !effective.use_custom_targets) saveCustom()
       return
     }
-
-    // 活動量／蛋白質的範圍由 effective*() 內的 clampToPresetRange 把關（見上方註解）：
-    // select 只保證使用者動過選單那條路徑合法，沿用 DB 原值那條要另外夾。
-    const patchBase: Partial<ProfileRow> = {
-      goal,
-      rate_kg_per_week: effectiveRateKgPerWeek(),
-      activity_factor: effectiveActivityFactor(),
-      protein_g_per_kg: effectiveProteinPerKg(),
-      use_custom_targets: false,
-    }
-
-    // 出生年／身高／性別只在 Mifflin-St Jeor 分支（沒填體脂率）才用得到——Katch-McArdle
-    // 只吃體重與體脂率。有體脂率時這三格整卡都不渲染，維持 DB 既有值不動，不逼使用者
-    // 補填跟這次計算無關的資料。
-    if (bodyFatPct === null) {
-      const birthYear = reqNum(draft.birthYear)
-      const height = reqNum(draft.height)
-      const invalid = checkBodyBasics({ birthYear, height }, new Date().getFullYear())
-      if (invalid) return setErr(invalid)
-      patchBase.birth_year = birthYear
-      patchBase.height_cm = height
-      patchBase.sex = draft.sex
-    }
-
-    setBusy(true)
-    setErr(null)
-    try {
-      await onSaveProfile(patchBase)
-      setBusy(false)
-    } catch (e) {
-      setBusy(false)
-      setErr(friendlyError(errMsg(e)))
-    }
+    setIsCustom(false)
+    if (isCustom && customValid && customDirty) saveCustom() // 還沒存的值先存，自訂值要留著
+    if (effective.use_custom_targets || (isCustom && customValid && customDirty)) save(withRate({ use_custom_targets: false }, goal))
   }
+
+  /** iOS Safari 點按鈕不會讓輸入框失焦，返回與開 sheet 都等不到 onBlur，改到一半的值會靜默不見。
+   *  離開前主動存；不合法的半成品照舊丟棄，因為資料庫還是對的值。 */
+  function commitTyped() {
+    if (isCustom) {
+      if (customValid && customDirty) saveCustom()
+      return
+    }
+    if (!basicsDirty) return
+    const birthYear = reqNum(basics.birthYear)
+    const height = reqNum(basics.height)
+    if (checkBodyBasics({ birthYear, height }, new Date().getFullYear()) !== null) return
+    const patch: Partial<ProfileRow> = {}
+    if (birthYear !== num(effective.birth_year)) patch.birth_year = birthYear
+    if (height !== num(effective.height_cm)) patch.height_cm = height
+    save(patch)
+  }
+
+  /** 資料庫可能沒有速度（舊資料）：減重／增肌沒有速度會算不出目標，每次開 app 都卡在錯誤畫面。
+   *  看已落地的 profile，不看 local：帶著速度的前一筆可能失敗，後一筆不帶就會存成有目標沒速度。 */
+  function withRate(patch: Partial<ProfileRow>, nextGoal: Goal): Partial<ProfileRow> {
+    if (nextGoal === 'maintain' || numOrNull(profile.rate_kg_per_week) !== null) return patch
+    return { ...patch, rate_kg_per_week: rateWeekly ?? weeklyRate(RATE_PRESETS_KG_PER_MONTH[0]) }
+  }
+
+  function saveCustom() {
+    save({
+      use_custom_targets: true,
+      custom_kcal: customKcal,
+      custom_protein_g: reqNum(custom.protein),
+      custom_fat_g: reqNum(custom.fat),
+      custom_carb_g: reqNum(custom.carb),
+    })
+  }
+
+  function blurCustom() {
+    const invalid = checkCustomTargets({
+      kcal: customKcal,
+      proteinG: reqNum(custom.protein),
+      fatG: reqNum(custom.fat),
+      carbG: reqNum(custom.carb),
+    })
+    if (invalid) return setErr(invalid)
+    setErr(null)
+    if (customDirty) saveCustom()
+    else settleFailed(['use_custom_targets', 'custom_kcal', 'custom_protein_g', 'custom_fat_g', 'custom_carb_g'])
+  }
+
+  function blurBasics() {
+    const birthYear = reqNum(basics.birthYear)
+    const height = reqNum(basics.height)
+    const invalid = checkBodyBasics({ birthYear, height }, new Date().getFullYear())
+    if (invalid) return setErr(invalid)
+    setErr(null)
+    const patch: Partial<ProfileRow> = {}
+    if (birthYear !== num(effective.birth_year)) patch.birth_year = birthYear
+    if (height !== num(effective.height_cm)) patch.height_cm = height
+    if (Object.keys(patch).length > 0) save(patch)
+    else settleFailed(['birth_year', 'height_cm'])
+  }
+
+  function pickGoal(next: Goal) {
+    save(withRate({ goal: next }, next))
+  }
+
+  const rate = choices(RATE_PRESETS_KG_PER_MONTH, rateWeeklyToMonthly(rateWeekly ?? NaN), RATE_MATCH_KG_PER_MONTH)
+  const activity = choices(ACTIVITY_FACTOR_PRESETS, num(effective.activity_factor))
+  const protein = choices(PROTEIN_G_PER_KG_PRESETS, num(effective.protein_g_per_kg))
+
+  const heroKcal = isCustom ? (Number.isFinite(customKcal) ? customKcal : null) : (preview?.kcal ?? null)
+  const source = isCustom
+    ? (!customValid ? '填完才生效' : customDirty ? '未儲存' : '自己填的')
+    : basicsDirty
+      ? '未儲存'
+      : usingMeasured
+        ? (measuredOn ? `依 ${monthDay(measuredOn)} 確認的記錄` : '依確認的記錄')
+        : '依公式估算'
 
   return (
     <div className="main" data-screen="daily-goal">
-      <SubPageTop title="每日目標" backLabel="返回設定" onBack={onBack} />
+      <SubPageTop title="每日目標" backLabel="返回設定" onBack={() => { commitTyped(); onBack() }} />
+
+      <div className="goal-hero">
+        <div>
+          <span className="gauge-num">{heroKcal !== null ? Math.round(heroKcal) : '—'}</span>
+          <span className="gauge-unit">卡</span>
+        </div>
+        <div className="goal-hero-macros">
+          {isCustom
+            ? `蛋白 ${custom.protein || 0}g・脂肪 ${custom.fat || 0}g・碳水 ${custom.carb || 0}g`
+            : preview
+              ? `蛋白 ${Math.round(preview.protein)}g・脂肪 ${Math.round(preview.fat)}g・碳水 ${Math.round(preview.carb)}g`
+              : '欄位還沒填完，先看不出目標'}
+        </div>
+        <div className="goal-hero-src">
+          <span>{source}</span>
+          <span className="goal-saved" role="status">{saved ? '已儲存' : ''}</span>
+        </div>
+      </div>
+
+      {err && <p className="sheet-error goal-err" role="alert">{err}</p>}
 
       <div className="goal-seg-wrap">
         <SegmentedControl
           label="目標計算方式"
-          items={[{ key: 'formula', label: '公式估算' }, { key: 'custom', label: '自訂目標' }]}
-          value={draft.useCustom ? 'custom' : 'formula'}
-          onPick={(k) => patch('useCustom', k === 'custom')}
+          items={[{ key: 'auto', label: '自動' }, { key: 'custom', label: '自訂' }]}
+          value={isCustom ? 'custom' : 'auto'}
+          onPick={pickMode}
         />
       </div>
 
-      <div className="form-wrap" style={{ paddingTop: 0 }}>
-        {draft.useCustom ? (
-          <>
-            <div className="goal-group-title" style={{ paddingLeft: 0, paddingBottom: 'var(--s-2)' }}>今日目標（自己填）</div>
-            {field({ id: 'g-custom-kcal', label: '熱量（卡）', required: true, value: draft.customKcal, onChange: (v) => patch('customKcal', v) })}
-            <div style={{ marginTop: 'var(--s-3)' }}>
-              {field({ id: 'g-custom-protein', label: '蛋白質 g', value: draft.customProtein, onChange: (v) => patch('customProtein', v) })}
+      <div className="form-wrap goal-scroll" style={{ paddingTop: 0 }} ref={scrollRef}>
+        {isCustom ? (
+          <form className="goal-custom" onSubmit={(e) => { e.preventDefault(); blurCustom() }} onBlur={(e) => { if (leavingForm(e)) blurCustom() }}>
+            {field({ id: 'g-custom-kcal', label: '熱量（卡）', value: custom.kcal, onChange: editCustom('kcal') })}
+            <div className="goal-macro-grid">
+              {field({ id: 'g-custom-protein', label: '蛋白 g', value: custom.protein, onChange: editCustom('protein') })}
+              {field({ id: 'g-custom-fat', label: '脂肪 g', value: custom.fat, onChange: editCustom('fat') })}
+              {field({ id: 'g-custom-carb', label: '碳水 g', value: custom.carb, onChange: editCustom('carb') })}
             </div>
-            <div style={{ marginTop: 'var(--s-3)' }}>
-              {field({ id: 'g-custom-fat', label: '脂肪 g', value: draft.customFat, onChange: (v) => patch('customFat', v) })}
-            </div>
-            <div style={{ marginTop: 'var(--s-3)' }}>
-              {field({ id: 'g-custom-carb', label: '碳水 g', value: draft.customCarb, onChange: (v) => patch('customCarb', v) })}
-            </div>
-            <div className="goal-note-box" style={{ marginTop: 'var(--s-4)' }}>
-              這是你自己設定的目標，沒有套用任何公式，跟身體數據無關。關掉「自訂目標」會退回公式估算——這幾個數字會留著，下次切回來還在。
-            </div>
-          </>
+            {customValid && (
+              <p className="goal-sum">
+                三大營養素加起來 <b>{Math.round(customSum)}</b> 卡
+                {Math.round(customSum) === Math.round(customKcal)
+                  ? '，和熱量一致'
+                  : `，比熱量${customSum > customKcal ? '多' : '少'} `}
+                {Math.round(customSum) !== Math.round(customKcal) && <><b>{Math.abs(Math.round(customSum - customKcal))}</b> 卡</>}
+              </p>
+            )}
+          </form>
         ) : (
           <>
-            <div className="goal-hero">
-              <div className="gauge-num">
-                {preview ? Math.round(preview.kcal) : '—'}
-                <span className="gauge-unit">卡</span>
-              </div>
-              <div className="goal-hero-macros">
-                {preview
-                  ? `蛋白 ${Math.round(preview.protein)}g・脂肪 ${Math.round(preview.fat)}g・碳水 ${Math.round(preview.carb)}g`
-                  : '欄位還沒填完，先看不出目標'}
-              </div>
-              <div className="goal-hero-live">改下面任何一格，這裡會即時跟著算，不用先按儲存</div>
-            </div>
+            {advice?.kind === 'new' && !dismissed && preview && afterKcal !== null && (
+              <ConfirmCard
+                result={advice.result}
+                beforeKcal={preview.kcal}
+                afterKcal={afterKcal}
+                bmr={finiteOrNull(preview.bmr)}
+                plannedKgPerWeek={plannedKgPerWeek}
+                onAdopt={() => { setDismissed(false); save({ measured_tdee: adopted, measured_tdee_on: localDate() }) }}
+                onDismiss={() => setDismissed(true)}
+              />
+            )}
 
             <div className="goal-group">
-              <div className="goal-group-title">身體數據</div>
-              <div className="goal-row"><span className="lb">最新體重</span><span className="val">{num(latestWeight.weight_kg).toFixed(2)} kg</span></div>
-              {bodyFatPct !== null && (
-                <div className="goal-row"><span className="lb">體脂率</span><span className="val">{num(bodyFatPct).toFixed(1)} %</span></div>
+              <PickRow id="g-goal" label="目標" shown={GOAL_LABEL[goal]} value={goal} onChange={(v) => pickGoal(v as Goal)}>
+                {(Object.keys(GOAL_LABEL) as Goal[]).map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}</option>)}
+              </PickRow>
+              {goal !== 'maintain' && (
+                <PickRow
+                  id="g-rate"
+                  label="速度"
+                  shown={`${rate.selected} kg/月`}
+                  value={String(rate.selected)}
+                  onChange={(v) => save({ rate_kg_per_week: weeklyRate(Number(v)) })}
+                >
+                  {rate.list.map((v) => <option key={v} value={v}>{v} kg/月</option>)}
+                </PickRow>
               )}
-              <div className="goal-row">
-                <span className="lb">
-                  BMR
-                  {/* 公式說明原本是 BMR 底下一段常駐的 .goal-hint，中文折成兩行、把整張卡撐高，
-                      而它是「想確認才看」的資訊，不是每次都要讀的。收進 popover：**不是 tooltip**
-                      ——tooltip 靠 hover/focus 觸發，手機沒有 hover 就打不開，這個 app 是手機為主。 */}
-                  <Popover.Root>
-                    <Popover.Trigger className="info-btn" aria-label="BMR 是怎麼算的">
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 11v5" />
-                        <path d="M12 7.6v.5" />
-                      </svg>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Positioner side="bottom" align="start" sideOffset={8} collisionPadding={12}>
-                        {/* Popup 帶 dialog 語意，沒有可及名稱時讀屏會播報一個沒有名字的
-                            dialog——聽不出這是什麼的說明（precommit-review 抓到）。 */}
-                        <Popover.Popup className="info-popup" aria-label="BMR 是怎麼算的">
-                          {bodyFatPct !== null
-                            ? '有體脂率，所以用 Katch-McArdle 公式：以去脂體重推 BMR，比只看身高年齡的公式準。哪天沒有體脂率可用，會自動退回 Mifflin-St Jeor。'
-                            : '目前沒有體脂率，用 Mifflin-St Jeor 公式：看的是體重、身高、年齡、性別。記一次體脂率之後會自動改用更準的 Katch-McArdle，以去脂體重計算。'}
-                        </Popover.Popup>
-                      </Popover.Positioner>
-                    </Popover.Portal>
-                  </Popover.Root>
-                </span>
-                <span className="val">{preview && preview.bmr !== null ? Math.round(preview.bmr) : '—'} 卡</span>
-              </div>
-              <button className="goal-link-row" type="button" onClick={onOpenBodyUpdate}>
-                <span>更新身體數據</span>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-              </button>
+              <PickRow
+                id="g-protein"
+                label="蛋白質"
+                shown={`${protein.selected} g/kg`}
+                value={String(protein.selected)}
+                onChange={(v) => save({ protein_g_per_kg: Number(v) })}
+              >
+                {protein.list.map((v) => <option key={v} value={v}>{v} g/kg</option>)}
+              </PickRow>
+              {/* 用回推值時目標不吃活動量，留著只會讓人以為改了有用 */}
+              {!usingMeasured && (
+                <PickRow
+                  id="g-activity"
+                  label="活動量"
+                  shown={activityLabel(activity.selected)}
+                  value={String(activity.selected)}
+                  onChange={(v) => save({ activity_factor: Number(v) })}
+                >
+                  {activity.list.map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}
+                </PickRow>
+              )}
             </div>
+          </>
+        )}
 
+        <MaintenanceCard
+          estimate={estimate}
+          inUseTdee={inUseTdee}
+          formulaTdee={finiteOrNull(preview?.formulaTdee)}
+          usingMeasured={usingMeasured}
+          targetKcal={heroKcal}
+          isCustom={isCustom}
+          dismissed={dismissed}
+          onUndismiss={() => setDismissed(false)}
+          onRevert={() => { setDismissed(true); save({ measured_tdee: null, measured_tdee_on: null }) }}
+        />
+
+        {!isCustom && (
+          <>
             {bodyFatPct === null && (
               <div className="goal-group">
                 <div className="goal-group-title">基本資料</div>
-                <div style={{ padding: '0 var(--s-4) var(--s-3)' }}>
-                  {field({ id: 'g-birth-year', label: '出生年', required: true, value: draft.birthYear, onChange: (v) => patch('birthYear', v) })}
+                <form style={{ padding: '0 var(--s-4) var(--s-3)' }} onSubmit={(e) => { e.preventDefault(); blurBasics() }} onBlur={(e) => { if (leavingForm(e)) blurBasics() }}>
+                  {field({ id: 'g-birth-year', label: '出生年', value: basics.birthYear, onChange: editBasics('birthYear') })}
                   <div className="field-row" style={{ marginTop: 'var(--s-3)' }}>
-                    {field({ id: 'g-height', label: '身高 cm', required: true, value: draft.height, onChange: (v) => patch('height', v) })}
+                    {field({ id: 'g-height', label: '身高 cm', value: basics.height, onChange: editBasics('height') })}
                     <div className="field-float" style={{ marginBottom: 0, flex: 1 }}>
-                      <select id="g-sex" value={draft.sex} onChange={(e) => patch('sex', e.target.value)}>
+                      <select id="g-sex" value={effective.sex} onChange={(e) => save({ sex: e.target.value })}>
                         <option value="male">男</option>
                         <option value="female">女</option>
                       </select>
                       <label htmlFor="g-sex">性別</label>
                     </div>
                   </div>
-                </div>
+                </form>
               </div>
             )}
 
             <div className="goal-group">
-              <div className="goal-group-title">活動與目標</div>
-              <div style={{ padding: '0 var(--s-4) var(--s-3)' }}>
-                <div className="field-float" style={{ marginBottom: 0 }}>
-                  <select
-                    id="g-goal"
-                    value={draft.goal}
-                    onChange={(e) => patch('goal', e.target.value as Goal)}
-                  >
-                    {GOAL_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <label htmlFor="g-goal">
-                    目標<span className="req">*</span>
-                  </label>
-                </div>
-                {draft.goal !== 'maintain' && (
-                  <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
-                    <select
-                      id="g-rate"
-                      value={draft.rateChoice}
-                      onChange={(e) => patch('rateChoice', e.target.value)}
-                    >
-                      {RATE_PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                    <label htmlFor="g-rate">
-                      變化速度<span className="req">*</span>
-                    </label>
-                  </div>
-                )}
-                {/* 活動量與攝取蛋白質**各佔整行**，不併成兩欄（2026-08-05 改）。
-                    量過才改：半寬欄位的可用文字寬度是 103.5px，而最長的選項
-                    「輕度活動（1.375）」需要 136px——差 32.5px。這不是加了下拉箭頭才有的
-                    問題，箭頭之前就已經短 8.5px、只是勉強看不出來。縮箭頭補不回 32.5px；
-                    縮短選項文字也不行，DESIGN.md 明訂活動量要帶數字給看得懂公式的人核對，
-                    而「非常活躍（1.9）」就算砍成兩字仍然超出。整行是唯一不靠魔術數字的解，
-                    也跟上面的目標／變化速度一致。 */}
-                <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
-                  <select
-                    id="g-activity"
-                    value={draft.activityChoice}
-                    onChange={(e) => patch('activityChoice', e.target.value)}
-                  >
-                    {ACTIVITY_PRESETS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                  <label htmlFor="g-activity">
-                    活動量<span className="req">*</span>
-                  </label>
-                </div>
-                <div className="field-float" style={{ marginBottom: 0, marginTop: 'var(--s-3)' }}>
-                  <select
-                    id="g-protein"
-                    value={draft.proteinChoice}
-                    onChange={(e) => patch('proteinChoice', e.target.value)}
-                  >
-                    {PROTEIN_PRESETS.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                  <label htmlFor="g-protein">
-                    攝取蛋白質<span className="req">*</span>
-                  </label>
-                </div>
-              </div>
+              <button type="button" className="goal-pick as-btn" onClick={() => { commitTyped(); onOpenBodyUpdate() }}>
+                <span className="lb">身體數據</span>
+                <span className="val">{weightKg.toFixed(2)} kg{bodyFatPct !== null && `・${num(bodyFatPct).toFixed(1)}%`}</span>
+                {CHEV}
+              </button>
             </div>
 
-            <div className="goal-src">
-              <div className="t">計算依據</div>
-              <ul>
-                {/* 原本這條寫「有填體脂率（…）：用 X 公式算 BMR（沒填則…）」——前綴寫死「有填
-                    體脂率」但公式名隨狀態變，沒填體脂率時整句自相矛盾，而且兩層括號讓它折成
-                    三行。改成只陳述規則、不講「目前」：現在是哪個公式由 BMR 那顆 ⓘ 負責講。 */}
-                <li>BMR 依有沒有體脂率選公式（Katch-McArdle／Mifflin-St Jeor）</li>
-                <li>TDEE ＝ BMR × 活動係數</li>
-                <li>減重／增肌依變化速度（7700 卡／公斤換算）在 TDEE 上加減每日熱量差額；維持＝TDEE。{goal !== 'maintain' && `目前是${goalLabel}`}</li>
-                <li>蛋白質＝體重 × g/kg；脂肪＝體重 × 0.85 g/kg（固定，不隨目標變動）；碳水＝扣掉蛋白質與脂肪熱量後的剩餘熱量 ÷ 4，不開放個別調整</li>
-              </ul>
-            </div>
+            <details className="goal-group goal-how">
+              <summary className="goal-pick"><span className="lb">怎麼算的</span>{CHEV}</summary>
+              <div className="goal-row">
+                <span className="lb">BMR（{bodyFatPct !== null ? 'Katch-McArdle' : 'Mifflin-St Jeor'}）</span>
+                <span className="val">{finiteOrNull(preview?.bmr) !== null ? Math.round(preview!.bmr!) : '—'} 卡</span>
+              </div>
+              <EstimateDetail estimate={estimate} targetKcal={preview?.kcal ?? null} plannedKgPerWeek={plannedKgPerWeek} />
+              <div className="goal-src">
+                <ul>
+                  <li>維持熱量：按過「改用」就是你確認的回推值，否則是 BMR × 活動量</li>
+                  <li>BMR：有體脂率用 Katch-McArdle，沒有用 Mifflin-St Jeor</li>
+                  <li>目標＝維持熱量 ± 速度換算（7700 卡／公斤）</li>
+                  <li>蛋白質＝體重 × g/kg；脂肪＝體重 × 0.85 g/kg；碳水取剩餘熱量 ÷ 4</li>
+                </ul>
+              </div>
+            </details>
           </>
         )}
-
-        {/* 實測維持熱量（v2.49）：唯讀對帳，兩種模式都顯示——自訂目標的人最需要知道自己填的數字準不準。
-            「目前上限」＝上面畫面上算出來／填的那個數，連未儲存的預覽也跟著動，改一格就看得到預期週變化。 */}
-        <MaintenanceCard targetKcal={maintenanceTarget} plannedKgPerWeek={plannedKgPerWeek} />
-      </div>
-
-      <div className="confirm-wrap">
-        {err && <p className="sheet-error" role="alert">{err}</p>}
-        <button type="button" className="pick-bar-btn" disabled={busy} onClick={() => void submit()}>
-          {busy ? '儲存中…' : '儲存'}
-        </button>
       </div>
     </div>
   )
