@@ -2,12 +2,9 @@
  *
  * 時間來源是 `Date.now()` 與存起來的 endAt，不是每秒遞減：鎖屏或切到背景時網頁的 JS 會被暫停，
  * 回到前景（`visibilitychange`）立刻重算，數字就是準的。這裡的 interval 只是讓畫面每 250ms 重畫，不是計時的依據。
- * 提示音走 `<audio>` 元素（WebKit 回報 Web Audio 在回前景後可能靜音）；iOS 要先有使用者手勢才放行，
- * 所以第一次開始倒數（＝勾組那一下）順手無聲播一次解鎖。靜音開關打開時照樣會響（使用者 2026-10-20 真機實測，
- * 與我原本「`<audio>` 會被靜音」的推測相反）。
+ * 不出聲（2026-11-10 拿掉提示音）：iOS 網頁一播 `<audio>` 就搶走音訊，使用者運動時放的音樂會被暫停；連解鎖用的無聲播放也算。
  * 狀態不進資料庫：endAt 存 sessionStorage（重新載入、SW 換版重載後續算）；休息時長固定 REST_SEC，沒有偏好要存。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import chimeUrl from '@/assets/rest-chime.wav'
 import {
   adjustEnd,
   firedOnTime,
@@ -53,12 +50,8 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
     enabled ? parseEndAt(readStore(endKey(workoutId)), Date.now()) : null,
   )
   const [now, setNow] = useState(() => Date.now())
-  const audio = useRef<HTMLAudioElement | null>(null)
-  const unlocked = useRef(false)
   const alerted = useRef<number | null>(null)
   const onTime = useRef(false)
-
-  const getAudio = () => (audio.current ??= new Audio(chimeUrl))
 
   const commit = useCallback(
     (next: number | null, at: number) => {
@@ -73,20 +66,6 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
     if (!enabled) return
     const at = Date.now()
     commit(startRest(at, REST_SEC), at)
-    if (unlocked.current) return
-    unlocked.current = true
-    const a = getAudio()
-    a.muted = true
-    a.play()
-      .then(() => {
-        a.pause()
-        a.currentTime = 0
-        a.muted = false
-      })
-      .catch(() => {
-        a.muted = false
-        unlocked.current = false
-      })
   }, [enabled, commit])
 
   const adjust = useCallback(
@@ -113,19 +92,13 @@ export function useRestTimer(workoutId: string, enabled: boolean): RestTimer {
     }
   }, [enabled, endAt])
 
-  // 歸零：準時看著（前景、超時不到 REST_ON_TIME_MS）才響、才自動收起；回前景時已經過了好一陣子就只顯示已過多久
+  // 歸零：準時看著（前景、超時不到 REST_ON_TIME_MS）才自動收起；回前景時已經過了好一陣子就只顯示已過多久
   useEffect(() => {
-    // enabled 變 false（訓練在畫面還掛著時被結束）：不響，也不再讀已隱藏的 endAt
+    // enabled 變 false（訓練在畫面還掛著時被結束）：不再讀已隱藏的 endAt
     if (!enabled || endAt === null || remainingMs(endAt, now) > 0) return
     if (alerted.current !== endAt) {
       alerted.current = endAt
       onTime.current = document.visibilityState === 'visible' && firedOnTime(endAt, now)
-      if (onTime.current) {
-        const a = getAudio()
-        a.muted = false
-        a.currentTime = 0
-        void a.play().catch(() => undefined)
-      }
     }
     if (onTime.current && now - endAt >= REST_AUTO_HIDE_MS) commit(null, now)
   }, [enabled, endAt, now, commit])

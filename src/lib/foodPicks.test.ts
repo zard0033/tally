@@ -4,7 +4,7 @@ import { byQuotaFit, defaultQty, overQuotaAmounts, pickTotals, quotaOverage, rec
 import type { Targets } from './formulas'
 
 const food = (id: number, kcal: number, protein: number, fat: number, carb: number): Food => ({
-  id, name: `f${id}`, vendor: null, kcal, protein, fat, carb, archived: false,
+  id, name: `f${id}`, vendor: null, kcal, protein, fat, carb, archived: false, category: null, category_manual: false,
 })
 const A = food(1, 200, 30, 5, 0)
 const B = food(2, 280, 5, 1, 60)

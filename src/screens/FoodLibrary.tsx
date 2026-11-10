@@ -1,5 +1,6 @@
 /* 食品庫管理頁：搜尋／使用中·已封存分頁／店家分組／就地編輯／以現有食物為範本新增／
    封存＋復原／FAB 新增。三顆列操作圖示（編輯／範本新增／封存）不寫字，靠 aria-label。
+   品名下面一顆類型標籤（v2.120），點了用原生 select 從固定清單改；改過的 AI 不再覆蓋。
 
    封存的「樂觀＋5 秒復原」刻意不比照 App.tsx 的 intake 刪除（那邊延遲真正的 DELETE
    5 秒才送出，因為硬刪除不可逆，要留一個「還沒真的發生」的窗口）。封存是可逆的
@@ -14,6 +15,7 @@ import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
+import { MEAL_TYPE_CATEGORIES, SIDE_CATEGORIES, categoryOf, normalizeCategory, type FoodCategory } from '@/lib/categories'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, foodMatches, foodToForm, groupByVendor, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 
@@ -24,6 +26,7 @@ export interface FoodLibraryProps {
   onUpdateFood: (id: number, patch: Partial<NewFood>) => Promise<void>
   onArchiveFood: (food: Food) => Promise<Food>
   onUnarchiveFood: (food: Food) => Promise<void>
+  onSetCategory: (id: number, category: FoodCategory) => Promise<void>
   onBack: () => void
 }
 
@@ -37,7 +40,7 @@ const EDIT_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"
 const TEMPLATE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="7.5" width="11" height="11" rx="2" /><path d="M8.5 7.5V6.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1" /></svg>
 
 export default function FoodLibrary(props: FoodLibraryProps) {
-  const { foods, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onBack } = props
+  const { foods, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSetCategory, onBack } = props
 
   const [tab, setTab] = useState<Tab>('active')
   const [archived, setArchived] = useState<Food[] | null>(null)
@@ -59,6 +62,10 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const [addSourceName, setAddSourceName] = useState<string | null>(null)
   const [addBusy, setAddBusy] = useState(false)
   const [addErr, setAddErr] = useState<string | null>(null)
+
+  /* 改類型：送出中先顯示選的那個，失敗退回並在那一列下面講原因。 */
+  const [catBusy, setCatBusy] = useState<{ id: number; category: FoodCategory } | null>(null)
+  const [catErr, setCatErr] = useState<{ id: number; msg: string } | null>(null)
 
   const [undo, setUndo] = useState<{ food: Food } | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
@@ -90,6 +97,19 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     } catch (e) {
       setEditBusy(false)
       setEditErr(friendlyError(errMsg(e)))
+    }
+  }
+
+  async function setCategory(f: Food, category: FoodCategory) {
+    setCatBusy({ id: f.id, category })
+    setCatErr(null)
+    try {
+      await onSetCategory(f.id, category)
+      setArchived((prev) => prev?.map((x) => (x.id === f.id ? { ...x, category, category_manual: true } : x)) ?? prev)
+    } catch (e) {
+      setCatErr({ id: f.id, msg: friendlyError(errMsg(e)) })
+    } finally {
+      setCatBusy((cur) => (cur?.id === f.id ? null : cur))
     }
   }
 
@@ -248,10 +268,31 @@ export default function FoodLibrary(props: FoodLibraryProps) {
             <div className="lib-group" key={g.vendor}>
               <div className="lib-group-title">{g.vendor}</div>
               <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {g.items.map((f) => (
+                {g.items.map((f) => {
+                  const cat = catBusy?.id === f.id ? catBusy.category : categoryOf(f.category)
+                  return (
                   <li className="lib-row" key={f.id}>
                     <div className="lib-row-main">
-                      <div className="nm-wrap"><span className="nm">{f.name}</span></div>
+                      <div className="nm-wrap">
+                        <span className="nm">{f.name}</span>
+                        {/* 原生 select 透明疊在標籤上當命中區（同每日目標的 .goal-pick），iOS 叫出系統滾輪 */}
+                        <label className="lib-cat" data-empty={cat === null || undefined}>
+                          <span className="lib-cat-tag" aria-hidden="true">{cat ?? '未分類'}</span>
+                          <select
+                            aria-label={`${f.name} 的類型：${cat ?? '未分類'}`}
+                            value={cat ?? ''}
+                            onChange={(e) => void setCategory(f, normalizeCategory(e.target.value))}
+                          >
+                            {cat === null && <option value="" disabled>未分類</option>}
+                            <optgroup label="餐點類型">
+                              {MEAL_TYPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </optgroup>
+                            <optgroup label="搭配類">
+                              {SIDE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </optgroup>
+                          </select>
+                        </label>
+                      </div>
                       <button className="icon-btn" type="button" aria-label={`編輯 ${f.name}`} onClick={() => (editingId === f.id ? setEditingId(null) : openEdit(f))}>
                         {EDIT_ICON}
                       </button>
@@ -295,8 +336,10 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         {editErr && <p className="sheet-error" role="alert">{editErr}</p>}
                       </div>
                     )}
+                    {catErr?.id === f.id && <p className="sheet-error lib-cat-err" role="alert">類型沒有存到：{catErr.msg}</p>}
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             </div>
           ))

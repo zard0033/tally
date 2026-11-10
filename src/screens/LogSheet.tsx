@@ -130,6 +130,9 @@ function suggestedFood(item: RepeatItem): Food {
     fat: item.fat,
     carb: item.carb,
     archived: item.archived,
+    category: item.category,
+    // 只給 sheet 顯示與寫入用，不會寫回食品庫；手動與否這裡不知道也用不到
+    category_manual: false,
   }
 }
 

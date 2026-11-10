@@ -49,7 +49,7 @@ interface Play {
 }
 type W = { __plays: Play[] }
 
-/** 時鐘照常流動；提示音只記錄不真的播。要在第一次導覽之前裝。 */
+/** 時鐘照常流動；媒體播放只記錄不真的播（用來驗證完全不出聲）。要在第一次導覽之前裝。 */
 async function prepare(page: Page, opts: { reduced?: boolean } = {}) {
   await page.clock.install({ time: Date.now() })
   await page.addInitScript(() => {
@@ -70,7 +70,6 @@ async function jump(page: Page, ms: number) {
 }
 
 const plays = (page: Page) => page.evaluate(() => (window as unknown as W).__plays)
-const chimes = async (page: Page) => (await plays(page)).filter((p) => !p.muted && p.src.includes('rest-chime'))
 
 const bar = (page: Page) => page.locator('.tr-rest')
 const barText = (page: Page) => page.locator('.tr-rest [data-rest-text]')
@@ -127,7 +126,7 @@ test('已結束的訓練裡勾組不開始倒數', async ({ page }) => {
   await expect(bar(page)).toHaveCount(0)
 })
 
-test('倒數由「結束時間點 − 現在」算：撥時鐘 30 秒顯示 1:00；再勾另一組重新起算；撥過結束點顯示已過多久、不補響', async ({ page }) => {
+test('倒數由「結束時間點 − 現在」算：撥時鐘 30 秒顯示 1:00；再勾另一組重新起算；撥過結束點顯示已過多久', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   await tick(page, 0)
@@ -143,12 +142,11 @@ test('倒數由「結束時間點 − 現在」算：撥時鐘 30 秒顯示 1:00
   await jump(page, 113_000)
   await expect(bar(page)).toHaveAttribute('data-rest', 'over')
   await expect(barText(page)).toHaveText('休息結束 · 已過 0:23')
-  expect(await chimes(page), '回前景時已超時，不補響').toHaveLength(0)
   await btn(page, '收起').click()
   await expect(bar(page)).toHaveCount(0)
 })
 
-test('−15／＋15：各調整 15 秒；＋15 最多到 10:00；−15 減到 0 就是結束（響一聲、約 3 秒後自動收起）', async ({ page }) => {
+test('−15／＋15：各調整 15 秒；＋15 最多到 10:00；−15 減到 0 就是結束（約 3 秒後自動收起）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   await tick(page, 0)
@@ -169,7 +167,6 @@ test('−15／＋15：各調整 15 秒；＋15 最多到 10:00；−15 減到 0 
   for (let i = 0; i < 6; i++) await btn(page, '減 15 秒').click()
   await expect(bar(page)).toHaveAttribute('data-rest', 'over')
   await expect(barText(page)).toHaveText('休息結束')
-  await expect.poll(async () => (await chimes(page)).length, '準時歸零：響一聲').toBe(1)
 
   await jump(page, 3_000)
   await expect(bar(page), '準時看到的歸零，約 3 秒後自動收起').toHaveCount(0)
@@ -221,25 +218,20 @@ test('重新載入：倒數中續算；已過期的不復活', async ({ page }) 
   await expect(bar(page)).toHaveCount(0)
 })
 
-test('歸零且畫面在前景：響一聲（第一次勾組那下先無聲解鎖）、條換色、約 3 秒後自動收起', async ({ page }) => {
+test('歸零且畫面在前景：條換色、約 3 秒後自動收起；從勾組到收起完全不播任何聲音（iOS 一播就會暫停使用者的音樂）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   await tick(page, 0)
   await expect(barText(page)).toHaveText('1:30')
-  const unlock = await plays(page)
-  expect(unlock.length, '勾組當下無聲解鎖一次').toBe(1)
-  expect(unlock[0].muted).toBe(true)
-  expect(await chimes(page)).toHaveLength(0)
 
   await jump(page, 90_000)
   await expect(bar(page)).toHaveAttribute('data-rest', 'over')
-  await expect.poll(async () => (await chimes(page)).length).toBe(1)
   await expect(barText(page)).toHaveText('休息結束')
   await expect(page.locator('.tr-rest.is-over')).toHaveCount(1)
 
   await jump(page, 3_000)
   await expect(bar(page)).toHaveCount(0)
-  expect(await chimes(page), '只響一次').toHaveLength(1)
+  expect(await plays(page), '連無聲解鎖也沒有').toHaveLength(0)
 })
 
 test('回前景（visibilitychange）立刻重算：計時器全凍結時只靠這個事件，數字仍追上', async ({ page }) => {
@@ -338,11 +330,11 @@ test('進場（減少動態）：只淡入，沒有任何位移', async ({ page 
   expect(styles.some((s) => /translate/.test(s)), `減少動態不該位移：${styles.join(' | ')}`).toBe(false)
 })
 
-test('建置層：提示音是獨立檔案、進了 precache（離線健身房也響）', async ({ page }) => {
+test('建置層：沒有提示音檔（precache 清單裡沒有 wav）', async ({ page }) => {
   await prepare(page)
   await openApp(page)
   const sw = await (await page.request.get(new URL('sw.js', page.url()).href)).text()
-  expect(sw.match(/assets\/rest-chime-[\w-]+\.wav/g), 'precache 清單有提示音').toHaveLength(1)
+  expect(sw).not.toMatch(/\.wav/)
 })
 
 /* ── RPE 問題列（spec.md「階段 4 乙」）：一個動作的最後一組勾完，休息條長高成兩列 ───────────────── */

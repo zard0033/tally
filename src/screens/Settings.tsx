@@ -43,7 +43,7 @@ function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
 export default function Settings(props: SettingsProps) {
   const {
     profile, targets, latestWeight, foods,
-    onSaveProfile, onSaveLost, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSignOut,
+    onSaveProfile, onSaveLost, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSetFoodCategory, onSignOut,
     training, onTrainingWrite, onSubViewChange,
   } = props
 
@@ -198,6 +198,7 @@ export default function Settings(props: SettingsProps) {
         onUpdateFood={onUpdateFood}
         onArchiveFood={onArchiveFood}
         onUnarchiveFood={onUnarchiveFood}
+        onSetCategory={onSetFoodCategory}
         onBack={() => setView('list')}
       />
     )

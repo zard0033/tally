@@ -1117,8 +1117,9 @@ test('「全選」命中區 ≥44×44：鈕的四邊都點得到它，第一列�
       rowCenter: document.elementFromPoint(rr.left + rr.width / 2, rr.top + rr.height / 2)?.closest('.food-row') === row,
     }
   })
-  expect(hit.w).toBeGreaterThanOrEqual(44)
-  expect(hit.h).toBeGreaterThanOrEqual(44)
+  // 量的是畫面上的盒子，sheet 的位移會留浮點尾數（實測 43.99998）；0.01px 的容差不放寬 44 這條線
+  expect(hit.w).toBeGreaterThanOrEqual(44 - 0.01)
+  expect(hit.h).toBeGreaterThanOrEqual(44 - 0.01)
   expect(hit.edges).toEqual([true, true, true, true])
   expect(hit.rowCenter).toBe(true)
 })
@@ -1140,14 +1141,16 @@ test('封存食物：一鍵照搬；sheet 可選、確認列計入、切餐別�
     foods: { name: '新款便當', vendor: '停賣店', archived: true },
   })
   const snapshot = { eaten_on: MON, food_id: 99, kcal: 300, protein: 20, fat: 10, carb: 30, name: '舊款便當' }
-  await openAppAt(page, MON, { intakePersist: true }, fixWith([archived(301, 'breakfast', 1), archived(302, 'lunch', 2)]))
+  /* 第二個來源放點心不放午餐：早餐一鍵加入了停賣店，第三版起同一天的午餐、晚餐會把同店家的組整組拿掉（spec C 節第三版），
+     點心不套用避開重複，才驗得到 sheet 那一半。 */
+  await openAppAt(page, MON, { intakePersist: true }, fixWith([archived(301, 'breakfast', 1), archived(302, 'snack', 2)]))
 
   await expect(cardOf(page, '早餐').locator('.sg-items')).toHaveText('舊款便當')
   await addOf(page, '早餐').click()
   await expect(nodeOf(page, '早餐').locator('.item .nm')).toHaveText(['舊款便當'])
   expect((await intakeWrites(page, 'POST'))[0].body).toEqual([{ ...snapshot, meal: 'breakfast', qty: 1 }])
 
-  await openMealSheet(page, '午餐')
+  await openMealSheet(page, '點心')
   const sheet = sheetOf(page)
   await expect(suggestNames(page)).toHaveText(['舊款便當'])
   await sheet.locator('.sect-suggest + .food-list .food-row').click()
@@ -1403,4 +1406,102 @@ test('第二版：過去的日子早午餐都記了，晚餐仍是常吃、不�
   await expect(nodeOf(page, '午餐').locator('.item')).toHaveCount(1)
   await expect(cardOf(page, '晚餐').locator('.sg-src')).toHaveText('常吃')
   await expect(swapOf(page, '晚餐')).toHaveCount(0)
+})
+
+/* ── 餐建議第三版：避開重複（spec.md C 節「第三版」）──
+   今天釘 MON（週一），前一天是週日 11-01（沒有紀錄）。這幾樣食物不在 fixture 的食品庫裡：建議只用回看資料的
+   快照，不需要它們。通用名、店家寫甲乙。上面第二版的測試用的 srcRow 沒帶類型（＝未分類），所以不受類型重複影響。 */
+interface Typed {
+  food_id: number
+  name: string
+  vendor: string | null
+  category: string
+  kcal: number
+  protein: number
+  fat: number
+  carb: number
+}
+const T = {
+  roastA: { food_id: 501, name: '叉燒飯', vendor: '燒臘店甲', category: '燒臘', kcal: 700, protein: 30, fat: 25, carb: 90 },
+  roastB: { food_id: 502, name: '燒臘便當', vendor: '燒臘店乙', category: '燒臘', kcal: 750, protein: 45, fat: 20, carb: 70 },
+  chicken: { food_id: 503, name: '雞腿便當', vendor: '便當店', category: '便當', kcal: 650, protein: 35, fat: 18, carb: 60 },
+  burger: { food_id: 504, name: '漢堡套餐', vendor: '漢堡店', category: '速食', kcal: 800, protein: 30, fat: 35, carb: 80 },
+  nugget: { food_id: 505, name: '雞塊', vendor: '漢堡店', category: '速食', kcal: 450, protein: 25, fat: 25, carb: 30 },
+  beef: { food_id: 506, name: '牛肉麵', vendor: '麵店', category: '麵食', kcal: 600, protein: 35, fat: 18, carb: 70 },
+  whey: { food_id: 13, name: '乳清（1匙）', vendor: null, category: '蛋白質補充', kcal: 120, protein: 24, fat: 1.5, carb: 2 },
+} satisfies Record<string, Typed>
+
+/** 回看資料或當日清單的一列（兩種查詢的欄位聯集，stub 不挑）。 */
+const typedRow = (id: number, eaten_on: string, meal: string, f: Typed) => ({
+  id,
+  eaten_on,
+  meal,
+  food_id: f.food_id,
+  qty: 1,
+  kcal: f.kcal,
+  protein: f.protein,
+  fat: f.fat,
+  carb: f.carb,
+  name: null,
+  created_at: `${eaten_on}T01:00:00.000Z`,
+  foods: { name: f.name, vendor: f.vendor, archived: false, category: f.category },
+})
+const dinners = (from: number, dates: string[], f: Typed) => dates.map((d, i) => typedRow(from + i, d, 'dinner', f))
+
+test('第三版：中午吃燒臘，晚餐常吃的燒臘便當換成雞腿便當；刪掉午餐就換回來', async ({ page }) => {
+  const fix = fixWith(
+    [...dinners(601, ['2026-10-28', '2026-10-27', '2026-10-26'], T.roastB), ...dinners(611, ['2026-10-30', '2026-10-29'], T.chicken)],
+    [typedRow(101, MON, 'lunch', T.roastA)],
+  )
+  await openAppAt(page, MON, {}, fix)
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-src')).toHaveText('常吃')
+  await expect(card.locator('.sg-items')).toHaveText('雞腿便當')
+
+  await deleteViaTap(page, 0)
+  await expect(card.locator('.sg-items'), '沒有午餐就沒有重複，回到最常吃的').toHaveText('燒臘便當')
+  await expect(card.locator('.sg-src')).toHaveText('常吃')
+})
+
+test('第三版：中午吃了漢堡店，晚餐的漢堡店整組拿掉；只剩同店時不出建議', async ({ page }) => {
+  const fix = fixWith(
+    [...dinners(621, ['2026-10-28', '2026-10-27', '2026-10-26'], T.nugget), typedRow(631, '2026-10-30', 'dinner', T.beef)],
+    [typedRow(101, MON, 'lunch', T.burger)],
+  )
+  await openAppAt(page, MON, {}, fix)
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-items')).toHaveText('牛肉麵')
+  await expect(card.locator('.sg-src'), '沒重複的只吃過一次：上次').toHaveText('上次')
+
+  // 別的日子沒有午餐：雞塊照樣是常吃（同店家只看當天）
+  await gotoDate(page, TUE)
+  await expect(card.locator('.sg-items')).toHaveText('雞塊')
+})
+
+test('第三版：只有同店家的候選時，晚餐不出建議', async ({ page }) => {
+  const fix = fixWith(dinners(621, ['2026-10-28', '2026-10-27'], T.nugget), [typedRow(101, MON, 'lunch', T.burger)])
+  await openAppAt(page, MON, {}, fix)
+  await expect(nodeOf(page, '午餐').locator('.item')).toHaveCount(1)
+  await expect(cardOf(page, '早餐'), '對照：早餐沒有候選').toHaveCount(0)
+  await expect(cardOf(page, '晚餐')).toHaveCount(0)
+})
+
+test('第三版：依缺口挑時，中午燒臘 ⇒ 晚餐先出雞腿便當、換一個才是燒臘便當', async ({ page }) => {
+  /* 自訂目標 1800／130／60／200。已吃 乳清 120／24／1.5／2 ＋ 叉燒飯 700／30／25／90 ＝ 820／54／26.5／92
+     ⇒ 缺口 980／76／33.5／108，減重上限 980。燒臘便當 750 與雞腿便當 650 都在上限內、脂碳都沒超、蛋白質都沒達標（< 71）：
+     第二版會因蛋白質多先出燒臘便當；燒臘跟午餐重複 ⇒ 雞腿便當在前。 */
+  const fix = {
+    ...fixWith(
+      [typedRow(641, '2026-10-30', 'dinner', T.roastB), typedRow(642, '2026-10-29', 'dinner', T.chicken)],
+      [typedRow(101, MON, 'breakfast', T.whey), typedRow(102, MON, 'lunch', T.roastA)],
+    ),
+    profile: [{ ...FIX.profile[0], use_custom_targets: true, custom_kcal: 1800, custom_protein_g: 130, custom_fat_g: 60, custom_carb_g: 200 }],
+  } as unknown as typeof FIX
+  await openAppAt(page, MON, {}, fix)
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-src')).toHaveText('建議')
+  await expect(card.locator('.sg-items')).toHaveText('雞腿便當')
+  await expect(card.locator('.sg-kc')).toHaveText('650')
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items')).toHaveText('燒臘便當')
 })

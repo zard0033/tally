@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { createFood as apiCreateFood, updateFood as apiUpdateFood, type Food, type NewFood } from '@/lib/api'
+import type { FoodCategory } from '@/lib/categories'
 import { byFoodName } from '@/lib/foodForm'
 
 export function useFoods() {
@@ -36,5 +37,30 @@ export function useFoods() {
     setFoods((prev) => [...(prev ?? []).filter((f) => f.id !== food.id), { ...food, archived: false }].sort(byFoodName))
   }, [])
 
-  return { foods, setFoods, handleCreateFood, handleUpdateFood, handleArchiveFood, handleUnarchiveFood }
+  /** 食品庫手動改類型：標成手動，之後 AI 補判不覆蓋。 */
+  const handleSetFoodCategory = useCallback(async (id: number, category: FoodCategory): Promise<void> => {
+    await apiUpdateFood(id, { category, category_manual: true })
+    setFoods((prev) => prev?.map((f) => (f.id === id ? { ...f, category, category_manual: true } : f)) ?? prev)
+  }, [])
+
+  /** AI 補判寫入成功的類型。只補還沒有類型、沒手動改過的——補判途中手動改了的以手動為準。 */
+  const applyAiCategories = useCallback((cats: ReadonlyMap<number, FoodCategory>) => {
+    setFoods((prev) =>
+      prev?.map((f) => {
+        const c = cats.get(f.id)
+        return c && f.category === null && !f.category_manual ? { ...f, category: c } : f
+      }) ?? prev,
+    )
+  }, [])
+
+  return {
+    foods,
+    setFoods,
+    handleCreateFood,
+    handleUpdateFood,
+    handleArchiveFood,
+    handleUnarchiveFood,
+    handleSetFoodCategory,
+    applyAiCategories,
+  }
 }

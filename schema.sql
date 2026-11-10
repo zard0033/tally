@@ -15,6 +15,16 @@ create table foods (
   -- 真刪不可行（會擋住或毀掉歷史），所以改成不刪。
   -- 既有資料庫補這欄：alter table foods add column archived boolean not null default false;
   archived   boolean not null default false,
+  -- 類型（2026-11-10，spec.md C 節「第三版」）：由 read-label 的分類模式在背景補上，值只會是
+  -- src/lib/categories.ts 那張固定清單裡的字。null＝還沒分類（失敗或離線就留著，下次開 app 再補）。
+  -- 不加 check 約束：清單之後可能增減，前端讀到清單外的值一律當「其他正餐」。
+  -- category_manual＝使用者在食品庫手動改過；AI 補判只寫 category is null and category_manual = false 的列，不覆蓋。
+  -- 既有資料庫補這兩欄：
+  --   alter table foods add column category text;
+  --   alter table foods add column category_manual boolean not null default false;
+  -- 回滾：alter table foods drop column category_manual; alter table foods drop column category;
+  category        text,
+  category_manual boolean not null default false,
   created_at timestamptz not null default now()
 );
 

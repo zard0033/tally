@@ -73,15 +73,16 @@ export const FIX = {
   // 同名不同 vendor 是真實資料的形狀，搜尋必須兩個欄位都比對才分得開。
   // 8 筆涵蓋：同一店家多筆食物（減醣廚房、全家各兩筆，測店家 Autocomplete 去重）、
   // vendor 為 null（乳清／地瓜／香蕉三筆，測「留空仍可送出」與去重時 null 不算進選項）。
+  // 全部都已分類（v2.120）：開機的類型補判沒有對象，既有測試不會多出分類請求與寫入。要驗補判的測試自己把 category 改成 null。
   foods: [
-    { id: 11, name: '雞胸餐盒', vendor: '健康盒', kcal: 420, protein: 45, fat: 12, carb: 30 },
-    { id: 12, name: '雞胸餐盒', vendor: '減醣廚房', kcal: 380, protein: 42, fat: 9, carb: 28 },
-    { id: 13, name: '乳清（1匙）', vendor: null, kcal: 120, protein: 24, fat: 1.5, carb: 2 },
-    { id: 14, name: '地瓜', vendor: null, kcal: 130, protein: 2, fat: 0.2, carb: 31 },
-    { id: 15, name: '無糖豆漿', vendor: '全家', kcal: 90, protein: 8, fat: 4, carb: 5 },
-    { id: 16, name: '溫泉蛋', vendor: '減醣廚房', kcal: 80, protein: 7, fat: 5, carb: 1 },
-    { id: 17, name: '香蕉', vendor: null, kcal: 105, protein: 1.3, fat: 0.4, carb: 27 },
-    { id: 18, name: '拿鐵', vendor: '全家', kcal: 150, protein: 8, fat: 6, carb: 15 },
+    { id: 11, name: '雞胸餐盒', vendor: '健康盒', kcal: 420, protein: 45, fat: 12, carb: 30, category: '健康餐盒', category_manual: false },
+    { id: 12, name: '雞胸餐盒', vendor: '減醣廚房', kcal: 380, protein: 42, fat: 9, carb: 28, category: '健康餐盒', category_manual: false },
+    { id: 13, name: '乳清（1匙）', vendor: null, kcal: 120, protein: 24, fat: 1.5, carb: 2, category: '蛋白質補充', category_manual: false },
+    { id: 14, name: '地瓜', vendor: null, kcal: 130, protein: 2, fat: 0.2, carb: 31, category: '主食', category_manual: false },
+    { id: 15, name: '無糖豆漿', vendor: '全家', kcal: 90, protein: 8, fat: 4, carb: 5, category: '飲料', category_manual: false },
+    { id: 16, name: '溫泉蛋', vendor: '減醣廚房', kcal: 80, protein: 7, fat: 5, carb: 1, category: '配菜', category_manual: false },
+    { id: 17, name: '香蕉', vendor: null, kcal: 105, protein: 1.3, fat: 0.4, carb: 27, category: '點心', category_manual: false },
+    { id: 18, name: '拿鐵', vendor: '全家', kcal: 150, protein: 8, fat: 6, carb: 15, category: '飲料', category_manual: false },
   ],
   // listRecentIntake 的形狀（meal, food_id, qty）——用於「常吃」排序
   history: [

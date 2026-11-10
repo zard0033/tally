@@ -10,7 +10,8 @@
    401 因此只剩「驗證失敗」一個成因，不會有「別的錯誤碰巧也回 401」的假綠。 */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose'
-import { handleRequest } from './handler.ts'
+import { CATEGORIES, handleRequest } from './handler.ts'
+import { FOOD_CATEGORIES } from '../../../src/lib/categories.ts'
 
 const now = () => Math.floor(Date.now() / 1000)
 
@@ -358,5 +359,146 @@ describe('read-label 辨識', () => {
       expect(text).not.toContain('Invalid API key')
       expect(text).not.toContain('at ')
     }
+  })
+})
+
+/* 分類模式（spec.md C 節「第三版」）：body 帶 foods 時改成純文字分類。驗證閘與辨識共用，
+   這裡只驗分類自己的東西：輸入的界、提示詞帶了清單與界線、輸出的收斂。 */
+describe('read-label 分類模式', () => {
+  const FOODS = [
+    { id: 1, name: '叉燒飯', vendor: '燒臘店' },
+    { id: 2, name: '乳清', vendor: null },
+  ]
+
+  it('㉒ 清單與前端 src/lib/categories.ts 同一份（Edge Function 不能 import src，只能比對）', () => {
+    expect(CATEGORIES).toEqual([...FOOD_CATEGORIES])
+  })
+
+  it('㉓ 成功：送純文字（沒有圖片）、提示詞帶清單與三條界線與品名店家，回 {results}', async () => {
+    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"},{"id":2,"category":"蛋白質補充"}]}'))
+    const res = await handleRequest(post(await validToken(), { foods: FOODS }, SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SITE)
+    expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }, { id: 2, category: '蛋白質補充' }] })
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
+    const sent = JSON.parse(init.body as string)
+    expect(sent.model).toBe('qwen/qwen3.7-flash')
+    const parts = sent.messages[0].content
+    expect(parts).toHaveLength(1)
+    expect(parts[0].type).toBe('text')
+    const text: string = parts[0].text
+    expect(text).toContain('燒臘、便當、健康餐盒、飯類、麵食、餃類、速食、早餐店、滷味／鹽水雞、鍋物、日式、其他正餐')
+    expect(text).toContain('飲料、蛋白質補充、配菜、主食、點心')
+    expect(text).toContain('便當＝')
+    expect(text).toContain('飯類＝')
+    expect(text).toContain('早餐店是一整類')
+    expect(text).toContain('健康餐盒＝')
+    expect(text).toContain('{"id":1,"name":"叉燒飯","vendor":"燒臘店"}')
+    expect(text).toContain('{"id":2,"name":"乳清","vendor":null}')
+  })
+
+  it('㉔ 清單外的值一律「其他正餐」；半形斜線當全形；沒問過的 id 丟掉、重複的 id 取第一筆、漏回的不補', async () => {
+    const token = await validToken()
+    const asked = [...FOODS, { id: 3, name: '鹽水雞', vendor: null }, { id: 4, name: '某某', vendor: null }]
+    stubUpstream(upstreamReply(JSON.stringify({
+      results: [
+        { id: 1, category: '炸物' },
+        { id: 2, category: 5 },
+        { id: 3, category: ' 滷味/鹽水雞 ' },
+        { id: 1, category: '便當' },
+        { id: 99, category: '便當' },
+        { id: '4', category: '便當' },
+      ],
+    })))
+    const res = await handleRequest(post(token, { foods: asked }), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      results: [{ id: 1, category: '其他正餐' }, { id: 2, category: '其他正餐' }, { id: 3, category: '滷味／鹽水雞' }],
+    })
+  })
+
+  it('㉕ 模型包 ``` 或省掉外層物件也解得開', async () => {
+    const token = await validToken()
+    for (const content of ['```json\n{"results":[{"id":1,"category":"燒臘"}]}\n```', '[{"id":1,"category":"燒臘"}]']) {
+      stubUpstream(upstreamReply(content))
+      const res = await handleRequest(post(token, { foods: FOODS }), JWKS, OR_KEY)
+      expect(res.status, content).toBe(200)
+      expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }] })
+    }
+  })
+
+  it('㉖ 輸入不合法 → 400，不外呼', async () => {
+    const token = await validToken()
+    const bad: unknown[] = [
+      [],
+      'abc',
+      null,
+      [{ id: 1.5, name: 'a', vendor: null }],
+      [{ id: '1', name: 'a', vendor: null }],
+      [{ id: 1, name: '', vendor: null }],
+      [{ id: 1, name: '   ', vendor: null }],
+      [{ id: 1, name: 3, vendor: null }],
+      [{ id: 1, name: 'a' }], // vendor 要明確給 null
+      [{ id: 1, name: 'a', vendor: 7 }],
+      [{ id: 1, name: 'x'.repeat(101), vendor: null }],
+      [{ id: 1, name: 'a', vendor: 'x'.repeat(101) }],
+      Array.from({ length: 51 }, (_, i) => ({ id: i, name: 'a', vendor: null })),
+      [null],
+    ]
+    for (const foods of bad) {
+      const res = await handleRequest(post(token, { foods }, SITE), JWKS, OR_KEY)
+      expect(res.status, JSON.stringify(foods)?.slice(0, 60)).toBe(400)
+      expect(await res.json()).toEqual({ error: '請求格式不正確' })
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+    }
+  })
+
+  it('㉗ 上限內最多 50 樣、品名 100 字都收', async () => {
+    stubUpstream(upstreamReply('{"results":[]}'))
+    const foods = Array.from({ length: 50 }, (_, i) => ({ id: i, name: 'x'.repeat(100), vendor: 'y'.repeat(100) }))
+    const res = await handleRequest(post(await validToken(), { foods }), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ results: [] })
+  })
+
+  it('㉘ 驗證閘在分類模式一樣有效：偽造 token → 401、沒有 key → 500，都不外呼', async () => {
+    const forged = await sign(foreignKeys.privateKey, validClaims, { iat: now(), exp: now() + 3600 })
+    const res = await handleRequest(post(forged, { foods: FOODS }, SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(401)
+    const noKey = await handleRequest(post(await validToken(), { foods: FOODS }), JWKS, undefined)
+    expect(noKey.status).toBe(500)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('㉙ 模型回的不是 JSON／沒有陣列、上游壞掉 → 502，不轉發上游原文', async () => {
+    const token = await validToken()
+    const leaky = JSON.stringify({ error: { message: `Invalid API key: ${OR_KEY}` } })
+    const cases: (() => void)[] = [
+      () => stubUpstream(upstreamReply('看不懂')),
+      () => stubUpstream(upstreamReply('{"results":"燒臘"}')),
+      () => stubUpstream(upstreamReply('null')),
+      () => stubUpstream(leaky, 500),
+      () => stubUpstream(JSON.stringify({ choices: [] }), 200),
+    ]
+    for (const setup of cases) {
+      setup()
+      const res = await handleRequest(post(token, { foods: FOODS }, SITE), JWKS, OR_KEY)
+      expect(res.status).toBe(502)
+      const body = await res.json()
+      expect(body).toEqual({ error: '辨識失敗' })
+      expect(JSON.stringify(body)).not.toContain('sk-or')
+    }
+  })
+
+  it('㉚ 帶 foods 就走分類，不看 image（同時帶也一樣，不會把圖送出去）', async () => {
+    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+    const res = await handleRequest(post(await validToken(), { foods: FOODS, image: IMAGE }), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    const sent = JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(JSON.stringify(sent)).not.toContain('image_url')
   })
 })

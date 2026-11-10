@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 視覺方向三選一：故事書／圖鑑／回饋</title>
+<style>
+/* 這頁只看方向，不連 app.css：三個方向各帶自己的 token，現有 token 不約束。
+   數字字體 Archivo 直接吃 repo 內自架的 woff2；其餘字體見各方向說明。 */
+@font-face { font-family: 'Archivo Num'; src: url('../src/assets/archivo-400.woff2') format('woff2'); font-weight: 400; }
+@font-face { font-family: 'Archivo Num'; src: url('../src/assets/archivo-600.woff2') format('woff2'); font-weight: 600; }
+
+/* ── 樣張外殼 ───────────────────────────────────────── */
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #E6E6E1; color: #202124; }
+body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; padding: 40px 40px 80px; }
+button { font: inherit; color: inherit; -webkit-appearance: none; appearance: none; cursor: pointer; }
+ul { list-style: none; margin: 0; padding: 0; }
+.h-title { font-size: 24px; font-weight: 800; margin: 0 0 8px; letter-spacing: -.01em; }
+.h-sub { font-size: 14px; line-height: 1.75; color: #4A4C50; margin: 0 0 40px; max-width: 1180px; }
+.h-sub b { color: #202124; }
+.dir { margin: 0 0 72px; padding: 32px 0 0 8px; border-top: 2px solid #CFCFC9; }
+.dir-head { display: flex; align-items: baseline; gap: 16px; margin: 0 0 20px; flex-wrap: wrap; }
+.dir-head h2 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.01em; }
+.dir-head p { margin: 0; font-size: 15px; color: #4A4C50; max-width: 760px; line-height: 1.6; }
+.dir-row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.fig { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.fig figcaption { max-width: 393px; min-height: 39px; line-height: 1.5; font-size: 13px; font-weight: 700; color: #3A3B3E; }
+.device { width: 393px; height: 745px; overflow: hidden; border-radius: 30px; position: relative;
+  box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 18px 40px -18px rgba(20,22,30,.35); isolation: isolate; }
+.notes { width: 440px; font-size: 13px; line-height: 1.7; color: #3A3B3E; }
+.notes h3 { font-size: 14px; margin: 18px 0 6px; color: #202124; }
+.notes h3:first-child { margin-top: 0; }
+.notes p { margin: 0 0 8px; }
+.notes b { color: #202124; }
+.notes ul { padding-left: 1.1em; list-style: disc; }
+.notes li { margin: 0 0 4px; }
+.tok { width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 6px; }
+.tok td, .tok th { padding: 4px 6px 4px 0; border-bottom: 1px solid #D3D3CD; text-align: left; vertical-align: middle; font-weight: 400; }
+.tok th { font-weight: 700; color: #202124; }
+.tok td:nth-child(2) { white-space: nowrap; }
+.tok .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; vertical-align: -2px; margin-right: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.tok code, .notes code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; }
+.flag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #FBE3D6; color: #8A2C0D; }
+
+/* 圖示區 */
+.icons { display: flex; gap: 36px; align-items: flex-end; flex-wrap: wrap; margin-top: 28px; }
+.icon-set { display: flex; gap: 22px; align-items: flex-end; }
+.icon-set figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; color: #55575C; }
+.ic { display: block; overflow: hidden; }
+.ic-180 { width: 180px; height: 180px; border-radius: 22%; box-shadow: 0 10px 30px -12px rgba(0,0,0,.35); }
+.ic-60 { width: 60px; height: 60px; border-radius: 22%; }
+.ic-29 { width: 29px; height: 29px; border-radius: 22%; }
+.home { width: 336px; height: 230px; border-radius: 26px; padding: 26px 22px 0; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, #7C8796 0%, #A4ACB4 45%, #C9C1B3 100%); }
+.home-grid { display: grid; grid-template-columns: repeat(4, 60px); gap: 18px 16px; }
+.home-app { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.home-app .ph { width: 60px; height: 60px; border-radius: 22%; background: rgba(255,255,255,.55); }
+.home-app .ph.b { background: rgba(70,76,86,.45); }
+.home-app .lbl { height: 8px; width: 40px; border-radius: 4px; background: rgba(255,255,255,.55); }
+.home-app .name { font-size: 11px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); line-height: 8px; height: 8px; }
+.icon-concept { font-size: 13px; line-height: 1.7; color: #3A3B3E; max-width: 360px; }
+.icon-concept b { color: #202124; }
+
+svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.num { font-family: 'Archivo Num', -apple-system, sans-serif; font-variant-numeric: tabular-nums; }
+
+/* ═══════════════ ① 故事書 ═══════════════ */
+.d-sb {
+  --paper: #F2F2ED; --card: #FFFFFF; --ink: #1D2B45; --muted: #56647C; --muted-sky: #3F5372;
+  --accent: #2E5E93; --accent-soft: #DCE8F2; --sky: #CADDED; --hill-far: #A9C3DC; --hill-mid: #7DA0C4;
+  --hill-near: #3D6894; --sun: #F0B94A; --rule: #DEE2E2; --over: #A23E2C;
+  --display: "Noto Serif TC", "Noto Serif HK", "Source Han Serif TC", serif;
+  --body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+.d-sb .device { background: var(--paper); color: var(--ink); font-family: var(--body); }
+.sb-scene { position: absolute; inset: 0 0 auto 0; height: 300px; }
+.sb-scene svg { display: block; width: 393px; height: 300px; }
+.sb-hero { position: absolute; left: 24px; top: 18px; }
+.sb-date { font-size: 13px; font-weight: 600; color: var(--muted-sky); letter-spacing: .02em; }
+.sb-lead { font-family: var(--display); font-weight: 600; font-size: 19px; margin-top: 18px; }
+.sb-big { font-family: var(--display); font-weight: 900; font-size: 88px; line-height: .92; letter-spacing: -.035em; margin-top: 4px; }
+.sb-big small { font-size: 22px; font-weight: 700; letter-spacing: 0; margin-left: 6px; }
+.sb-meta { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; color: var(--muted-sky); }
+.sb-meta .bar { width: 120px; height: 6px; border-radius: 3px; background: var(--paper); overflow: hidden; }
+.sb-meta .bar i { display: block; height: 100%; width: 61.6%; background: var(--accent); border-radius: 3px; }
+.sb-meta .num { color: var(--ink); font-weight: 600; }
+.sb-body { position: absolute; top: 300px; left: 0; right: 0; bottom: 0; padding: 16px 22px 0; }
+.sb-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+.sb-mac .k { font-size: 12px; color: var(--muted); }
+.sb-mac .v { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.sb-mac .v b { font-size: 19px; color: var(--ink); font-weight: 600; }
+.sb-mac .t { height: 4px; border-radius: 2px; background: var(--rule); margin-top: 6px; overflow: hidden; }
+.sb-mac .t i { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
+.sb-mac .g { font-size: 12px; margin-top: 4px; color: var(--muted); }
+.sb-mac.hot .g { color: var(--accent); font-weight: 700; }
+.sb-mac.hot .t i { background: var(--accent); }
+.sb-meals { margin-top: 6px; }
+.sb-meal { display: flex; align-items: baseline; gap: 12px; min-height: 48px; padding: 12px 0 0; }
+.sb-meal .mn { font-family: var(--display); font-weight: 700; font-size: 16px; flex-shrink: 0; width: 36px; }
+.sb-meal .it { flex: 1; min-width: 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-meal .kc { font-size: 15px; font-weight: 600; }
+.sb-todo { margin-top: 10px; background: var(--card); border-radius: 18px; padding: 12px 12px 12px 16px;
+  box-shadow: 0 1px 2px rgba(29,43,69,.06), 0 6px 18px -10px rgba(29,43,69,.25); }
+.sb-todo .top { display: flex; align-items: baseline; gap: 10px; }
+.sb-todo .mn { font-family: var(--display); font-weight: 700; font-size: 16px; }
+.sb-todo .st { font-size: 12.5px; color: var(--muted); }
+.sb-sg { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-height: 44px; }
+.sb-sg .src { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 999px; }
+.sb-sg .its { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-sg .kc { font-size: 14px; font-weight: 600; }
+.sb-swap { position: relative; width: 36px; height: 36px; border: none; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; flex-shrink: 0; }
+.sb-swap::before { content: ""; position: absolute; inset: -4px; }
+.sb-swap svg { width: 18px; height: 18px; }
+.sb-add { flex-shrink: 0; height: 36px; padding: 0 14px; border: none; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; position: relative; }
+.sb-add::before { content: ""; position: absolute; inset: -4px 0; }
+.sb-snack { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin-top: 2px; font-family: var(--display); font-weight: 700; font-size: 16px; color: var(--muted); }
+.sb-snack svg { width: 18px; height: 18px; }
+.sb-bar { position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+.sb-fog { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: linear-gradient(to bottom, rgba(242,242,237,0), var(--paper) 62%); pointer-events: none; }
+.sb-tabs { display: flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--card); box-shadow: 0 6px 18px -6px rgba(29,43,69,.3); }
+.sb-tabs span { width: 52px; height: 44px; border-radius: 999px; display: grid; place-items: center; color: var(--muted); }
+.sb-tabs span.on { background: var(--accent-soft); color: var(--accent); }
+.sb-tabs svg { width: 22px; height: 22px; }
+.sb-cta { width: 58px; height: 58px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; border: none;
+  box-shadow: 0 8px 20px -6px rgba(46,94,147,.6); }
+.sb-cta svg { width: 26px; height: 26px; stroke-width: 2.2; }
+@keyframes sbPulse { 0%,100% { opacity: .9; transform: scale(1); } 50% { opacity: .35; transform: scale(1.25); } }
+.sb-pulse { transform-box: fill-box; transform-origin: center; animation: sbPulse 2.6s cubic-bezier(.4,0,.2,1) infinite; }
+@media (prefers-reduced-motion: reduce) { .sb-pulse { animation: none; } }
+
+/* 故事書：記一筆 sheet */
+.sb-behind { position: absolute; inset: 0; background: var(--sky); }
+.sb-behind .sb-date { position: absolute; left: 24px; top: 18px; }
+.sb-scrim { position: absolute; inset: 0; background: rgba(29,43,69,.32); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 46px; display: flex; flex-direction: column; overflow: hidden; border-radius: 26px 26px 0 0; }
+.sb-sheet { background: var(--paper); box-shadow: 0 -10px 30px rgba(29,43,69,.18); }
+.handle { width: 38px; height: 5px; border-radius: 3px; margin: 8px auto 0; flex-shrink: 0; }
+.sb-sheet .handle { background: #C9D0D6; }
+.sheet-head { padding: 6px 20px 8px; flex-shrink: 0; }
+.chips { display: flex; gap: 8px; padding: 6px 0 10px; }
+.sb-chip { min-height: 36px; padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px #C4CCD4; position: relative; }
+.sb-chip.on { background: var(--ink); color: #fff; box-shadow: none; }
+.search { min-height: 44px; border-radius: 14px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 14px; }
+.search svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sb-search { background: #E5E8E6; color: var(--muted); }
+.sheet-list { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 24px; scrollbar-width: none; }
+.sheet-list::-webkit-scrollbar { display: none; }
+.sb-sect { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 20px 4px; font-family: var(--display); font-weight: 700; font-size: 16px; }
+.sb-sect .act { font-family: var(--body); font-size: 14px; font-weight: 700; color: var(--accent); border: none; background: none; padding: 0; min-height: 32px; position: relative; }
+.sb-sect .act::before { content: ""; position: absolute; inset: -6px -10px; }
+.sb-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 4px 20px; border: none; background: none; text-align: left; }
+.sb-row .chk { width: 22px; height: 22px; flex-shrink: 0; color: #9AA6B4; }
+.nm-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nm-wrap .nm { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nm-wrap .sub { font-size: 12px; margin-top: 1px; }
+.sb-row .sub { color: var(--muted); }
+.sb-row .kc { font-size: 14.5px; font-weight: 600; }
+.sb-grp { display: flex; align-items: center; gap: 10px; padding: 14px 20px 2px; }
+.sb-grp .gn { font-size: 14px; font-weight: 700; }
+.sb-grp .cnt { font-size: 12px; color: var(--muted); }
+.sb-seen { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 6px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 600; }
+.sb-seen svg { width: 15px; height: 15px; color: var(--accent); }
+.sb-more { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 10px; padding: 0 20px; border: none; border-top: 1px solid var(--rule); background: none; text-align: left; font-size: 14px; color: var(--muted); }
+.sb-more svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ═══════════════ ② 圖鑑 ═══════════════ */
+.d-dx {
+  --bg: #EEF0F3; --card: #FFFFFF; --ink: #15181E; --muted: #5B6270; --rule: #E3E6EB; --track: #DDE0E6; --over: #C2362B;
+  --c-box: #2E9457; --c-bento: #CF6A1E; --c-noodle: #A87A12; --c-roast: #CF443A; --c-bfast: #5867C9; --c-drink: #1F8CA3; --c-snack: #C9578A; --c-side: #5E7A26;
+  --body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+.d-dx .device { background: var(--bg); color: var(--ink); font-family: var(--body); }
+.tile { flex-shrink: 0; display: grid; place-items: center; color: #fff; position: relative; }
+.tile svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.t-24 { width: 24px; height: 24px; border-radius: 7px; } .t-24 svg { width: 15px; height: 15px; }
+.t-32 { width: 32px; height: 32px; border-radius: 9px; } .t-32 svg { width: 19px; height: 19px; }
+.t-36 { width: 36px; height: 36px; border-radius: 11px; } .t-36 svg { width: 21px; height: 21px; }
+.c-box { background: var(--c-box); } .c-bento { background: var(--c-bento); } .c-noodle { background: var(--c-noodle); } .c-roast { background: var(--c-roast); }
+.c-bfast { background: var(--c-bfast); } .c-drink { background: var(--c-drink); } .c-snack { background: var(--c-snack); } .c-side { background: var(--c-side); }
+.dx-top { padding: 18px 20px 0; }
+.dx-date { display: flex; align-items: baseline; justify-content: space-between; }
+.dx-date b { font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+.dx-date span { font-size: 12.5px; color: var(--muted); }
+.dx-week { display: grid; grid-template-columns: repeat(7, 1fr); margin-top: 10px; }
+.dx-day { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 50px; justify-content: center; border-radius: 14px; font-size: 11px; color: var(--muted); }
+.dx-day .d { font-size: 15px; font-weight: 600; color: var(--ink); }
+.dx-day .dots { display: flex; gap: 2px; height: 5px; }
+.dx-day .dots i { width: 5px; height: 5px; border-radius: 50%; }
+.dx-day.on { background: var(--ink); color: #C9CDD4; }
+.dx-day.on .d { color: #fff; }
+.dx-hero { margin: 12px 16px 0; background: var(--card); border-radius: 22px; padding: 16px 18px 16px; box-shadow: 0 1px 2px rgba(21,24,30,.05), 0 8px 24px -14px rgba(21,24,30,.25); }
+.dx-hero .row { display: flex; justify-content: space-between; align-items: flex-end; }
+.dx-hero .lead { font-size: 14px; font-weight: 700; color: var(--muted); }
+.dx-hero .big { font-family: 'Archivo Num', sans-serif; font-weight: 600; font-size: 66px; line-height: 1; letter-spacing: -.035em; margin-top: 2px; }
+.dx-hero .big small { font-family: var(--body); font-size: 20px; font-weight: 700; letter-spacing: 0; margin-left: 6px; }
+.dx-hero .tgt { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.5; padding-bottom: 8px; }
+.dx-hero .tgt .num { font-size: 15px; color: var(--ink); font-weight: 600; }
+.dx-stack { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--track); margin-top: 12px; gap: 2px; }
+.dx-stack i { display: block; height: 100%; }
+.dx-legend { display: flex; gap: 14px; margin-top: 9px; font-size: 12px; color: var(--muted); }
+.dx-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.dx-legend i { width: 9px; height: 9px; border-radius: 3px; }
+.dx-legend .num { color: var(--ink); font-weight: 600; }
+.dx-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 16px 0; }
+.dx-mac { background: var(--card); border-radius: 16px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(21,24,30,.05); }
+.dx-mac .k { font-size: 12px; font-weight: 700; color: var(--muted); }
+.dx-mac .v { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.dx-mac .v b { font-family: 'Archivo Num', sans-serif; font-size: 18px; color: var(--ink); font-weight: 600; }
+.dx-mac .t { height: 5px; border-radius: 3px; background: var(--track); margin-top: 6px; overflow: hidden; }
+.dx-mac .t i { display: block; height: 100%; background: var(--ink); }
+.dx-meals { margin: 10px 16px 0; background: var(--card); border-radius: 20px; padding: 2px 14px; box-shadow: 0 1px 2px rgba(21,24,30,.05); }
+.dx-meal { display: flex; align-items: center; gap: 10px; min-height: 52px; border-bottom: 1px solid var(--rule); }
+.dx-meal:last-child { border-bottom: none; }
+.dx-meal .mn { font-size: 15px; font-weight: 700; width: 34px; flex-shrink: 0; }
+.dx-meal .tiles { display: flex; gap: 4px; }
+.dx-meal .it { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dx-meal .kc { font-family: 'Archivo Num', sans-serif; font-weight: 600; font-size: 15px; }
+.dx-todo { display: block; padding: 10px 0 10px; }
+.dx-todo .h { display: flex; align-items: center; gap: 10px; }
+.dx-todo .h .st { font-size: 12.5px; color: var(--muted); }
+.dx-sg { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 6px 6px 8px; background: var(--bg); border-radius: 14px; }
+.dx-sg .its { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; flex-direction: column; line-height: 1.3; }
+.dx-sg .its small { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.dx-sg .stack { display: flex; flex-shrink: 0; }
+.dx-sg .stack .tile + .tile { margin-left: -7px; box-shadow: 0 0 0 2px var(--bg); }
+.dx-sg .kc { font-family: 'Archivo Num', sans-serif; font-weight: 600; font-size: 14px; }
+.dx-swap { position: relative; width: 36px; height: 36px; border: none; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; flex-shrink: 0; }
+.dx-swap::before { content: ""; position: absolute; inset: -4px; }
+.dx-swap svg { width: 18px; height: 18px; }
+.dx-add { flex-shrink: 0; height: 36px; padding: 0 14px; border: none; border-radius: 11px; background: var(--ink); color: #fff; font-weight: 700; font-size: 14px; position: relative; }
+.dx-add::before { content: ""; position: absolute; inset: -4px 0; }
+.dx-bar { position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+.dx-fog { position: absolute; left: 0; right: 0; bottom: 0; height: 104px; background: linear-gradient(to bottom, rgba(238,240,243,0), var(--bg) 62%); }
+.dx-tabs { display: flex; gap: 4px; padding: 5px; border-radius: 18px; background: var(--card); box-shadow: 0 6px 18px -6px rgba(21,24,30,.28); }
+.dx-tabs span { width: 52px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: var(--muted); }
+.dx-tabs span.on { background: var(--ink); color: #fff; }
+.dx-tabs svg { width: 22px; height: 22px; }
+.dx-cta { width: 58px; height: 58px; border-radius: 18px; background: var(--ink); color: #fff; display: grid; place-items: center; border: none; box-shadow: 0 8px 20px -6px rgba(21,24,30,.5); }
+.dx-cta svg { width: 26px; height: 26px; stroke-width: 2.2; }
+
+/* 圖鑑：記一筆 sheet */
+.dx-behind { position: absolute; inset: 0; background: var(--bg); }
+.dx-behind .dx-top { opacity: 1; }
+.dx-scrim { position: absolute; inset: 0; background: rgba(21,24,30,.38); }
+.dx-sheet { background: var(--card); box-shadow: 0 -10px 30px rgba(21,24,30,.2); }
+.dx-sheet .handle { background: #CDD1D8; }
+.dx-chip { min-height: 36px; padding: 0 16px; border-radius: 11px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 700; color: var(--muted); background: var(--bg); }
+.dx-chip.on { background: var(--ink); color: #fff; }
+.dx-search { background: var(--bg); color: var(--muted); }
+.dx-sect { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 20px 4px; font-size: 13px; font-weight: 800; color: var(--muted); letter-spacing: .04em; }
+.dx-sect .act { font-size: 14px; font-weight: 700; color: var(--ink); border: none; background: none; padding: 0; min-height: 32px; letter-spacing: 0; position: relative; }
+.dx-sect .act::before { content: ""; position: absolute; inset: -6px -10px; }
+.dx-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 4px 20px; border: none; background: none; text-align: left; }
+.dx-row .sub { color: var(--muted); }
+.dx-row .kc { font-family: 'Archivo Num', sans-serif; font-weight: 600; font-size: 14.5px; }
+.dx-row .chk { width: 22px; height: 22px; flex-shrink: 0; color: #9AA1AD; }
+.dx-row.in { padding-left: 68px; }
+.dx-grp { display: flex; align-items: center; gap: 12px; padding: 14px 20px 2px; }
+.dx-grp .gt { display: flex; flex-direction: column; }
+.dx-grp .gn { font-size: 15px; font-weight: 800; }
+.dx-grp .gs { font-size: 12px; color: var(--muted); }
+.dx-grp .gs b { color: var(--ink); font-weight: 700; }
+.badge { position: absolute; right: -6px; top: -6px; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 999px; background: var(--ink); color: #fff;
+  font-size: 11px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--card); line-height: 1; }
+.dx-more { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; margin-top: 10px; padding: 0 20px; border: none; border-top: 1px solid var(--rule); background: none; text-align: left; font-size: 14px; color: var(--muted); }
+.dx-more .tiles { display: flex; }
+.dx-more .tiles .tile { box-shadow: 0 0 0 2px var(--card); margin-right: -4px; }
+.dx-more .what { flex: 1; min-width: 0; margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dx-more svg.ln { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ═══════════════ ③ 回饋 ═══════════════ */
+.d-rw {
+  --bg: #F3F4F0; --card: #FFFFFF; --ink: #0F1113; --muted: #575B60; --lime: #C8F031; --track: #E3E5DF; --rule: #E2E4DE; --over: #B3261E;
+  --cond: "Bahnschrift", "Archivo Num", sans-serif;
+  --body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+.d-rw .device { background: var(--bg); color: var(--ink); font-family: var(--body); }
+.cn { font-family: var(--cond); font-variation-settings: "wdth" 75, "wght" 700; font-variant-numeric: tabular-nums; }
+.rw-top { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 20px 0; }
+.rw-top b { font-size: 15px; font-weight: 800; }
+.rw-top span { font-size: 12.5px; color: var(--muted); }
+.rw-hero { padding: 6px 20px 0; }
+.rw-hero .lead { font-size: 15px; font-weight: 800; }
+.rw-hero .line { display: flex; align-items: flex-end; justify-content: space-between; }
+.rw-hero .big { font-size: 132px; line-height: .86; letter-spacing: -.02em; margin-left: -4px; }
+.rw-hero .big small { font-family: var(--body); font-variation-settings: normal; font-size: 22px; font-weight: 800; letter-spacing: 0; margin-left: 4px; }
+.rw-hero .side { text-align: right; padding-bottom: 8px; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.rw-hero .side .cn { font-size: 24px; color: var(--ink); display: block; line-height: 1; }
+.rw-meter { position: relative; height: 14px; border-radius: 4px; background: var(--track); margin: 14px 20px 0; overflow: hidden; }
+.rw-meter i { position: absolute; inset: 0 auto 0 0; width: 61.6%; background: var(--ink); }
+.rw-meter::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--bg) calc(10% - 2px) 10%); }
+.rw-macs { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 8px; margin: 16px 16px 0; }
+.rw-mac { border-radius: 16px; padding: 10px 12px 10px; background: var(--card); }
+.rw-mac.hot { background: var(--lime); }
+.rw-mac .k { font-size: 12px; font-weight: 800; }
+.rw-mac .v { display: flex; align-items: baseline; gap: 2px; margin-top: 2px; }
+.rw-mac .v .cn:first-child { font-size: 34px; line-height: 1; }
+.rw-mac .v .of { font-size: 15px; color: var(--muted); }
+.rw-mac.hot .v .of { color: #3A4012; }
+.rw-mac .g { font-size: 12px; font-weight: 700; margin-top: 2px; color: var(--muted); }
+.rw-mac.hot .g { color: var(--ink); }
+.rw-earn { margin: 10px 16px 0; background: var(--ink); color: #fff; border-radius: 20px; padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rw-earn .k { font-size: 12px; font-weight: 700; color: #B9BEC4; }
+.rw-earn .big { color: var(--lime); font-size: 34px; line-height: 1; margin-top: 4px; }
+.rw-earn .big small { font-family: var(--body); font-variation-settings: normal; font-size: 13px; font-weight: 700; color: #fff; margin-left: 4px; }
+.rw-earn .s { font-size: 11.5px; color: #B9BEC4; margin-top: 6px; }
+.rw-dots { display: flex; gap: 4px; margin-top: 8px; }
+.rw-dots i { width: 14px; height: 14px; border-radius: 4px; background: #33373C; display: block; }
+.rw-dots i.y { background: var(--lime); }
+.rw-dots i.now { background: transparent; box-shadow: inset 0 0 0 2px var(--lime); }
+.rw-conf { display: flex; gap: 3px; margin-top: 8px; }
+.rw-conf i { flex: 1; height: 14px; border-radius: 3px; background: #33373C; display: block; }
+.rw-conf i.y { background: #fff; }
+.rw-conf i.new { background: var(--lime); }
+.rw-meals { margin: 12px 20px 0; }
+.rw-meal { display: flex; align-items: center; gap: 12px; min-height: 46px; border-bottom: 1px solid var(--rule); }
+.rw-meal .mn { font-size: 15px; font-weight: 800; width: 34px; flex-shrink: 0; }
+.rw-meal .it { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rw-meal .kc { font-size: 22px; }
+.rw-todo { padding: 8px 0 10px; }
+.rw-todo .h { display: flex; align-items: baseline; gap: 10px; }
+.rw-todo .h .mn { font-size: 15px; font-weight: 800; }
+.rw-todo .h .st { font-size: 12.5px; color: var(--muted); }
+.rw-sg { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.rw-sg .src { flex-shrink: 0; font-size: 11.5px; font-weight: 800; background: var(--lime); padding: 3px 7px; border-radius: 6px; }
+.rw-sg .its { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rw-sg .kc { font-size: 22px; }
+.rw-swap { position: relative; width: 36px; height: 36px; border: none; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; flex-shrink: 0; }
+.rw-swap::before { content: ""; position: absolute; inset: -4px; }
+.rw-swap svg { width: 18px; height: 18px; }
+.rw-add { flex-shrink: 0; height: 36px; padding: 0 14px; border: none; border-radius: 10px; background: var(--ink); color: var(--lime); font-weight: 800; font-size: 14px; position: relative; }
+.rw-add::before { content: ""; position: absolute; inset: -4px 0; }
+.rw-bar { position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+.rw-fog { position: absolute; left: 0; right: 0; bottom: 0; height: 104px; background: linear-gradient(to bottom, rgba(243,244,240,0), var(--bg) 62%); }
+.rw-tabs { display: flex; gap: 4px; padding: 5px; border-radius: 16px; background: var(--ink); }
+.rw-tabs span { width: 52px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: #B9BEC4; }
+.rw-tabs span.on { background: var(--lime); color: var(--ink); }
+.rw-tabs svg { width: 22px; height: 22px; }
+.rw-cta { width: 58px; height: 58px; border-radius: 16px; background: var(--lime); color: var(--ink); display: grid; place-items: center; border: none; box-shadow: 0 8px 20px -8px rgba(15,17,19,.55), inset 0 0 0 2px var(--ink); }
+.rw-cta svg { width: 28px; height: 28px; stroke-width: 2.6; }
+
+/* 回饋：記一筆 sheet */
+.rw-behind { position: absolute; inset: 0; background: var(--bg); }
+.rw-scrim { position: absolute; inset: 0; background: rgba(15,17,19,.42); }
+.rw-sheet { background: var(--card); box-shadow: 0 -10px 30px rgba(15,17,19,.2); }
+.rw-sheet .handle { background: #CFD2CB; }
+.rw-chip { min-height: 36px; padding: 0 16px; border-radius: 10px; display: inline-flex; align-items: center; font-size: 14px; font-weight: 800; color: var(--muted); background: var(--bg); }
+.rw-chip.on { background: var(--ink); color: var(--lime); }
+.rw-search { background: var(--bg); color: var(--muted); }
+.rw-sect { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 20px 4px; }
+.rw-sect .t { font-size: 15px; font-weight: 800; }
+.rw-sect .gain { font-size: 12px; font-weight: 700; color: var(--ink); background: var(--lime); padding: 3px 8px; border-radius: 6px; }
+.rw-sect .act { font-size: 14px; font-weight: 800; color: var(--ink); border: none; background: none; padding: 0; min-height: 32px; text-decoration: underline; text-underline-offset: 3px; position: relative; }
+.rw-sect .act::before { content: ""; position: absolute; inset: -6px -10px; }
+.rw-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 4px 20px; border: none; background: none; text-align: left; }
+.rw-row .chk { width: 22px; height: 22px; flex-shrink: 0; color: #9DA19A; }
+.rw-row .sub { color: var(--muted); }
+.rw-row .r { text-align: right; flex-shrink: 0; }
+.rw-row .kc { font-size: 22px; line-height: 1; display: block; }
+.rw-row .p { font-size: 11px; color: var(--muted); font-weight: 600; }
+.rw-row .p .cn { font-size: 13px; color: var(--ink); }
+.rw-grp { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 20px 2px; }
+.rw-grp .gn { font-size: 15px; font-weight: 800; }
+.rw-grp .gn .cnt { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+.rw-last { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.rw-cal { display: flex; gap: 3px; }
+.rw-cal i { width: 9px; height: 14px; border-radius: 2px; background: var(--track); display: block; }
+.rw-cal i.y { background: #747970; }
+.rw-cal i.now { background: var(--ink); }
+.rw-more { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; margin-top: 10px; padding: 0 20px; border: none; border-top: 1px solid var(--rule); background: none; text-align: left; font-size: 14px; color: var(--muted); }
+.rw-more svg { width: 16px; height: 16px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<!-- 共用圖示：類型圖示（圖鑑用）＋ 介面圖示 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="3.5" y="9" width="17" height="11" rx="2.5"/><path d="M3.5 13h17"/><path d="M12 9c0-3 1.8-5 5-5 0 3-1.8 5-5 5z"/></symbol>
+  <symbol id="i-bento" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M11 5v14M11 12h10"/></symbol>
+  <symbol id="i-noodle" viewBox="0 0 24 24"><path d="M3 12h18a9 7.5 0 0 1-18 0z"/><path d="M8 12c0-2 1.2-2.6 1.2-4.5S8 5 8 5M12 12c0-2 1.2-2.6 1.2-4.5S12 5 12 5"/><path d="M16 4l5 4"/></symbol>
+  <symbol id="i-roast" viewBox="0 0 24 24"><path d="M15 3.5a5.5 5.5 0 0 1 3.9 9.4l-2.6 2.6-6.8-6.8 2.6-2.6A5.5 5.5 0 0 1 15 3.5z"/><path d="M9.5 12.5L5.5 16.5"/><circle cx="4.6" cy="18.2" r="1.6"/><circle cx="6.8" cy="20" r="1.4"/></symbol>
+  <symbol id="i-egg" viewBox="0 0 24 24"><path d="M12 3.5c4 0 8.5 2.6 8.5 7.5 0 5.5-4 9.5-8.7 9.5S3.5 17 3.5 12.3C3.5 7 8 3.5 12 3.5z"/><circle cx="12" cy="12" r="3.4"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M5 8.5h14M6.5 8.5l1.4 12h8.2l1.4-12"/><path d="M12.5 8.5L14.5 3h3"/></symbol>
+  <symbol id="i-cake" viewBox="0 0 24 24"><path d="M4.5 12h15l-2 8h-11z"/><path d="M4.5 12a7.5 6 0 0 1 15 0"/><path d="M12 6V3.5"/></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M5 19c0-8.5 5.5-14 15-14 0 9.5-6 14-15 14z"/><path d="M5 19l8-8"/></symbol>
+  <symbol id="u-swap" viewBox="0 0 24 24"><path d="M4 9h13l-3.5-3.5"/><path d="M20 15H7l3.5 3.5"/></symbol>
+  <symbol id="u-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="u-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="u-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+  <symbol id="u-chk" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9"/></symbol>
+  <symbol id="u-food" viewBox="0 0 24 24"><path d="M3.5 11.5h17a8.5 7.5 0 0 1-17 0z"/><path d="M9 8c0-1.6 1.2-2 1.2-3.6M13.5 8c0-1.6 1.2-2 1.2-3.6"/></symbol>
+  <symbol id="u-gym" viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></symbol>
+  <symbol id="u-set" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="u-noon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></symbol>
+  <symbol id="u-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+</svg>
+
+<h1 class="h-title">樣張 — 視覺方向三選一：故事書／圖鑑／回饋</h1>
+<p class="h-sub">
+  問題：現在的方向（暖米底、單一青瓷色、系統字、只靠字重分層）刻意做得很收，結果是<b>沒有一處讓眼睛亮起來</b>。這頁把同一天（週二、減重、目標 1,850 卡、已吃 1,140、晚餐還沒記）放進三個新方向，每個方向畫<b>今日頁</b>和<b>記一筆 sheet（選晚餐）</b>兩張 393×745，右邊寫它的想法、token、對比度、會牽動全站哪裡，下面是<b>App 圖示提案</b>（180／60／29 與主畫面一角）。
+  功能與資訊完全不變；動的是字、色、構圖和插圖。<b>品名都是泛稱、數字是示意。</b>現有 token 對這三個方向沒有約束力，所以這頁不連 <code>app.css</code>。
+  「吃過」提示上一版被說不直覺，這裡每個方向各試一種更清楚的畫法。
+</p>
+
+<!-- ════════════════════════ ① 故事書 ════════════════════════ -->
+<section class="dir d-sb" aria-labelledby="sb-h">
+  <div class="dir-head">
+    <h2 id="sb-h">① 故事書</h2>
+    <p>今日頁頂端是一幅會隨一天推進的小插圖：太陽往西走，山坡上的四顆踏石是四餐，吃過的亮起來。數字用宋體大字寫在天空上，像繪本的標題。</p>
+  </div>
+  <div class="dir-row">
+
+    <figure class="fig">
+      <figcaption>今日頁：傍晚 17:40，早午餐記了，晚餐那顆石頭在等你</figcaption>
+      <div class="device">
+        <div class="sb-scene" aria-hidden="true">
+          <svg viewBox="0 0 393 300">
+            <rect width="393" height="300" fill="#CADDED"/>
+            <ellipse cx="318" cy="200" rx="190" ry="70" fill="#F7E7C4" opacity=".55"/>
+            <circle cx="318" cy="132" r="46" fill="#FBF0D6" opacity=".6"/>
+            <circle cx="318" cy="132" r="30" fill="#F0B94A"/>
+            <g fill="#FFFFFF" opacity=".9">
+              <ellipse cx="232" cy="74" rx="26" ry="11"/><ellipse cx="252" cy="65" rx="19" ry="13"/><ellipse cx="272" cy="75" rx="22" ry="9"/>
+              <ellipse cx="354" cy="48" rx="16" ry="7"/><ellipse cx="366" cy="43" rx="11" ry="8"/>
+            </g>
+            <path d="M0 214 C 60 188, 120 192, 178 206 S 292 172, 393 190 V300 H0Z" fill="#A9C3DC"/>
+            <path d="M0 240 C 80 214, 170 220, 240 234 S 350 218, 393 226 V300 H0Z" fill="#7DA0C4"/>
+            <g transform="translate(286 226)"><rect x="-2" y="6" width="4" height="14" rx="2" fill="#3D6894"/><circle cx="0" cy="2" r="11" fill="#5A84B0"/></g>
+            <g transform="translate(118 222)"><rect x="-1.5" y="4" width="3" height="10" rx="1.5" fill="#3D6894"/><circle cx="0" cy="1" r="7.5" fill="#5A84B0"/></g>
+            <path d="M0 256 C 90 242, 200 246, 290 256 S 370 252, 393 254 V300 H0Z" fill="#3D6894"/>
+            <path d="M36 280 C 90 268, 120 288, 168 276 S 230 270, 262 280 S 330 290, 358 278" fill="none" stroke="#FFFFFF" stroke-opacity=".45" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round"/>
+            <g font-family="-apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif" font-size="12.5" font-weight="700" fill="#FFFFFF">
+              <circle cx="36" cy="280" r="9" fill="#FFFFFF"/><path d="M31.8 280.2l2.8 2.8 5.4-5.6" fill="none" stroke="#3D6894" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <text x="50" y="284.5">早餐</text>
+              <circle cx="132" cy="279" r="9" fill="#FFFFFF"/><path d="M127.8 279.2l2.8 2.8 5.4-5.6" fill="none" stroke="#3D6894" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <text x="146" y="283.5">午餐</text>
+              <circle class="sb-pulse" cx="232" cy="274" r="13" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+              <circle cx="232" cy="274" r="8" fill="none" stroke="#FFFFFF" stroke-width="2.4"/>
+              <text x="259" y="278.5">晚餐</text>
+              <circle cx="326" cy="283" r="6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-opacity=".9"/>
+              <text x="338" y="287.5" opacity=".9">點心</text>
+            </g>
+          </svg>
+        </div>
+        <div class="sb-hero">
+          <div class="sb-date">週二 11/10</div>
+          <div class="sb-lead">還能吃</div>
+          <div class="sb-big">710<small>卡</small></div>
+          <div class="sb-meta"><span class="bar" aria-hidden="true"><i></i></span><span><span class="num">1,140</span> / <span class="num">1,850</span></span></div>
+        </div>
+        <div class="sb-body">
+          <div class="sb-macros">
+            <div class="sb-mac hot"><div class="k">蛋白質</div><div class="v"><b class="num">78</b> <span class="num">/137</span></div><div class="t"><i style="width:57%"></i></div><div class="g">差 59</div></div>
+            <div class="sb-mac"><div class="k">脂肪</div><div class="v"><b class="num">41</b> <span class="num">/65</span></div><div class="t"><i style="width:63%"></i></div><div class="g">差 24</div></div>
+            <div class="sb-mac"><div class="k">碳水</div><div class="v"><b class="num">128</b> <span class="num">/163</span></div><div class="t"><i style="width:79%"></i></div><div class="g">差 35</div></div>
+          </div>
+          <div class="sb-meals">
+            <div class="sb-meal"><span class="mn">早餐</span><span class="it">鮪魚蛋餅・無糖豆漿</span><span class="kc num">400</span></div>
+            <div class="sb-meal"><span class="mn">午餐</span><span class="it">滷肉便當</span><span class="kc num">740</span></div>
+            <div class="sb-todo">
+              <div class="top"><span class="mn">晚餐</span><span class="st">還沒記</span></div>
+              <div class="sb-sg"><span class="src">建議</span><span class="its">雞胸餐盒＋燙青菜</span><span class="kc num">520</span>
+                <button class="sb-swap" type="button" aria-label="換一個晚餐建議"><svg class="ln"><use href="#u-swap"/></svg></button>
+                <button class="sb-add" type="button">加入</button></div>
+            </div>
+            <div class="sb-snack"><span>點心</span><svg class="ln" aria-hidden="true"><use href="#u-chev"/></svg></div>
+          </div>
+        </div>
+        <div class="sb-fog" aria-hidden="true"></div>
+        <div class="sb-bar">
+          <nav class="sb-tabs" aria-label="主要導覽"><span class="on" aria-label="飲食"><svg class="ln"><use href="#u-food"/></svg></span><span aria-label="訓練"><svg class="ln"><use href="#u-gym"/></svg></span><span aria-label="設定"><svg class="ln"><use href="#u-set"/></svg></span></nav>
+          <button class="sb-cta" type="button" aria-label="記一筆"><svg class="ln"><use href="#u-plus"/></svg></button>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>記一筆（晚餐）：「吃過」改成貼在組名旁的時間小籤（清單可捲到底，看燒臘與收合列）</figcaption>
+      <div class="device">
+        <div class="sb-behind"><div class="sb-date">週二 11/10</div></div>
+        <div class="sb-scrim"></div>
+        <div class="sheet sb-sheet">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="sb-chip">早餐</span><span class="sb-chip">午餐</span><span class="sb-chip on" aria-pressed="true">晚餐</span><span class="sb-chip">點心</span></div>
+            <div class="search sb-search"><svg class="ln"><use href="#u-search"/></svg>搜尋品名或店家</div>
+          </div>
+          <div class="sheet-list">
+            <div class="sb-sect"><span>建議</span><button class="act" type="button">全選</button></div>
+            <ul>
+              <li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">某某餐盒</span></span><span class="kc num">420</span></button></li>
+              <li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">燙青菜</span></span><span class="kc num">100</span></button></li>
+            </ul>
+            <div class="sb-sect"><span>晚餐常吃</span></div>
+            <ul>
+              <li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">蝦仁餐盒</span><span class="sub">某某健康餐</span></span><span class="kc num">390</span></button></li>
+              <li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">牛肉烏龍麵</span></span><span class="kc num">560</span></button></li>
+            </ul>
+            <div class="sb-sect"><span>全部食物</span></div>
+            <div class="sb-grp"><span class="gn">健康餐盒</span><span class="cnt">9 次</span></div>
+            <ul><li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">鮭魚餐盒</span></span><span class="kc num">480</span></button></li></ul>
+            <div class="sb-grp"><span class="gn">便當</span><span class="sb-seen"><svg class="ln"><use href="#u-noon"/></svg>中午吃過</span></div>
+            <ul><li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">滷肉便當</span></span><span class="kc num">740</span></button></li></ul>
+            <div class="sb-grp"><span class="gn">麵食</span><span class="sb-seen"><svg class="ln"><use href="#u-moon"/></svg>昨天吃過</span></div>
+            <ul><li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">麻醬麵</span></span><span class="kc num">520</span></button></li></ul>
+            <div class="sb-grp"><span class="gn">燒臘</span><span class="cnt">2 次</span></div>
+            <ul><li><button class="sb-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">油雞腿飯</span></span><span class="kc num">820</span></button></li></ul>
+            <button class="sb-more" type="button" aria-expanded="false"><svg class="ln"><use href="#u-chev"/></svg>其他餐的（早餐店、飲料、點心）</button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <div class="notes">
+      <h3>想法</h3>
+      <p>畫面不再是「一張表」，是<b>今天這一頁</b>：太陽位置＝現在幾點，踏石＝四餐，吃了就點亮；記完晚餐那顆會亮、太陽也會沉下去。插圖只在今日頁頂端一處，往下全是乾淨的紙面。數字變成主角是靠<b>宋體 900 的大字</b>，不是靠顏色。</p>
+      <h3>Token</h3>
+      <table class="tok">
+        <tr><th>角色</th><th>色</th><th>對底色</th></tr>
+        <tr><td>紙面</td><td><span class="sw" style="background:#F2F2ED"></span>#F2F2ED</td><td>—</td></tr>
+        <tr><td>墨（內文）</td><td><span class="sw" style="background:#1D2B45"></span>#1D2B45</td><td>紙 12.6・天空 10.2</td></tr>
+        <tr><td>次要字</td><td><span class="sw" style="background:#56647C"></span>#56647C</td><td>紙 5.3・白卡 6.0</td></tr>
+        <tr><td>天空上的次要字</td><td><span class="sw" style="background:#3F5372"></span>#3F5372</td><td>天空 5.6</td></tr>
+        <tr><td>主色（CTA／選中）</td><td><span class="sw" style="background:#2E5E93"></span>#2E5E93</td><td>紙 6.0・白字 6.7</td></tr>
+        <tr><td>天空</td><td><span class="sw" style="background:#CADDED"></span>#CADDED</td><td>插圖底</td></tr>
+        <tr><td>近山（踏石底）</td><td><span class="sw" style="background:#3D6894"></span>#3D6894</td><td>白石與白字 5.8・對天空 3.2</td></tr>
+        <tr><td>太陽</td><td><span class="sw" style="background:#F0B94A"></span>#F0B94A</td><td>裝飾，不帶資訊</td></tr>
+        <tr><td>超標</td><td><span class="sw" style="background:#A23E2C"></span>#A23E2C</td><td>紙 5.7</td></tr>
+      </table>
+      <p><b>字</b>：標題與大數字用<b>思源宋體 Noto Serif TC</b>（OFL，700／900，要自架並做常用字子集；這頁直接用 Windows 已裝的同一套字）。內文照舊系統黑體，清單數字照舊 Archivo。字級：大數字 88／餐別與段標 16（宋體）／品名 15／次要 12–13.5。</p>
+      <h3>牽動全站</h3>
+      <ul>
+        <li>段標、餐別名、sheet 標題全換宋體；訓練頁、設定頁跟著換，但<b>插圖只在今日頁</b>。</li>
+        <li>插圖要做<b>幾個狀態</b>：早上／中午／傍晚／晚上的天色＋踏石亮幾顆、超標時的天色。用 SVG 參數化（太陽位置、天色、石頭狀態）就不必每張手繪。</li>
+        <li>「吃過」：貼在組名<b>正旁邊</b>的淡藍小籤，前面一個太陽（中午）或月亮（昨天）。舊版放在最右邊、灰色加小點，看起來像狀態燈，跟組名斷開了。</li>
+      </ul>
+      <h3>風險</h3>
+      <p>要做到「藝術品」的程度，插圖得有人畫：我這張只有平塗色塊，再往上走要插畫家或出圖流程，而且<b>每個時段都要一張</b>。宋體子集化也是新的建置工作（中文字型 4–8 MB，子集後約 300–600 KB）。</p>
+    </div>
+  </div>
+
+  <div class="icons">
+    <div class="icon-set">
+      <figure>
+        <svg class="ic ic-180" viewBox="0 0 1024 1024" role="img" aria-label="故事書方向 App 圖示"><use href="#icon-sb"/></svg>180
+      </figure>
+      <figure><svg class="ic ic-60" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-sb"/></svg>60</figure>
+      <figure><svg class="ic ic-29" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-sb"/></svg>29</figure>
+    </div>
+    <div class="home" aria-hidden="true">
+      <div class="home-grid">
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><svg class="ic ic-60" viewBox="0 0 1024 1024"><use href="#icon-sb"/></svg><div class="name">Tally</div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+      </div>
+    </div>
+    <p class="icon-concept"><b>碗裡升起的太陽。</b>深藍的碗＝一天的食物，黃色太陽從碗口露出一半＝今天還在進行。跟今日頁插圖同一組天空色、太陽色，沒有字。縮到 29px 只剩「淡藍底、黃圓、深藍半圓」三塊，還認得出來。</p>
+  </div>
+</section>
+
+<!-- ════════════════════════ ② 圖鑑 ════════════════════════ -->
+<section class="dir d-dx" aria-labelledby="dx-h">
+  <div class="dir-head">
+    <h2 id="dx-h">② 圖鑑</h2>
+    <p>每種食物類型有自己的顏色和圖示，從今日頁的熱量條、餐別列到記一筆清單都是同一套。一眼看出「今天的熱量花在哪裡」，「吃過」直接蓋在那個類型的圖示上。</p>
+  </div>
+  <div class="dir-row">
+
+    <figure class="fig">
+      <figcaption>今日頁：熱量條按類型上色，每週日曆有記錄的天有點</figcaption>
+      <div class="device">
+        <div class="dx-top">
+          <div class="dx-date"><b>週二 11/10</b><span>減重</span></div>
+          <div class="dx-week">
+            <div class="dx-day">一<span class="d num">9</span><span class="dots"><i class="c-bfast"></i><i class="c-box"></i><i class="c-noodle"></i></span></div>
+            <div class="dx-day on">二<span class="d num">10</span><span class="dots"><i class="c-bfast"></i><i class="c-bento"></i></span></div>
+            <div class="dx-day">三<span class="d num">11</span><span class="dots"></span></div>
+            <div class="dx-day">四<span class="d num">12</span><span class="dots"></span></div>
+            <div class="dx-day">五<span class="d num">13</span><span class="dots"></span></div>
+            <div class="dx-day">六<span class="d num">14</span><span class="dots"></span></div>
+            <div class="dx-day">日<span class="d num">15</span><span class="dots"></span></div>
+          </div>
+        </div>
+        <section class="dx-hero" aria-label="熱量">
+          <div class="row">
+            <div><div class="lead">還能吃</div><div class="big">710<small>卡</small></div></div>
+            <div class="tgt">已吃 <span class="num">1,140</span><br>目標 <span class="num">1,850</span></div>
+          </div>
+          <div class="dx-stack" aria-hidden="true"><i class="c-bfast" style="width:15.7%"></i><i class="c-drink" style="width:5.9%"></i><i class="c-bento" style="width:40%"></i></div>
+          <div class="dx-legend"><span><i class="c-bfast"></i>早餐店 <b class="num">290</b></span><span><i class="c-drink"></i>飲料 <b class="num">110</b></span><span><i class="c-bento"></i>便當 <b class="num">740</b></span></div>
+        </section>
+        <div class="dx-macros">
+          <div class="dx-mac"><div class="k">蛋白質</div><div class="v"><b>78</b> <span class="num">/137</span></div><div class="t"><i style="width:57%"></i></div><div class="v">差 59</div></div>
+          <div class="dx-mac"><div class="k">脂肪</div><div class="v"><b>41</b> <span class="num">/65</span></div><div class="t"><i style="width:63%"></i></div><div class="v">差 24</div></div>
+          <div class="dx-mac"><div class="k">碳水</div><div class="v"><b>128</b> <span class="num">/163</span></div><div class="t"><i style="width:79%"></i></div><div class="v">差 35</div></div>
+        </div>
+        <div class="dx-meals">
+          <div class="dx-meal"><span class="mn">早餐</span><span class="tiles"><span class="tile t-24 c-bfast"><svg><use href="#i-egg"/></svg></span><span class="tile t-24 c-drink"><svg><use href="#i-cup"/></svg></span></span><span class="it">鮪魚蛋餅・無糖豆漿</span><span class="kc">400</span></div>
+          <div class="dx-meal"><span class="mn">午餐</span><span class="tiles"><span class="tile t-24 c-bento"><svg><use href="#i-bento"/></svg></span></span><span class="it">滷肉便當</span><span class="kc">740</span></div>
+          <div class="dx-meal dx-todo">
+            <div class="h"><span class="mn">晚餐</span><span class="st">還沒記</span></div>
+            <div class="dx-sg"><span class="stack"><span class="tile t-24 c-box"><svg><use href="#i-box"/></svg></span><span class="tile t-24 c-side"><svg><use href="#i-leaf"/></svg></span></span><span class="its"><small>建議</small>雞胸餐盒＋燙青菜</span><span class="kc">520</span>
+              <button class="dx-swap" type="button" aria-label="換一個晚餐建議"><svg class="ln"><use href="#u-swap"/></svg></button>
+              <button class="dx-add" type="button">加入</button></div>
+          </div>
+          <div class="dx-meal"><span class="mn" style="color:var(--muted)">點心</span><span class="it"></span><svg class="ln" style="width:18px;height:18px;color:var(--muted)" aria-hidden="true"><use href="#u-chev"/></svg></div>
+        </div>
+        <div class="dx-fog" aria-hidden="true"></div>
+        <div class="dx-bar">
+          <nav class="dx-tabs" aria-label="主要導覽"><span class="on" aria-label="飲食"><svg class="ln"><use href="#u-food"/></svg></span><span aria-label="訓練"><svg class="ln"><use href="#u-gym"/></svg></span><span aria-label="設定"><svg class="ln"><use href="#u-set"/></svg></span></nav>
+          <button class="dx-cta" type="button" aria-label="記一筆"><svg class="ln"><use href="#u-plus"/></svg></button>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>記一筆（晚餐）：「吃過」是類型圖示角上的「午」「昨」章（清單可捲到底，看燒臘與收合列）</figcaption>
+      <div class="device">
+        <div class="dx-behind"><div class="dx-top"><div class="dx-date"><b>週二 11/10</b><span>減重</span></div></div></div>
+        <div class="dx-scrim"></div>
+        <div class="sheet dx-sheet">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="dx-chip">早餐</span><span class="dx-chip">午餐</span><span class="dx-chip on" aria-pressed="true">晚餐</span><span class="dx-chip">點心</span></div>
+            <div class="search dx-search"><svg class="ln"><use href="#u-search"/></svg>搜尋品名或店家</div>
+          </div>
+          <div class="sheet-list">
+            <div class="dx-sect"><span>建議</span><button class="act" type="button">全選</button></div>
+            <ul>
+              <li><button class="dx-row" type="button"><span class="tile t-32 c-box"><svg><use href="#i-box"/></svg></span><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">某某餐盒</span></span><span class="kc">420</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li>
+              <li><button class="dx-row" type="button"><span class="tile t-32 c-side"><svg><use href="#i-leaf"/></svg></span><span class="nm-wrap"><span class="nm">燙青菜</span></span><span class="kc">100</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li>
+            </ul>
+            <div class="dx-sect"><span>晚餐常吃</span></div>
+            <ul>
+              <li><button class="dx-row" type="button"><span class="tile t-32 c-box"><svg><use href="#i-box"/></svg></span><span class="nm-wrap"><span class="nm">蝦仁餐盒</span><span class="sub">某某健康餐</span></span><span class="kc">390</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li>
+              <li><button class="dx-row" type="button"><span class="tile t-32 c-noodle"><svg><use href="#i-noodle"/></svg></span><span class="nm-wrap"><span class="nm">牛肉烏龍麵</span></span><span class="kc">560</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li>
+            </ul>
+            <div class="dx-sect"><span>全部食物</span></div>
+            <div class="dx-grp"><span class="tile t-36 c-box"><svg><use href="#i-box"/></svg></span><span class="gt"><span class="gn">健康餐盒</span><span class="gs">晚餐吃過 9 次</span></span></div>
+            <ul><li><button class="dx-row in" type="button"><span class="nm-wrap"><span class="nm">鮭魚餐盒</span></span><span class="kc">480</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li></ul>
+            <div class="dx-grp"><span class="tile t-36 c-bento"><svg><use href="#i-bento"/></svg><span class="badge" aria-hidden="true">午</span></span><span class="gt"><span class="gn">便當</span><span class="gs"><b>今天中午吃過</b>・晚餐 5 次</span></span></div>
+            <ul><li><button class="dx-row in" type="button"><span class="nm-wrap"><span class="nm">滷肉便當</span></span><span class="kc">740</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li></ul>
+            <div class="dx-grp"><span class="tile t-36 c-noodle"><svg><use href="#i-noodle"/></svg><span class="badge" aria-hidden="true">昨</span></span><span class="gt"><span class="gn">麵食</span><span class="gs"><b>昨天吃過</b>・晚餐 3 次</span></span></div>
+            <ul><li><button class="dx-row in" type="button"><span class="nm-wrap"><span class="nm">麻醬麵</span></span><span class="kc">520</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li></ul>
+            <div class="dx-grp"><span class="tile t-36 c-roast"><svg><use href="#i-roast"/></svg></span><span class="gt"><span class="gn">燒臘</span><span class="gs">晚餐吃過 2 次</span></span></div>
+            <ul><li><button class="dx-row in" type="button"><span class="nm-wrap"><span class="nm">油雞腿飯</span></span><span class="kc">820</span><svg class="chk ln"><use href="#u-chk"/></svg></button></li></ul>
+            <button class="dx-more" type="button" aria-expanded="false"><span class="tiles"><span class="tile t-24 c-bfast"><svg><use href="#i-egg"/></svg></span><span class="tile t-24 c-drink"><svg><use href="#i-cup"/></svg></span><span class="tile t-24 c-snack"><svg><use href="#i-cake"/></svg></span></span><span class="what">其他餐的（早餐店、飲料、點心）</span><svg class="ln"><use href="#u-chev"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <div class="notes">
+      <h3>想法</h3>
+      <p>像一本收藏圖鑑：<b>顏色就是分類</b>。白卡片、冷灰底、黑色主動作，全頁唯一的彩度來自食物類型，所以顏色永遠有意思，不是裝飾。今日頁的熱量條直接切成「早餐店 290＋飲料 110＋便當 740」，三秒內看到的不只剩多少，還有花在哪。</p>
+      <h3>Token</h3>
+      <table class="tok">
+        <tr><th>角色</th><th>色</th><th>對底色</th></tr>
+        <tr><td>底</td><td><span class="sw" style="background:#EEF0F3"></span>#EEF0F3</td><td>—</td></tr>
+        <tr><td>卡片</td><td><span class="sw" style="background:#FFFFFF"></span>#FFFFFF</td><td>—</td></tr>
+        <tr><td>墨／主動作</td><td><span class="sw" style="background:#15181E"></span>#15181E</td><td>底 15.6・白卡 17.8</td></tr>
+        <tr><td>次要字</td><td><span class="sw" style="background:#5B6270"></span>#5B6270</td><td>白卡 6.1・底 5.4</td></tr>
+        <tr><td>超標</td><td><span class="sw" style="background:#C2362B"></span>#C2362B</td><td>白卡 5.5</td></tr>
+      </table>
+      <p>類型色（白色圖示疊在上面，圖形要 3:1；色塊對白卡也要 3:1）：</p>
+      <table class="tok">
+        <tr><td><span class="sw" style="background:#2E9457"></span>健康餐盒 #2E9457</td><td>3.8</td><td><span class="sw" style="background:#CF6A1E"></span>便當 #CF6A1E</td><td>3.7</td></tr>
+        <tr><td><span class="sw" style="background:#A87A12"></span>麵食 #A87A12</td><td>3.9</td><td><span class="sw" style="background:#CF443A"></span>燒臘 #CF443A</td><td>4.6</td></tr>
+        <tr><td><span class="sw" style="background:#5867C9"></span>早餐店 #5867C9</td><td>5.0</td><td><span class="sw" style="background:#1F8CA3"></span>飲料 #1F8CA3</td><td>3.9</td></tr>
+        <tr><td><span class="sw" style="background:#C9578A"></span>點心 #C9578A</td><td>4.0</td><td><span class="sw" style="background:#5E7A26"></span>配菜 #5E7A26</td><td>4.9</td></tr>
+      </table>
+      <p><b>字</b>：中文照舊系統黑體，但拉到 700–800 做組名與日期；數字全用已自架的 <b>Archivo 600</b>，大數字 66。字級：66／21／15／13.5／12。</p>
+      <h3>牽動全站</h3>
+      <ul>
+        <li>類型清單有 <b>17 類</b>（<code>categories.ts</code>），每一類都要一個顏色＋一個圖示；17 個顏色彼此分得開又都過 3:1 很難，<b>實際上要讓幾類共用色、只靠圖示分</b>。</li>
+        <li>食品庫、記一筆、今日頁每一列都多一個圖示；食物還沒分類（null）時要有中性灰圖示。</li>
+        <li>「吃過」：類型圖示右上角一個黑底白字的章「午」「昨」，組名底下同時寫「今天中午吃過」。章讓眼睛一掃就停在那一組，字負責說清楚。</li>
+      </ul>
+      <h3>風險</h3>
+      <p>最不像「藝術品」、最像「好用的 app」：精緻但不驚豔。圖示要一套畫到 17 個且一致，這是主要工時（可以自己畫，不需要外包）。顏色多了以後，「超標紅」要跟「燒臘紅」分開，我把超標拉到 #C2362B 並一律配「超」字，但還是近。</p>
+    </div>
+  </div>
+
+  <div class="icons">
+    <div class="icon-set">
+      <figure><svg class="ic ic-180" viewBox="0 0 1024 1024" role="img" aria-label="圖鑑方向 App 圖示"><use href="#icon-dx"/></svg>180</figure>
+      <figure><svg class="ic ic-60" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-dx"/></svg>60</figure>
+      <figure><svg class="ic ic-29" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-dx"/></svg>29</figure>
+    </div>
+    <div class="home" aria-hidden="true">
+      <div class="home-grid">
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><svg class="ic ic-60" viewBox="0 0 1024 1024"><use href="#icon-dx"/></svg><div class="name">Tally</div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+      </div>
+    </div>
+    <p class="icon-concept"><b>四格標本盒。</b>白底上四個類型色塊（健康餐盒、便當、麵食、燒臘），各帶自己的圖示，就是 app 裡那套。29px 時圖示糊掉，剩四個色塊，仍然是全主畫面最好認的一格，但也最「工具感」。</p>
+  </div>
+</section>
+
+<!-- ════════════════════════ ③ 回饋 ════════════════════════ -->
+<section class="dir d-rw" aria-labelledby="rw-h">
+  <div class="dir-head">
+    <h2 id="rw-h">③ 回饋</h2>
+    <p>數字當主角：窄體粗字的 710 佔掉螢幕三分之一，蛋白質那格用螢光綠框起來，因為減重最該追的是它。今日頁多一塊黑卡，讓你看到「記錄換到了什麼」。</p>
+  </div>
+  <div class="dir-row">
+
+    <figure class="fig">
+      <figcaption>今日頁：大數字＋這週賺到的</figcaption>
+      <div class="device">
+        <div class="rw-top"><b>週二 11/10</b><span>減重</span></div>
+        <section class="rw-hero" aria-label="熱量">
+          <div class="lead" style="margin-top:6px">還能吃</div>
+          <div class="line">
+            <div class="big cn">710<small>卡</small></div>
+            <div class="side">已吃<span class="cn">1,140</span>目標 <span class="cn" style="display:inline;font-size:15px">1,850</span></div>
+          </div>
+        </section>
+        <div class="rw-meter" aria-hidden="true"><i></i></div>
+        <div class="rw-macs">
+          <div class="rw-mac hot"><div class="k">蛋白質</div><div class="v"><span class="cn">78</span><span class="cn of">/137</span></div><div class="g">差 59 g</div></div>
+          <div class="rw-mac"><div class="k">脂肪</div><div class="v"><span class="cn">41</span><span class="cn of">/65</span></div><div class="g">差 24</div></div>
+          <div class="rw-mac"><div class="k">碳水</div><div class="v"><span class="cn">128</span><span class="cn of">/163</span></div><div class="g">差 35</div></div>
+        </div>
+        <section class="rw-earn" aria-label="這週的進展">
+          <div>
+            <div class="k">蛋白質達標</div>
+            <div class="big cn">3<small>天連續</small></div>
+            <div class="rw-dots" aria-hidden="true"><i></i><i class="y"></i><i></i><i class="y"></i><i class="y"></i><i class="y"></i><i class="now"></i></div>
+            <div class="s">今天再 59 g 就是 4 天</div>
+          </div>
+          <div>
+            <div class="k">你的維持熱量</div>
+            <div class="big cn">2,180<small>±90</small></div>
+            <div class="rw-conf" aria-hidden="true"><i class="y"></i><i class="y"></i><i class="y"></i><i class="new"></i><i></i></div>
+            <div class="s">這週多記 6 天，範圍窄了 30</div>
+          </div>
+        </section>
+        <div class="rw-meals">
+          <div class="rw-meal"><span class="mn">早餐</span><span class="it">鮪魚蛋餅・無糖豆漿</span><span class="kc cn">400</span></div>
+          <div class="rw-meal"><span class="mn">午餐</span><span class="it">滷肉便當</span><span class="kc cn">740</span></div>
+          <div class="rw-todo">
+            <div class="h"><span class="mn">晚餐</span><span class="st">還沒記</span></div>
+            <div class="rw-sg"><span class="src">建議</span><span class="its">雞胸餐盒＋燙青菜</span><span class="kc cn">520</span>
+              <button class="rw-swap" type="button" aria-label="換一個晚餐建議"><svg class="ln"><use href="#u-swap"/></svg></button>
+              <button class="rw-add" type="button">加入</button></div>
+          </div>
+        </div>
+        <div class="rw-fog" aria-hidden="true"></div>
+        <div class="rw-bar">
+          <nav class="rw-tabs" aria-label="主要導覽"><span class="on" aria-label="飲食"><svg class="ln"><use href="#u-food"/></svg></span><span aria-label="訓練"><svg class="ln"><use href="#u-gym"/></svg></span><span aria-label="設定"><svg class="ln"><use href="#u-set"/></svg></span></nav>
+          <button class="rw-cta" type="button" aria-label="記一筆"><svg class="ln"><use href="#u-plus"/></svg></button>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>記一筆（晚餐）：每列多一個蛋白質數字；「吃過」是近 7 天的小格子（清單可捲到底，看燒臘與收合列）</figcaption>
+      <div class="device">
+        <div class="rw-behind"><div class="rw-top"><b>週二 11/10</b><span>減重</span></div></div>
+        <div class="rw-scrim"></div>
+        <div class="sheet rw-sheet">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="rw-chip">早餐</span><span class="rw-chip">午餐</span><span class="rw-chip on" aria-pressed="true">晚餐</span><span class="rw-chip">點心</span></div>
+            <div class="search rw-search"><svg class="ln"><use href="#u-search"/></svg>搜尋品名或店家</div>
+          </div>
+          <div class="sheet-list">
+            <div class="rw-sect"><span class="t">建議</span><span class="gain">兩樣一起：蛋白差 59 → 18</span><button class="act" type="button">全選</button></div>
+            <ul>
+              <li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">某某餐盒</span></span><span class="r"><span class="kc cn">420</span><span class="p">蛋白 <span class="cn">38</span></span></span></button></li>
+              <li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">燙青菜</span></span><span class="r"><span class="kc cn">100</span><span class="p">蛋白 <span class="cn">3</span></span></span></button></li>
+            </ul>
+            <div class="rw-sect"><span class="t">晚餐常吃</span></div>
+            <ul>
+              <li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">蝦仁餐盒</span><span class="sub">某某健康餐</span></span><span class="r"><span class="kc cn">390</span><span class="p">蛋白 <span class="cn">32</span></span></span></button></li>
+              <li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">牛肉烏龍麵</span></span><span class="r"><span class="kc cn">560</span><span class="p">蛋白 <span class="cn">27</span></span></span></button></li>
+            </ul>
+            <div class="rw-sect"><span class="t">全部食物</span></div>
+            <div class="rw-grp"><span class="gn">健康餐盒<span class="cnt">晚餐 9 次</span></span></div>
+            <ul><li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">鮭魚餐盒</span></span><span class="r"><span class="kc cn">480</span><span class="p">蛋白 <span class="cn">30</span></span></span></button></li></ul>
+            <div class="rw-grp"><span class="gn">便當</span><span class="rw-last">今天中午<span class="rw-cal" aria-hidden="true"><i></i><i class="y"></i><i></i><i></i><i class="y"></i><i></i><i class="now"></i></span></span></div>
+            <ul><li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">滷肉便當</span></span><span class="r"><span class="kc cn">740</span><span class="p">蛋白 <span class="cn">26</span></span></span></button></li></ul>
+            <div class="rw-grp"><span class="gn">麵食</span><span class="rw-last">昨天<span class="rw-cal" aria-hidden="true"><i></i><i></i><i class="y"></i><i></i><i></i><i class="now"></i><i></i></span></span></div>
+            <ul><li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">麻醬麵</span></span><span class="r"><span class="kc cn">520</span><span class="p">蛋白 <span class="cn">14</span></span></span></button></li></ul>
+            <div class="rw-grp"><span class="gn">燒臘<span class="cnt">晚餐 2 次</span></span></div>
+            <ul><li><button class="rw-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">油雞腿飯</span></span><span class="r"><span class="kc cn">820</span><span class="p">蛋白 <span class="cn">35</span></span></span></button></li></ul>
+            <button class="rw-more" type="button" aria-expanded="false"><svg class="ln"><use href="#u-chev"/></svg>其他餐的（早餐店、飲料、點心）</button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <div class="notes">
+      <h3>想法</h3>
+      <p>像健身 app 的成績板：每次記錄都在推一個看得見的數字。版面幾乎全黑白，<b>螢光綠只標「現在該追的那一個」</b>（今天是蛋白質）和「賺到的」。熱量條切成十格，像量杯刻度。</p>
+      <h3>Token</h3>
+      <table class="tok">
+        <tr><th>角色</th><th>色</th><th>對底色</th></tr>
+        <tr><td>底</td><td><span class="sw" style="background:#F3F4F0"></span>#F3F4F0</td><td>—</td></tr>
+        <tr><td>墨／條填色</td><td><span class="sw" style="background:#0F1113"></span>#0F1113</td><td>底 17.1・對軌道 14.9</td></tr>
+        <tr><td>次要字</td><td><span class="sw" style="background:#575B60"></span>#575B60</td><td>底 6.2・白卡 6.8・螢光綠 5.2</td></tr>
+        <tr><td>螢光綠</td><td><span class="sw" style="background:#C8F031"></span>#C8F031</td><td><b>只當底色或放黑底上</b>：黑字 14.4；放淺底上 1.2，不能當字或線</td></tr>
+        <tr><td>超標</td><td><span class="sw" style="background:#B3261E"></span>#B3261E</td><td>底 5.9</td></tr>
+      </table>
+      <p><b>字</b>：數字用窄體粗字。提案是把已自架的 Archivo 換成<b>可變字重＋字寬版</b>（OFL，字寬 62–125，取 75／700），同一個字型檔就有窄體，不多一套字；這頁用 Windows 內建的 Bahnschrift 窄體近似。字級：大數字 132／三大營養素 34／清單熱量 22／中文 15 粗、12 次要。</p>
+      <h3>現在 app 沒有的資料 <span class="flag">要先寫 spec</span></h3>
+      <ul>
+        <li><b>蛋白質連續達標天數</b>與近 7 天格子：沒有這個功能。資料算得出來（每日合計已存），但「達標」怎麼算、斷一天怎麼辦要先定。</li>
+        <li><b>維持熱量的範圍「這週窄了 30」與 5 格信心條</b>：<code>baseline.ts</code> 已經算得出維持熱量和 ±範圍，但不存歷史，沒辦法說「比上週窄多少」；信心格數怎麼對應範圍也要定。</li>
+        <li>sheet 建議段的「蛋白差 59 → 18」與每列蛋白質：資料都有，是新的顯示。</li>
+        <li>「便當」的近 7 天格子：吃過紀錄已經有，只是新畫法。</li>
+      </ul>
+      <h3>牽動全站</h3>
+      <ul>
+        <li>訓練頁最受益：重量、次數、RPE 本來就是數字，同一套窄體會很一致。</li>
+        <li>「吃過」：組名右邊寫最近一次（「今天中午」），旁邊七格是近 7 天哪幾天吃過，黑格是最近那一次（灰格對空格 3.5:1、黑格對灰格 4.3:1）。看得到「多常吃」，不只「吃過沒」。</li>
+      </ul>
+      <h3>風險</h3>
+      <p>最吵的一個：一天看五次，連續達標斷掉那天會有壓力，減重 app 做成成績板要小心。黑卡占掉約 150px，時間軸往下擠，晚餐建議剛好落在底部列上方。</p>
+    </div>
+  </div>
+
+  <div class="icons">
+    <div class="icon-set">
+      <figure><svg class="ic ic-180" viewBox="0 0 1024 1024" role="img" aria-label="回饋方向 App 圖示"><use href="#icon-rw"/></svg>180</figure>
+      <figure><svg class="ic ic-60" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-rw"/></svg>60</figure>
+      <figure><svg class="ic ic-29" viewBox="0 0 1024 1024" aria-hidden="true"><use href="#icon-rw"/></svg>29</figure>
+    </div>
+    <div class="home" aria-hidden="true">
+      <div class="home-grid">
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><svg class="ic ic-60" viewBox="0 0 1024 1024"><use href="#icon-rw"/></svg><div class="name">Tally</div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph"></div><div class="lbl"></div></div>
+        <div class="home-app"><div class="ph b"></div><div class="lbl"></div></div>
+      </div>
+    </div>
+    <p class="icon-concept"><b>計數記號（正字的西方版）。</b>Tally 這個名字本來就是「畫記號計數」：四豎一斜，螢光綠畫在黑底上。29px 時仍是五條粗線，主畫面上最搶眼，跟名字也最有關係。</p>
+  </div>
+</section>
+
+<!-- App 圖示原圖（滿版方形，iOS 自己裁圓角） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="icon-sb" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="#CADDED"/>
+    <ellipse cx="300" cy="250" rx="110" ry="40" fill="#FFFFFF" opacity=".85"/><ellipse cx="370" cy="222" rx="80" ry="50" fill="#FFFFFF" opacity=".85"/>
+    <circle cx="512" cy="560" r="300" fill="#FBF0D6" opacity=".7"/>
+    <circle cx="512" cy="560" r="200" fill="#F0B94A"/>
+    <path d="M150 600 H874 A362 300 0 0 1 150 600 Z" fill="#2E5E93"/>
+    <path d="M150 600 H874" stroke="#1D2B45" stroke-width="36" stroke-linecap="round"/>
+    <rect x="404" y="880" width="216" height="46" rx="23" fill="#1D2B45"/>
+  </symbol>
+  <symbol id="icon-dx" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="#FFFFFF"/>
+    <rect x="152" y="152" width="340" height="340" rx="92" fill="#2E9457"/>
+    <rect x="532" y="152" width="340" height="340" rx="92" fill="#CF6A1E"/>
+    <rect x="152" y="532" width="340" height="340" rx="92" fill="#A87A12"/>
+    <rect x="532" y="532" width="340" height="340" rx="92" fill="#CF443A"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <use href="#i-box" x="202" y="202" width="240" height="240"/>
+      <use href="#i-bento" x="582" y="202" width="240" height="240"/>
+      <use href="#i-noodle" x="202" y="582" width="240" height="240"/>
+      <use href="#i-roast" x="582" y="582" width="240" height="240"/>
+    </g>
+  </symbol>
+  <symbol id="icon-rw" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="#0F1113"/>
+    <g stroke="#C8F031" stroke-width="70" stroke-linecap="round">
+      <path d="M322 290v444M442 290v444M562 290v444M682 290v444"/>
+      <path d="M232 650L792 374"/>
+    </g>
+  </symbol>
+</svg>
+
+</body>
+</html>

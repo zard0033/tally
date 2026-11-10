@@ -27,11 +27,13 @@ import {
   upsertWeight as apiUpsertWeight,
   type IntakeDetailPatch,
   type IntakeRow,
+  type NewFood,
   type NewIntake,
   type NewWeight,
   type ProfileRow,
   type Weight,
 } from '@/lib/api'
+import { withCategories, type FoodCategory } from '@/lib/categories'
 import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
@@ -49,6 +51,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import TabBar, { type Tab } from '@/screens/TabBar'
 import { useMonthMarks } from '@/useMonthMarks'
 import { useRepeatHistory } from '@/useRepeatHistory'
+import { useFoodCategories } from '@/useFoodCategories'
 import { useViewportInsets } from '@/useViewportInsets'
 import { useFoods } from '@/useFoods'
 import { useTraining } from '@/useTraining'
@@ -137,7 +140,16 @@ export default function App() {
     weightRef.current = weight
   }, [profile, weight])
   const [rows, setRows] = useState<IntakeRow[] | null>(null)
-  const { foods, setFoods, handleCreateFood, handleUpdateFood, handleArchiveFood, handleUnarchiveFood } = useFoods()
+  const {
+    foods,
+    setFoods,
+    handleCreateFood,
+    handleUpdateFood,
+    handleArchiveFood,
+    handleUnarchiveFood,
+    handleSetFoodCategory,
+    applyAiCategories,
+  } = useFoods()
 
   const [tab, setTab] = useState<Tab>('today')
   /** 設定頁的次級頁面（每日目標／食品庫管理／體重趨勢）自己有返回鍵，主 navbar 同時
@@ -410,17 +422,48 @@ export default function App() {
     () => (targets && profile && isPlannable(currentDate) ? { targets, goal: profile.goal } : null),
     [targets, profile, currentDate],
   )
+  /* 類型的背景補判（spec C 節第三版）。食品庫到齊＝連得上，才開始補。 */
+  const {
+    overrides: categoryOverrides,
+    classifyNew,
+    markManual,
+    reset: resetCategories,
+  } = useFoodCategories(session ? session.user.id : null, foods !== null, applyAiCategories)
+  const handleCreateFoodAndClassify = useCallback(
+    async (food: NewFood) => {
+      const created = await handleCreateFood(food)
+      classifyNew(created)
+      return created
+    },
+    [handleCreateFood, classifyNew],
+  )
+  const handleSetCategory = useCallback(
+    async (id: number, category: FoodCategory) => {
+      await handleSetFoodCategory(id, category)
+      markManual(id, category)
+    },
+    [handleSetFoodCategory, markManual],
+  )
+  /* 避開重複看的是類型：當日清單與回看資料是補判前撈的，蓋上這次 session 補上或手動改的類型。 */
   const suggestionsByMeal = useMemo(
-    () => suggestMeals(repeatHistory, currentDate, rows, gapCtx),
-    [repeatHistory, currentDate, rows, gapCtx],
+    () =>
+      suggestMeals(
+        repeatHistory && withCategories(repeatHistory, categoryOverrides),
+        currentDate,
+        rows && withCategories(rows, categoryOverrides),
+        gapCtx,
+      ),
+    [repeatHistory, currentDate, rows, gapCtx, categoryOverrides],
   )
   /* 「換一個」換到第幾名只記在畫面上：換了日期、當天紀錄有變（新增、刪除、改份量）、或目標變了，就回第一名。
      用簽章比對，不用 rows 的 identity——重撈回來同一份資料不該把使用者換到的那一組洗掉。
      簽章一不同就整個丟掉、不是只比對：否則切走再切回、或復原把紀錄還原成舊樣子，會回到換過的那一名。 */
   const daySig = useMemo(() => {
     const t = gapCtx ? `${gapCtx.goal}|${gapCtx.targets.kcal}|${gapCtx.targets.protein}|${gapCtx.targets.fat}|${gapCtx.targets.carb}` : ''
-    return `${currentDate}#${t}#${rows?.map((r) => `${r.id}:${r.qty}`).join(',') ?? ''}`
-  }, [currentDate, gapCtx, rows])
+    // 背景分類落地會讓候選重排，名次也要跟著回第一名，否則畫面上那組會突然換掉
+    const cats = [...categoryOverrides].map(([id, c]) => `${id}${c}`).join(',')
+    return `${currentDate}#${t}#${rows?.map((r) => `${r.id}:${r.qty}`).join(',') ?? ''}#${cats}`
+  }, [currentDate, gapCtx, rows, categoryOverrides])
   const [swap, setSwap] = useState<{ sig: string; meal: MealKey; idx: number } | null>(null)
   if (swap && swap.sig !== daySig) setSwap(null)
   const swapIdx = useCallback((meal: MealKey) => (swap && swap.sig === daySig && swap.meal === meal ? swap.idx : 0), [swap, daySig])
@@ -921,6 +964,7 @@ export default function App() {
         setTab('today')
         resetMonthMarks()
         resetRepeatHistory()
+        resetCategories()
         settleRepeat()
         setRepeatLock(null)
         setRepeatErr(null)
@@ -944,7 +988,7 @@ export default function App() {
       clearTimeout(fastTimer)
       sub.subscription.unsubscribe()
     }
-  }, [setFoods, resetMonthMarks, resetRepeatHistory, settleRepeat, setRepeatLock])
+  }, [setFoods, resetMonthMarks, resetRepeatHistory, resetCategories, settleRepeat, setRepeatLock])
 
   /* 網路回來（AC 4）。online 事件只當「值得再試一次」的提示，不拿來判斷有沒有網路
    * （伺服器死了它仍回「線上」，見 spec.md 探針 2）。兩種情形：
@@ -1041,8 +1085,9 @@ export default function App() {
             onSaveProfile={handleSaveProfile}
             onSaveLost={handleSaveLost}
             onSaveWeight={handleSaveWeight}
-            onCreateFood={handleCreateFood}
+            onCreateFood={handleCreateFoodAndClassify}
             onUpdateFood={handleUpdateFood}
+            onSetFoodCategory={handleSetCategory}
             onArchiveFood={handleArchiveFood}
             onUnarchiveFood={handleUnarchiveFood}
             onSignOut={handleSignOut}
@@ -1171,7 +1216,7 @@ export default function App() {
           repeatByMeal={sheetRepeatByMeal}
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}
-          onCreateFood={handleCreateFood}
+          onCreateFood={handleCreateFoodAndClassify}
         />
       )}
     </div>

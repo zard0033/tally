@@ -17,6 +17,7 @@ import type { Profile } from './formulas'
 import type { MealKey } from './meals'
 import type { LabelReading } from './foodForm'
 import type { RepeatSourceRow } from './mealSuggest'
+import { normalizeCategory, type FoodCategory } from './categories'
 
 /* 明確傳 storageKey：離線開機要自己讀本機 session（session.ts），讀的 key 必須與 supabase-js
    寫的是同一個。值等於它的預設，所以既有登入不受影響。 */
@@ -86,6 +87,10 @@ export interface Food {
   fat: number
   carb: number
   archived: boolean
+  /** 類型（固定清單，見 categories.ts）。null＝還沒分類；資料庫沒有約束，讀到清單外的值用 categoryOf 收斂。 */
+  category: string | null
+  /** 使用者在食品庫手動改過類型：AI 補判跳過它。 */
+  category_manual: boolean
 }
 
 export interface NewFood {
@@ -97,7 +102,7 @@ export interface NewFood {
   carb: number
 }
 
-const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived'
+const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived,category,category_manual'
 
 /** 今日頁記一筆的挑選清單只給使用中的食物——封存是「以後不再用」的宣告，
  *  不該讓它繼續冒出來讓人選到。 */
@@ -120,9 +125,36 @@ export async function createFood(food: NewFood): Promise<Food> {
 
 /** 就地編輯與封存/復原共用一支：封存只是把 archived 這一欄改掉，不是真的刪列
  *  （intake.food_id 是 restrict 外鍵，歷史紀錄要保留可查）。 */
-export async function updateFood(id: number, patch: Partial<NewFood & { archived: boolean }>): Promise<void> {
+export async function updateFood(
+  id: number,
+  patch: Partial<NewFood & Pick<Food, 'archived' | 'category' | 'category_manual'>>,
+): Promise<void> {
   const { error } = await supabase.from('foods').update(patch).eq('id', id).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
+}
+
+/** 還沒分類、也沒被手動改過的食物，**含封存的**（歷史紀錄的建議會用到它們的類型）。 */
+export async function listUncategorizedFoods(): Promise<Pick<Food, 'id' | 'name' | 'vendor'>[]> {
+  return unwrap(await supabase
+    .from('foods')
+    .select('id,name,vendor')
+    .is('category', null)
+    .eq('category_manual', false)
+    .abortSignal(dbSignal()))
+}
+
+/** AI 補判的寫入：同一類型的一批一次寫。條件與 listUncategorizedFoods 相同——
+ *  送出之前使用者手動改了（或別台補完了）的那幾筆不會被蓋掉。回傳真的寫到的 id。 */
+export async function setFoodsCategory(ids: number[], category: FoodCategory): Promise<number[]> {
+  const rows = unwrap<{ id: number }[]>(await supabase
+    .from('foods')
+    .update({ category })
+    .in('id', ids)
+    .is('category', null)
+    .eq('category_manual', false)
+    .select('id')
+    .abortSignal(dbSignal()))
+  return rows.map((r) => r.id)
 }
 
 /* ═══════════ intake ═══════════ */
@@ -139,7 +171,9 @@ export interface IntakeRow {
    *  刻意不回填）。有值代表使用者為這一筆改過名（「雞排便當（去皮）」），
    *  之後食品庫再改品名也不會回頭改寫它——與 kcal/protein/fat/carb 同一套快照語意。 */
   name: string | null
-  foods: { name: string; vendor: string | null } | null
+  /** 餐建議避開重複用（同一天同店家、同品項）。 */
+  food_id: number
+  foods: { name: string; vendor: string | null; category: string | null } | null
 }
 
 /** 區間內每筆的 eaten_on／qty／kcal（單份快照），實測維持熱量用。只撈三欄、不 join foods。
@@ -184,8 +218,8 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
      推不出關聯基數，型別預設當作陣列——實際回傳仍是單一物件，用明確泛型覆寫成真實形狀 */
   return unwrap(await supabase
     .from('intake')
-    .select<'id,meal,qty,kcal,protein,fat,carb,name,foods(name,vendor)', IntakeRow>(
-      'id,meal,qty,kcal,protein,fat,carb,name,foods(name,vendor)',
+    .select<'id,meal,qty,kcal,protein,fat,carb,name,food_id,foods(name,vendor,category)', IntakeRow>(
+      'id,meal,qty,kcal,protein,fat,carb,name,food_id,foods(name,vendor,category)',
     )
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
@@ -198,8 +232,8 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
 export async function listIntakeForRepeat(from: string, to: string): Promise<RepeatSourceRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived)', RepeatSourceRow>(
-      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived)',
+    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived,category)', RepeatSourceRow>(
+      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived,category)',
     )
     .gte('eaten_on', from)
     .lte('eaten_on', to)
@@ -387,4 +421,33 @@ export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
   })
   if (error || !data) throw new Error('辨識失敗')
   return data
+}
+
+/* 分類跟辨識走同一支函式、同一把 key；文字模型比讀圖快，但上游同一家在排隊，界照辨識那條訂。 */
+const CLASSIFY_TIMEOUT = SCAN_TIMEOUT
+/** 與 read-label handler 的 MAX_TEXT 同值。 */
+const CLASSIFY_TEXT_MAX = 100
+
+export interface CategoryResult {
+  id: number
+  category: FoodCategory
+}
+
+/**
+ * 請 `read-label` 的分類模式替一批食物分類（送品名＋店家，不送營養值）。函式那端已經把清單外的值收斂過，
+ * 這裡再收斂一次——回應是外部資料，不在這批裡的 id 一律丟掉。模型漏回的食物就不在結果裡（維持 null、下次再補）。
+ */
+export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[]): Promise<CategoryResult[]> {
+  const { data, error } = await supabase.functions.invoke<{ results?: unknown }>('read-label', {
+    // 函式那端任一樣超過 100 字就整批 400，而品名沒有長度上限（拍標示可能帶進長字串）；分類用不到全文
+    body: { foods: foods.map(({ id, name, vendor }) => ({ id, name: name.slice(0, CLASSIFY_TEXT_MAX), vendor: vendor?.slice(0, CLASSIFY_TEXT_MAX) ?? null })) },
+    signal: AbortSignal.timeout(CLASSIFY_TIMEOUT),
+  })
+  if (error || !data || !Array.isArray(data.results)) throw new Error('分類失敗')
+  const asked = new Set(foods.map((f) => f.id))
+  const out = new Map<number, FoodCategory>()
+  for (const r of data.results as { id?: unknown; category?: unknown }[]) {
+    if (typeof r?.id === 'number' && asked.has(r.id) && !out.has(r.id)) out.set(r.id, normalizeCategory(r.category))
+  }
+  return [...out].map(([id, category]) => ({ id, category }))
 }

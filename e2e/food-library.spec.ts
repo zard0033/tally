@@ -6,7 +6,9 @@
    （session-state 已驗證事實）。所以下面所有斷言都只用「使用中」分頁，分頁切換本身
    留白——在 stub 升級之前，那條測起來只會鎖住 stub 的行為，不是產品的行為。 */
 import { test, expect, type Page } from '@playwright/test'
+import { FIX } from './fixtures'
 import { openApp } from './harness'
+import type { ClassifyStub } from './stub'
 
 async function openLibrary(page: Page) {
   await page.locator('.tab[aria-label="設定"]').click()
@@ -864,4 +866,147 @@ test('新增食物時斷網：顯示看得懂的錯誤，不是原始錯誤', as
   await dropNetwork(page)
   await sheet.locator('.confirm-wrap .pick-bar-btn').click()
   await expect(sheet.locator('.sheet-error')).toHaveText(OFFLINE_TEXT)
+})
+
+/* ── 類型標籤與背景補判（v2.120，spec.md C 節「第三版」）──
+   分類模式由 stub 回應（StubOptions.classify）：ok 依品名查表、fail 回 502。fixture 的食物預設都已分類，
+   這裡把地瓜（14）與拿鐵（18）改回未分類，開機的補判才有對象。 */
+interface ClassifyWindow {
+  __classify: ClassifyStub
+  __classifyCalls: { id: number; name: string; vendor: string | null }[][]
+  __allFetches: string[]
+}
+const UNCLASSIFIED_FIX = {
+  ...FIX,
+  foods: FIX.foods.map((f) => (f.id === 14 || f.id === 18 ? { ...f, category: null } : f)),
+} as unknown as typeof FIX
+const AI_CATS = { 地瓜: '主食', 拿鐵: '飲料', 測試便當: '便當' }
+
+const classifyCalls = (page: Page) => page.evaluate(() => (window as unknown as ClassifyWindow).__classifyCalls)
+const tagOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat-tag')
+const catSelect = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat select')
+
+test('類型補判：開 app 後只送未分類的、一個類型寫一次且帶「未分類、沒手動改過」的條件，食品庫標籤補上', async ({ page }) => {
+  await openApp(page, { classify: { mode: 'ok', categories: AI_CATS } }, UNCLASSIFIED_FIX)
+
+  await expect.poll(() => classifyCalls(page)).toEqual([[
+    { id: 14, name: '地瓜', vendor: null },
+    { id: 18, name: '拿鐵', vendor: '全家' },
+  ]])
+  // 未分類查詢不篩封存：封存的食物也要補（歷史紀錄的建議會用到）
+  const listQuery = (await page.evaluate(() => (window as unknown as ClassifyWindow).__allFetches)).find(
+    (u) => u.includes('/foods?') && u.includes('category=is.null'),
+  )
+  expect(listQuery, '沒有打未分類查詢').toBeTruthy()
+  expect(listQuery).toContain('category_manual=eq.false')
+  expect(listQuery).not.toContain('archived=')
+
+  await expect.poll(async () => (await foodWrites(page)).length).toBe(2)
+  const writes = await foodWrites(page)
+  expect(writes.map((w) => w.method)).toEqual(['PATCH', 'PATCH'])
+  expect(writes.map((w) => w.body)).toEqual([{ category: '主食' }, { category: '飲料' }])
+  for (const w of writes) {
+    expect(w.path).toContain('category=is.null')
+    expect(w.path).toContain('category_manual=eq.false')
+  }
+  expect(decodeURIComponent(writes[0].path)).toContain('id=in.(14)')
+  expect(decodeURIComponent(writes[1].path)).toContain('id=in.(18)')
+
+  await openLibrary(page)
+  await expect(tagOf(page, '地瓜')).toHaveText('主食')
+  await expect(tagOf(page, '拿鐵')).toHaveText('飲料')
+  await expect(tagOf(page, '溫泉蛋'), '原本就有類型的照舊').toHaveText('配菜')
+  await expect(catSelect(page, '地瓜')).toHaveAttribute('aria-label', '地瓜 的類型：主食')
+})
+
+test('類型補判失敗：維持未分類、不寫入；重新開 app 再補一次就補上', async ({ page }) => {
+  await openApp(page, { classify: { mode: 'fail' } }, UNCLASSIFIED_FIX)
+  await expect.poll(async () => (await classifyCalls(page)).length).toBe(1)
+  await openLibrary(page)
+  await expect(tagOf(page, '地瓜')).toHaveText('未分類')
+  await expect(rows(page).filter({ hasText: '地瓜' }).locator('.lib-cat')).toHaveAttribute('data-empty', 'true')
+  expect(await foodWrites(page), '失敗了不該寫任何東西').toHaveLength(0)
+  await expect(page.locator('.notice'), '背景補判失敗不打擾使用者').toHaveCount(0)
+
+  // 下次開 app：分類恢復正常（後加的 init script 在 stub 之後跑，蓋掉它的設定）
+  await page.addInitScript((cats) => {
+    ;(window as unknown as ClassifyWindow).__classify = { mode: 'ok', categories: cats }
+  }, AI_CATS)
+  await page.reload()
+  await page.waitForSelector('.gauge-num', { timeout: 5000 })
+  await expect.poll(async () => (await classifyCalls(page)).length).toBe(1)
+  await openLibrary(page)
+  await expect(tagOf(page, '地瓜')).toHaveText('主食')
+  await expect(tagOf(page, '拿鐵')).toHaveText('飲料')
+})
+
+test('手動改類型：送 category＋category_manual，標籤換掉；補判晚回來也不覆蓋', async ({ page }) => {
+  // 補判延遲 3 秒：在它回來之前先手動改地瓜（下面先斷言還是未分類，確認真的搶在前面）
+  await openApp(page, { classify: { mode: 'ok', categories: AI_CATS, delayMs: 3000 } }, UNCLASSIFIED_FIX)
+  await openLibrary(page)
+  await expect(tagOf(page, '地瓜')).toHaveText('未分類')
+  await catSelect(page, '地瓜').selectOption('點心')
+
+  await expect(tagOf(page, '地瓜')).toHaveText('點心')
+  await expect.poll(async () => (await foodWrites(page)).length).toBe(1)
+  const manual = (await foodWrites(page))[0]
+  expect(manual.method).toBe('PATCH')
+  expect(manual.body).toEqual({ category: '點心', category_manual: true })
+  expect(manual.path).toContain('id=eq.14')
+
+  // 同一批的拿鐵寫進去了＝補判那批已經處理完
+  await expect.poll(async () => (await foodWrites(page)).length).toBe(2)
+  const ai = (await foodWrites(page))[1]
+  expect(ai.body).toEqual({ category: '飲料' })
+  expect(decodeURIComponent(ai.path), '手動改過的不該再送補判').toContain('id=in.(18)')
+  await expect(tagOf(page, '拿鐵')).toHaveText('飲料')
+  await expect(tagOf(page, '地瓜'), '補判回來把手動改的蓋掉了').toHaveText('點心')
+
+  // 改已分類的也一樣：飲料 → 蛋白質補充
+  await catSelect(page, '拿鐵').selectOption('蛋白質補充')
+  await expect(tagOf(page, '拿鐵')).toHaveText('蛋白質補充')
+  await expect.poll(async () => (await foodWrites(page)).length).toBe(3)
+  expect((await foodWrites(page))[2].body).toEqual({ category: '蛋白質補充', category_manual: true })
+})
+
+test('手動改類型失敗：標籤退回、那一列下面講原因', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { __failNext: { table: string; method: string } | null }).__failNext = { table: 'foods', method: 'PATCH' }
+  })
+  await catSelect(page, '溫泉蛋').selectOption('點心')
+  const row = rows(page).filter({ hasText: '溫泉蛋' })
+  await expect(row.locator('.lib-cat-err')).toContainText('類型沒有存到')
+  await expect(tagOf(page, '溫泉蛋')).toHaveText('配菜')
+})
+
+test('新增食物：存完 sheet 立刻關（不等分類），之後背景補上類型', async ({ page }) => {
+  await openApp(page, { classify: { mode: 'ok', categories: AI_CATS, delayMs: 3000 } })
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await page.locator('#lf-name').fill('測試便當')
+  await page.locator('#lf-kcal').fill('650')
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
+
+  await expect(sheet).toHaveCount(0)
+  await expect(tagOf(page, '測試便當'), '分類回來之前先是未分類').toHaveText('未分類')
+  await expect(tagOf(page, '測試便當')).toHaveText('便當')
+  expect(await classifyCalls(page), '開機時沒有未分類的食物，只有新增的這一次').toEqual([[{ id: 999, name: '測試便當', vendor: null }]])
+  const writes = await foodWrites(page)
+  expect(writes.map((w) => w.method)).toEqual(['POST', 'PATCH'])
+  expect(writes[1].body).toEqual({ category: '便當' })
+})
+
+test('類型標籤：393 寬命中區 ≥ 44×44、不撐出這一列', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  const row = rows(page).filter({ hasText: '溫泉蛋' })
+  const sel = await row.locator('.lib-cat select').boundingBox()
+  const rowBox = await row.boundingBox()
+  expect(sel!.width).toBeGreaterThanOrEqual(44)
+  expect(sel!.height).toBeGreaterThanOrEqual(44)
+  expect(sel!.y + sel!.height, '命中區撐出列底，會蓋到下一列').toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 0.5)
 })

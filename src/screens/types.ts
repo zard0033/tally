@@ -6,6 +6,7 @@
    （例如 LogSheet 的搜尋字、已選清單、qty 輸入草稿）不在這裡，那是各 screen 自己的事。 */
 
 import type { Food, IntakeDetailPatch, IntakeRow, NewFood, NewIntake, NewWeight, ProfileRow, Weight } from '@/lib/api'
+import type { FoodCategory } from '@/lib/categories'
 import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
@@ -107,6 +108,8 @@ export interface SettingsProps {
   onArchiveFood: (food: Food) => Promise<Food>
   /** 復原：把整筆連同 id 一起送回去解封存，App 的使用中清單同步插回並排序。 */
   onUnarchiveFood: (food: Food) => Promise<void>
+  /** 食品庫手動改類型（標成手動，AI 補判不再覆蓋）。 */
+  onSetFoodCategory: (id: number, category: FoodCategory) => Promise<void>
   onSignOut: () => void
   /** 訓練資料（動作庫管理頁用）。null＝還沒載到：入口列顯示「載入中」、不可點，不顯示 0 個動作。 */
   training: TrainingView | null

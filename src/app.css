@@ -789,6 +789,20 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    「觸控區」條的 ≥44×44px 是不可砍的底線，樣張原稿的 40px 縮寫在 precommit-review 抓到，
    改回繼承全域 .icon-btn 的 44×44，只縮圖示本身。 */
 .lib-row-main .icon-btn svg { width: 17px; height: 17px; }
+/* 類型標籤（v2.120）：品名下面一顆 20px 小膠囊，透明的原生 select 疊在上面當命中區（同 .goal-pick）。
+   select 上下各撐出 12px 湊滿 44px：往上蓋到品名那行（品名本身不能點，蓋到無妨），往下剛好是這一列的
+   底部留白——不撐出列外，否則會蓋到下一列的品名、點了開成上一列的選單。 */
+.lib-row-main .nm-wrap { display: flex; flex-direction: column; align-items: flex-start; padding: var(--s-1) 0 var(--s-3); }
+.lib-cat { position: relative; display: inline-flex; margin-top: var(--s-1); }
+.lib-cat-tag { display: inline-flex; align-items: center; min-height: 20px; padding: 0 var(--s-2); border-radius: var(--r-pill);
+  background: var(--raised); color: var(--ink-muted); font-size: var(--t-xs); letter-spacing: var(--track-xs); white-space: nowrap; }
+/* 未分類：不填底、只留控件邊界，跟已分類分得開，字色不降（--ink-faint 不能用在要讀的字上） */
+.lib-cat[data-empty] .lib-cat-tag { background: none; box-shadow: inset 0 0 0 1px var(--rule-field); }
+.lib-cat select { position: absolute; top: -12px; left: -8px; width: calc(100% + 16px); height: 44px; opacity: 0;
+  font-size: var(--t-md); cursor: pointer; }
+.lib-cat:active .lib-cat-tag { opacity: .6; }
+.lib-cat:has(select:focus-visible) .lib-cat-tag { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lib-cat-err { padding: 0 var(--s-3) var(--s-2); }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
 /* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.04:1 會隱形（與就地編輯區同一筆帳） */

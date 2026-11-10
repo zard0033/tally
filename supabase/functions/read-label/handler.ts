@@ -1,4 +1,5 @@
 /* read-label 的安全外殼：先確認呼叫者是誰，通過了才把圖片轉給 OpenRouter 讀營養標示。
+   第二個模式（2026-11-10，spec.md C 節「第三版」）：body 帶 `foods` 時改成純文字分類，替食物挑類型。
    存在的理由是 spec.md「安全（不可妥協）」——repo 是 public，辨識用的 API key 不能進前端 bundle，
    所以必須有一層「先確認呼叫者是誰、再動作」的後端代理。金鑰只活在這一層，
    而且**永遠不出現在任何回應裡**：上游的錯誤原文一律不轉發，只回固定字串。
@@ -129,6 +130,175 @@ function parseReading(content: string): LabelReading | null {
   return { name: trimmed || null, basis, serving_g, kcal, protein_g, fat_g, carb_g }
 }
 
+/* ── 分類模式 ── */
+
+/* 固定清單：與 src/lib/categories.ts 同一份（Edge Function 不能 import src，handler.test.ts 比對兩份）。 */
+const MEAL_TYPES = ['燒臘', '便當', '健康餐盒', '飯類', '麵食', '餃類', '速食', '早餐店', '滷味／鹽水雞', '鍋物', '日式', '其他正餐']
+const SIDES = ['飲料', '蛋白質補充', '配菜', '主食', '點心']
+export const CATEGORIES = [...MEAL_TYPES, ...SIDES]
+const FALLBACK = '其他正餐'
+
+/** 一次最多幾樣。前端一批送 40（見 useFoodCategories），這裡留一點餘裕；有界是為了不替人轉發任意長的提示詞。 */
+const MAX_CLASSIFY = 50
+/** 品名、店家各自的上限。食品庫裡最長的品名不到 30 字（假設，未實測），100 是寬鬆的界。 */
+const MAX_TEXT = 100
+
+/* 界線照使用者 2026-11-10 確認的三條（便當／飯類分開、早餐店一整類、健康餐盒獨立），
+   其餘幾條（燒臘店的飯、速食、搭配類各指什麼）是我補的說明，讓模型少猜。 */
+const CLASSIFY_PROMPT = `你是台灣飲食紀錄 App 的食物分類器。把下面每一樣食物分到一個類型，只能從清單挑，清單外的字一律不要用。
+餐點類型：${MEAL_TYPES.join('、')}
+搭配類：${SIDES.join('、')}
+界線：
+- 便當＝一個主菜配白飯和幾樣配菜的盒餐；飯類＝丼飯、燴飯、炒飯、滷肉飯這類一碗飯。兩者分開，不要混。
+- 健康餐盒＝標榜低脂、減醣、舒肥雞胸的餐盒，獨立一類，不歸便當。
+- 燒臘店的飯（叉燒飯、三寶飯、燒鴨便當）一律歸燒臘。
+- 早餐店是一整類：蛋餅、吐司、早餐店的漢堡、蘿蔔糕、鐵板麵都歸早餐店，不分細項。
+- 速食＝連鎖速食店的漢堡、炸雞、薯條。店家欄可以幫你分早餐店與速食。
+- 蛋白質補充＝乳清、蛋白飲、蛋白棒；主食＝單獨吃的白飯、地瓜、麵包這類澱粉；配菜＝單點的蛋、青菜、小菜；點心＝餅乾、甜點、水果。
+- 都不像就填「${FALLBACK}」。
+店家欄可能是 null。
+只回一個 JSON 物件，不要任何其他文字：{"results":[{"id":數字,"category":"清單裡的字"}]}，每一樣都要回。
+食物：
+`
+
+type ClassifyInput = { id: number; name: string; vendor: string | null }
+
+/** 只收 {id 整數, name 非空字串, vendor 字串或 null} 的陣列，1 到 MAX_CLASSIFY 樣；任何一樣不對整批 400。 */
+function parseClassifyInput(foods: unknown): ClassifyInput[] | null {
+  if (!Array.isArray(foods) || foods.length === 0 || foods.length > MAX_CLASSIFY) return null
+  const out: ClassifyInput[] = []
+  for (const f of foods) {
+    if (typeof f !== 'object' || f === null) return null
+    const { id, name, vendor } = f as Record<string, unknown>
+    if (typeof id !== 'number' || !Number.isInteger(id)) return null
+    if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_TEXT) return null
+    if (!(vendor === null || (typeof vendor === 'string' && vendor.length <= MAX_TEXT))) return null
+    out.push({ id, name, vendor })
+  }
+  return out
+}
+
+/** 清單外（含非字串）一律「其他正餐」；半形斜線當全形。與 categories.ts 的 normalizeCategory 同規則。 */
+function toCategory(v: unknown): string {
+  if (typeof v !== 'string') return FALLBACK
+  const t = v.trim().replace(/\//g, '／')
+  return CATEGORIES.includes(t) ? t : FALLBACK
+}
+
+/**
+ * 把模型回的文字解成 {id, category}。只留這批問過的 id、每個 id 第一次出現的那筆；
+ * 模型漏回的就不在結果裡（前端維持 null，下次開 app 再補）。整段解不開回 null（＝失敗）。
+ * 物件包 results 或直接一個陣列都收：模型偶爾省掉外層。
+ */
+function parseCategories(content: string, asked: Set<number>): { id: number; category: string }[] | null {
+  const text = content.trim().replace(/^```(?:json)?/, '').replace(/```$/, '').trim()
+  let list: unknown
+  try {
+    const parsed: unknown = JSON.parse(text)
+    list = Array.isArray(parsed) ? parsed : (parsed as { results?: unknown } | null)?.results
+  } catch {
+    return null
+  }
+  if (!Array.isArray(list)) return null
+  const out = new Map<number, string>()
+  for (const r of list) {
+    const id = (r as { id?: unknown } | null)?.id
+    if (typeof id !== 'number' || !asked.has(id) || out.has(id)) continue
+    out.set(id, toCategory((r as { category?: unknown }).category))
+  }
+  return [...out].map(([id, category]) => ({ id, category }))
+}
+
+/** 分類模式：已通過驗證才會走到這裡（與辨識共用 1–5 步）。失敗一律 READ_FAILED，前端留 null 等下次。 */
+async function classify(foods: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+  const input = parseClassifyInput(foods)
+  if (!input) {
+    diag('400 bad-foods', { isArray: Array.isArray(foods), len: Array.isArray(foods) ? foods.length : null })
+    return json({ error: BAD_REQUEST }, 400, cors)
+  }
+  const t0 = Date.now()
+  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey)
+  if (!reply) return json({ error: READ_FAILED }, 502, cors)
+  const results = parseCategories(reply.content, new Set(input.map((f) => f.id)))
+  if (!results) {
+    diag('502 classify-unparseable', { content: reply.content.slice(0, 300) })
+    return json({ error: READ_FAILED }, 502, cors)
+  }
+  // 不記品名與結果（使用者的資料）；記數量看模型漏回多少
+  diag('200 classify ok', { ms: Date.now() - t0, usage: reply.usage, asked: input.length, got: results.length })
+  return json({ results }, 200, cors)
+}
+
+type Usage = { prompt?: number; completion?: number; think?: number; cost?: number } | undefined
+
+/**
+ * 對 OpenRouter 問一次，回模型的字串與用量；任何失敗都寫 diag 後回 null，由呼叫端收斂成 READ_FAILED。
+ * 辨識與分類兩個模式共用：同一把 key、同一個模型、同一套「上游原文不轉發」。
+ */
+async function askModel(content: unknown[], openrouterKey: string): Promise<{ content: string; usage: Usage } | null> {
+  try {
+    const upstream = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openrouterKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：這個模型在 OpenRouter 上
+           只有阿里巴巴一家在供（`/api/v1/models/qwen/qwen3.7-flash/endpoints` 回 1 筆），
+           `sort: 'throughput'` 沒有第二家可選、是空話；而 `data_collection: 'deny'` 更危險
+           ——唯一那家若不符合就沒有 provider 可用，等於把功能關掉。
+           **「照片不被拿去訓練」這個保證在哪裡**：OpenRouter 帳號的 Privacy 設定（付費／免費各一個
+           開關），關掉之後它本來就不會把請求路由給會訓練的 provider，不必在每個請求裡再講一次。
+           **動那個設定要立刻測一張**——只有一家 provider，被那個設定擋掉就是全滅、沒有備援。
+           推論：耗時的波動（同圖 12.9／22.4 秒）是那一家自己的排隊，這邊沒有旋鈕可轉。 */
+        messages: [{ role: 'user', content }],
+      }),
+      /* 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
+         **這個數字必須比前端的 `SCAN_TIMEOUT`（55 秒）小，而且要小得夠多**（前端的計時含上傳，
+         這裡的不含）——誰先放棄，誰就決定失敗留不留得下
+         紀錄：函式先放棄會走下面的 catch 寫一行 diag，前端先放棄則連 `edge_logs` 都不會有那一列
+         （那列是回應送出時才寫的）。2026-08-13 追一次真機「辨識失敗」追了大半天，就是因為前端
+         15 秒先切，函式這邊從頭到尾安靜。45 秒對實測 13–22 秒是兩倍餘裕。 */
+      signal: AbortSignal.timeout(45_000),
+    })
+    if (!upstream.ok) {
+      diag('502 upstream-not-ok', { status: upstream.status, body: (await upstream.text()).slice(0, 300) })
+      return null
+    }
+    const data = (await upstream.json()) as {
+      choices?: { message?: { content?: unknown } }[]
+      /** OpenRouter 的用量回報。只進 log，不進回應——用途見呼叫端 `200 ok` 那行的註解。 */
+      usage?: unknown
+    }
+    /* **挑欄位，不整包透傳**：這個物件的形狀由上游決定（型別是 `unknown` 不是我們定的），
+       哪天多塞了請求回顯就會不聲不響地多留一份在 log 裡。
+       第一版是「字串化後截斷 200 字」，**那個界正好砍掉 `completion_tokens_details`**——
+       要看的 `reasoning_tokens` 就住在裡面，第一筆真實 log 因此白拿。**截斷保不住你要的欄位，
+       除非你確定它排在前面；挑欄位才會。** */
+    const u = data.usage as
+      | { prompt_tokens?: number; completion_tokens?: number; cost?: number;
+          completion_tokens_details?: { reasoning_tokens?: number } }
+      | undefined
+    /* `u` 整個缺（上游沒回 usage）時**不要組一個空物件**——`JSON.stringify` 會把值是 undefined
+       的 key 全部省略，印出來的 `"usage":{}` 跟「有回 usage 但欄位都空」一模一樣。留 undefined，
+       那個 key 會整個不出現，兩種情況才分得開。 */
+    const usage = u && { prompt: u.prompt_tokens, completion: u.completion_tokens,
+      think: u.completion_tokens_details?.reasoning_tokens, cost: u.cost }
+    const raw = data.choices?.[0]?.message?.content
+    if (typeof raw !== 'string') {
+      diag('502 no-content', { shape: Object.keys(data) })
+      return null
+    }
+    return { content: raw, usage }
+  } catch (e) {
+    // 連不上、逾時、回的不是 JSON。catch 到的 error 可能夾帶請求內容甚至 header，絕不進回應。
+    diag('502 fetch-threw', { reason: e instanceof Error ? e.message : String(e) })
+    return null
+  }
+}
+
 /**
  * 驗證呼叫者的 Supabase user JWT，通過才把圖片送去辨識。
  *
@@ -207,10 +377,12 @@ export async function handleRequest(
         401 也才維持只有「驗證失敗」一個成因。 */
   if (!openrouterKey) return json({ error: MISCONFIGURED }, 500, cors)
 
-  // 6. 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。
-  let image: unknown
+  /* 6. 讀 body。帶 `foods` 的是分類模式（純文字，見 classify）；其餘是辨識模式，只認 image。 */
+  let body: Record<string, unknown>
   try {
-    image = ((await req.json()) as { image?: unknown }).image
+    const parsed: unknown = await req.json()
+    if (typeof parsed !== 'object' || parsed === null) throw new Error('body 不是物件')
+    body = parsed as Record<string, unknown>
   } catch (e) {
     // 這條原本沒加診斷，害得第一次上線除錯時「log 是空的」也是一種可能，等於白跑一趟
     diag('400 body-not-json', {
@@ -219,6 +391,10 @@ export async function handleRequest(
     })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
+  if ('foods' in body) return classify(body.foods, openrouterKey, cors)
+
+  // 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。
+  const image = body.image
   if (typeof image !== 'string' || image.length > MAX_IMAGE_CHARS || !IMAGE_DATA_URI.test(image)) {
     diag('400 bad-image', {
       type: typeof image,
@@ -230,78 +406,16 @@ export async function handleRequest(
 
   /* 7. 辨識。不重試、不換模型、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：
         前端讓使用者手打。上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
-  let content: string
-  let usage: { prompt?: number; completion?: number; think?: number; cost?: number } | undefined
   const t0 = Date.now()
-  try {
-    const upstream = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openrouterKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：這個模型在 OpenRouter 上
-           只有阿里巴巴一家在供（`/api/v1/models/qwen/qwen3.7-flash/endpoints` 回 1 筆），
-           `sort: 'throughput'` 沒有第二家可選、是空話；而 `data_collection: 'deny'` 更危險
-           ——唯一那家若不符合就沒有 provider 可用，等於把功能關掉。
-           **「照片不被拿去訓練」這個保證在哪裡**：OpenRouter 帳號的 Privacy 設定（付費／免費各一個
-           開關），關掉之後它本來就不會把請求路由給會訓練的 provider，不必在每個請求裡再講一次。
-           **動那個設定要立刻測一張**——只有一家 provider，被那個設定擋掉就是全滅、沒有備援。
-           推論：耗時的波動（同圖 12.9／22.4 秒）是那一家自己的排隊，這邊沒有旋鈕可轉。 */
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: PROMPT },
-              { type: 'image_url', image_url: { url: image } },
-            ],
-          },
-        ],
-      }),
-      /* 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
-         **這個數字必須比前端的 `SCAN_TIMEOUT`（55 秒）小，而且要小得夠多**（前端的計時含上傳，
-         這裡的不含）——誰先放棄，誰就決定失敗留不留得下
-         紀錄：函式先放棄會走下面的 catch 寫一行 diag，前端先放棄則連 `edge_logs` 都不會有那一列
-         （那列是回應送出時才寫的）。2026-08-13 追一次真機「辨識失敗」追了大半天，就是因為前端
-         15 秒先切，函式這邊從頭到尾安靜。45 秒對實測 13–22 秒是兩倍餘裕。 */
-      signal: AbortSignal.timeout(45_000),
-    })
-    if (!upstream.ok) {
-      diag('502 upstream-not-ok', { status: upstream.status, body: (await upstream.text()).slice(0, 300) })
-      return json({ error: READ_FAILED }, 502, cors)
-    }
-    const data = (await upstream.json()) as {
-      choices?: { message?: { content?: unknown } }[]
-      /** OpenRouter 的用量回報。只進 log，不進回應——用途見下方 `200 ok` 那行的註解。 */
-      usage?: unknown
-    }
-    /* **挑欄位，不整包透傳**：這個物件的形狀由上游決定（型別是 `unknown` 不是我們定的），
-       哪天多塞了請求回顯就會不聲不響地多留一份在 log 裡。
-       第一版是「字串化後截斷 200 字」，**那個界正好砍掉 `completion_tokens_details`**——
-       要看的 `reasoning_tokens` 就住在裡面，第一筆真實 log 因此白拿。**截斷保不住你要的欄位，
-       除非你確定它排在前面；挑欄位才會。** */
-    const u = data.usage as
-      | { prompt_tokens?: number; completion_tokens?: number; cost?: number;
-          completion_tokens_details?: { reasoning_tokens?: number } }
-      | undefined
-    /* `u` 整個缺（上游沒回 usage）時**不要組一個空物件**——`JSON.stringify` 會把值是 undefined
-       的 key 全部省略，印出來的 `"usage":{}` 跟「有回 usage 但欄位都空」一模一樣。留 undefined，
-       那個 key 會整個不出現，兩種情況才分得開。 */
-    usage = u && { prompt: u.prompt_tokens, completion: u.completion_tokens,
-      think: u.completion_tokens_details?.reasoning_tokens, cost: u.cost }
-    const raw = data.choices?.[0]?.message?.content
-    if (typeof raw !== 'string') {
-      diag('502 no-content', { shape: Object.keys(data) })
-      return json({ error: READ_FAILED }, 502, cors)
-    }
-    content = raw
-  } catch (e) {
-    // 連不上、逾時、回的不是 JSON。catch 到的 error 可能夾帶請求內容甚至 header，絕不進回應。
-    diag('502 fetch-threw', { reason: e instanceof Error ? e.message : String(e) })
-    return json({ error: READ_FAILED }, 502, cors)
-  }
+  const reply = await askModel(
+    [
+      { type: 'text', text: PROMPT },
+      { type: 'image_url', image_url: { url: image } },
+    ],
+    openrouterKey,
+  )
+  if (!reply) return json({ error: READ_FAILED }, 502, cors)
+  const { content, usage } = reply
 
   const reading = parseReading(content)
   if (!reading) {

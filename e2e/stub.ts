@@ -42,6 +42,16 @@ export interface StubOptions {
   intakePersist?: boolean
   /** 開機就要停住的日期（見 __holdIntake）：開機時的預取測試來不及從外面設。 */
   holdIntake?: string[]
+  /** 類型分類（read-label 的分類模式）的回應，見 __classify。不設＝每次都回 502：背景補判失敗是無聲的、
+   *  也不寫任何東西，既有測試（新增食物會觸發補判）的寫入計數因此不受影響。 */
+  classify?: ClassifyStub
+}
+
+/** ok＝依品名查 categories 回類型（查不到回「其他正餐」）；fail＝502。delayMs 造「補判還在路上」。 */
+export interface ClassifyStub {
+  mode: 'ok' | 'fail'
+  categories?: Record<string, string>
+  delayMs?: number
 }
 
 export type AuthMode = 'down' | 'hang' | 'ok' | 'revoked'
@@ -54,7 +64,7 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, intakePersist, holdIntake }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, intakePersist, holdIntake, classify }) => {
       const stored: Record<string, unknown> = {
         access_token: 'stub-token',
         refresh_token: 'stub-refresh',
@@ -93,6 +103,9 @@ export async function seedFetchStub(
          * delayMs 是讓測試有時間在辨識途中操作畫面（例如打字），那正是 stale closure 那類
          * bug 唯一現形的時機。 */
         __scan: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
+        /* 分類模式的回應控制（見 StubOptions.classify），測試中途可改。__classifyCalls＝每次送來的 foods。 */
+        __classify: ClassifyStub
+        __classifyCalls: { id: number; name: string; vendor: string | null }[][]
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
         __authMode: AuthMode | null
         /* 設 true＝資料請求連不上（見 StubOptions.dataDown）。 */
@@ -134,6 +147,8 @@ export async function seedFetchStub(
       w.__rejectWrite = null
       w.__writeDelayMs = 0
       w.__scan = null
+      w.__classify = classify
+      w.__classifyCalls = []
 
       const TRAINING_TABLES = [
         'exercises',
@@ -190,8 +205,21 @@ export async function seedFetchStub(
          因為 foods 查詢不看 filter，放進 fix.foods 就會被當成使用中的食物回給 listFoods。 */
       const intakeFoodsJoin = (foodId: unknown) => {
         const food = (fix.foods as Record<string, unknown>[]).find((f) => f.id === foodId)
-        if (food) return { name: food.name, vendor: food.vendor, archived: food.archived ?? false }
+        if (food) return { name: food.name, vendor: food.vendor, archived: food.archived ?? false, category: food.category ?? null }
         return fix.repeatWindow.find((r) => r.food_id === foodId)?.foods ?? null
+      }
+
+      /* foods 的寫入落地處，只給類型補判用：未分類查詢（`category=is.null`）從這裡篩，PATCH 依同樣的條件
+         只動符合的列（「手動改過的不被覆蓋」靠它），POST 的新食物也放進來。一般的 foods GET 照舊回 fix.foods，
+         既有測試的資料不變。 */
+      let foodStore = (fix.foods as Record<string, unknown>[]).map((f) => ({ ...f }))
+      const foodFilter = (qs: URLSearchParams) => {
+        const idParam = qs.get('id') ?? ''
+        const ids = idParam.startsWith('in.(') ? idParam.slice(4, -1).split(',').map(Number) : idParam ? [Number(idParam.replace(/^eq\./, ''))] : null
+        return (f: Record<string, unknown>) =>
+          (ids === null || ids.includes(f.id as number)) &&
+          (qs.get('category') !== 'is.null' || f.category == null) &&
+          (qs.get('category_manual') !== 'eq.false' || !f.category_manual)
       }
 
       const real = window.fetch.bind(window)
@@ -206,6 +234,23 @@ export async function seedFetchStub(
 
         /* 拍照辨識：排在下面那道總擋之前，但**沒設 __scan 就一樣落回去被擋**，
            所以「測試忘了打開」不會靜默變成放行。 */
+        /* 分類模式：body 帶 foods。排在拍照辨識之前（同一個網址）。 */
+        if (u.includes('/functions/v1/read-label')) {
+          let sent: { foods?: { id: number; name: string; vendor: string | null }[] } = {}
+          try {
+            sent = JSON.parse(String(opts.body ?? '{}'))
+          } catch {
+            sent = {}
+          }
+          if (sent.foods) {
+            w.__classifyCalls.push(sent.foods)
+            const c = w.__classify
+            if (c.delayMs) await new Promise((r) => setTimeout(r, c.delayMs))
+            if (c.mode === 'fail') return json({ error: '辨識失敗' }, 502)
+            return json({ results: sent.foods.map((f) => ({ id: f.id, category: c.categories?.[f.name] ?? '其他正餐' })) })
+          }
+        }
+
         if (u.includes('/functions/v1/read-label') && w.__scan) {
           const s = w.__scan
           if (s.delayMs) await new Promise((r) => setTimeout(r, s.delayMs))
@@ -316,7 +361,19 @@ export async function seedFetchStub(
           }
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body
-            return json([{ id: 999, ...(rec as Record<string, unknown>) }], 201)
+            // 資料庫的預設值：還沒分類、沒手動改過
+            const created = { id: 999, category: null, category_manual: false, ...(rec as Record<string, unknown>) }
+            foodStore.push(created)
+            return json([created], 201)
+          }
+          if (table === 'foods' && method === 'PATCH') {
+            const qs = new URL(u).searchParams
+            const hit = foodFilter(qs)
+            const touched = foodStore.filter(hit).map((f) => f.id)
+            foodStore = foodStore.map((f) => (hit(f) ? { ...f, ...(body as Record<string, unknown>) } : f))
+            // .select('id') 要拿到真的寫到的列；就地編輯、封存沒有 select，照舊 204
+            if (qs.has('select')) return json(touched.map((id) => ({ id })))
+            return new Response(null, { status: 204 })
           }
           if (table === 'intake' && intakePersist) {
             if (method === 'PATCH') {
@@ -352,7 +409,11 @@ export async function seedFetchStub(
 
         if (table === 'profile') return json(fix.profile)
         if (table === 'weight') return json(fix.weight)
-        if (table === 'foods') return json(fix.foods)
+        if (table === 'foods') {
+          const qs = new URL(u).searchParams
+          if (qs.get('category') === 'is.null') return json(foodStore.filter(foodFilter(qs)))
+          return json(fix.foods)
+        }
         // 訓練表（階段 2）：stub 不看 filter，回該表目前的全部列（fixture ＋ 已落地的寫入）。
         // 認 offset／limit（分頁）：執行期的分頁迴圈停在空頁，stub 若每頁都回整份就停不下來。
         if (TRAINING_TABLES.includes(table)) {
@@ -421,6 +482,7 @@ export async function seedFetchStub(
       repeatFail: opts.repeatFail ?? false,
       intakePersist: opts.intakePersist ?? false,
       holdIntake: opts.holdIntake ?? [],
+      classify: opts.classify ?? { mode: 'fail' },
     },
   )
 }
