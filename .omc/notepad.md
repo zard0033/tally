@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-10）：餐建議第二版 `bf4eb71` 已上線。每日目標照算式排（DESIGN v2.118）已上線，**全量 e2e 待確認**。兩者都還沒上真機。
-下一步：①全量結果 ②真機驗（每日目標新版面與 ⓘ、換一個與超 N 卡、一鍵加入與復原）③修 v2.116 review 兩條（見 MANUAL）④使用者確認 iOS 捷徑（體重最新 10-23）⑤`suggestWeight` 用上 RPE ⑥查「慢態有出口」高機率紅。
+現況（2026-11-10）：餐建議第二版 `bf4eb71` 已上線。每日目標照算式排（DESIGN v2.118）已上線（`da43c7b`），push 後全量 519 條 517 過、2 紅判定負載偶發（見 wiki）。兩者都還沒上真機。
+下一步：①真機驗（每日目標新版面與 ⓘ、換一個與超 N 卡、一鍵加入與復原）②修 v2.116 review 兩條（見 MANUAL）③使用者確認 iOS 捷徑（體重最新 10-23）④`suggestWeight` 用上 RPE ⑤查「慢態有出口」高機率紅。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
