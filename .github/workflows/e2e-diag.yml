@@ -1,0 +1,78 @@
+name: E2E diagnose (manual)
+
+# 只在 Linux CI 紅、本機綠的 e2e 用：手動觸發，跑指定的 spec／-g，trace 全開，成敗都上傳 test-results。
+# 不部署、不擋任何東西。另附一條探針，印出視窗與 visualViewport 的尺寸、捲軸寬度（2026-11-10 查 sheet 頂緣 88≠96）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      specs:
+        description: 要跑的 spec（空白分隔，例：spring-sheet training）
+        type: string
+        default: ''
+      grep:
+        description: -g 的關鍵字（可空）
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      - run: npx playwright install --with-deps webkit
+      - name: 探針（只在這個 job 裡產生，不進 repo）
+        run: |
+          cat > e2e/zz-diag-probe.spec.ts <<'EOF'
+          import { test } from '@playwright/test'
+          import { openApp } from './harness'
+          test('diag: viewport metrics', async ({ page }) => {
+            await openApp(page)
+            const m = await page.evaluate(() => {
+              const vv = window.visualViewport!
+              const de = document.documentElement
+              const cs = getComputedStyle(de)
+              return {
+                innerW: window.innerWidth, innerH: window.innerHeight,
+                vvW: vv.width, vvH: vv.height, vvTop: vv.offsetTop,
+                clientW: de.clientWidth, clientH: de.clientHeight,
+                scrollW: de.scrollWidth, scrollH: de.scrollHeight,
+                kb: cs.getPropertyValue('--kb'), vvtop: cs.getPropertyValue('--vvtop'),
+                dpr: window.devicePixelRatio, ua: navigator.userAgent,
+              }
+            })
+            console.log('DIAG', JSON.stringify(m))
+          })
+          EOF
+      # 探針紅了也要往下跑，真正要看的是後面那一步
+      - run: npx playwright test zz-diag-probe --reporter=list
+        continue-on-error: true
+      # 輸入走環境變數，不直接插進 shell（避免指令注入）
+      - env:
+          SPECS: ${{ inputs.specs }}
+          GREP: ${{ inputs.grep }}
+        run: |
+          # 兩個都空＝全量，單一 worker 加 trace 一定超過 timeout、被取消後 artifact 也不會上傳
+          if [ -z "$SPECS" ] && [ -z "$GREP" ]; then echo '::error::specs 與 grep 至少填一個'; exit 1; fi
+          set -f  # $SPECS 刻意不加引號（要拆成多個字），關掉 glob 展開
+          if [ -n "$GREP" ]; then
+            npx playwright test $SPECS -g "$GREP" --trace on --reporter=list
+          else
+            npx playwright test $SPECS --trace on --reporter=list
+          fi
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: diag-test-results
+          path: test-results/
+          retention-days: 7
