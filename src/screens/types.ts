@@ -56,6 +56,8 @@ export interface TodayProps {
   repeatErr: { key: string; msg: string } | null
   /** 一鍵加入建議的全部品項。進行中與失敗都由 App 記著，從上面兩個 prop 下發；復原提示也是 App 開。 */
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
+  /** 「換一個」：這一餐換成排序的下一名（最後一名再回第一名）。只有依缺口挑、候選 > 1 時才有鈕。 */
+  onSwapRepeat: (meal: MealKey) => void
 }
 
 export interface LogSheetProps {

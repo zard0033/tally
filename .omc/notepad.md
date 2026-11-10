@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-04）：餐建議 `009be2e` 已上線。每日目標改版（DESIGN v2.116）已 commit、**未 push**；DDL 已跑並讀回；全量沒跑（508 條）。餐建議與每日目標都還沒上真機。
-下一步：①push 走閘門，push 後背景全量 ②真機驗（一鍵加入與復原、每日目標的滾輪與改完就返回）③使用者確認 iOS 捷徑還在跑（體重最新 10-23）④`suggestWeight` 用上 RPE（spec 階段 4 丙的階段 1）⑤查 `interaction`「慢態有出口」為何高機率紅。
+現況（2026-11-10）：餐建議第二版（DESIGN v2.117：晚餐依缺口挑、常吃、換一個、超 N 卡）已 push 上線，**全量 e2e 待確認**（513 條；push 前 vitest 971、smoke 55、meal-suggest 55）。餐建議與每日目標都還沒上真機。
+下一步：①全量結果 ②真機驗（換一個與超 N 卡、一鍵加入與復原、每日目標滾輪與改完就返回）③修 review 兩條：DailyGoal 離開再進來 isCustom/basics 沒重同步會蓋回舊值（先重現）、onSaveLost 用 notice 整頁替換；順手清 MaintenanceCard:118 文案、App.tsx:314 與 stub.ts 舊註解、DESIGN 補 withRate ④使用者確認 iOS 捷徑（體重最新 10-23）⑤`suggestWeight` 用上 RPE ⑥查「慢態有出口」高機率紅。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

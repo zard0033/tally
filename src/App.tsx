@@ -34,9 +34,9 @@ import {
 } from '@/lib/api'
 import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
-import { localDate, maxPlanDate, shiftDate } from '@/lib/dates'
+import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
-import { repeatToIntake, suggestRepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
+import { repeatToIntake, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -403,7 +403,40 @@ export default function App() {
     targets !== null,
     currentDate,
   )
-  const repeatByMeal = useMemo(() => suggestRepeatByMeal(repeatHistory, currentDate, rows), [repeatHistory, currentDate, rows])
+  /* 晚餐依缺口挑只在今天與明天（同營養素條的「差 N」）；過去的日子走常吃／上次。 */
+  const gapCtx = useMemo<GapContext | null>(
+    () => (targets && profile && isPlannable(currentDate) ? { targets, goal: profile.goal } : null),
+    [targets, profile, currentDate],
+  )
+  const suggestionsByMeal = useMemo(
+    () => suggestMeals(repeatHistory, currentDate, rows, gapCtx),
+    [repeatHistory, currentDate, rows, gapCtx],
+  )
+  /* 「換一個」換到第幾名只記在畫面上：換了日期、當天紀錄有變（新增、刪除、改份量）、或目標變了，就回第一名。
+     用簽章比對，不用 rows 的 identity——重撈回來同一份資料不該把使用者換到的那一組洗掉。
+     簽章一不同就整個丟掉、不是只比對：否則切走再切回、或復原把紀錄還原成舊樣子，會回到換過的那一名。 */
+  const daySig = useMemo(() => {
+    const t = gapCtx ? `${gapCtx.goal}|${gapCtx.targets.kcal}|${gapCtx.targets.protein}|${gapCtx.targets.fat}|${gapCtx.targets.carb}` : ''
+    return `${currentDate}#${t}#${rows?.map((r) => `${r.id}:${r.qty}`).join(',') ?? ''}`
+  }, [currentDate, gapCtx, rows])
+  const [swap, setSwap] = useState<{ sig: string; meal: MealKey; idx: number } | null>(null)
+  if (swap && swap.sig !== daySig) setSwap(null)
+  const swapIdx = useCallback((meal: MealKey) => (swap && swap.sig === daySig && swap.meal === meal ? swap.idx : 0), [swap, daySig])
+  const repeatByMeal = useMemo(() => {
+    const out: RepeatByMeal = {}
+    for (const [meal, list] of Object.entries(suggestionsByMeal) as [MealKey, RepeatSuggestion[]][]) {
+      out[meal] = list[swapIdx(meal) % list.length]
+    }
+    return out
+  }, [suggestionsByMeal, swapIdx])
+  const handleSwapRepeat = useCallback(
+    (meal: MealKey) => {
+      setSwap({ sig: daySig, meal, idx: swapIdx(meal) + 1 })
+      // 上一組寫入失敗的「存不進去」不該掛到換來的這一組下面
+      setRepeatErr((e) => (e?.key === `${currentDate}|${meal}` ? null : e))
+    },
+    [currentDate, daySig, swapIdx],
+  )
   /* sheet 那份拿掉正在加入的那餐：今日頁的卡片要留著顯示「加入中…」，這時從 sheet 再選一次就是同餐第二份。 */
   const sheetRepeatByMeal = useMemo(() => {
     // 復原在途：DELETE 可能失敗，這時從 sheet 再加一次，同餐會變兩份
@@ -998,6 +1031,7 @@ export default function App() {
             repeatBusyKey={repeatBusyKey}
             repeatErr={repeatErr}
             onAddRepeat={handleAddRepeat}
+            onSwapRepeat={handleSwapRepeat}
           />
         ) : (
           <Settings

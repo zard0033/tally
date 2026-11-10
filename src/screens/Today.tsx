@@ -14,7 +14,7 @@ import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
 import { macroExceeds, macroGap, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
-import { suggestLabel, type RepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
+import { suggestLabel, type RepeatByMeal, type RepeatSuggestion, type SuggestSource } from '@/lib/mealSuggest'
 import ItemEditor from './ItemEditor'
 import type { TodayProps } from './types'
 
@@ -50,6 +50,7 @@ export default function Today(props: TodayProps) {
     repeatBusyKey,
     repeatErr,
     onAddRepeat,
+    onSwapRepeat,
   } = props
 
   const rows = dayData.rows
@@ -249,6 +250,7 @@ export default function Today(props: TodayProps) {
             editErr,
             repeatByMeal,
             onAddRepeat,
+            onSwapRepeat,
             repeatBusyKey,
             repeatErr,
           })
@@ -272,6 +274,7 @@ interface TimelineHelpers {
   editErr: { id: number; msg: string } | null
   repeatByMeal: RepeatByMeal
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
+  onSwapRepeat: (meal: MealKey) => void
   repeatBusyKey: string | null
   repeatErr: { key: string; msg: string } | null
 }
@@ -649,6 +652,7 @@ function MealNode({
                 locked={h.repeatBusyKey !== null}
                 err={h.repeatErr?.key === repeatKey ? h.repeatErr.msg : null}
                 onAdd={() => h.onAddRepeat(date, suggestion)}
+                onSwap={() => h.onSwapRepeat(meal.key)}
               />
             )}
           </>
@@ -658,9 +662,12 @@ function MealNode({
   )
 }
 
+const SOURCE_LABEL: Record<SuggestSource, string> = { gap: '建議', frequent: '常吃', last: '上次' }
+
 /* 待記錄那一列底下的一行建議：放不下的品項寧可截斷也不長高（sheet 與加入後的時間軸都看得到全部）。
    只有寫入失敗時多一行錯誤，卡片還在、按鈕變重試。
-   鎖住用 aria-disabled，不用 disabled：按下去那顆鈕馬上就鎖，disabled 會讓焦點掉回 body，失敗轉「重試」時鍵盤使用者就迷路了。 */
+   鎖住用 aria-disabled，不用 disabled：按下去那顆鈕馬上就鎖，disabled 會讓焦點掉回 body，失敗轉「重試」時鍵盤使用者就迷路了。
+   「換一個」只有依缺口挑、候選 > 1 時才有；換了整列淡綠閃一下（同「剛加入」），讓人知道內容換了。 */
 function SuggestRow({
   suggestion,
   mealLabel,
@@ -668,6 +675,7 @@ function SuggestRow({
   locked,
   err,
   onAdd,
+  onSwap,
 }: {
   suggestion: RepeatSuggestion
   mealLabel: string
@@ -675,20 +683,55 @@ function SuggestRow({
   locked: boolean
   err: string | null
   onAdd: () => void
+  onSwap: () => void
 }) {
   const label = suggestLabel(suggestion)
   const kcal = Math.round(suggestion.kcal)
+  const src = SOURCE_LABEL[suggestion.source]
+  const over = suggestion.overKcal
+  const kcalSpoken = over === null ? `${kcal} 卡` : `${kcal} 卡，超過 ${over} 卡`
+  const swappable = suggestion.source === 'gap' && suggestion.total > 1
+  // 每按一次換一個新 key，閃的那層重掛、動畫重播
+  const [flash, setFlash] = useState(0)
   return (
     <>
       <div className="sg">
-        <span className="sg-src">上次</span>
+        {flash > 0 && <span className="sg-flash" key={flash} aria-hidden="true" />}
+        <span className="sg-src">{src}</span>
         <span className="sg-items">{label}</span>
-        <span className="sg-kc">{kcal}</span>
+        {over === null ? (
+          <span className="sg-kc">{kcal}</span>
+        ) : (
+          <span className="sg-kc is-over">
+            超 <span className="n">{over}</span> 卡
+          </span>
+        )}
+        {swappable && (
+          <button
+            className="sg-swap"
+            type="button"
+            aria-disabled={locked || undefined}
+            aria-label={`換一個${mealLabel}建議`}
+            onClick={
+              locked
+                ? undefined
+                : () => {
+                    onSwap()
+                    setFlash((n) => n + 1)
+                  }
+            }
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9h13l-3.5-3.5" />
+              <path d="M20 15H7l3.5 3.5" />
+            </svg>
+          </button>
+        )}
         <button
           className="sg-add"
           type="button"
           aria-disabled={locked || undefined}
-          aria-label={busy ? '正在加入…' : `${err ? '重試加入' : '加入'}上次的${mealLabel}：${label}，${kcal} 卡`}
+          aria-label={busy ? '正在加入…' : `${err ? '重試加入' : '加入'}${src}的${mealLabel}：${label}，${kcalSpoken}`}
           onClick={locked ? undefined : onAdd}
         >
           {busy ? '加入中…' : err ? '重試' : '加入'}

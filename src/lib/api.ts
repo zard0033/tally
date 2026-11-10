@@ -193,7 +193,7 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
     .abortSignal(dbSignal()))
 }
 
-/** 餐建議的回看查詢。不分頁：14 天遠低於單次上限 1000 列（假設，未實測）。
+/** 餐建議的回看查詢。不分頁：28 天遠低於單次上限 1000 列（假設，未實測）。
  *  select 要 id 開頭且含 meal：e2e 靠這兩點把它跟 listIntakeKcal 分開（比對 `select=eaten_on`、「無 meal」）。 */
 export async function listIntakeForRepeat(from: string, to: string): Promise<RepeatSourceRow[]> {
   return unwrap(await supabase

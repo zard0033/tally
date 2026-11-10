@@ -361,16 +361,16 @@ test('查詢失敗：無建議、無 Notice、今日頁照常，之後換日可�
 })
 
 test('今天加入後切明天：來源是今天', async ({ page }) => {
-  /* 10-19 是週一，從 MON 回看剛好第 14 天，從 TUE 回看就超界：TUE 的早餐建議只可能來自 MON。
+  /* 10-05 是週一，從 MON 回看剛好第 28 天，從 TUE 回看就超界：TUE 的早餐建議只可能來自 MON。
      午餐的來源兩邊都看得到，它出現就代表回看資料到了。 */
-  const src = [srcRow(301, '2026-10-19', 'breakfast', 13), srcRow(302, '2026-10-30', 'lunch', 11)]
+  const src = [srcRow(301, '2026-10-05', 'breakfast', 13), srcRow(302, '2026-10-30', 'lunch', 11)]
   await openAppAt(page, MON, { intakePersist: true }, fixWith(src))
   await expect(cardOf(page, '早餐').locator('.sg-items')).toHaveText('乳清（1匙）')
 
   // 先切明天再切回：讓回看資料存下「今天＝沒紀錄」，之後沒 invalidate 就會一直用這份舊的
   await gotoDate(page, TUE)
   await expect(cardOf(page, '午餐')).toHaveCount(1)
-  await expect(cardOf(page, '早餐'), '10-19 對明天已超界').toHaveCount(0)
+  await expect(cardOf(page, '早餐'), '10-05 對明天已超界').toHaveCount(0)
   await gotoDate(page, MON)
 
   await addOf(page, '早餐').click()
@@ -1185,14 +1185,14 @@ test('同一食物不同時出現在建議段與常吃段；常吃先濾再取�
 })
 
 test('從 sheet 加入今天的餐後切明天：來源是今天', async ({ page }) => {
-  // 資料的設計同「今天加入後切明天」：10-19 對 TUE 超界，TUE 的早餐建議只可能來自 MON
-  const src = [srcRow(301, '2026-10-19', 'breakfast', 13), srcRow(302, '2026-10-30', 'lunch', 11)]
+  // 資料的設計同「今天加入後切明天」：10-05 對 TUE 超界，TUE 的早餐建議只可能來自 MON
+  const src = [srcRow(301, '2026-10-05', 'breakfast', 13), srcRow(302, '2026-10-30', 'lunch', 11)]
   await openAppAt(page, MON, { intakePersist: true }, fixWith(src))
   await expect(cardOf(page, '早餐').locator('.sg-items')).toHaveText('乳清（1匙）')
 
   await gotoDate(page, TUE)
   await expect(cardOf(page, '午餐')).toHaveCount(1)
-  await expect(cardOf(page, '早餐'), '10-19 對明天已超界').toHaveCount(0)
+  await expect(cardOf(page, '早餐'), '10-05 對明天已超界').toHaveCount(0)
   await gotoDate(page, MON)
   await expect(cardOf(page, '早餐')).toHaveCount(1)
 
@@ -1272,4 +1272,135 @@ test('差 N：今天明天顯示、歷史日不顯示、N≤0 不顯示、393 �
   await expect(page.locator('.gauge-num')).toHaveText('333')
   await expect(page.locator('.macros .gap')).toHaveCount(0)
   await expect(macro(page, 0).locator('.val')).toHaveAttribute('aria-label', '蛋白質 10.0 克，目標 100 克')
+})
+
+/* ── 餐建議第二版：晚餐依缺口挑、換一個、超 N 卡（spec.md C 節「第二版」）──
+   目標釘死（自訂目標，profile 的 goal 是 cut ⇒ 熱量上限＝缺口）。今天 MON 已吃：
+   早餐乳清 ×1（120／24／1.5／2）＋午餐雞胸餐盒（健康盒）×2（840／90／24／60）＝ 960／114／25.5／62。
+   晚餐候選（都是平日）：A＝雞胸餐盒（減醣廚房）380／42／9／28，吃過兩次；B＝拿鐵 150／8／6／15，吃過一次。
+   點心來源：香蕉，換一個之後拿它來改動當天紀錄。預期值手算。 */
+const dinnerFix = (kcalTarget: number, intake = [srcRow(101, MON, 'breakfast', 13), srcRow(102, MON, 'lunch', 11, 2)]) =>
+  ({
+    ...fixWith(
+      [
+        srcRow(401, '2026-10-30', 'dinner', 12),
+        srcRow(402, '2026-10-29', 'dinner', 18),
+        srcRow(403, '2026-10-28', 'dinner', 12),
+        srcRow(404, '2026-10-30', 'snack', 17),
+      ],
+      intake,
+    ),
+    profile: [{ ...FIX.profile[0], use_custom_targets: true, custom_kcal: kcalTarget, custom_protein_g: 130, custom_fat_g: 50, custom_carb_g: 200 }],
+  }) as unknown as typeof FIX
+const swapOf = (page: Page, label: string) => cardOf(page, label).locator('.sg-swap')
+
+test('第二版：早午餐都記了，晚餐依缺口挑出「建議」；刪掉午餐換回「常吃」', async ({ page }) => {
+  // 缺口 1800−960＝840／130−114＝16／50−25.5＝24.5／200−62＝138：A 蛋白 42 達標，B 8 沒達標 ⇒ A 第一
+  await openAppAt(page, MON, {}, dinnerFix(1800))
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-src')).toHaveText('建議')
+  await expect(card.locator('.sg-items')).toHaveText('雞胸餐盒')
+  await expect(card.locator('.sg-kc')).toHaveText('380')
+  await expect(addOf(page, '晚餐')).toHaveAttribute('aria-label', '加入建議的晚餐：雞胸餐盒，380 卡')
+
+  // 刪掉午餐（第 2 筆品項）：條件不滿足 ⇒ 平日晚餐 A 吃過兩次 ⇒「常吃」，沒有換一個
+  await deleteViaTap(page, 1)
+  await expect(card.locator('.sg-src')).toHaveText('常吃')
+  await expect(card.locator('.sg-items')).toHaveText('雞胸餐盒')
+  await expect(swapOf(page, '晚餐')).toHaveCount(0)
+  await expect(addOf(page, '晚餐')).toHaveAttribute('aria-label', '加入常吃的晚餐：雞胸餐盒，380 卡')
+})
+
+test('第二版：換一個輪流換、最後回第一名，sheet 與加入跟著目前那組，當天紀錄有變回第一名', async ({ page }) => {
+  await openAppAt(page, MON, { intakePersist: true }, dinnerFix(1800))
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-items')).toHaveText('雞胸餐盒')
+  await expect(swapOf(page, '晚餐')).toHaveAttribute('aria-label', '換一個晚餐建議')
+
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items')).toHaveText('拿鐵')
+  await expect(card.locator('.sg-kc')).toHaveText('150')
+  await expect(card.locator('.sg-flash'), '換了要閃一下').toHaveCount(1)
+  // 每換一次都要重閃：閃的那層要換成新的元素（重掛才會重播動畫），不能一直是同一個
+  const firstFlash = await card.locator('.sg-flash').elementHandle()
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items'), '最後一名之後回第一名').toHaveText('雞胸餐盒')
+  expect(await firstFlash!.evaluate((n) => n.isConnected), '第二次換一個沒有重閃').toBe(false)
+  await expect(card.locator('.sg-flash')).toHaveCount(1)
+  expect(
+    await card.locator('.sg-flash').evaluate((n) => n.getAnimations().map((a) => (a as CSSAnimation).animationName)),
+  ).toContain('flash')
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items')).toHaveText('拿鐵')
+
+  // sheet 的建議段跟著今日頁目前那組
+  await openMealSheet(page, '晚餐')
+  await expect(suggestNames(page)).toHaveText(['拿鐵'])
+  await page.keyboard.press('Escape')
+  await expect(sheetOf(page)).toHaveCount(0)
+  await expect(card.locator('.sg-items'), '開關 sheet 不會洗掉換到的那組').toHaveText('拿鐵')
+
+  // 換日期再切回（紀錄沒變）⇒ 回第一名
+  await gotoDate(page, TUE)
+  await gotoDate(page, MON)
+  await expect(card.locator('.sg-items'), '切走再切回同一天要回第一名').toHaveText('雞胸餐盒')
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items')).toHaveText('拿鐵')
+
+  // 當天紀錄有變（加入點心）⇒ 晚餐回第一名
+  await addOf(page, '點心').click()
+  await expect(nodeOf(page, '點心').locator('.item')).toHaveCount(1)
+  await expect(card.locator('.sg-items')).toHaveText('雞胸餐盒')
+
+  // 換到拿鐵再加入：寫入的是拿鐵
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-items')).toHaveText('拿鐵')
+  await addOf(page, '晚餐').click()
+  await expect.poll(async () => (await intakeWrites(page, 'POST')).map((w) => w.body)).toContainEqual([
+    { eaten_on: MON, meal: 'dinner', food_id: 18, qty: 1, kcal: 150, protein: 8, fat: 6, carb: 15, name: null },
+  ])
+})
+
+test('第二版：全都超過熱量上限，給超最少的並標「超 N 卡」、命中區與列高', async ({ page }) => {
+  // 目標 1100 ⇒ 缺口 140：B 150 超 10、A 380 超 240 ⇒ B 第一
+  await openAppAt(page, MON, {}, dinnerFix(1100))
+  const card = cardOf(page, '晚餐')
+  await expect(card.locator('.sg-items')).toHaveText('拿鐵')
+  await expect(card.locator('.sg-kc')).toHaveText('超 10 卡')
+  await expect(card.locator('.sg-kc')).toHaveClass(/is-over/)
+  await expect(addOf(page, '晚餐')).toHaveAttribute('aria-label', '加入建議的晚餐：拿鐵，150 卡，超過 10 卡')
+  const color = await card.locator('.sg-kc').evaluate((e) => getComputedStyle(e).color)
+  expect(color, '超標用 --over（#9A4330）').toBe('rgb(154, 67, 48)')
+  await swapOf(page, '晚餐').click()
+  await expect(card.locator('.sg-kc')).toHaveText('超 240 卡')
+
+  // 393 寬：整列不長高，換一個命中區 ≥ 44
+  const box = await card.boundingBox()
+  expect(box!.height).toBe(44)
+  const hit = await swapOf(page, '晚餐').evaluate((b) => {
+    const r = b.getBoundingClientRect()
+    const before = getComputedStyle(b, '::before')
+    return { w: r.width - 2 * parseFloat(before.left), h: r.height - 2 * parseFloat(before.top) }
+  })
+  expect(hit.w).toBeGreaterThanOrEqual(44)
+  expect(hit.h).toBeGreaterThanOrEqual(44)
+})
+
+test('第二版：只有一組晚餐候選時沒有換一個', async ({ page }) => {
+  const fix = dinnerFix(1800)
+  ;(fix as unknown as { repeatWindow: unknown[] }).repeatWindow = [srcRow(401, '2026-10-30', 'dinner', 12)]
+  await openAppAt(page, MON, {}, fix)
+  await expect(cardOf(page, '晚餐').locator('.sg-src')).toHaveText('建議')
+  await expect(swapOf(page, '晚餐')).toHaveCount(0)
+})
+
+test('第二版：過去的日子早午餐都記了，晚餐仍是常吃、不依缺口挑', async ({ page }) => {
+  // 今天釘 TUE，MON 變成昨天（過去）；MON 的早午餐放在 intakeYday
+  const fix = { ...dinnerFix(1800, []), intakeYday: [srcRow(101, MON, 'breakfast', 13), srcRow(102, MON, 'lunch', 11, 2)] } as unknown as typeof FIX
+  await openAppAt(page, TUE, {}, fix)
+  await expect(cardOf(page, '晚餐').locator('.sg-src'), '今天早午餐沒記：常吃').toHaveText('常吃')
+  await gotoDate(page, MON)
+  await expect(nodeOf(page, '午餐').locator('.item')).toHaveCount(1)
+  await expect(cardOf(page, '晚餐').locator('.sg-src')).toHaveText('常吃')
+  await expect(swapOf(page, '晚餐')).toHaveCount(0)
 })
