@@ -865,20 +865,84 @@ const failNextPatch = (page: Page) =>
 const fetchesTo = (page: Page, part: string) =>
   page.evaluate((p) => (window as unknown as { __allFetches: string[] }).__allFetches.filter((u) => u.includes(p)).length, part)
 
-test('改完立刻返回、存檔才失敗：跳提示，不是靜默遺失；目標還是舊的', async ({ page }) => {
+test('改完立刻返回、存檔才失敗：浮出提示，不換掉頁面、別處打到一半的欄位留著；目標還是舊的', async ({ page }) => {
   await openApp(page)
   await openGoal(page)
   const entrySub = (await macros(page))!.protein
-  await setWriteDelay(page, 400)
+  // 返回後還要開 sheet、打字，都得在這筆回來前做完
+  await setWriteDelay(page, 1500)
   await failNextPatch(page)
 
   await page.locator('#g-protein').selectOption('2')
   await page.getByRole('button', { name: '返回設定' }).click()
+  await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+  await page.locator('#w-kg').fill('74')
 
-  await expect(page.locator('.notice .headline')).toHaveText('每日目標沒有存到')
-  await page.locator('.notice button').click()
-  await expect(page.locator('.notice')).toHaveCount(0)
+  const lost = page.locator('.undo-bar', { hasText: '每日目標沒有存到' })
+  await expect(lost).toBeVisible({ timeout: 5000 })
+  await expect(page.locator('.notice'), '失敗不該把整頁換成 Notice').toHaveCount(0)
+  await expect(page.locator('#w-kg'), '別處打到一半的值被洗掉了').toHaveValue('74')
+
+  await page.locator('#settings-sheet-root .icon-btn').click()
+  await lost.getByRole('button').click()
+  await expect(lost).toHaveCount(0)
   await expect(page.locator('.entry-row', { hasText: '每日目標' }).locator('.lb-sub').first()).toContainText(`蛋白 ${entrySub}g`)
+})
+
+/* 離開再進來時前一筆還在路上：新開的頁面拿到的 profile 是舊的，落地後才換新。自動／自訂與文字欄是頁面自己的 state，
+   沒跟著換就停在舊值，再離開時還會被當成改動寫回去。 */
+const reenterGoal = async (page: Page) => {
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await page.locator('.entry-row', { hasText: '每日目標' }).click()
+}
+
+test('切回自動、離開再進來（前一筆還在路上）：落地後畫面跟著變自動，再離開不會把自訂寫回去', async ({ page }) => {
+  await openApp(page, {}, customFix())
+  await openGoal(page)
+  await setWriteDelay(page, 1500)
+
+  await page.locator('.goal-seg-wrap .seg button', { hasText: '自動' }).click()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  await reenterGoal(page)
+
+  await expect(page.locator('#g-goal'), '前一筆落地了，畫面還停在自訂').toBeVisible({ timeout: 5000 })
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await page.waitForTimeout(300)
+  expect((await profilePatches(page)).map((w) => w.body.use_custom_targets), '舊的自訂被寫回去了').toEqual([false])
+})
+
+test('自訂改值、離開再進來（前一筆還在路上）：落地後輸入框換成新值，再離開不會寫回舊值', async ({ page }) => {
+  await openApp(page, {}, customFix())
+  await openGoal(page)
+  await setWriteDelay(page, 1500)
+
+  await page.locator('#g-custom-kcal').fill('1900')
+  await page.locator('#g-custom-kcal').blur()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  await reenterGoal(page)
+
+  await expect(page.locator('#g-custom-kcal')).toHaveValue('1900', { timeout: 5000 })
+  await expect(src(page)).toContainText('自己填的')
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await page.waitForTimeout(300)
+  expect(await profilePatches(page), '舊的 2000 被寫回去了').toHaveLength(1)
+})
+
+test('基本資料改值、離開再進來（前一筆還在路上）：落地後換成新值、不標未儲存，再離開不會寫回舊值', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+  await setWriteDelay(page, 1500)
+
+  await page.locator('#g-height').fill('180')
+  await page.locator('#g-height').blur()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  await reenterGoal(page)
+
+  await expect(page.locator('#g-height')).toHaveValue('180', { timeout: 5000 })
+  await expect(src(page)).not.toContainText('未儲存')
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await page.waitForTimeout(300)
+  expect(await profilePatches(page), '舊的身高被寫回去了').toHaveLength(1)
 })
 
 test('存檔不重撈：不打 foods 與 intake，設定入口照樣更新', async ({ page }) => {

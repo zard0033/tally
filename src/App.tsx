@@ -176,6 +176,8 @@ export default function App() {
   }, [])
   /* 一鍵加入的失敗，鍵同上。Today 重掛、切日再回來都要還在。 */
   const [repeatErr, setRepeatErr] = useState<{ key: string; msg: string } | null>(null)
+  /* 離開每日目標頁之後才失敗的存檔原因；按掉才收。 */
+  const [goalSaveLost, setGoalSaveLost] = useState<string | null>(null)
   /* 已送出 DELETE 的 id（復原一鍵加入、結清待刪）。DELETE 失敗才移除，成功不移除（id 不重用）：
      回應前就發出的 loadDay／預取／refreshDay 可能在成功之後才落地，讀到的還有它們。 */
   const undoingIdsRef = useRef<Set<number>>(new Set())
@@ -311,8 +313,8 @@ export default function App() {
       setRows(filterPendingRow(r, date, pendingDelete.current, undoingIdsRef.current))
       setFoods(f)
       setNotice(null)
-      cacheRef.current.set(date, r) // 也覆寫快取——這條路徑也會被 handleSaveProfile／
-      // handleSaveWeight 呼叫（設定改動後重算），r 是這一天的最新狀態，讓快取跟著更新
+      cacheRef.current.set(date, r) // 也覆寫快取——這條路徑也會被 handleSaveWeight 呼叫
+      // （存體重後重算目標），r 是這一天的最新狀態，讓快取跟著更新
       prefetchAdjacent(date)
     } catch (e) {
       // 離線提示已經在畫面上了；這裡的錯是那批背景請求終於放棄，不要拿較不精準的訊息蓋掉它
@@ -809,13 +811,9 @@ export default function App() {
     [load, showNotice],
   )
 
-  /* 改完立刻離開每日目標頁，存檔才失敗：頁面已經不在，沒有地方顯示，不說就是靜默遺失。 */
-  const handleSaveLost = useCallback(
-    (message: string) => {
-      showNotice('每日目標沒有存到', `${message}。目標還是原本的，回每日目標頁再改一次。`, '知道了', () => setNotice(null))
-    },
-    [showNotice],
-  )
+  /* 改完立刻離開每日目標頁，存檔才失敗：頁面已經不在，沒有地方顯示，不說就是靜默遺失。
+     用浮在底部的提示條，不用 Notice：Notice 換掉整頁，人已經在別處打到一半的欄位會不見。 */
+  const handleSaveLost = useCallback((message: string) => setGoalSaveLost(message), [])
 
   const handleSaveWeight = useCallback(
     async (w: Omit<NewWeight, 'user_id'>) => {
@@ -926,6 +924,7 @@ export default function App() {
         settleRepeat()
         setRepeatLock(null)
         setRepeatErr(null)
+        setGoalSaveLost(null)
         undoingIdsRef.current.clear()
         cacheRef.current.clear() // 換帳號後別讓上一個帳號的快取資料在切日期時冒出來
         prefetchingRef.current.clear()
@@ -1083,6 +1082,28 @@ export default function App() {
                   <path d="M7 4 3 8l4 4" />
                 </svg>
                 復原
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* 每日目標沒存到：借復原條的位置與樣子，不換掉頁面。不會自己消失（是失敗，要看到）；
+            復原條開著時先讓位，兩條疊在同一處會互相蓋住。 */}
+        <AnimatePresence>
+          {goalSaveLost !== null && !undoOpen && (
+            <motion.div
+              className="undo-bar"
+              role="alert"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={prefersReducedMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
+            >
+              <button
+                type="button"
+                aria-label={`每日目標沒有存到：${goalSaveLost}。目標還是原本的。知道了`}
+                onClick={() => setGoalSaveLost(null)}
+              >
+                每日目標沒有存到・知道了
               </button>
             </motion.div>
           )}

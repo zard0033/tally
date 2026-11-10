@@ -309,7 +309,7 @@ export async function seedFetchStub(
               return new Response(null, { status: 204 })
             }
           }
-          // 每日目標改了就存、存完重撈：不落地的話重撈會把剛改的值讀回舊的
+          // 每日目標存完不重撈，但之後的 load（例如存體重）會讀 profile：不落地就讀回舊值
           if (table === 'profile' && method === 'PATCH') {
             Object.assign(fix.profile[0], body as Record<string, unknown>)
             return new Response(null, { status: 204 })

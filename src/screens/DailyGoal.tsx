@@ -121,6 +121,21 @@ export default function DailyGoal(props: DailyGoalProps) {
     carb: textOf(profile.custom_carb_g),
   })
   const [basics, setBasics] = useState({ birthYear: textOf(profile.birth_year), height: textOf(profile.height_cm) })
+  /* 離開再進來時前一筆可能還在路上，拿到的 profile 是舊的、落地才換新。上面三個是自己的 state，不跟著換就停在舊值，
+     再離開時還會被當成改動寫回去。只換使用者沒動過的（還等於上一份 profile 的）。 */
+  const [prevProfile, setPrevProfile] = useState(profile)
+  if (prevProfile !== profile) {
+    setPrevProfile(profile)
+    const follow = (shown: string, key: keyof ProfileRow) => (shown === textOf(prevProfile[key]) ? textOf(profile[key]) : shown)
+    if (isCustom === prevProfile.use_custom_targets) setIsCustom(profile.use_custom_targets)
+    setCustom((c) => ({
+      kcal: follow(c.kcal, 'custom_kcal'),
+      protein: follow(c.protein, 'custom_protein_g'),
+      fat: follow(c.fat, 'custom_fat_g'),
+      carb: follow(c.carb, 'custom_carb_g'),
+    }))
+    setBasics((b) => ({ birthYear: follow(b.birthYear, 'birth_year'), height: follow(b.height, 'height_cm') }))
+  }
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [dismissed, setDismissed] = useState(false)
