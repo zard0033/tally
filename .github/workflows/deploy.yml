@@ -40,7 +40,7 @@ jobs:
         with:
           path: dist
 
-  # 全量 e2e 分 4 份同時跑（本機只開得起 2 個 WebKit，全量要 14 分鐘）；沒全綠就不部署。
+  # 全量 e2e 分 8 份同時跑、每份 1 個 worker（本機只開得起 2 個 WebKit，全量要 14 分鐘）；沒全綠就不部署。
   # 救援部署（self_destroy_sw）跳過：那時手機上的 SW 已經壞了，不能讓偶發紅擋住救援。
   e2e:
     if: ${{ !inputs.self_destroy_sw }}
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -64,7 +64,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
       - run: npx playwright install --with-deps webkit
       # GitHub runner 本來就設 CI=true，playwright.config 靠它開重試
-      - run: npx playwright test --shard=${{ matrix.shard }}/4
+      - run: npx playwright test --shard=${{ matrix.shard }}/8
 
   deploy:
     needs: [build, e2e]

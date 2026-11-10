@@ -30,10 +30,13 @@ export default defineConfig({
      `browserContext.newPage: Target page, context or browser has been closed`。
 
      **後端那道牆已經拆掉**（webServer 改跑 build 後的靜態 preview，見下方註解），
-     但這個數字留在 2：那是**瀏覽器端**的容量，跟 server 怎麼跑無關——會在別人開著
+     但本機這個數字留在 2：那是**瀏覽器端**的容量，跟 server 怎麼跑無關——會在別人開著
      編輯器與設計工具時偶發紅的測試等於沒有測試。要往上調就要在記憶體同樣吃緊的狀態下
      實測，不是看著閒置機器調。 */
-  workers: 2,
+  /* CI 每片 1 個：2026-11-10 第一次 CI（4 片×2 worker）有 8 條動畫／焦點類測試在半途量到（本機全綠）。
+     **原因是假設**：runner 4 vCPU、沒有 GPU，WebKit 軟體繪圖，2 個同時跑把幀率拖垮。8 片×1 worker 首跑若仍紅，
+     根因就不在 worker 數，該查的是那幾條的等待方式（量得太早），不是再加片數。 */
+  workers: process.env.CI ? 1 : 2,
   /* CI 的全量擋部署，已知偶發紅（wiki e2e-reference）不該擋住上線，所以 CI 重試一次；重試才過的會在報告標 flaky。
      本機維持 0：開發中要看到第一次就紅的。 */
   retries: process.env.CI ? 1 : 0,
