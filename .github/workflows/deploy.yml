@@ -40,8 +40,35 @@ jobs:
         with:
           path: dist
 
+  # 全量 e2e 分 4 份同時跑（本機只開得起 2 個 WebKit，全量要 14 分鐘）；沒全綠就不部署。
+  # 救援部署（self_destroy_sw）跳過：那時手機上的 SW 已經壞了，不能讓偶發紅擋住救援。
+  e2e:
+    if: ${{ !inputs.self_destroy_sw }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # 跑 npm ci 與 playwright install（會執行套件的安裝腳本），不給它頂層的 pages／id-token
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Linux runner 沒有中文字型，折行與高度類斷言會跟手機差很遠
+      - run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      - run: npx playwright install --with-deps webkit
+      # GitHub runner 本來就設 CI=true，playwright.config 靠它開重試
+      - run: npx playwright test --shard=${{ matrix.shard }}/4
+
   deploy:
-    needs: build
+    needs: [build, e2e]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

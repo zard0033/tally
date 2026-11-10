@@ -34,7 +34,9 @@ export default defineConfig({
      編輯器與設計工具時偶發紅的測試等於沒有測試。要往上調就要在記憶體同樣吃緊的狀態下
      實測，不是看著閒置機器調。 */
   workers: 2,
-  retries: 0,
+  /* CI 的全量擋部署，已知偶發紅（wiki e2e-reference）不該擋住上線，所以 CI 重試一次；重試才過的會在報告標 flaky。
+     本機維持 0：開發中要看到第一次就紅的。 */
+  retries: process.env.CI ? 1 : 0,
   /* 15 條路徑跑在同一個 test() 裡（狀態累積，見 spec 檔頭），所以 timeout 是整份的總時長，
      不是單一路徑。預設 30s 在加到 15 條時就撞牆了——調高而不是拆成多個 test，
      因為「一輪走完不中斷」正是這份 harness 的核心紀律。 */
