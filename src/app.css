@@ -604,18 +604,6 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-row .lb { flex: 1; color: var(--ink-muted); }
 .goal-row .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 
-.goal-src { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
-  background: var(--raised); }
-.goal-src .t { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
-  letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }
-/* Tailwind preflight 把 ul 的 list-style 清成 none，所以只留 padding-left 會是一個空的
-   縮排、四條依據黏成一片文字牆（v2.23 拿掉收合 toggle、改常駐顯示之後才看得出來）。
-   明釘 disc 並把 marker 調成更淡的 --ink-faint：項目符號只需要標示邊界，不必跟內文搶。
-   每條之間補 --s-1，讓折成兩三行的長句子看得出來哪裡換一條。 */
-.goal-src ul { margin: 0; padding-left: 1.1em; font-size: var(--t-xs); color: var(--ink-muted);
-  line-height: 1.7; list-style: disc; }
-.goal-src li + li { margin-top: var(--s-1); }
-.goal-src li::marker { color: var(--ink-faint); }
 
 .goal-seg-wrap { padding: 0 var(--s-5) var(--s-3); flex-shrink: 0; }
 .goal-note-box { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-tab);
@@ -624,10 +612,16 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-hero { flex-shrink: 0; padding: var(--s-2) var(--s-5) var(--s-3); text-align: center; }
 .goal-hero-macros { margin-top: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.goal-hero-src { display: flex; align-items: center; justify-content: center; min-height: 20px;
-  margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-muted); }
+/* 「已儲存／未儲存」放在算式膠囊下面一行、預留高度：放右邊的話每次存檔膠囊都會往左跳一下 */
+.goal-hero-src { display: flex; flex-direction: column; align-items: center; gap: var(--s-1);
+  margin-top: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); }
+.goal-hero-src [role="status"] { min-height: 18px; line-height: 18px; }
+/* v2.118：大數字上面寫「每日目標」，下面一行算式（維持熱量 − 減重），三個數字的關係在頂端就講完 */
+.goal-hero-cap { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.goal-hero-eq { display: inline-block; padding: var(--s-1) var(--s-3); border-radius: var(--r-pill); background: var(--raised); }
+.goal-hero-eq b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 .goal-saved { color: var(--accent); font-weight: 600; }
-.goal-saved:not(:empty) { margin-left: var(--s-2); }
+.goal-unsaved { color: var(--ink-muted); font-weight: 600; }
 .goal-err { flex-shrink: 0; padding: 0 var(--s-5) var(--s-2); text-align: center; }
 /* 一列：左標籤、右目前值。整列是原生 select 的命中區（透明疊在上面），iOS 叫出系統滾輪。 */
 .goal-pick { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; width: 100%;
@@ -645,7 +639,6 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-how summary { list-style: none; }
 .goal-how summary::-webkit-details-marker { display: none; }
 .goal-how[open] summary svg { transform: rotate(90deg); }
-.goal-how .goal-src { margin: var(--s-3); }
 /* 確認卡：記錄算出的數字和現在用的不同才出現，不按什麼都不變。 */
 .goal-confirm { margin: 0 0 var(--s-4); padding: var(--s-4); border-radius: var(--r-tab); background: var(--card);
   box-shadow: inset 0 0 0 1px var(--accent); }
@@ -666,6 +659,72 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-meter { padding: var(--s-1) var(--s-4) var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
 .goal-meter-track { height: 4px; margin-bottom: var(--s-2); border-radius: 2px; background: var(--rule); overflow: hidden; }
 .goal-meter-track i { display: block; height: 100%; background: var(--accent); }
+.goal-note-in { margin: 0 var(--s-3) var(--s-3); }
+.goal-pick .val small { margin-left: var(--s-1); font-weight: 400; color: var(--ink-faint); }
+
+/* v2.118 照算式排：每段標題就是算式的一項（① 維持熱量 → ② 減多少 → ③ 怎麼分），右邊寫這段算出來的數字 */
+.goal-sec { margin-top: var(--s-4); }
+.goal-sec > .goal-group { margin-bottom: 0; }
+.goal-sec-h { display: flex; align-items: center; justify-content: space-between; min-height: 28px; padding: 0 var(--s-1) var(--s-2);
+  font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+.goal-sec-h .out { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-xs); color: var(--ink-muted); }
+.goal-sec-title { display: inline-flex; align-items: center; }
+.goal-tag { display: inline-flex; align-items: center; min-height: 20px; margin-left: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--accent-dark); font-size: var(--t-xs); font-weight: 600; }
+/* 維持熱量的兩種算法並排、圓點標使用中的。沒在用的那一列是 button，整列可點（＝單選）。
+   右邊只放數字：算式那行（BMR 1693 × 活動係數 1.375）才有寬度、不換行——桌機有捲軸時會少約 15px，樣張在那個寬度驗過。 */
+.goal-est { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-2) var(--s-4);
+  border: none; border-top: 1px solid var(--rule-subtle); background: none; color: var(--ink); font-family: inherit; text-align: left; }
+.goal-group > .goal-est:first-child { border-top: none; }
+button.goal-est { cursor: pointer; }
+button.goal-est:active { background: var(--raised); }
+button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.goal-radio { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--rule-field); }
+.goal-est.on .goal-radio { box-shadow: inset 0 0 0 5px var(--accent); }
+.goal-est-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.goal-est-lb { display: flex; align-items: center; font-size: var(--t-base); }
+.goal-est-lb .goal-tag { margin-left: var(--s-2); }
+.goal-est-sub { margin-top: 2px; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; white-space: nowrap; }
+.goal-est-sub b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.goal-est-val { flex-shrink: 0; white-space: nowrap; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
+.goal-est:not(.on) .goal-est-val { color: var(--ink-muted); font-weight: 400; }
+/* 活動係數只影響公式推導：縮排掛在那一列下面（左緣對齊文字，不對齊圓點） */
+.goal-sub-pick { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
+  margin: 0 var(--s-4) var(--s-2) calc(var(--s-4) + 18px + var(--s-3)); padding: 0 var(--s-3); border-radius: var(--r-tab);
+  background: var(--fill); font-size: var(--t-sm); cursor: pointer; }
+.goal-sub-pick .lb { flex: 1; color: var(--ink-muted); }
+.goal-sub-pick .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.goal-sub-pick .val small { margin-left: var(--s-1); font-family: var(--font-body); font-weight: 400; color: var(--ink-muted); }
+.goal-sub-pick svg { flex-shrink: 0; width: 14px; height: 14px; color: var(--ink-faint); fill: none; stroke: currentColor;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.goal-sub-pick select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: var(--t-md); cursor: pointer; }
+.goal-sub-pick:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.goal-group .goal-confirm { margin: 0 var(--s-3) var(--s-3); background: var(--paper); }
+.goal-confirm-cmp { display: flex; align-items: baseline; gap: var(--s-2); }
+.goal-confirm-cmp small { font-family: var(--font-body); font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+/* ⓘ：「想確認才看」的規則收進 popover（v2.24 裁決：點了才開，不用 tooltip——手機沒有 hover）。
+   圖示 18px，命中區用 ::before 補到 44px */
+.goal-info { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: var(--s-1); padding: 0;
+  border: none; background: none; color: var(--ink-faint); cursor: pointer; }
+.goal-info::before { content: ""; position: absolute; inset: -12px; }
+.goal-info svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.goal-info[data-popup-open] { color: var(--accent); }
+.goal-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 50%; }
+.goal-pop-pos { z-index: 50; }
+.goal-pop { width: min(260px, calc(100vw - 32px)); padding: var(--s-3); border-radius: var(--r-tab); background: var(--card);
+  box-shadow: var(--shadow-2); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.7; }
+.goal-pop b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+/* 往下開時箭頭在上緣、往上開（下方空間不夠，Base UI 會翻面）時在下緣 */
+.goal-pop-arrow { width: 12px; height: 12px; background: var(--card); transform: rotate(45deg); }
+.goal-pop-arrow[data-side="bottom"] { top: -6px; }
+.goal-pop-arrow[data-side="top"] { bottom: -6px; }
+/* 怎麼算的：三段算式都代入自己的數字 */
+.goal-calc { padding: var(--s-1) var(--s-4) var(--s-4); border-top: 1px solid var(--rule-subtle); }
+.goal-calc h3 { display: flex; align-items: center; margin: var(--s-3) 0 var(--s-1); font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+.goal-calc-ln { margin: 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.8; }
+.goal-calc-ln b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.goal-calc-ln .res { font-weight: 600; color: var(--ink); }
+.goal-calc-fine { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--ink-faint); line-height: 1.6; }
 .goal-custom { margin-bottom: var(--s-4); }
 .goal-macro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); }
 .goal-sum { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }

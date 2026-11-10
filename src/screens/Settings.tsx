@@ -242,7 +242,7 @@ export default function Settings(props: SettingsProps) {
               <span className="lb-sub">
                 {Math.round(targets.kcal)} 卡・蛋白 {Math.round(targets.protein)}g・脂 {Math.round(targets.fat)}g・碳水 {Math.round(targets.carb)}g
               </span>
-              {adviceOf(estimate, targets.tdee)?.kind === 'new' && <span className="lb-sub lb-new">記錄算出新的維持熱量</span>}
+              {adviceOf(estimate, targets.tdee)?.kind === 'new' && <span className="lb-sub lb-new">紀錄回推出新的維持熱量</span>}
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>

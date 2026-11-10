@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 每日目標重構：照算式排（第二版）</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外殼（只給這頁看用，不進產品） ── */
+  html, body { background: #EDE6DA; height: auto; overflow: auto; }
+  body { font-family: var(--font-body); padding: 32px; color: var(--ink); }
+  .harness-title { font-size: 20px; font-weight: 700; color: #3D2210; margin: 0 0 6px; }
+  .harness-sub { font-size: 13px; color: #7A5C44; margin: 0 0 16px; max-width: 900px; line-height: 1.7; }
+  .harness-sub b { color: #3D2210; }
+  .harness-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+  .harness-bar button { min-height: 40px; padding: 0 16px; border: 1px solid #D8C9AE; border-radius: 999px; background: #F7F1E6;
+    font: inherit; font-size: 13px; color: #7A5C44; cursor: pointer; }
+  .harness-bar button[aria-pressed="true"] { background: #3D2210; border-color: #3D2210; color: #fff; font-weight: 600; }
+  .frames { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; width: 393px; }
+  .frame-label { font-size: 14px; font-weight: 700; color: #3D2210; }
+  .frame-note { font-size: 12px; color: #7A5C44; line-height: 1.7; }
+  .frame-note b { color: #3D2210; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px; border: 1px solid #D8C9AE;
+    position: relative; background: var(--paper); display: flex; flex-direction: column; }
+  .device svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .mock-top { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; padding: var(--s-2) var(--s-3) 0; flex-shrink: 0; }
+  .mock-top .back { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-muted); }
+  .mock-top .back svg { width: 22px; height: 22px; }
+  .mock-top h1 { margin: 0; font-size: var(--t-lg); font-weight: 700; color: var(--ink); }
+  .g-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--s-5) var(--s-5); }
+
+  /* ── 新增的版面（若核可，這些進 app.css 並寫回 DESIGN.md） ───────────────────────
+     ① 數字區：大數字上面寫「每日目標」，下面一行算式，三個數字的關係在最上面就講完。 */
+  .gh { flex-shrink: 0; padding: var(--s-1) var(--s-5) var(--s-3); text-align: center; }
+  .gh-cap { font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+  .gh .gauge-num { font-size: 2.6rem; line-height: 1.05; }
+  .gh-macros { margin-top: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .gh-eq { display: inline-block; margin-top: var(--s-2); padding: var(--s-1) var(--s-3); border-radius: var(--r-pill); background: var(--raised);
+    font-size: var(--t-xs); color: var(--ink-muted); }
+  .gh-eq b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+  .gh-saved { display: block; min-height: 18px; margin-top: var(--s-1); font-size: var(--t-xs); font-weight: 600; color: var(--accent); }
+
+  /* ② 分段：標題就是算式裡的那一項，右邊寫這段算出來的數字 */
+  .sec { margin-top: var(--s-4); }
+  .sec-h { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--s-1) var(--s-2);
+    font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+  .sec-h .out { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink-muted); font-size: var(--t-xs); }
+  .card { border-radius: var(--r-tab); background: var(--card); overflow: hidden; }
+
+  /* ③ 維持熱量的兩種算法並排，圓點標使用中的那個。沒在用的那一列整列可點（＝單選）：
+        點紀錄回推展開確認框、點公式推導直接改回。右邊只留數字，算式那行才有寬度不換行。 */
+  .est { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-2) var(--s-4);
+    border: none; border-top: 1px solid var(--rule-subtle); background: none; font-family: inherit; text-align: left; color: inherit; }
+  .est:first-child { border-top: none; }
+  button.est { cursor: pointer; }
+  button.est:active { background: var(--raised); }
+  .est .radio { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--rule-field); }
+  .est.on .radio { box-shadow: inset 0 0 0 5px var(--accent); }
+  .est .tx { flex: 1; min-width: 0; }
+  .est .lb { display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-base); color: var(--ink); }
+  .est .lb .tag { min-height: 20px; }
+  .est .sub { margin-top: 2px; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; white-space: nowrap; }
+  .est .sub b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+  .est .val { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-base); color: var(--ink); white-space: nowrap; }
+  .est:not(.on) .val { color: var(--ink-muted); font-weight: 400; }
+  .tag { flex-shrink: 0; min-height: 28px; display: inline-flex; align-items: center; padding: 0 var(--s-2); border-radius: var(--r-pill);
+    font-size: var(--t-xs); font-weight: 600; }
+  .tag.inuse { background: var(--accent-soft); color: var(--accent-dark); }
+  /* 活動係數只影響公式推導，所以縮排掛在那一列下面 */
+  .sub-pick { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; margin: 0 var(--s-4) var(--s-2) calc(var(--s-4) + 18px + var(--s-3));
+    padding: 0 var(--s-3); border-radius: var(--r-tab); background: var(--fill); font-size: var(--t-sm); }
+  .sub-pick .lb { flex: 1; color: var(--ink-muted); }
+  .sub-pick .val { font-weight: 600; color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .sub-pick .val small { font-family: var(--font-body); font-weight: 400; color: var(--ink-muted); margin-left: var(--s-1); }
+  .sub-pick svg { width: 14px; height: 14px; color: var(--ink-faint); }
+  .sub-pick select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+  .meter { margin: 0 var(--s-4) var(--s-3) calc(var(--s-4) + 18px + var(--s-3)); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+  .meter .track { height: 4px; margin-bottom: var(--s-1); border-radius: 2px; background: var(--rule); overflow: hidden; }
+  .meter .track i { display: block; height: 100%; background: var(--accent); }
+  .cf { margin: 0 var(--s-3) var(--s-3); padding: var(--s-3); border-radius: var(--r-tab); background: var(--paper); box-shadow: inset 0 0 0 1px var(--accent); }
+  .cf .cmp { display: flex; align-items: baseline; gap: var(--s-2); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 600; }
+  .cf .cmp .old { color: var(--ink-faint); font-weight: 400; }
+  .cf .cmp small { font-family: var(--font-body); font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+  .cf .why { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
+  .cf .acts { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+  .g-btn { flex: 1; min-height: 44px; border: none; border-radius: var(--r-pill); font-family: inherit; font-size: var(--t-base); font-weight: 600; cursor: pointer; }
+  .g-btn.primary { background: var(--accent); color: var(--on-accent); }
+  .g-btn.quiet { background: var(--fill); color: var(--ink-muted); }
+
+  /* ④ 清單列（沿用 v2.116）：整列是原生 select 的命中區 */
+  .g-pick { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-4);
+    border-top: 1px solid var(--rule-subtle); font-size: var(--t-base); }
+  .g-pick:first-child { border-top: none; }
+  .g-pick .lb { flex: 1; color: var(--ink-muted); }
+  .g-pick .val { font-weight: 600; font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--ink); }
+  .g-pick .val small { font-weight: 400; color: var(--ink-faint); margin-left: var(--s-1); }
+  .g-pick svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--ink-faint); transition: transform var(--dur-mid, 220ms) var(--ease); }
+  .g-pick select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+  .g-pick.as-btn { width: 100%; border-left: none; border-right: none; border-bottom: none; background: none; font-family: inherit; text-align: left; cursor: pointer; }
+  /* ⑥ ⓘ：「想確認才看」的規則收進 popover（v2.24 的裁決：點了才開的 popover，不用 tooltip——手機沒有 hover）。
+        圖示 18px、命中區 44px；產品用 @base-ui/react/popover，點外面或 Esc 收起。 */
+  .info { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: var(--s-1); padding: 0;
+    border: none; background: none; color: var(--ink-faint); cursor: pointer; vertical-align: -4px; }
+  .info::before { content: ""; position: absolute; inset: -12px; }
+  .info svg { width: 18px; height: 18px; }
+  .info[aria-expanded="true"] { color: var(--accent); }
+  .pop-anchor { position: relative; display: inline-flex; align-items: center; }
+  .pop { position: absolute; z-index: 5; top: calc(100% + 10px); left: -8px; width: 260px; padding: var(--s-3);
+    border-radius: var(--r-tab); background: var(--card); box-shadow: var(--shadow-2);
+    font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); line-height: 1.7; }
+  .pop::before { content: ""; position: absolute; top: -6px; left: 30px; width: 12px; height: 12px; background: var(--card); transform: rotate(45deg);
+    box-shadow: -1px -1px 2px rgba(61, 34, 16, .06); }
+  .pop b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
+  /* ⑤ 怎麼算的：每一段算式都代入你的數字，跟上面的①②③一一對應 */
+  details.how > summary { list-style: none; }
+  details.how > summary::-webkit-details-marker { display: none; }
+  details.how[open] > summary svg { transform: rotate(90deg); }
+  .calc { padding: var(--s-1) var(--s-4) var(--s-4); border-top: 1px solid var(--rule-subtle); }
+  .calc h3 { margin: var(--s-3) 0 var(--s-1); font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+  .calc h3 .tag { min-height: 20px; margin-left: var(--s-1); vertical-align: 1px; }
+  .calc .ln { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.8; }
+  .calc .ln b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+  .calc .res { font-weight: 600; color: var(--ink); }
+  .calc .fine { margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-faint); line-height: 1.6; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">樣張 — 每日目標重構：照算式排（第二版）</h1>
+<p class="harness-sub">
+  依你的四點回饋改：<b>① 維持熱量標出 TDEE</b>；<b>② 「公式推導」「紀錄回推」</b>；
+  <b>③ 「怎麼算的」裡兩種維持熱量各有一段算式</b>，代入你的數字（右邊那支手機是展開後捲到底的樣子）；
+  <b>④ 公式推導那列直接寫「BMR 1693 × 活動係數 1.375」</b>；<b>⑤ 「脂肪固定、剩下給碳水」收進「③ 怎麼分」旁邊的 ⓘ</b>，點了才出現，點外面或按 Esc 收起。
+  上面的按鈕切狀態，兩支手機一起換；選單可以點、數字會重算。<b>數字都是示意</b>（e2e 假資料：男、33 歲、175 cm、75.95 kg）。
+</p>
+<div class="harness-bar" role="group" aria-label="狀態">
+  <button type="button" data-view="need">記錄還不夠</button>
+  <button type="button" data-view="ready">紀錄回推出新數字</button>
+  <button type="button" data-view="measured">已改用紀錄回推</button>
+</div>
+<div class="frames">
+  <div class="frame-block">
+    <div class="frame-label">頁面頂端</div>
+    <div class="device" id="a"></div>
+    <div class="frame-note" id="a-note"></div>
+  </div>
+  <div class="frame-block">
+    <div class="frame-label">展開「怎麼算的」、捲到底</div>
+    <div class="device" id="b"></div>
+    <div class="frame-note"><b>三段算式對應上面的 ①②③</b>，每個數字都代入你自己的值，算到最後就是頂端那個每日目標。<b>使用中的那個維持熱量標「使用中」</b>，另一個照樣算給你看，方便比較。</div>
+  </div>
+</div>
+<script>
+/* 公式抄 src/lib/formulas.ts（computeTargets）與 src/lib/baseline.ts（維持熱量＝平均攝取 − 體重斜率×7700）；假資料同 e2e/fixtures.ts。 */
+const KG = 75.95, HEIGHT = 175, AGE = 33, KCAL_PER_KG = 7700
+const BMR = 10 * KG + 6.25 * HEIGHT - 5 * AGE + 5          // Mifflin-St Jeor（男）＝ 1693.25
+const AVG_IN = 1846, SLOPE_DAY = -0.14 / 7                    // 紀錄回推的示意：平均吃 1846、每週掉 0.14 kg（每天換算 154 卡）
+const MEASURED = AVG_IN - SLOPE_DAY * KCAL_PER_KG            // ＝ 2000
+const GOALS = { cut: '減重', maintain: '維持', bulk: '增肌' }
+const RATES = [0.5, 0.75, 1, 1.25, 1.5]
+const ACTS = [[1.2, '久坐不動'], [1.375, '輕度活動'], [1.55, '中度活動'], [1.725, '高度活動'], [1.9, '非常活躍']]
+const PROTEINS = [1.2, 1.6, 1.8, 2, 2.2]
+const s = { view: 'ready', confirmOpen: true, goal: 'cut', rate: 1.5, act: 1.375, prot: 1.8, flash: false, infoOpen: false }
+const r = Math.round
+const chev = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
+const opt = (v, cur, label) => `<option value="${v}"${String(v) === String(cur) ? ' selected' : ''}>${label}</option>`
+
+const weeklyKg = () => s.rate * 12 / 52
+const delta = () => s.goal === 'maintain' ? 0 : weeklyKg() * KCAL_PER_KG / 7
+const target = (m) => s.goal === 'cut' ? m - delta() : s.goal === 'bulk' ? m + delta() : m
+const formula = () => BMR * s.act
+const usingRecord = () => s.view === 'measured'
+const inUse = () => usingRecord() ? MEASURED : formula()
+const macros = (kcal) => { const p = s.prot * KG, f = 0.85 * KG; return { p, f, c: Math.max(0, kcal - p * 4 - f * 9) / 4 } }
+const weekly = (kg) => (kg > 0 ? '+' : kg < 0 ? '−' : '') + Math.abs(kg).toFixed(2) + ' kg'
+const actName = () => ACTS.find((x) => x[0] === s.act)[1]
+const deltaText = () => s.goal === 'maintain' ? '' : ` ${s.goal === 'cut' ? '−' : '+'} ${GOALS[s.goal]} <b>${r(delta())}</b>`
+
+function hero() {
+  const k = target(inUse()), m = macros(k)
+  return `<div class="gh"><div class="gh-cap">每日目標</div>
+    <div><span class="gauge-num">${r(k)}</span><span class="gauge-unit">卡</span></div>
+    <div class="gh-macros">蛋白 ${r(m.p)}g・脂肪 ${r(m.f)}g・碳水 ${r(m.c)}g</div>
+    <div class="gh-eq">維持熱量 <b>${r(inUse())}</b>（${usingRecord() ? '紀錄回推' : '公式推導'}）${deltaText()}</div>
+    <span class="gh-saved">${s.flash ? '已儲存' : ''}</span></div>`
+}
+
+const seg = () => `<div class="goal-seg-wrap"><div class="seg" role="group" aria-label="目標計算方式">${[['auto', '自動'], ['custom', '自訂']].map(([k, l]) =>
+  `<button type="button" aria-pressed="${k === 'auto'}">${k === 'auto' ? '<span class="seg-thumb"></span>' : ''}<span class="seg-label">${l}</span></button>`).join('')}</div></div>`
+
+function confirmBox() {
+  const before = target(formula()), after = target(MEASURED)
+  const nowKg = (before - MEASURED) * 7 / KCAL_PER_KG
+  const planned = s.goal === 'cut' ? -weeklyKg() : s.goal === 'bulk' ? weeklyKg() : 0
+  return `<div class="cf">
+    <div class="cmp"><small>每日目標</small><span class="old">${r(before)}</span><span>→</span><span>${r(after)} 卡</span></div>
+    <div class="why">紀錄回推比公式推導少 ${r(formula() - MEASURED)} 卡。照現在的目標吃，每週約 ${weekly(nowKg)}，你設的是 ${weekly(planned)}。</div>
+    <div class="acts"><button class="g-btn quiet" type="button" data-act="close">先不要</button><button class="g-btn primary" type="button" data-act="adopt">改用紀錄回推</button></div>
+  </div>`
+}
+
+function maintenanceSec() {
+  const formulaOn = !usingRecord()
+  const actRow = `<label class="sub-pick"><span class="lb">活動係數</span><span class="val">${s.act}<small>${actName()}</small></span>${chev}
+    <select data-field="act" aria-label="活動係數">${ACTS.map(([v, l]) => opt(v, s.act, `${v}（${l}）`)).join('')}</select></label>`
+  const inuse = '<span class="tag inuse">使用中</span>'
+  // 使用中的那一列是 div（點了沒事）；沒在用的是 button，點了切過去
+  const row = (on, act, inner) => on ? `<div class="est on">${inner}</div>` : `<button class="est" type="button" data-act="${act}">${inner}</button>`
+  const formulaRow = row(formulaOn, 'revert', `<span class="radio" aria-hidden="true"></span>
+      <div class="tx"><div class="lb">公式推導${formulaOn ? inuse : ''}</div><div class="sub">BMR <b>${r(BMR)}</b> × 活動係數 <b>${s.act}</b></div></div>
+      <span class="val">${r(formula())} 卡</span>`) + (formulaOn ? actRow : '')
+  let recordRow
+  if (s.view === 'need') {
+    recordRow = `<div class="est"><span class="radio" aria-hidden="true"></span>
+        <div class="tx"><div class="lb">紀錄回推</div><div class="sub">用近 28 天吃的與體重變化倒推</div></div>
+        <span class="val">還算不出來</span></div>
+      <div class="meter"><div class="track"><i style="width:95%"></i></div>再記 1 天、量 1 筆體重，就算得出來。</div>`
+  } else {
+    const on = usingRecord()
+    recordRow = row(on, 'open', `<span class="radio" aria-hidden="true"></span>
+        <div class="tx"><div class="lb">紀錄回推${on ? inuse : ''}</div><div class="sub">平均吃 <b>${AVG_IN}</b> ＋ 體重換算 <b>${r(-SLOPE_DAY * KCAL_PER_KG)}</b></div></div>
+        <span class="val">${r(MEASURED)} 卡</span>`) + (!on && s.confirmOpen ? confirmBox() : '')
+  }
+  return `<div class="sec"><div class="sec-h"><span>① 維持熱量（TDEE）</span><span class="out">${r(inUse())} 卡</span></div>
+    <div class="card">${formulaRow}${recordRow}</div></div>`
+}
+
+function goalSec() {
+  const pr = (label, field, shown, options) =>
+    `<label class="g-pick"><span class="lb">${label}</span><span class="val">${shown}</span>${chev}<select data-field="${field}" aria-label="${label}">${options}</select></label>`
+  const out = s.goal === 'maintain' ? '± 0 卡' : `${s.goal === 'cut' ? '−' : '+'} ${r(delta())} 卡／天`
+  return `<div class="sec"><div class="sec-h"><span>② ${s.goal === 'maintain' ? '目標' : `${GOALS[s.goal]}多少`}</span><span class="out">${out}</span></div>
+    <div class="card">
+      ${pr('目標', 'goal', GOALS[s.goal], Object.entries(GOALS).map(([v, l]) => opt(v, s.goal, l)).join(''))}
+      ${s.goal !== 'maintain' ? pr('速度', 'rate', `${s.rate} kg/月`, RATES.map((v) => opt(v, s.rate, `${v} kg/月`)).join('')) : ''}
+    </div></div>`
+}
+
+function macroSec() {
+  const m = macros(target(inUse()))
+  const info = `<span class="pop-anchor"><button class="info" type="button" data-act="info" aria-expanded="${s.infoOpen}" aria-label="脂肪和碳水怎麼分">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg></button>
+      ${s.infoOpen ? `<span class="pop" role="dialog" aria-label="脂肪和碳水怎麼分">脂肪固定每公斤 0.85 g（<b>${r(m.f)}</b> g），剩下的熱量都給碳水（<b>${r(m.c)}</b> g）。</span>` : ''}</span>`
+  return `<div class="sec"><div class="sec-h"><span>③ 怎麼分${info}</span><span class="out">蛋白・脂肪・碳水</span></div>
+    <div class="card">
+      <label class="g-pick"><span class="lb">蛋白質</span><span class="val">${s.prot} g/kg<small>${r(m.p)}g</small></span>${chev}
+        <select data-field="prot" aria-label="蛋白質">${PROTEINS.map((v) => opt(v, s.prot, `${v} g/kg`)).join('')}</select></label>
+    </div></div>`
+}
+
+function howSec(open) {
+  const k = target(inUse()), m = macros(k)
+  const inuse = (on) => on ? '<span class="tag inuse">使用中</span>' : ''
+  const record = s.view === 'need'
+    ? `<div class="ln">維持熱量 ＝ 近 28 天平均每天吃的 − 體重每天的變化 × 7700</div>
+       <div class="fine">還算不出來：近 28 天要記滿 21 天、量 4 筆體重、體重橫跨 14 天以上。</div>`
+    : `<div class="ln">維持熱量 ＝ 近 28 天平均每天吃的 − 體重每天的變化 × 7700</div>
+       <div class="ln">體重每週 <b>${(SLOPE_DAY * 7).toFixed(2)}</b> kg ÷ 7 × 7700 ＝ 每天 <b>−${r(-SLOPE_DAY * KCAL_PER_KG)}</b> 卡（吃的比燒的少這麼多）</div>
+       <div class="ln">＝ <b>${AVG_IN}</b> − (−<b>${r(-SLOPE_DAY * KCAL_PER_KG)}</b>) ＝ <span class="res">約 ${r(MEASURED)} 卡</span></div>
+       <div class="fine">體重每週 ${(SLOPE_DAY * 7).toFixed(2)} kg 是 6 筆體重畫出的趨勢線，不是頭尾兩筆相減。估計範圍約 ${r(MEASURED - 120)}–${r(MEASURED + 120)} 卡（約六成把握）。漏記的餐會讓它偏低。</div>`
+  return `<div class="sec"><details class="how card"${open ? ' open' : ''}>
+    <summary class="g-pick as-btn"><span class="lb">怎麼算的</span>${chev}</summary>
+    <div class="calc">
+      <h3>① 公式推導${inuse(!usingRecord())}</h3>
+      <div class="ln">BMR（Mifflin-St Jeor）＝ 10 × 體重 <b>${KG}</b> ＋ 6.25 × 身高 <b>${HEIGHT}</b> − 5 × 年齡 <b>${AGE}</b> ＋ 5 ＝ <b>${r(BMR)}</b></div>
+      <div class="ln">維持熱量 ＝ BMR <b>${r(BMR)}</b> × 活動係數 <b>${s.act}</b> ＝ <span class="res">${r(formula())} 卡</span></div>
+      <h3>① 紀錄回推${inuse(usingRecord())}</h3>
+      ${record}
+      <h3>② ${s.goal === 'maintain' ? '維持' : GOALS[s.goal]}</h3>
+      ${s.goal === 'maintain'
+        ? '<div class="ln">維持不加不減，每日目標＝維持熱量。</div>'
+        : `<div class="ln">${s.rate} kg/月 × 12 ÷ 52 ＝ 每週 <b>${weeklyKg().toFixed(3)}</b> kg；1 公斤脂肪約 7700 卡</div>
+           <div class="ln">每天${s.goal === 'cut' ? '少' : '多'}吃 ＝ <b>${weeklyKg().toFixed(3)}</b> × 7700 ÷ 7 ＝ <span class="res">${r(delta())} 卡</span></div>`}
+      <div class="ln">每日目標 ＝ <b>${r(inUse())}</b>${s.goal === 'maintain' ? '' : ` ${s.goal === 'cut' ? '−' : '＋'} <b>${r(delta())}</b>`} ＝ <span class="res">${r(k)} 卡</span></div>
+      <h3>③ 怎麼分</h3>
+      <div class="ln">蛋白質 ＝ <b>${s.prot}</b> g × 體重 <b>${KG}</b> ＝ <span class="res">${r(m.p)} g</span></div>
+      <div class="ln">脂肪 ＝ <b>0.85</b> g × 體重 <b>${KG}</b> ＝ <span class="res">${r(m.f)} g</span></div>
+      <div class="ln">碳水 ＝（<b>${r(k)}</b> − 蛋白 <b>${r(m.p)}</b> × 4 − 脂肪 <b>${r(m.f)}</b> × 9）÷ 4 ＝ <span class="res">${r(m.c)} g</span></div>
+    </div></details></div>`
+}
+
+const bodySec = () => `<div class="sec"><div class="card">
+  <button class="g-pick as-btn" type="button"><span class="lb">身體數據</span><span class="val">${KG} kg</span>${chev}</button></div></div>`
+
+function render(root, open) {
+  const top = `<div class="mock-top"><span class="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span><h1>每日目標</h1></div>`
+  root.innerHTML = top + hero() + seg() + `<div class="g-scroll">${maintenanceSec() + goalSec() + macroSec() + bodySec() + howSec(open)}</div>`
+  if (open) { const sc = root.querySelector('.g-scroll'); sc.scrollTop = sc.scrollHeight }
+}
+
+const NOTES = {
+  need: '<b>記錄還不夠</b>：紀錄回推那列直接說還差什麼。活動係數縮排掛在「公式推導」下面——它只影響公式。',
+  ready: '<b>紀錄回推出新數字</b>：確認框就地展開在「紀錄回推」下面，寫改用後每日目標從多少變多少。按「先不要」收起來，要改用時再點一次「紀錄回推」那一列。',
+  measured: '<b>已改用紀錄回推</b>：圓點換到「紀錄回推」；要改回，點「公式推導」那一列，直接生效。活動係數跟著藏起來，因為用紀錄回推時它不影響目標。',
+}
+
+const paint = () => {
+  document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === s.view)))
+  render(document.getElementById('a'), false); render(document.getElementById('b'), true)
+  document.getElementById('a-note').innerHTML = NOTES[s.view] + ' <b>公式推導那列直接寫「BMR 1693 × 活動係數 1.375」</b>，紀錄回推那列寫「平均吃 1846 ＋ 體重換算 154」，兩個數字怎麼來的不用點開就看得到。'
+}
+let flashTimer
+const flash = () => { s.flash = true; paint(); clearTimeout(flashTimer); flashTimer = setTimeout(() => { s.flash = false; paint() }, 1500) }
+document.addEventListener('change', (e) => {
+  const f = e.target.dataset.field; if (!f) return
+  s[f] = f === 'goal' ? e.target.value : Number(e.target.value); flash()
+})
+document.addEventListener('click', (e) => {
+  const v = e.target.closest('[data-view]')
+  if (v) { s.view = v.dataset.view; s.confirmOpen = s.view === 'ready'; s.flash = false; return paint() }
+  // popover：點 ⓘ 開關，點外面收起（Esc 見下面的 keydown）
+  if (e.target.closest('[data-act="info"]')) { s.infoOpen = !s.infoOpen; return paint() }
+  if (s.infoOpen && !e.target.closest('.pop')) { s.infoOpen = false; paint() }
+  const a = e.target.closest('[data-act]'); if (!a) return
+  const act = a.dataset.act
+  if (act === 'open') { s.confirmOpen = true; paint() }
+  if (act === 'close') { s.confirmOpen = false; paint() }
+  if (act === 'adopt') { s.view = 'measured'; flash() }
+  if (act === 'revert') { s.view = 'ready'; s.confirmOpen = false; flash() }
+})
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && s.infoOpen) { s.infoOpen = false; paint() } })
+paint()
+</script>
+</body>
+</html>

@@ -170,35 +170,31 @@ test('基本資料清空時顯示 — 而不跳錯誤；失焦才擋、不送任
   await expect(heroNum(page)).toHaveText(/\d/)
 })
 
-test('怎麼算的預設收合；打開才看到 BMR 公式與四條依據，項目符號要畫得出來', async ({ page }) => {
+/* v2.118：「怎麼算的」三段算式都代入自己的數字，算到最後就是頂端的每日目標。
+   fixture：75.95 kg、175 cm、1993 年（年齡依跑測年份而變，從畫面讀）、男、1.375、0.5 kg/週、1.8 g/kg。 */
+test('怎麼算的預設收合；打開是三段算式、代入自己的數字，最後一行等於頂端的數字', async ({ page }) => {
   await openApp(page)
   await openGoal(page)
 
   const how = page.locator('.goal-how')
-  await expect(how.locator('.goal-src')).toBeHidden()
+  await expect(how.locator('.goal-calc')).toBeHidden()
 
   await how.locator('summary').click()
   expect(
     await how.locator('summary').evaluate((el) => getComputedStyle(el).outlineStyle),
     '滑鼠點開不該有焦點框，那是給鍵盤的',
   ).toBe('none')
-  const rules = how.locator('.goal-src')
-  await expect(rules).toBeVisible()
-  await expect(rules.locator('li')).toHaveCount(4)
-  await expect(rules).toContainText('0.85 g/kg')
-  // fixture 沒有體脂率 ⇒ BMR 那列要講現在用的公式
-  await expect(how.locator('.goal-row', { hasText: 'BMR' }).locator('.lb')).toContainText('Mifflin-St Jeor')
-
-  /* Tailwind 的 preflight 把 ul 的 list-style 清成 none，只留 padding-left 會四條黏成一片文字牆（2026-08-05）。
-     讀 li 不讀 ul：list-style-type 會繼承，ul 上讀到 disc 不代表 li 畫得出 marker。 */
-  const marker = await rules.locator('li').first().evaluate((el) => ({
-    type: getComputedStyle(el).listStyleType,
-    display: getComputedStyle(el.parentElement!).display,
-    color: getComputedStyle(el, '::marker').color,
-  }))
-  expect(marker.type, '項目符號又被清掉了').not.toBe('none')
-  expect(marker.display, 'ul 改成 flex/grid 之後 marker 不會渲染').toBe('block')
-  expect(marker.color, 'marker 被調成透明，等於看不到').not.toMatch(/rgba?\([^)]*,\s*0\)$/)
+  const calc = how.locator('.goal-calc')
+  await expect(calc).toBeVisible()
+  await expect(calc.locator('h3')).toHaveText(['① 公式推導使用中', '① 紀錄回推', '② 減重', '③ 怎麼分'])
+  // fixture 沒有體脂率 ⇒ 用 Mifflin-St Jeor，男性 ＋5，代入體重與身高
+  await expect(calc).toContainText('BMR（Mifflin-St Jeor）＝ 10 × 體重 75.95 ＋ 6.25 × 身高 175')
+  await expect(calc).toContainText('× 活動係數 1.375')
+  // 速度用資料庫存的 kg/週：0.5 × 7700 ÷ 7 ＝ 550
+  await expect(calc).toContainText('每天少吃 ＝ 0.5 × 7700 ÷ 7 ＝ 550 卡')
+  const target = await kcal(page)
+  await expect(calc).toContainText(`＝ ${target} 卡`)
+  await expect(calc).toContainText('脂肪 ＝ 0.85 g × 體重 75.95 ＝ 65 g')
 })
 
 /* 使用者回報的卡點：捲到選單時數字在畫面外約 345px，「即時預覽」等於看不到。 */
@@ -224,7 +220,9 @@ test('每一列命中區 ≥44px，整列都點得到 select', async ({ page }) 
   await openGoal(page)
 
   for (const id of ['g-goal', 'g-rate', 'g-protein', 'g-activity']) {
-    const row = page.locator(`.goal-pick:has(#${id})`)
+    const row = page.locator(`.goal-pick:has(#${id}), .goal-sub-pick:has(#${id})`)
+    // 版面變長後有些列在可視範圍外，elementFromPoint 只量得到看得見的點
+    await row.scrollIntoViewIfNeeded()
     const box = (await row.boundingBox())!
     expect(box.height, `${id} 那列矮於 44px`).toBeGreaterThanOrEqual(44)
     // 列的左緣、右緣點下去都要打到 select，不能只有值那一小塊有反應
@@ -235,13 +233,13 @@ test('每一列命中區 ≥44px，整列都點得到 select', async ({ page }) 
   }
 })
 
-test('最長的選項放得下：活動量那列的值不折行、不撞標籤', async ({ page }) => {
+test('最長的選項放得下：活動係數那列的值不折行、不撞標籤', async ({ page }) => {
   await openApp(page)
   await openGoal(page)
   await page.locator('#g-activity').selectOption('1.375')
 
-  const row = page.locator('.goal-pick', { hasText: '活動量' })
-  await expect(row.locator('.val')).toHaveText('輕度活動（1.375）')
+  const row = page.locator('.goal-sub-pick', { hasText: '活動係數' })
+  await expect(row.locator('.val')).toHaveText('1.375輕度活動')
   const { rowHeight, overflow } = await row.evaluate((el) => ({
     rowHeight: el.getBoundingClientRect().height,
     overflow: el.scrollWidth - el.clientWidth,
@@ -294,7 +292,7 @@ test('自訂目標：四格都標必填，離開整組才存、不合法不寫�
   await page.locator('.goal-seg-wrap .seg button', { hasText: '自動' }).click()
   await expect.poll(async () => (await profilePatches(page)).length).toBe(3)
   expect((await profilePatches(page))[2].body, '切回自動只動開關，自訂值要留著').toEqual({ use_custom_targets: false })
-  await expect(src(page)).toContainText('依公式估算')
+  await expect(src(page)).toContainText('（公式推導）')
 })
 
 test('切自動／自訂時捲動位置回頂：自訂第一格不會被捲走', async ({ page }) => {
@@ -336,6 +334,9 @@ function windowFix(kcalPerDay: number, weighInDays = [0, 5, 10, 15, 20, 26]): ty
 const card = (page: Page) => page.locator('[data-card="maintenance"]')
 const cardRow = (page: Page, label: string) => card(page).locator('.goal-row', { hasText: label }).locator('.val')
 const confirm = (page: Page) => page.locator('.goal-confirm')
+/** ① 維持熱量的兩種算法（公式推導／紀錄回推）那一列，與它右邊的數字。 */
+const est = (page: Page, label: string) => card(page).locator('.goal-est', { hasText: label })
+const estVal = (page: Page, label: string) => est(page, label).locator('.goal-est-val')
 const writes = (page: Page) => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)
 
 test('記錄不夠：說差什麼、有進度條、不給數字、不問', async ({ page }) => {
@@ -344,7 +345,9 @@ test('記錄不夠：說差什麼、有進度條、不給數字、不問', async
 
   await expect(card(page)).toContainText('記錄還差 21 天')
   await expect(card(page)).toContainText('體重還差 4 筆')
-  await expect(card(page)).toContainText('就能用你自己的數字')
+  await expect(card(page)).toContainText('就算得出來')
+  await expect(estVal(page, '紀錄回推')).toHaveText('還算不出來')
+  await expect(est(page, '紀錄回推'), '算不出來時那一列不能點').not.toHaveJSProperty('tagName', 'BUTTON')
   await expect(card(page).locator('.goal-meter-track')).toBeVisible()
   await expect(card(page), '不夠時不該出現「約 N 卡」').not.toContainText('約')
   await expect(confirm(page)).toHaveCount(0)
@@ -355,7 +358,11 @@ test('有新數字：確認卡列出前後目標、原因與依據；不按什�
   await openGoal(page)
 
   const before = await kcal(page)
-  await expect(confirm(page)).toContainText('你的記錄算出維持熱量約 2000 卡')
+  const formula = Number(((await estVal(page, '公式推導').textContent()) ?? '').replace(/[^\d]/g, ''))
+  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+  // 體重全程持平 ⇒ 平均吃多少就是多少，體重換算 0
+  await expect(est(page, '紀錄回推')).toContainText('平均吃 2000 ＋ 體重換算 0')
+  await expect(confirm(page)).toContainText(`紀錄回推比公式推導少 ${formula - 2000} 卡`)
   await expect(confirm(page).locator('.old')).toHaveText(String(before))
   // 2000 − 550
   await expect(confirm(page).locator('.new')).toHaveText('1450 卡')
@@ -398,12 +405,16 @@ test('改用：寫入兩欄、目標與來源都變、活動量消失；今日�
   await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
   expect((await profilePatches(page))[0].body).toEqual({ measured_tdee: 2000, measured_tdee_on: TODAY })
   await expect(heroNum(page)).toHaveText('1450')
-  await expect(src(page)).toContainText(`依 ${monthDay(TODAY)} 確認的記錄`)
+  await expect(src(page)).toContainText('維持熱量 2000（紀錄回推） − 減重 550')
+  await expect(est(page, '紀錄回推')).toContainText(`${monthDay(TODAY)} 確認的數字`)
   await expect(page.locator('.goal-saved')).toHaveText('已儲存')
   await expect(confirm(page), '改用後就在範圍內，不該再問').toHaveCount(0)
   await expect(page.locator('#g-activity'), '用回推值時目標不吃活動量').toHaveCount(0)
-  await expect(cardRow(page, '維持熱量')).toHaveText('2000 卡')
-  await expect(card(page).locator('.goal-row', { hasText: '依你的記錄推算' }), '同一個數字不列兩次').toHaveCount(0)
+  await expect(est(page, '紀錄回推')).toHaveClass(/\bon\b/)
+  await expect(est(page, '紀錄回推').locator('.goal-tag')).toHaveText('使用中')
+  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+  await expect(card(page).locator('.goal-sec-h .out')).toHaveText('2000 卡')
+  await expect(est(page, '公式推導'), '公式推導那列變成可以點回去').toHaveJSProperty('tagName', 'BUTTON')
 
   await page.getByRole('button', { name: '返回設定' }).click()
   await expect(page.locator('.entry-row', { hasText: '每日目標' }).locator('.lb-sub').first()).toContainText('1450 卡')
@@ -411,7 +422,7 @@ test('改用：寫入兩欄、目標與來源都變、活動量消失；今日�
   await expect(page.locator('.gauge-side .tgt')).toHaveText('1450')
 })
 
-test('先不要：不寫資料、收成一列；點那列卡片回來', async ({ page }) => {
+test('先不要：不寫資料、確認框收起；點紀錄回推那一列再開', async ({ page }) => {
   await openApp(page, {}, windowFix(2000))
   await openGoal(page)
   const before = await kcal(page)
@@ -421,7 +432,7 @@ test('先不要：不寫資料、收成一列；點那列卡片回來', async ({
   expect(await writes(page)).toBe(0)
   expect(await kcal(page)).toBe(before)
 
-  await card(page).locator('.goal-pick', { hasText: '要改用嗎' }).click()
+  await est(page, '紀錄回推').click()
   await expect(confirm(page)).toBeVisible()
 })
 
@@ -432,27 +443,28 @@ test('已改用的帳號：吃資料庫的值（numeric 字串）；改回公式
   await openGoal(page)
 
   await expect(heroNum(page)).toHaveText('1450')
-  await expect(src(page)).toContainText('依 10/30 確認的記錄')
+  await expect(src(page)).toContainText('維持熱量 2000（紀錄回推）')
+  await expect(est(page, '紀錄回推')).toContainText('10/30 確認的數字')
   await expect(confirm(page)).toHaveCount(0)
 
-  await card(page).locator('.goal-pick', { hasText: '改回公式' }).click()
+  await est(page, '公式推導').click()
   await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
   expect((await profilePatches(page))[0].body).toEqual({ measured_tdee: null, measured_tdee_on: null })
   await expect(heroNum(page)).not.toHaveText('1450')
-  await expect(src(page)).toContainText('依公式估算')
+  await expect(src(page)).toContainText('（公式推導）')
   await expect(page.locator('#g-activity')).toBeVisible()
   await expect(confirm(page), '剛改回公式就又跳卡片太吵').toHaveCount(0)
-  await expect(card(page).locator('.goal-pick', { hasText: '要改用嗎' })).toBeVisible()
+  await expect(est(page, '紀錄回推'), '改回之後點紀錄回推那一列可以再改用').toHaveJSProperty('tagName', 'BUTTON')
 })
 
-test('現用值在範圍內：不打擾，只列出回推值', async ({ page }) => {
+test('現用值在範圍內：不打擾，沒有「要更新嗎」', async ({ page }) => {
   // 公式值依年齡而變，不寫死：改用後現用值就等於回推值，一定在範圍內
   await openApp(page, {}, windowFix(2000))
   await openGoal(page)
   await confirm(page).locator('.goal-btn.primary').click()
   await expect(confirm(page)).toHaveCount(0)
-  await expect(cardRow(page, '維持熱量')).toHaveText('2000 卡')
-  await expect(card(page).locator('.goal-pick', { hasText: '要改用嗎' })).toHaveCount(0)
+  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+  await expect(card(page).locator('.goal-pick', { hasText: '要更新嗎' })).toHaveCount(0)
 })
 
 test('沒有低於基礎代謝就沒有紅字；體重滿 8 筆就沒有誤差加註', async ({ page }) => {
@@ -473,11 +485,145 @@ test('自訂目標模式：不問，但對帳跟著輸入框走', async ({ page 
   await expect(confirm(page)).toHaveCount(0)
   await page.locator('#g-custom-kcal').fill('1500')
 
-  await expect(cardRow(page, '依你的記錄推算')).toHaveText('約 2000 卡')
+  await expect(cardRow(page, '紀錄回推的維持熱量')).toHaveText('約 2000 卡')
   // (1500 − 2000) × 7 ÷ 7700 ≈ −0.45
   await expect(cardRow(page, '照這個目標吃')).toHaveText('每週約瘦 0.45 kg')
-  await expect(card(page).locator('.goal-row', { hasText: '維持熱量' }), '自訂沒有維持熱量可切換').toHaveCount(0)
+  await expect(card(page).locator('.goal-est'), '自訂沒有維持熱量可切換').toHaveCount(0)
   expect(await writes(page), '打字不該寫入').toBe(0)
+})
+
+/* ═══════════ v2.118 照算式排（樣張 daily-goal-v2.html）═══════════ */
+
+test('頂端：大數字標「每日目標」，算式膠囊的兩個數字相減剛好等於大數字', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+
+  await expect(page.locator('.goal-hero-cap')).toHaveText('每日目標')
+  const eq = ((await page.locator('.goal-hero-eq').textContent()) ?? '').trim()
+  const m = /^維持熱量 (\d+)（公式推導） − 減重 (\d+)$/.exec(eq)
+  expect(m, `算式膠囊的格式不對：「${eq}」`).not.toBeNull()
+  expect(Number(m![1]) - Number(m![2]), '算式要用畫面上的整數相減，才會剛好等於大數字').toBe(await kcal(page))
+  // 段標題右邊寫這段算出來的數字，跟算式對得起來
+  await expect(page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out')).toHaveText(`${m![1]} 卡`)
+  await expect(page.locator('.goal-sec-h', { hasText: '② 減重多少' }).locator('.out')).toHaveText(`− ${m![2]} 卡／天`)
+  // 公式推導那列直接寫 BMR × 活動係數，使用中
+  await expect(est(page, '公式推導')).toContainText('× 活動係數 1.375')
+  await expect(est(page, '公式推導').locator('.goal-tag')).toHaveText('使用中')
+
+  await page.locator('#g-goal').selectOption('maintain')
+  await expect(page.locator('.goal-hero-eq'), '維持沒有減項').toHaveText(`維持熱量 ${m![1]}（公式推導）`)
+  await expect(page.locator('.goal-sec-h', { hasText: '② 目標' }).locator('.out')).toHaveText('± 0 卡')
+})
+
+test('兩種維持熱量那兩列的算式不換行：393 寬、桌機捲軸佔掉 15px 也一樣', async ({ page }) => {
+  await openApp(page, {}, windowFix(2000))
+  await openGoal(page)
+  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+
+  const lines = async () =>
+    card(page).locator('.goal-est').evaluateAll((rows) =>
+      rows.map((row) => {
+        const sub = row.querySelector('.goal-est-sub') as HTMLElement
+        return { text: sub.textContent, clipped: sub.scrollWidth > sub.clientWidth + 1, h: sub.getBoundingClientRect().height }
+      }),
+    )
+  for (const l of await lines()) {
+    expect(l.clipped, `「${l.text}」被擠到截斷`).toBe(false)
+    expect(l.h, `「${l.text}」換行了`).toBeLessThan(24)
+  }
+  // 模擬桌機的實體捲軸：捲動區右邊多 15px
+  await page.addStyleTag({ content: '.goal-scroll { padding-right: calc(var(--s-5) + 15px) !important; }' })
+  for (const l of await lines()) expect(l.clipped, `有捲軸時「${l.text}」被擠到截斷`).toBe(false)
+})
+
+test('③ 怎麼分的 ⓘ：點了才出現脂肪碳水的規則，點外面、按 Esc 收起；命中區 ≥44px', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+
+  const info = page.getByRole('button', { name: '脂肪和碳水怎麼分' })
+  const pop = page.locator('.goal-pop')
+  await expect(pop).toHaveCount(0)
+  const hit = await info.evaluate((b) => {
+    const r = b.getBoundingClientRect()
+    const before = getComputedStyle(b, '::before')
+    return { w: r.width - 2 * parseFloat(before.left), h: r.height - 2 * parseFloat(before.top) }
+  })
+  expect(hit.w).toBeGreaterThanOrEqual(44)
+  expect(hit.h).toBeGreaterThanOrEqual(44)
+
+  const m = (await macros(page))!
+  await info.click()
+  await expect(pop).toBeVisible()
+  await expect(pop).toContainText(`脂肪固定每公斤 0.85 g（${m.fat} g），剩下的熱量都給碳水（${m.carb} g）`)
+  await page.keyboard.press('Escape')
+  await expect(pop).toHaveCount(0)
+
+  await info.click()
+  await expect(pop).toBeVisible()
+  await page.locator('.goal-hero').click()
+  await expect(pop).toHaveCount(0)
+})
+
+test('已改用、最新回推跑出範圍外：自己展開確認框；先不要之後有「要更新嗎」那一列', async ({ page }) => {
+  const fix = windowFix(2000)
+  Object.assign(fix.profile[0], { measured_tdee: 2300, measured_tdee_on: '2026-10-30' })
+  await openApp(page, {}, fix)
+  await openGoal(page)
+
+  await expect(estVal(page, '紀錄回推'), '使用中的是存下的數字').toHaveText('2300 卡')
+  await expect(confirm(page)).toContainText('紀錄回推比現在用的少 300 卡')
+  // 2300 − 550 → 2000 − 550
+  await expect(confirm(page).locator('.old')).toHaveText('1750')
+  await expect(confirm(page).locator('.new')).toHaveText('1450 卡')
+
+  await confirm(page).locator('.goal-btn.quiet').click()
+  await expect(confirm(page)).toHaveCount(0)
+  const update = card(page).locator('.goal-pick', { hasText: '最新紀錄回推約 2000 卡，要更新嗎' })
+  await update.click()
+  await confirm(page).locator('.goal-btn.primary').click()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  expect((await profilePatches(page))[0].body).toEqual({ measured_tdee: 2000, measured_tdee_on: TODAY })
+  await expect(heroNum(page)).toHaveText('1450')
+  await expect(update, '更新後就在範圍內').toHaveCount(0)
+})
+
+test('回推在範圍內：不自己跳確認框，但點紀錄回推那一列照樣能改用；切自訂再切回不會自己又開', async ({ page, context }) => {
+  // 公式值依年齡與體重而變：先用同一份體重（windowFix 是 75 kg）讀出來，再開一頁把近 28 天每天都吃這麼多、
+  // 體重持平 ⇒ 回推＝公式值，落在範圍內
+  await openApp(page, {}, windowFix(2000))
+  await openGoal(page)
+  const formula = Number(((await estVal(page, '公式推導').textContent()) ?? '').replace(/[^\d]/g, ''))
+  expect(formula).toBeGreaterThan(1000)
+
+  const p2 = await context.newPage()
+  await openApp(p2, {}, windowFix(formula))
+  await openGoal(p2)
+  await expect(estVal(p2, '紀錄回推')).toHaveText(`${formula} 卡`)
+  await expect(confirm(p2), '範圍內不打擾').toHaveCount(0)
+
+  await est(p2, '紀錄回推').click()
+  await expect(confirm(p2), '自己點的就要開').toBeVisible()
+  await p2.locator('.goal-seg-wrap .seg button', { hasText: '自訂' }).click()
+  await p2.locator('.goal-seg-wrap .seg button', { hasText: '自動' }).click()
+  await expect(confirm(p2), '切模式回來不該自己又開').toHaveCount(0)
+
+  await est(p2, '紀錄回推').click()
+  await confirm(p2).locator('.goal-btn.primary').click()
+  await expect.poll(async () => (await profilePatches(p2)).length).toBe(1)
+  expect((await profilePatches(p2))[0].body).toEqual({ measured_tdee: formula, measured_tdee_on: TODAY })
+  await expect(est(p2, '紀錄回推').locator('.goal-tag')).toHaveText('使用中')
+})
+
+test('怎麼算的：速度寫選單上的值（不是換算回來的 2.17），後面註明存成每週多少', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page)
+  await page.locator('#g-rate').selectOption('1.5')
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  await page.locator('.goal-how summary').click()
+  // 1.5 kg/月 存成 0.35 kg/週 ⇒ 0.35 × 7700 ÷ 7 ＝ 385
+  await expect(page.locator('.goal-calc')).toContainText('速度 1.5 kg/月（存成每週 0.35 kg）')
+  await expect(page.locator('.goal-calc')).toContainText('每天少吃 ＝ 0.35 × 7700 ÷ 7 ＝ 385 卡')
+  await expect(page.locator('.goal-hero-eq')).toContainText('− 減重 385')
 })
 
 test('讀不到記錄：不拖垮頁面，也不問', async ({ page }) => {
@@ -487,7 +633,7 @@ test('讀不到記錄：不拖垮頁面，也不問', async ({ page }) => {
   await expect(page.locator('.entry-row', { hasText: '每日目標' }).locator('.lb-new')).toHaveCount(0)
   await page.locator('.entry-row', { hasText: '每日目標' }).click()
 
-  await expect(card(page)).toContainText('讀不到記錄')
+  await expect(estVal(page, '紀錄回推')).toHaveText('讀不到紀錄')
   expect(await kcal(page)).toBeGreaterThan(0)
   await expect(confirm(page)).toHaveCount(0)
   expect(await writes(page)).toBe(0)
@@ -497,7 +643,7 @@ test('設定頁入口：有新數字才多一句，改用後消失', async ({ pa
   await openApp(page, {}, windowFix(2000))
   await page.locator('.tab[aria-label="設定"]').click()
   const entry = page.locator('.entry-row', { hasText: '每日目標' })
-  await expect(entry.locator('.lb-new')).toHaveText('記錄算出新的維持熱量')
+  await expect(entry.locator('.lb-new')).toHaveText('紀錄回推出新的維持熱量')
   const colors = await entry.locator('.lb-new').evaluate((el) => ({
     own: getComputedStyle(el).color,
     accent: (() => {
@@ -541,10 +687,9 @@ test('體重有雜訊：怎麼算的裡顯示估計範圍，且包住估計值',
   await openGoal(page)
   await page.locator('.goal-how summary').click()
 
-  const main = Number(((await cardRow(page, '依你的記錄推算').textContent()) ?? '').replace(/[^\d]/g, ''))
-  const rangeRow = page.locator('.goal-how .goal-row', { hasText: '估計範圍' }).locator('.val')
-  const m = /^(\d+)–(\d+) 卡$/.exec(((await rangeRow.textContent()) ?? '').trim())
-  expect(m, '有雜訊時應顯示「low–high 卡」').not.toBeNull()
+  const main = Number(((await estVal(page, '紀錄回推').textContent()) ?? '').replace(/[^\d]/g, ''))
+  const m = /估計範圍約 (\d+)–(\d+) 卡/.exec((await page.locator('.goal-calc').textContent()) ?? '')
+  expect(m, '有雜訊時應顯示「估計範圍約 low–high 卡」').not.toBeNull()
   expect(Number(m![1])).toBeLessThan(main)
   expect(Number(m![2])).toBeGreaterThan(main)
 })
@@ -553,7 +698,7 @@ test('體重全程持平：範圍收斂成一點就不顯示那一列', async ({
   await openApp(page, {}, windowFix(2000))
   await openGoal(page)
   await page.locator('.goal-how summary').click()
-  await expect(page.locator('.goal-how .goal-row', { hasText: '估計範圍' })).toHaveCount(0)
+  await expect(page.locator('.goal-calc')).not.toContainText('估計範圍')
   await expect(page.locator('.goal-how')).toContainText('依據近 28 天：記錄 28 天、體重 6 筆')
 })
 
@@ -567,9 +712,10 @@ test('一筆體重打錯（57.5 之於 75.5）：說資料有誤，不給離譜�
   await openApp(page, {}, mistyped)
   await openGoal(page)
 
-  await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料看起來有誤')
+  await expect(estVal(page, '紀錄回推')).toHaveText('資料看起來有誤')
   await expect(card(page)).toContainText('不像真的')
   await expect(card(page), '離譜的時候不該同時顯示一個「約 N 卡」').not.toContainText('約')
+  await expect(est(page, '紀錄回推'), '資料有誤時不能點那一列改用').not.toHaveJSProperty('tagName', 'BUTTON')
   await expect(confirm(page)).toHaveCount(0)
 })
 
@@ -578,7 +724,7 @@ test('飲食記錄打錯（體重走勢正常）：叫人去查飲食記錄，�
   await openApp(page, {}, windowFix(5500))
   await openGoal(page)
 
-  await expect(cardRow(page, '依你的記錄推算')).toHaveText('資料看起來有誤')
+  await expect(estVal(page, '紀錄回推')).toHaveText('資料看起來有誤')
   await expect(card(page)).toContainText('飲食記錄')
   await expect(card(page), '真因是飲食記錄時不該叫人去查體重').not.toContainText('體重紀錄有沒有打錯')
 })
@@ -601,7 +747,7 @@ test('近 28 天沒記、更早有完整一段：只當參考、明寫起訖日�
   const from = shiftDate(TODAY, -1 - 57)
   const end = shiftDate(TODAY, -1 - 30)
   // 日期要在**標題那一列**就出現：只放在灰色說明框的話，掃一眼的人會把舊數字當成現在的（review M4）
-  const row = card(page).locator('.goal-row', { hasText: '依你的記錄推算' })
+  const row = card(page).locator('.goal-row', { hasText: '紀錄回推（' })
   await expect(row.locator('.lb')).toContainText(`${monthDay(from)}–${monthDay(end)}`)
   await expect(row.locator('.val')).toHaveText('約 1800 卡')
   await expect(card(page)).toContainText('不是近 28 天')
@@ -610,7 +756,8 @@ test('近 28 天沒記、更早有完整一段：只當參考、明寫起訖日�
   await expect(card(page)).toContainText('記錄還差 21 天')
   await expect(card(page)).toContainText('接回記錄後')
   await expect(confirm(page), '舊的一段不能改用').toHaveCount(0)
-  await expect(card(page).locator('.goal-pick', { hasText: '要改用嗎' })).toHaveCount(0)
+  await expect(est(page, '紀錄回推'), '舊的一段不能點那一列改用').not.toHaveJSProperty('tagName', 'BUTTON')
+  await expect(estVal(page, '紀錄回推')).toHaveText('還算不出來')
 })
 
 test('天天有記只是體重太少：說「多量幾次體重」，不說「接回記錄」', async ({ page }) => {
@@ -624,7 +771,7 @@ test('天天有記只是體重太少：說「多量幾次體重」，不說「�
   await openApp(page, {}, { ...FIX, kcalWindow, weight } as unknown as typeof FIX)
   await openGoal(page)
 
-  await expect(cardRow(page, '依你的記錄推算')).toContainText('約 1800 卡')
+  await expect(card(page).locator('.goal-row', { hasText: '紀錄回推（' }).locator('.val')).toContainText('約 1800 卡')
   await expect(card(page)).toContainText('多量幾次體重')
   await expect(card(page), '天天都有記，不該叫人去「接回記錄」').not.toContainText('接回記錄')
 })
@@ -644,7 +791,7 @@ test('intake 超過一頁（2520 列）要翻頁抓完，不能只拿第一頁',
   await openApp(page, {}, { ...FIX, kcalWindow, weight } as unknown as typeof FIX)
   await openGoal(page)
 
-  await expect(cardRow(page, '依你的記錄推算')).toHaveText('約 1800 卡')
+  await expect(estVal(page, '紀錄回推')).toHaveText('1800 卡')
 
   // 只數這張卡自己的那條（from＝今天往前 118 天）；月份小點的查詢形狀相同，不能混進來
   const offsets = await page.evaluate(
@@ -850,8 +997,10 @@ test('已改用回推值時清空出生年：NaN 不進畫面', async ({ page })
 
   await expect(heroNum(page), '回推值不吃出生年，目標照算').toHaveText('1450')
   await expect(page.locator('[data-screen="daily-goal"]')).not.toContainText('NaN')
-  await expect(card(page).locator('.goal-pick', { hasText: '改回公式' })).toHaveCount(0)
-  await expect(page.locator('.goal-how .goal-row', { hasText: 'BMR' }).locator('.val')).toHaveText('— 卡')
+  // 公式算不出來：那一列寫 —、不能點（點了改回會讓目標算不出來）
+  await expect(estVal(page, '公式推導')).toHaveText('—')
+  await expect(est(page, '公式推導')).not.toHaveJSProperty('tagName', 'BUTTON')
+  await expect(page.locator('.goal-calc')).toContainText('年齡 —')
 })
 
 test('速度五格存完都認得回來：kg/週 兩位小數換回 kg/月 的誤差在容差內', async ({ page }) => {

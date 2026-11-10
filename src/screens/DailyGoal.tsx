@@ -1,12 +1,16 @@
-/* 每日目標頁（spec.md「每日目標改版」，樣張 _design-sample/daily-goal.html 方案 B）。
+/* 每日目標頁（spec.md「每日目標改版」，樣張 _design-sample/daily-goal-v2.html：照算式排）。
 
-   數字固定在上面、不隨捲動離開；每項一列，點整列叫出系統滾輪，改了就存。**只送改動的那個欄位**：
-   沒碰過的欄位根本不會寫，所以選單為了顯示取的近似值不可能蓋掉資料庫的真實值。
-   維持熱量只有一個：確認過的回推值，沒有就是公式。回推值要按「改用」才生效。 */
+   頁面長得跟算式一樣：頂端「每日目標」與一行算式（維持熱量 − 減重），下面 ① 維持熱量（TDEE）
+   → ② 減重多少 → ③ 怎麼分，段尾寫這段算出來的數字；「怎麼算的」把每一段代入自己的數字。
+   每項一列，點整列叫出系統滾輪，改了就存。**只送改動的那個欄位**：沒碰過的欄位根本不會寫，
+   所以選單為了顯示取的近似值不可能蓋掉資料庫的真實值。
+   維持熱量只有一個在用：確認過的回推值，沒有就是公式。回推值要按「改用」才生效。 */
 import { useEffect, useRef, useState } from 'react'
+import { Popover } from '@base-ui/react/popover'
 import {
   ACTIVITY_FACTOR_PRESETS,
   computeTargets,
+  FAT_G_PER_KG,
   num,
   numOrNull,
   PROTEIN_G_PER_KG_PRESETS,
@@ -18,18 +22,19 @@ import {
 import type { ProfileRow, Weight } from '@/lib/api'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { checkBodyBasics, checkCustomTargets } from '@/lib/goalForm'
-import { localDate, monthDay } from '@/lib/dates'
+import { localDate } from '@/lib/dates'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import { adviceOf, type MaintenanceEstimate } from '@/useMaintenanceEstimate'
-import MaintenanceCard, { ConfirmCard, EstimateDetail } from './MaintenanceCard'
+import MaintenanceSection, { CalcDetail, ConfirmCard, CustomCompare } from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
 const ACTIVITY_LABELS = ['久坐不動', '輕度活動', '中度活動', '高度活動', '非常活躍']
-const activityLabel = (v: number) => {
+const activityName = (v: number) => {
   const i = ACTIVITY_FACTOR_PRESETS.findIndex((p) => p === v)
-  return i >= 0 ? `${ACTIVITY_LABELS[i]}（${v}）` : `${v}`
+  return i >= 0 ? ACTIVITY_LABELS[i] : ''
 }
+const activityLabel = (v: number) => (activityName(v) ? `${v}（${activityName(v)}）` : `${v}`)
 const GOAL_LABEL: Record<Goal, string> = { cut: '減重', maintain: '維持', bulk: '增肌' }
 
 /** 「已儲存」閃多久：只是回報，時間是假設值，夠看到就好。 */
@@ -58,17 +63,19 @@ interface PickRowProps {
   id: string
   label: string
   shown: string
+  /** 值後面的淡色補充（蛋白質換算成的克數）。 */
+  extra?: string
   value: string
   onChange: (v: string) => void
   children: React.ReactNode
 }
 
 /** 一列：左標籤、右目前值，整列是原生 select 的命中區，iOS 叫出系統滾輪。 */
-function PickRow({ id, label, shown, value, onChange, children }: PickRowProps) {
+function PickRow({ id, label, shown, extra, value, onChange, children }: PickRowProps) {
   return (
     <label className="goal-pick" htmlFor={id}>
       <span className="lb">{label}</span>
-      <span className="val">{shown}</span>
+      <span className="val">{shown}{extra && <small>{extra}</small>}</span>
       {CHEV}
       <select id={id} aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>{children}</select>
     </label>
@@ -117,6 +124,8 @@ export default function DailyGoal(props: DailyGoalProps) {
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  /** 使用者自己點了「紀錄回推」那一列（數字在範圍內、確認框沒自己跳出來時也能改用）。 */
+  const [picked, setPicked] = useState(false)
 
   /* 只有離開整組欄位才檢查與儲存：依序填到一半切下一格不算，不然第一格填完就跳紅字。 */
   const leavingForm = (e: React.FocusEvent<HTMLFormElement>) => !e.currentTarget.contains(e.relatedTarget as Node | null)
@@ -248,15 +257,20 @@ export default function DailyGoal(props: DailyGoalProps) {
 
   const inUseTdee = isCustom ? null : (preview?.tdee ?? null)
   const advice = adviceOf(estimate, inUseTdee)
-  const adopted = advice?.kind === 'new' ? Math.round(advice.result.maintenance) : null
+  /* 最新 28 天算得出來就能改用：差很多時自己展開確認框（advice 'new'），範圍內不打擾，但點那一列照樣可以改用。 */
+  const current = estimate.state === 'done' && estimate.current.status === 'ok' ? estimate.current : null
+  const adopted = current ? Math.round(current.maintenance) : null
   const afterKcal = adopted !== null
     ? computeTargets({ ...effective, use_custom_targets: false, birth_year: reqNum(basics.birthYear), height_cm: reqNum(basics.height), measured_tdee: adopted }, weightKg, bodyFatPct).kcal
     : null
+  const confirmShown = !isCustom && current !== null && preview !== null && afterKcal !== null &&
+    ((advice?.kind === 'new' && !dismissed) || picked)
 
   /* 判斷一律看 effective（含還沒回來的改動），看 profile 會在請求途中做出錯的決定。 */
   function pickMode(key: 'auto' | 'custom') {
     if (scrollRef.current) scrollRef.current.scrollTop = 0
     failedKeysRef.current.clear()
+    setPicked(false) // 點開過確認框又切模式：回來時不該自己又打開
     setErr(null)
     if (key === 'custom') {
       setIsCustom(true)
@@ -337,19 +351,42 @@ export default function DailyGoal(props: DailyGoalProps) {
   const protein = choices(PROTEIN_G_PER_KG_PRESETS, num(effective.protein_g_per_kg))
 
   const heroKcal = isCustom ? (Number.isFinite(customKcal) ? customKcal : null) : (preview?.kcal ?? null)
-  const source = isCustom
-    ? (!customValid ? '填完才生效' : customDirty ? '未儲存' : '自己填的')
-    : basicsDirty
-      ? '未儲存'
-      : usingMeasured
-        ? (measuredOn ? `依 ${monthDay(measuredOn)} 確認的記錄` : '依確認的記錄')
-        : '依公式估算'
+  const customSource = !customValid ? '填完才生效' : customDirty ? '未儲存' : '自己填的，不從維持熱量算'
+  /* 算式用畫面上的整數相減，2328 − 385 才會剛好等於大數字（各自捨入會差 1）。 */
+  const shownTdee = preview?.tdee != null && Number.isFinite(preview.tdee) ? Math.round(preview.tdee) : null
+  const shownDelta = shownTdee !== null && preview ? Math.abs(shownTdee - Math.round(preview.kcal)) : null
+  const deltaWord = goal === 'cut' ? '減重' : '增肌'
+  const deltaSign = goal === 'cut' ? '−' : '＋'
+
+  function adopt() {
+    if (adopted === null) return
+    setPicked(false)
+    setDismissed(false)
+    save({ measured_tdee: adopted, measured_tdee_on: localDate() })
+  }
+  function revert() {
+    setPicked(false)
+    setDismissed(true)
+    save({ measured_tdee: null, measured_tdee_on: null })
+  }
+
+  const activityRow = (
+    <label className="goal-sub-pick" htmlFor="g-activity">
+      <span className="lb">活動係數</span>
+      <span className="val">{activity.selected}<small>{activityName(activity.selected)}</small></span>
+      {CHEV}
+      <select id="g-activity" aria-label="活動係數" value={String(activity.selected)} onChange={(e) => save({ activity_factor: Number(e.target.value) })}>
+        {activity.list.map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}
+      </select>
+    </label>
+  )
 
   return (
     <div className="main" data-screen="daily-goal">
       <SubPageTop title="每日目標" backLabel="返回設定" onBack={() => { commitTyped(); onBack() }} />
 
       <div className="goal-hero">
+        <div className="goal-hero-cap">每日目標</div>
         <div>
           <span className="gauge-num">{heroKcal !== null ? Math.round(heroKcal) : '—'}</span>
           <span className="gauge-unit">卡</span>
@@ -362,8 +399,17 @@ export default function DailyGoal(props: DailyGoalProps) {
               : '欄位還沒填完，先看不出目標'}
         </div>
         <div className="goal-hero-src">
-          <span>{source}</span>
-          <span className="goal-saved" role="status">{saved ? '已儲存' : ''}</span>
+          {isCustom
+            ? <span className="goal-hero-eq">{customSource}</span>
+            : shownTdee !== null && (
+              <span className="goal-hero-eq">
+                維持熱量 <b>{shownTdee}</b>（{usingMeasured ? '紀錄回推' : '公式推導'}）
+                {goal !== 'maintain' && shownDelta !== null && <> {deltaSign} {deltaWord} <b>{shownDelta}</b></>}
+              </span>
+            )}
+          <span className={basicsDirty && !isCustom ? 'goal-unsaved' : 'goal-saved'} role="status">
+            {basicsDirty && !isCustom ? '未儲存' : saved ? '已儲存' : ''}
+          </span>
         </div>
       </div>
 
@@ -380,93 +426,116 @@ export default function DailyGoal(props: DailyGoalProps) {
 
       <div className="form-wrap goal-scroll" style={{ paddingTop: 0 }} ref={scrollRef}>
         {isCustom ? (
-          <form className="goal-custom" onSubmit={(e) => { e.preventDefault(); blurCustom() }} onBlur={(e) => { if (leavingForm(e)) blurCustom() }}>
-            {field({ id: 'g-custom-kcal', label: '熱量（卡）', value: custom.kcal, onChange: editCustom('kcal') })}
-            <div className="goal-macro-grid">
-              {field({ id: 'g-custom-protein', label: '蛋白 g', value: custom.protein, onChange: editCustom('protein') })}
-              {field({ id: 'g-custom-fat', label: '脂肪 g', value: custom.fat, onChange: editCustom('fat') })}
-              {field({ id: 'g-custom-carb', label: '碳水 g', value: custom.carb, onChange: editCustom('carb') })}
-            </div>
-            {customValid && (
-              <p className="goal-sum">
-                三大營養素加起來 <b>{Math.round(customSum)}</b> 卡
-                {Math.round(customSum) === Math.round(customKcal)
-                  ? '，和熱量一致'
-                  : `，比熱量${customSum > customKcal ? '多' : '少'} `}
-                {Math.round(customSum) !== Math.round(customKcal) && <><b>{Math.abs(Math.round(customSum - customKcal))}</b> 卡</>}
-              </p>
-            )}
-          </form>
+          <>
+            <form className="goal-custom" onSubmit={(e) => { e.preventDefault(); blurCustom() }} onBlur={(e) => { if (leavingForm(e)) blurCustom() }}>
+              {field({ id: 'g-custom-kcal', label: '熱量（卡）', value: custom.kcal, onChange: editCustom('kcal') })}
+              <div className="goal-macro-grid">
+                {field({ id: 'g-custom-protein', label: '蛋白 g', value: custom.protein, onChange: editCustom('protein') })}
+                {field({ id: 'g-custom-fat', label: '脂肪 g', value: custom.fat, onChange: editCustom('fat') })}
+                {field({ id: 'g-custom-carb', label: '碳水 g', value: custom.carb, onChange: editCustom('carb') })}
+              </div>
+              {customValid && (
+                <p className="goal-sum">
+                  三大營養素加起來 <b>{Math.round(customSum)}</b> 卡
+                  {Math.round(customSum) === Math.round(customKcal)
+                    ? '，和熱量一致'
+                    : `，比熱量${customSum > customKcal ? '多' : '少'} `}
+                  {Math.round(customSum) !== Math.round(customKcal) && <><b>{Math.abs(Math.round(customSum - customKcal))}</b> 卡</>}
+                </p>
+              )}
+            </form>
+            <CustomCompare estimate={estimate} targetKcal={heroKcal} />
+          </>
         ) : (
           <>
-            {advice?.kind === 'new' && !dismissed && preview && afterKcal !== null && (
-              <ConfirmCard
-                result={advice.result}
-                beforeKcal={preview.kcal}
-                afterKcal={afterKcal}
-                bmr={finiteOrNull(preview.bmr)}
-                plannedKgPerWeek={plannedKgPerWeek}
-                onAdopt={() => { setDismissed(false); save({ measured_tdee: adopted, measured_tdee_on: localDate() }) }}
-                onDismiss={() => setDismissed(true)}
-              />
-            )}
+            <MaintenanceSection
+              estimate={estimate}
+              inUseTdee={inUseTdee}
+              formulaTdee={finiteOrNull(preview?.formulaTdee)}
+              bmr={finiteOrNull(preview?.bmr)}
+              activityFactor={activity.selected}
+              usingMeasured={usingMeasured}
+              measuredTdee={numOrNull(effective.measured_tdee)}
+              measuredOn={measuredOn ?? null}
+              activityRow={activityRow}
+              onOpenConfirm={() => { setPicked(true); setDismissed(false) }}
+              onRevert={revert}
+              confirm={confirmShown && current && preview && afterKcal !== null && inUseTdee !== null ? (
+                <ConfirmCard
+                  result={current}
+                  beforeKcal={preview.kcal}
+                  afterKcal={afterKcal}
+                  inUseTdee={inUseTdee}
+                  usingMeasured={usingMeasured}
+                  bmr={finiteOrNull(preview.bmr)}
+                  plannedKgPerWeek={plannedKgPerWeek}
+                  onAdopt={adopt}
+                  onDismiss={() => { setPicked(false); setDismissed(true) }}
+                />
+              ) : null}
+            />
 
-            <div className="goal-group">
-              <PickRow id="g-goal" label="目標" shown={GOAL_LABEL[goal]} value={goal} onChange={(v) => pickGoal(v as Goal)}>
-                {(Object.keys(GOAL_LABEL) as Goal[]).map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}</option>)}
-              </PickRow>
-              {goal !== 'maintain' && (
-                <PickRow
-                  id="g-rate"
-                  label="速度"
-                  shown={`${rate.selected} kg/月`}
-                  value={String(rate.selected)}
-                  onChange={(v) => save({ rate_kg_per_week: weeklyRate(Number(v)) })}
-                >
-                  {rate.list.map((v) => <option key={v} value={v}>{v} kg/月</option>)}
-                </PickRow>
-              )}
-              <PickRow
-                id="g-protein"
-                label="蛋白質"
-                shown={`${protein.selected} g/kg`}
-                value={String(protein.selected)}
-                onChange={(v) => save({ protein_g_per_kg: Number(v) })}
-              >
-                {protein.list.map((v) => <option key={v} value={v}>{v} g/kg</option>)}
-              </PickRow>
-              {/* 用回推值時目標不吃活動量，留著只會讓人以為改了有用 */}
-              {!usingMeasured && (
-                <PickRow
-                  id="g-activity"
-                  label="活動量"
-                  shown={activityLabel(activity.selected)}
-                  value={String(activity.selected)}
-                  onChange={(v) => save({ activity_factor: Number(v) })}
-                >
-                  {activity.list.map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}
-                </PickRow>
-              )}
-            </div>
-          </>
-        )}
-
-        <MaintenanceCard
-          estimate={estimate}
-          inUseTdee={inUseTdee}
-          formulaTdee={finiteOrNull(preview?.formulaTdee)}
-          usingMeasured={usingMeasured}
-          targetKcal={heroKcal}
-          isCustom={isCustom}
-          dismissed={dismissed}
-          onUndismiss={() => setDismissed(false)}
-          onRevert={() => { setDismissed(true); save({ measured_tdee: null, measured_tdee_on: null }) }}
-        />
-
-        {!isCustom && (
-          <>
-            {bodyFatPct === null && (
+            <div className="goal-sec">
+              <div className="goal-sec-h">
+                <span>② {goal === 'maintain' ? '目標' : `${deltaWord}多少`}</span>
+                <span className="out">{goal === 'maintain' ? '± 0 卡' : shownDelta !== null ? `${deltaSign} ${shownDelta} 卡／天` : '—'}</span>
+              </div>
               <div className="goal-group">
+                <PickRow id="g-goal" label="目標" shown={GOAL_LABEL[goal]} value={goal} onChange={(v) => pickGoal(v as Goal)}>
+                  {(Object.keys(GOAL_LABEL) as Goal[]).map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}</option>)}
+                </PickRow>
+                {goal !== 'maintain' && (
+                  <PickRow
+                    id="g-rate"
+                    label="速度"
+                    shown={`${rate.selected} kg/月`}
+                    value={String(rate.selected)}
+                    onChange={(v) => save({ rate_kg_per_week: weeklyRate(Number(v)) })}
+                  >
+                    {rate.list.map((v) => <option key={v} value={v}>{v} kg/月</option>)}
+                  </PickRow>
+                )}
+              </div>
+            </div>
+
+            <div className="goal-sec">
+              <div className="goal-sec-h">
+                <span className="goal-sec-title">
+                  ③ 怎麼分
+                  {preview && (
+                    <Popover.Root>
+                      <Popover.Trigger className="goal-info" aria-label="脂肪和碳水怎麼分">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" /></svg>
+                      </Popover.Trigger>
+                      <Popover.Portal>
+                        <Popover.Positioner className="goal-pop-pos" side="bottom" align="start" sideOffset={8} collisionPadding={16}>
+                          <Popover.Popup className="goal-pop">
+                            <Popover.Arrow className="goal-pop-arrow" />
+                            脂肪固定每公斤 {FAT_G_PER_KG} g（<b>{Math.round(preview.fat)}</b> g），剩下的熱量都給碳水（<b>{Math.round(preview.carb)}</b> g）。
+                          </Popover.Popup>
+                        </Popover.Positioner>
+                      </Popover.Portal>
+                    </Popover.Root>
+                  )}
+                </span>
+                <span className="out">蛋白・脂肪・碳水</span>
+              </div>
+              <div className="goal-group">
+                <PickRow
+                  id="g-protein"
+                  label="蛋白質"
+                  shown={`${protein.selected} g/kg`}
+                  extra={preview ? `${Math.round(preview.protein)}g` : undefined}
+                  value={String(protein.selected)}
+                  onChange={(v) => save({ protein_g_per_kg: Number(v) })}
+                >
+                  {protein.list.map((v) => <option key={v} value={v}>{v} g/kg</option>)}
+                </PickRow>
+              </div>
+            </div>
+
+            {bodyFatPct === null && (
+              <div className="goal-group goal-sec">
                 <div className="goal-group-title">基本資料</div>
                 <form style={{ padding: '0 var(--s-4) var(--s-3)' }} onSubmit={(e) => { e.preventDefault(); blurBasics() }} onBlur={(e) => { if (leavingForm(e)) blurBasics() }}>
                   {field({ id: 'g-birth-year', label: '出生年', value: basics.birthYear, onChange: editBasics('birthYear') })}
@@ -484,7 +553,7 @@ export default function DailyGoal(props: DailyGoalProps) {
               </div>
             )}
 
-            <div className="goal-group">
+            <div className="goal-group goal-sec">
               <button type="button" className="goal-pick as-btn" onClick={() => { commitTyped(); onOpenBodyUpdate() }}>
                 <span className="lb">身體數據</span>
                 <span className="val">{weightKg.toFixed(2)} kg{bodyFatPct !== null && `・${num(bodyFatPct).toFixed(1)}%`}</span>
@@ -494,19 +563,31 @@ export default function DailyGoal(props: DailyGoalProps) {
 
             <details className="goal-group goal-how">
               <summary className="goal-pick"><span className="lb">怎麼算的</span>{CHEV}</summary>
-              <div className="goal-row">
-                <span className="lb">BMR（{bodyFatPct !== null ? 'Katch-McArdle' : 'Mifflin-St Jeor'}）</span>
-                <span className="val">{finiteOrNull(preview?.bmr) !== null ? Math.round(preview!.bmr!) : '—'} 卡</span>
-              </div>
-              <EstimateDetail estimate={estimate} targetKcal={preview?.kcal ?? null} plannedKgPerWeek={plannedKgPerWeek} />
-              <div className="goal-src">
-                <ul>
-                  <li>維持熱量：按過「改用」就是你確認的回推值，否則是 BMR × 活動量</li>
-                  <li>BMR：有體脂率用 Katch-McArdle，沒有用 Mifflin-St Jeor</li>
-                  <li>目標＝維持熱量 ± 速度換算（7700 卡／公斤）</li>
-                  <li>蛋白質＝體重 × g/kg；脂肪＝體重 × 0.85 g/kg；碳水取剩餘熱量 ÷ 4</li>
-                </ul>
-              </div>
+              {preview && (
+                <CalcDetail
+                  estimate={estimate}
+                  usingMeasured={usingMeasured}
+                  measuredTdee={numOrNull(effective.measured_tdee)}
+                  weightKg={weightKg}
+                  bodyFatPct={bodyFatPct !== null && Number.isFinite(num(bodyFatPct)) ? num(bodyFatPct) : null}
+                  heightCm={reqNum(basics.height)}
+                  age={preview.age}
+                  sex={effective.sex}
+                  bmr={finiteOrNull(preview.bmr)}
+                  activityFactor={num(effective.activity_factor)}
+                  formulaTdee={finiteOrNull(preview.formulaTdee)}
+                  inUseTdee={inUseTdee}
+                  goal={goal}
+                  rateKgPerMonth={goal === 'maintain' ? null : rate.selected}
+                  rateKgPerWeek={rateWeekly}
+                  proteinGPerKg={num(effective.protein_g_per_kg)}
+                  kcal={preview.kcal}
+                  protein={preview.protein}
+                  fat={preview.fat}
+                  carb={preview.carb}
+                  plannedKgPerWeek={plannedKgPerWeek}
+                />
+              )}
             </details>
           </>
         )}
