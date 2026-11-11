@@ -261,7 +261,7 @@ describe('read-label 辨識', () => {
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
     const sent = JSON.parse(init.body as string)
-    // v2.128：跟分類一樣走主模型＋備援（預設 deepseek 先、qwen 備援），model 與 models 一起送語意不明，只送陣列
+    // v2.129：跟分類一樣走主模型＋備援（預設 deepseek 先、qwen 備援），model 與 models 一起送語意不明，只送陣列
     expect(sent.models).toEqual(['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'])
     expect(sent).not.toHaveProperty('model')
     expect(sent.messages[0].content[0].text).toContain('一律讀「每份」那欄')

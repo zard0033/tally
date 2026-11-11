@@ -33,7 +33,7 @@ export interface LabelReading {
    回應裡填的是這個陣列裡的常數，不是請求帶來的 Origin 字串。 */
 const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
 
-/* OpenRouter 的 OpenAI 相容端點。模型與提示詞照抄 dev-flow 校準階段實測通過的那份，
+/* OpenRouter 的 OpenAI 相容端點。提示詞照抄 dev-flow 校準階段在 qwen 上實測通過的那份（deepseek 只過合成標示，見 VISION_MODELS），
    兩條不可省的規則寫在提示詞裡：兩欄並列時一律讀「每份」、serving_g 沒印就填 null 不回推。 */
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions' // 等於 `${OPENROUTER_API}/chat/completions`
 const OPENROUTER_API = 'https://openrouter.ai/api/v1'
@@ -340,14 +340,13 @@ async function askModel(
       },
       body: JSON.stringify({
         ...(models.length > 1 ? { models } : { model: models[0] }),
-        /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：這個模型在 OpenRouter 上
+        /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：qwen 在 OpenRouter 上
            只有阿里巴巴一家在供（`/api/v1/models/qwen/qwen3.7-flash/endpoints` 回 1 筆），
-           `sort: 'throughput'` 沒有第二家可選、是空話；而 `data_collection: 'deny'` 更危險
-           ——唯一那家若不符合就沒有 provider 可用，等於把功能關掉。
+           `data_collection: 'deny'` 若那家不符合就沒有 provider 可用；deepseek 有三十幾家，
+           照片與品名現在會分到更多家去——所以靠的是下面那個帳號設定，不是每個請求各講一次。
            **「照片不被拿去訓練」這個保證在哪裡**：OpenRouter 帳號的 Privacy 設定（付費／免費各一個
-           開關），關掉之後它本來就不會把請求路由給會訓練的 provider，不必在每個請求裡再講一次。
-           **動那個設定要立刻測一張**——只有一家 provider，被那個設定擋掉就是全滅、沒有備援。
-           推論：耗時的波動（同圖 12.9／22.4 秒）是那一家自己的排隊，這邊沒有旋鈕可轉。 */
+           開關），關掉之後它本來就不會把請求路由給會訓練的 provider。
+           **動那個設定要立刻拍一張、分類一次**：qwen 那家被擋掉就只剩備援。 */
         messages: [{ role: 'user', content }],
       }),
       /* 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
@@ -503,6 +502,7 @@ export async function handleRequest(
   }
 
   /* 7. 辨識。不重試、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：前端讓使用者手打。
+        換備援模型不是重試：同一次請求由 OpenRouter 在上游出錯時改問下一個，不多花等待時間（spec 那條 v2.129 已改）。
         v2.128 起跟分類一樣走主模型＋備援（OpenRouter 的 `models`：上一個回錯誤、含 429 才換，逾時不換）：
         qwen 只有一家在供，2026-11-11 冒煙測試兩次就被 429 擋一次。
         上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
@@ -523,11 +523,12 @@ export async function handleRequest(
     chain,
   )
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
-  const { content, usage } = reply
+  // model＝實際回答的那個（主模型或備援）：真機讀錯時要分得出是誰讀的（v2.129 review）
+  const { content, usage, model } = reply
 
   const reading = parseReading(content)
   if (!reading) {
-    diag('502 unparseable', { content: content.slice(0, 300) })
+    diag('502 unparseable', { model, content: content.slice(0, 300) })
     return json({ error: READ_FAILED }, 502, cors)
   }
   /* **成功路徑也要留一行**。原本只有失敗分支寫 log，於是「函式好好跑完、前端已經放棄」
@@ -537,6 +538,6 @@ export async function handleRequest(
      `usage.completion_tokens_details.reasoning_tokens` 直接顯示思考佔了多少，
      決定要不要送 `reasoning: { enabled: false }`（會影響準確度，要有數字才動）。
      **不記讀數內容**，那是使用者的資料，診斷用不到。 */
-  diag('200 ok', { ms: Date.now() - t0, usage })
+  diag('200 ok', { ms: Date.now() - t0, model, usage })
   return json(reading, 200, cors)
 }
