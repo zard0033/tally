@@ -35,6 +35,11 @@ const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
    兩條不可省的規則寫在提示詞裡：兩欄並列時一律讀「每份」、serving_g 沒印就填 null 不回推。 */
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'qwen/qwen3.7-flash'
+/* 分類模式的備援（OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。
+   qwen 只有阿里巴巴一家在供，2026-11-11 上線第一天分類全被 429 擋光；deepseek 有三十幾家。
+   只給分類用：辨識的提示詞是在 qwen 上校準準度的，換模型讀圖沒驗過。分類界線也是對 qwen 寫的，deepseek 只用 15 樣編的品名
+   實測過一次（全對）——真實準度要看 `200 classify ok` 的 model 欄、抽看 deepseek 分的那幾批（假設，未驗）。 */
+const CLASSIFY_MODELS = [MODEL, 'deepseek/deepseek-v4.1-flash']
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
 {"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
 name 填包裝上的**正式完整品名**（通常標在成分欄前面的「品名:」後面，例如「伯朗奶茶-減糖香濃原味(三合一)」），
@@ -138,7 +143,7 @@ const SIDES = ['飲料', '蛋白質補充', '配菜', '主食', '點心']
 export const CATEGORIES = [...MEAL_TYPES, ...SIDES]
 const FALLBACK = '其他正餐'
 
-/** 一次最多幾樣。前端一批送 40（見 useFoodCategories），這裡留一點餘裕；有界是為了不替人轉發任意長的提示詞。 */
+/** 一次最多幾樣。前端一批送 15（見 useFoodCategories），這裡留一點餘裕；有界是為了不替人轉發任意長的提示詞。 */
 const MAX_CLASSIFY = 50
 /** 品名、店家各自的上限。食品庫裡最長的品名不到 30 字（假設，未實測），100 是寬鬆的界。 */
 const MAX_TEXT = 100
@@ -217,15 +222,16 @@ async function classify(foods: unknown, openrouterKey: string, cors: Record<stri
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   const t0 = Date.now()
-  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey)
+  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey, CLASSIFY_MODELS)
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   const results = parseCategories(reply.content, new Set(input.map((f) => f.id)))
   if (!results) {
-    diag('502 classify-unparseable', { content: reply.content.slice(0, 300) })
+    // 不記原文：解析失敗的回覆可能整段回顯品名（使用者的資料）；只記形狀與哪個模型壞了格式
+    diag('502 classify-unparseable', { model: reply.model, len: reply.content.length, head: reply.content.trimStart().slice(0, 1) })
     return json({ error: READ_FAILED }, 502, cors)
   }
   // 不記品名與結果（使用者的資料）；記數量看模型漏回多少
-  diag('200 classify ok', { ms: Date.now() - t0, usage: reply.usage, asked: input.length, got: results.length })
+  diag('200 classify ok', { ms: Date.now() - t0, model: reply.model, usage: reply.usage, asked: input.length, got: results.length })
   return json({ results }, 200, cors)
 }
 
@@ -233,9 +239,14 @@ type Usage = { prompt?: number; completion?: number; think?: number; cost?: numb
 
 /**
  * 對 OpenRouter 問一次，回模型的字串與用量；任何失敗都寫 diag 後回 null，由呼叫端收斂成 READ_FAILED。
- * 辨識與分類兩個模式共用：同一把 key、同一個模型、同一套「上游原文不轉發」。
+ * 辨識與分類兩個模式共用：同一把 key、同一套「上游原文不轉發」。models 給兩個以上時走 OpenRouter 的備援，
+ * 回傳的 model 是實際回答的那個（上游回應的 `model` 欄位）。
  */
-async function askModel(content: unknown[], openrouterKey: string): Promise<{ content: string; usage: Usage } | null> {
+async function askModel(
+  content: unknown[],
+  openrouterKey: string,
+  models: readonly string[] = [MODEL],
+): Promise<{ content: string; model: string | undefined; usage: Usage } | null> {
   try {
     const upstream = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -244,7 +255,7 @@ async function askModel(content: unknown[], openrouterKey: string): Promise<{ co
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: MODEL,
+        ...(models.length > 1 ? { models } : { model: models[0] }),
         /* **不要加 `provider` 路由參數**（2026-08-13 查證後撤掉）：這個模型在 OpenRouter 上
            只有阿里巴巴一家在供（`/api/v1/models/qwen/qwen3.7-flash/endpoints` 回 1 筆），
            `sort: 'throughput'` 沒有第二家可選、是空話；而 `data_collection: 'deny'` 更危險
@@ -268,6 +279,7 @@ async function askModel(content: unknown[], openrouterKey: string): Promise<{ co
       return null
     }
     const data = (await upstream.json()) as {
+      model?: unknown
       choices?: { message?: { content?: unknown } }[]
       /** OpenRouter 的用量回報。只進 log，不進回應——用途見呼叫端 `200 ok` 那行的註解。 */
       usage?: unknown
@@ -291,7 +303,7 @@ async function askModel(content: unknown[], openrouterKey: string): Promise<{ co
       diag('502 no-content', { shape: Object.keys(data) })
       return null
     }
-    return { content: raw, usage }
+    return { content: raw, model: typeof data.model === 'string' ? data.model.slice(0, 80) : undefined, usage }
   } catch (e) {
     // 連不上、逾時、回的不是 JSON。catch 到的 error 可能夾帶請求內容甚至 header，絕不進回應。
     diag('502 fetch-threw', { reason: e instanceof Error ? e.message : String(e) })

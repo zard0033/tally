@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { classifyFoods, listUncategorizedFoods, setFoodsCategory, type Food } from '@/lib/api'
 import type { FoodCategory } from '@/lib/categories'
 
-/** 一次送幾樣給分類模式（函式那端上限 50）。食品庫一百多樣時分三、四趟。 */
-export const CLASSIFY_BATCH = 40
+/** 一次送幾樣給分類模式（函式那端上限 50）。原本 40，qwen 一批要想超過 45 秒、函式逾時（2026-11-11 線上 log）；
+ *  逾時不會觸發模型備援，只能把批次切小。15 是假設（思考時間不一定跟樣數成正比），用 `200 classify ok` 的 ms 驗。
+ *  食品庫一百多樣時分八趟左右。 */
+export const CLASSIFY_BATCH = 15
 
 type FoodRef = Pick<Food, 'id' | 'name' | 'vendor'>
 

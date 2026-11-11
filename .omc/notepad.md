@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11）：CI 全綠、已部署（run 42942213668，c47a3e3）——線上是 v2.119–v2.122：每日目標兩修、類型 AI 分類＋避開重複、拿掉提示音、視覺第一批（故事書配色＋Nunito＋類型圖示＋今日頁插畫）。CI 首跑 Linux 才紅的全修掉（等落定誤判、選取攔下左滑、檢視器時序、rest-timer 連點競態含 app 修正）。autopilot 已停。
-下一步：①請使用者真機看今日頁新視覺、每日目標頁、訓練打勾問 RPE、要點編輯（.ex-body 鎖選取）②開 app 觸發類型 AI 補判後抽看分類結果 ③視覺第二批（記一筆 sheet＋類型分組＋確認列「+這次」＋失敗訊息重複前綴）。
+現況（2026-11-11 午）：線上 v2.119–v2.122。AI 分類從沒成功（112 樣全 null：qwen 429＋40 樣一批逾時）。已修、本機已 commit：分類加 deepseek-v4.1-flash 備援、一批 15 樣；**read-label 部署（--use-api --no-verify-jwt）與 push 待使用者授權**。
+下一步：①上線後請使用者開 app，`db query --read-only` 數 category is null 驗收 ②今日頁視覺問題（時間軸虛線穿字、空進度條、雲壓日期、狀態列接縫）併入視覺第二批 ③AI 設定頁＋額度（MANUAL）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -87,3 +87,5 @@
 [待決 2026-11-04] 餐建議實作時補的假設（使用者還沒確認，`.omc/autopilot/spec.md` 本機有全文）：sheet 建議品項用來源快照；今日頁失敗時卡片多一行錯誤；sheet 建議段顯示單份、勾了才看到份量（今日頁卡片是整餐）；sheet 寫入中不可關閉，最壞約 26 秒。
 [未修 2026-11-04] 餐建議已知限制：卡片可能含 5 秒內的待刪列；查詢失敗不自動重試；改名或封存不更新建議；同食物兩列快照不同時卡片與 sheet 數字不同；切走後失敗要回該日才看到；卡片隨歷史失效消失時錯誤沒地方顯示；refreshDay 成功不清 Notice（窄時序要多按一次重試）；切走後小點回去才更新；sheet 路徑沒等在途 DELETE（既有）；連按 stepper 3 下以上且 GET 交錯時總量可能暫時是舊的；設定頁存檔後切日，load 不比對日期（既有）。
 [未修 2026-11-03] push 前 review 的 LOW：FoodLibrary 寫入還在路上時關掉再開別筆，前一筆回來會關掉新草稿（LogSheet 同款，原本就有、現在視窗變大）；FinishSheet 的狀態在 SpringSheet 之上，收合重開不重置；減少動態時 sheet 立刻卸載，透明罩跟著沒了，連按照舊穿透。
+[想法 2026-11-11] 設定頁放 AI 相關設定（BYOK 感）＋顯示 OpenRouter 額度。已查：現有 key 打 `GET /api/v1/credits`（total_credits／total_usage）與 `/api/v1/key`（usage_daily／monthly、limit_remaining）都回 200，可由 read-label 加唯讀模式回前端，key 不離開伺服器。BYOK 輸入 key 的部分對單人 app 價值低（key 進資料庫或瀏覽器都多一個外洩面），建議只做「選模型＋看額度」。
+[待決 2026-11-11] 使用者問「全局 AI 統一」：建議統一成一份設定（一個地方定主模型＋備援），但辨識營養標示換 deepseek 前要先重跑校準照片量準度；目前只有分類用備援。

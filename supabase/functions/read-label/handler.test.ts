@@ -261,6 +261,7 @@ describe('read-label 辨識', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
     const sent = JSON.parse(init.body as string)
     expect(sent.model).toBe('qwen/qwen3.7-flash')
+    expect(sent).not.toHaveProperty('models') // 辨識不換模型：提示詞是在 qwen 上校準的
     expect(sent.messages[0].content[0].text).toContain('一律讀「每份」那欄')
     expect(sent.messages[0].content[1].image_url.url).toBe(IMAGE)
 
@@ -386,7 +387,9 @@ describe('read-label 分類模式', () => {
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
     const sent = JSON.parse(init.body as string)
-    expect(sent.model).toBe('qwen/qwen3.7-flash')
+    // qwen 限流（429）時由 OpenRouter 換 deepseek；兩個一起送 model 與 models 會讓 model 蓋過陣列的語意不明，只送陣列
+    expect(sent.models).toEqual(['qwen/qwen3.7-flash', 'deepseek/deepseek-v4.1-flash'])
+    expect(sent).not.toHaveProperty('model')
     const parts = sent.messages[0].content
     expect(parts).toHaveLength(1)
     expect(parts[0].type).toBe('text')
@@ -492,6 +495,18 @@ describe('read-label 分類模式', () => {
       expect(body).toEqual({ error: '辨識失敗' })
       expect(JSON.stringify(body)).not.toContain('sk-or')
     }
+  })
+
+  it('㉙b 回覆解析不了時 log 不留原文：模型可能整段回顯品名（使用者的資料）', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubUpstream(upstreamReply('以下是分類：叉燒飯 屬於燒臘，乳清 屬於蛋白質補充'))
+    const res = await handleRequest(post(await validToken(), { foods: FOODS }, SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(502)
+    const logged = spy.mock.calls.flat().join(' ')
+    expect(logged).toContain('classify-unparseable')
+    expect(logged).not.toContain('叉燒飯')
+    expect(logged).not.toContain('乳清')
+    spy.mockRestore()
   })
 
   it('㉚ 帶 foods 就走分類，不看 image（同時帶也一樣，不會把圖送出去）', async () => {
