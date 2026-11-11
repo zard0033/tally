@@ -179,6 +179,37 @@ export function recentMeals(rows: RepeatSourceRow[], viewDate: string, dayRows: 
   return { categories, items, vendors }
 }
 
+/** 記一筆 sheet 類型組標的「吃過」提示：檢視日其他哪一餐吃過（優先），否則前一天吃過。 */
+export type SeenMark = { when: 'today'; meal: MealKey } | { when: 'yesterday' }
+export type SeenByMeal = Partial<Record<MealKey, Map<FoodCategory, SeenMark>>>
+
+/** 範圍與 recentMeals 同一套（只有午餐、晚餐；只收餐點類型），提示和建議避開的才是同一件事。
+ *  rows＝null（回看資料還沒到）就只看檢視日。只提示、不改組序。 */
+export function seenCategories(
+  rows: RepeatSourceRow[] | null,
+  viewDate: string,
+  dayRows: IntakeRow[] | null,
+  meal: MealKey,
+): Map<FoodCategory, SeenMark> {
+  const out = new Map<FoodCategory, SeenMark>()
+  if (!AVOID_REPEAT_MEALS.includes(meal)) return out
+  const mark = (raw: string | null | undefined, m: SeenMark) => {
+    const c = categoryOf(raw)
+    if (c && isMealType(c) && !out.has(c)) out.set(c, m)
+  }
+  // 照一天的順序，同一類取最早那餐（「中午吃過」比「點心吃過」好認）
+  const order = (k: MealKey) => MEALS.findIndex((x) => x.key === k)
+  const today = (dayRows ?? []).filter((r) => r.meal !== meal).sort((a, b) => order(a.meal) - order(b.meal))
+  for (const r of today) mark(r.foods?.category, { when: 'today', meal: r.meal })
+  const prev = shiftDate(viewDate, -1)
+  for (const r of rows ?? []) if (r.eaten_on === prev) mark(r.foods?.category, { when: 'yesterday' })
+  return out
+}
+
+const SEEN_TODAY: Record<MealKey, string> = { breakfast: '早上吃過', lunch: '中午吃過', dinner: '晚上吃過', snack: '今天吃過' }
+
+export const seenText = (m: SeenMark): string => (m.when === 'yesterday' ? '昨天吃過' : SEEN_TODAY[m.meal])
+
 const sameVendor = (c: DayCombo, recent: RecentMeals) =>
   c.items.some((i) => {
     const v = vendorKey(i.vendor)

@@ -1181,7 +1181,7 @@ test('同一食物不同時出現在建議段與常吃段；常吃先濾再取�
 
   await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
   await expect(sectNames(page, '.sect-lb:has-text("早餐常吃")')).toHaveText(['雞胸餐盒', '雞胸餐盒', '地瓜', '溫泉蛋', '香蕉'])
-  await expect(sectNames(page, '.sect-lb:has-text("全部食物")')).toHaveText(['拿鐵'])
+  await expect(sheet.locator('.food-groups .nm')).toHaveText(['拿鐵'])
 
   await sheet.getByLabel('搜尋食物').fill('乳清')
   await expect(sheet.locator('.sect-suggest')).toHaveCount(0)
@@ -1508,4 +1508,72 @@ test('第三版：依缺口挑時，中午燒臘 ⇒ 晚餐先出雞腿便當、
   await expect(card.locator('.sg-kc')).toHaveText('650')
   await swapOf(page, '晚餐').click()
   await expect(card.locator('.sg-items')).toHaveText('燒臘便當')
+})
+
+/* ── 第三版：記一筆 sheet「全部食物」依類型分組（spec.md C 節第三版 AC 6）──
+   食品庫多兩樣麵食（牛肉麵吃過、陽春麵沒吃過）。晚餐吃過：牛肉麵 3 次、雞胸餐盒·健康盒 1 次；早餐吃過乳清、豆漿。
+   今天中午吃雞胸餐盒·健康盒（健康餐盒），昨天晚餐吃牛肉麵（麵食）。手算：
+   - 晚餐常吃＝[牛肉麵, 雞胸餐盒·健康盒]，不進「全部食物」；建議＝上週五的雞腿便當（昨天週日不算平日的來源）
+   - 組序：麵食 3 次 → 健康餐盒 1 次 → 沒吃過的照固定清單：配菜、主食、點心
+   - 收起來：只在早餐吃過的飲料、蛋白質補充 */
+test('第三版：sheet 全部食物依類型分組、組序看這一餐吃過幾次、吃過蓋徽章、其他餐的收在最底；搜尋不分組、早餐不提示', async ({ page }) => {
+  const BOX = { food_id: 11, name: '雞胸餐盒', vendor: '健康盒', category: '健康餐盒', kcal: 420, protein: 45, fat: 12, carb: 30 }
+  const PLAIN = { id: 507, name: '陽春麵', vendor: '麵店', kcal: 400, protein: 12, fat: 8, carb: 70, category: '麵食', category_manual: false }
+  const BEEF_LIB = { id: T.beef.food_id, name: T.beef.name, vendor: T.beef.vendor, kcal: T.beef.kcal, protein: T.beef.protein, fat: T.beef.fat, carb: T.beef.carb, category: '麵食', category_manual: false }
+  const history = [
+    ...[506, 506, 506, 11].map((food_id) => ({ meal: 'dinner', food_id, qty: 1 })),
+    { meal: 'breakfast', food_id: 13, qty: 1 },
+    { meal: 'breakfast', food_id: 15, qty: 1 },
+  ]
+  const fix = {
+    // 昨天是週日，平日的建議不拿它當來源；建議來自上週五的雞腿便當（便當，不在食品庫，只用來源快照）
+    ...fixWith([typedRow(701, '2026-11-01', 'dinner', T.beef), typedRow(702, '2026-10-30', 'dinner', T.chicken)], [typedRow(101, MON, 'lunch', BOX)]),
+    foods: [...FIX.foods, BEEF_LIB, PLAIN],
+    history,
+  } as unknown as typeof FIX
+  await openAppAt(page, MON, {}, fix)
+  await openMealSheet(page, '晚餐')
+  const sheet = sheetOf(page)
+  const groups = sheet.locator('.food-groups')
+  const more = groups.locator('.grp-more')
+
+  // 收合列出現＝常吃那份歷史到了，組序之後不會再變
+  await expect(more).toHaveText('其他餐的（飲料、蛋白質補充）')
+  await expect(more).toHaveAttribute('aria-expanded', 'false')
+  await expect(groups.locator('.grp .gn')).toHaveText(['麵食', '健康餐盒', '配菜', '主食', '點心'])
+  const grp = (name: string) => groups.locator('.grp', { has: page.locator('.gn', { hasText: new RegExp(`^${name}$`) }) })
+  await expect(grp('麵食').locator('.nm')).toHaveText(['陽春麵'])
+  await expect(grp('麵食').locator('.seen')).toHaveText('昨天吃過')
+  await expect(grp('麵食').locator('.ci-badge')).toHaveAttribute('data-badge', 'yesterday')
+  await expect(grp('健康餐盒').locator('.seen')).toHaveText('中午吃過')
+  await expect(grp('健康餐盒').locator('.ci-badge')).toHaveAttribute('data-badge', 'today')
+  await expect(grp('健康餐盒').locator('.nm')).toHaveText(['雞胸餐盒'])
+  await expect(grp('健康餐盒').locator('.sub')).toHaveText(['減醣廚房'])
+  // 沒吃過提示的組不蓋徽章；這一餐沒吃過的不寫次數
+  await expect(grp('配菜').locator('.ci-badge')).toHaveCount(0)
+  await expect(grp('配菜').locator('.cnt')).toHaveCount(0)
+  // 建議列帶 24px 類型圖示；一般品項列不帶
+  await expect(sheet.locator('.sect-suggest + .food-list .food-row .ci')).toHaveAttribute('data-category', '便當')
+  await expect(groups.locator('.food-row .ci')).toHaveCount(0)
+
+  // 可見文字就是名稱（Label in Name：語音控制說「其他餐的」要點得到）
+  await expect(sheet.getByRole('button', { name: '其他餐的（飲料、蛋白質補充）' })).toBeVisible()
+  await more.click()
+  await expect(more).toHaveAttribute('aria-expanded', 'true')
+  await expect(groups.locator('.grp .gn')).toHaveText(['麵食', '健康餐盒', '配菜', '主食', '點心', '飲料', '蛋白質補充'])
+  await expect(grp('飲料').locator('.nm')).toHaveCount(2)
+
+  // 搜尋時是平的結果，不分組
+  await sheet.getByLabel('搜尋食物').fill('陽春')
+  await expect(groups).toHaveCount(0)
+  await expect(sheet.locator('.grp')).toHaveCount(0)
+  await expect(sectNames(page, '.sect-lb:has-text("搜尋結果")')).toHaveText(['陽春麵'])
+  await sheet.getByLabel('搜尋食物').fill('')
+
+  // 早餐不套用避開重複，也就不提示吃過
+  await sheet.locator('.chip', { hasText: '早餐' }).click()
+  await expect(groups.locator('.grp').first()).toBeVisible()
+  await expect(more, '換餐別收的是另一批類型，展開狀態要收回').toHaveAttribute('aria-expanded', 'false')
+  await expect(sheet.locator('.grp .ci-badge')).toHaveCount(0)
+  await expect(sheet.locator('.grp .seen')).toHaveCount(0)
 })

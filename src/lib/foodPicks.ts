@@ -1,6 +1,7 @@
 /* 記一筆 sheet 的挑選邏輯：已選小計、「常吃」排名與最近份量、「還吃得下嗎」的軟性排序。
    原本長在 LogSheet.tsx 裡，抽出來才能單測；不沾 DOM，未來要原樣帶去 React Native。 */
 import type { Food, RecentIntakeRow } from './api'
+import { categoryOf, FOOD_CATEGORIES, type FoodCategory } from './categories'
 import { num, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from './formulas'
 import { MEALS, type MealKey } from './meals'
 
@@ -19,7 +20,12 @@ export function pickTotals(
 /** 「常吃」＝該餐別歷史出現次數（多的排前面，同次數維持歷史出現順序），
  *  順便記住每個「餐別:食物」最近一次的份量。hist 要由新到舊排（listRecentIntake 的順序），
  *  第一次見到的 key 才是「最近一次」。 */
-export function recentStats(hist: RecentIntakeRow[]): { recent: Map<MealKey, number[]>; lastQty: Map<string, number> } {
+export function recentStats(hist: RecentIntakeRow[]): {
+  recent: Map<MealKey, number[]>
+  lastQty: Map<string, number>
+  /** 餐別 → 食物 → 次數。sheet 依類型分組的組序用（同一份歷史，不另外查）。 */
+  counts: Map<MealKey, Map<number, number>>
+} {
   const byMeal = new Map<MealKey, Map<number, number>>(MEALS.map((m) => [m.key, new Map()]))
   const lastQty = new Map<string, number>()
   for (const r of hist) {
@@ -29,7 +35,67 @@ export function recentStats(hist: RecentIntakeRow[]): { recent: Map<MealKey, num
     if (c) c.set(r.food_id, (c.get(r.food_id) ?? 0) + 1)
   }
   const recent = new Map([...byMeal].map(([k, counts]) => [k, [...counts].sort((a, b) => b[1] - a[1]).map(([id]) => id)] as [MealKey, number[]]))
-  return { recent, lastQty }
+  return { recent, lastQty, counts: byMeal }
+}
+
+/* ── 「全部食物」依類型分組（spec.md C 節第三版）──
+   清單用標示、建議用排序：組序只看「這一餐吃過幾次」，吃過的提示（徽章）不改組序。 */
+
+export interface FoodGroup {
+  /** null＝還沒分類，也是一組。 */
+  category: FoodCategory | null
+  /** 照傳進來的順序（呼叫端先排好「吃得下的在前、再照品名」）。 */
+  foods: Food[]
+  /** 這一餐吃過這一類幾次。 */
+  count: number
+}
+
+export interface GroupedFoods {
+  /** 這一餐吃過的類型（次數多的在前），接著是哪一餐都沒吃過的（新加的食物）。 */
+  main: FoodGroup[]
+  /** 只在其他餐吃過的類型：沉到最底、收合。這一餐還沒有任何歷史時是空的（不收）。 */
+  elsewhere: FoodGroup[]
+}
+
+const categoryRank = (c: FoodCategory | null) => (c === null ? FOOD_CATEGORIES.length : FOOD_CATEGORIES.indexOf(c))
+
+/** list＝要分組的食物（已排好序）；categoryById 要查得到歷史裡的食物（含不在 list 裡的，例如已勾、常吃那幾樣）。
+ *  查不到的 food_id（已封存、已刪）不算次數。同次數照固定清單的順序，未分類排最後。 */
+export function groupByCategory(
+  list: Food[],
+  meal: MealKey | null,
+  counts: Map<MealKey, Map<number, number>>,
+  categoryById: (id: number) => FoodCategory | null | undefined,
+): GroupedFoods {
+  const tally = (m: MealKey) => {
+    const out = new Map<FoodCategory | null, number>()
+    for (const [id, n] of counts.get(m) ?? []) {
+      const c = categoryById(id)
+      if (c !== undefined) out.set(c, (out.get(c) ?? 0) + n)
+    }
+    return out
+  }
+  const here = meal ? tally(meal) : new Map<FoodCategory | null, number>()
+  const elsewhereCats = new Set<FoodCategory | null>()
+  // 這一餐還沒有任何歷史（例如從沒記過點心）就不收：否則吃過的類型全被收起來，清單只剩沒吃過的
+  for (const m of here.size > 0 ? MEALS : []) {
+    if (m.key === meal) continue
+    for (const c of tally(m.key).keys()) if (!here.has(c)) elsewhereCats.add(c)
+  }
+
+  const byCat = new Map<FoodCategory | null, Food[]>()
+  for (const f of list) {
+    const c = categoryOf(f.category)
+    const arr = byCat.get(c)
+    if (arr) arr.push(f)
+    else byCat.set(c, [f])
+  }
+  const groups = [...byCat].map(([category, foods]) => ({ category, foods, count: here.get(category) ?? 0 }))
+  groups.sort((a, b) => b.count - a.count || categoryRank(a.category) - categoryRank(b.category))
+  return {
+    main: groups.filter((g) => !elsewhereCats.has(g.category)),
+    elsewhere: groups.filter((g) => elsewhereCats.has(g.category)),
+  }
 }
 
 /** 勾選時的預設份量：該餐上次吃這樣東西的份量，沒有（或不是正數）就 1。 */

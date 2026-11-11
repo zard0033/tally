@@ -10,7 +10,7 @@ import type { FoodCategory } from '@/lib/categories'
 import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
-import type { RepeatByMeal, RepeatSuggestion } from '@/lib/mealSuggest'
+import type { RepeatByMeal, RepeatSuggestion, SeenByMeal } from '@/lib/mealSuggest'
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
 
@@ -71,6 +71,8 @@ export interface LogSheetProps {
   targets: Targets
   /** 跟今日頁同一份建議，建議段從這裡取。 */
   repeatByMeal: RepeatByMeal
+  /** 「全部食物」類型組標的吃過提示；只有午餐、晚餐有。 */
+  seenByMeal: SeenByMeal
   onClose: () => void
   /**
    * 送出「加入」——rows 已經是組好的完整 NewIntake（含 eaten_on／meal／營養快照)，

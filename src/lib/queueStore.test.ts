@@ -73,12 +73,12 @@ describe('createQueueStore', () => {
     expect((err as QueueStorageError).cause).toBeInstanceOf(Error)
   })
 
-  it('寫入失敗（容量滿）翻成「這筆沒有存下來」（AC 20）', async () => {
+  it('寫入失敗（容量滿）丟 QueueStorageError，訊息不帶前綴（UI 會加「這筆沒有存下來：」）（AC 20）', async () => {
     const m = memoryKv()
     m.fail.set = true
     const err = await createQueueStore(m.kv).save(emptySnapshot()).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(QueueStorageError)
-    expect((err as QueueStorageError).message).toContain('沒有存下來')
+    expect((err as QueueStorageError).message).toBe('本機儲存寫入失敗')
     expect(((err as QueueStorageError).cause as DOMException).name).toBe('QuotaExceededError')
   })
 })

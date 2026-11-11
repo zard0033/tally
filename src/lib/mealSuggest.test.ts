@@ -6,6 +6,8 @@ import {
   mergeByFood,
   recentMeals,
   repeatToIntake,
+  seenCategories,
+  seenText,
   suggestByGap,
   suggestLabel,
   suggestMeals,
@@ -473,6 +475,31 @@ describe('第三版：避開重複', () => {
       const r = recentMeals([], VIEW, [today('lunch', spaced), today('lunch', blank)], 'dinner')
       expect([...r.vendors]).toEqual(['漢堡店'])
       expect([...r.items]).toEqual([220])
+    })
+  })
+
+  describe('seenCategories：sheet 類型組標的吃過提示（AC 6）', () => {
+    it('檢視日其他餐優先於前一天；只收餐點類型；提示文字照實際那一餐', () => {
+      const dayRows = [today('breakfast', OMELET), today('lunch', ROAST_A), today('lunch', TEA)]
+      const rows = [...ate('2026-11-03', 'dinner', [BEEF, EGG]), ...ate('2026-11-03', 'lunch', [ROAST_B]), ...ate('2026-11-02', 'dinner', [CHICKEN])]
+      const m = seenCategories(rows, VIEW, dayRows, 'dinner')
+      // 燒臘今天中午、昨天中午都吃過 → 取今天；飲料、配菜是搭配類不收；便當是前天，不在範圍
+      expect([...m.keys()].sort()).toEqual(['早餐店', '燒臘', '麵食'].sort())
+      expect(seenText(m.get('燒臘')!)).toBe('中午吃過')
+      expect(seenText(m.get('早餐店')!)).toBe('早上吃過')
+      expect(seenText(m.get('麵食')!)).toBe('昨天吃過')
+    })
+
+    it('不含這一餐本身；早餐與點心不提示；回看資料還沒到就只看檢視日', () => {
+      const dayRows = [today('lunch', ROAST_A), today('dinner', BEEF)]
+      expect([...seenCategories(null, VIEW, dayRows, 'lunch').keys()]).toEqual(['麵食'])
+      expect(seenCategories(ate('2026-11-03', 'lunch', [BEEF]), VIEW, dayRows, 'breakfast').size).toBe(0)
+      expect(seenCategories(ate('2026-11-03', 'lunch', [BEEF]), VIEW, dayRows, 'snack').size).toBe(0)
+    })
+
+    it('同一類今天兩餐都吃過，取一天裡較早那餐（與紀錄先後無關）', () => {
+      const dayRows = [today('snack', ROAST_B), today('breakfast', ROAST_A)]
+      expect(seenText(seenCategories(null, VIEW, dayRows, 'dinner').get('燒臘')!)).toBe('早上吃過')
     })
   })
 

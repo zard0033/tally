@@ -38,7 +38,7 @@ import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
-import { repeatToIntake, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
+import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
 import Login from '@/screens/Login'
@@ -457,6 +457,13 @@ export default function App() {
       ),
     [repeatHistory, currentDate, rowsWithCategories, gapCtx, categoryOverrides],
   )
+  /* sheet 類型組標的「吃過」提示：跟避開重複看同一份（蓋過類型的）資料，提示的才是建議避開的那些。 */
+  const sheetSeen = useMemo(() => {
+    const history = repeatHistory && withCategories(repeatHistory, categoryOverrides)
+    const out: SeenByMeal = {}
+    for (const meal of AVOID_REPEAT_MEALS) out[meal] = seenCategories(history, currentDate, rowsWithCategories, meal)
+    return out
+  }, [repeatHistory, categoryOverrides, currentDate, rowsWithCategories])
   /* 「換一個」換到第幾名只記在畫面上：換了日期、當天紀錄有變（新增、刪除、改份量）、或目標變了，就回第一名。
      用簽章比對，不用 rows 的 identity——重撈回來同一份資料不該把使用者換到的那一組洗掉。
      簽章一不同就整個丟掉、不是只比對：否則切走再切回、或復原把紀錄還原成舊樣子，會回到換過的那一名。 */
@@ -1218,6 +1225,7 @@ export default function App() {
           dayData={{ date: currentDate, rows }}
           targets={targets}
           repeatByMeal={sheetRepeatByMeal}
+          seenByMeal={sheetSeen}
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}
           onCreateFood={handleCreateFoodAndClassify}

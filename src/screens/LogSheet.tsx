@@ -7,6 +7,7 @@
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import QtyStepper from '@/components/QtyStepper'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
@@ -19,9 +20,10 @@ import {
 import { isPlannable } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
-import { byQuotaFit, defaultQty, overQuotaAmounts, pickTotals, recentStats } from '@/lib/foodPicks'
+import { categoryOf } from '@/lib/categories'
+import { byQuotaFit, defaultQty, groupByCategory, overQuotaAmounts, pickTotals, recentStats, type FoodGroup } from '@/lib/foodPicks'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
-import { mergeByFood, type RepeatItem } from '@/lib/mealSuggest'
+import { mergeByFood, seenText, type RepeatItem, type SeenMark } from '@/lib/mealSuggest'
 import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
@@ -56,7 +58,7 @@ interface FoodRowHandlers {
 
 /* 一般函式、不是元件——用 fn(f) 呼叫而非 <Fn/>，React 才不會把它當成每次 render
    都換了身分的新元件型別重新掛載（那樣份量輸入框每打一個字就會失焦）。 */
-function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
+function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers, withIcon = false) {
   const qty = h.picks.get(f.id) ?? 1
   const draft = h.qtyDrafts.get(f.id) ?? String(qty)
   const overQuota = !picked && h.overAmounts.has(f.id)
@@ -102,6 +104,7 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers) {
                 <svg className="chk" viewBox="0 0 22 22" aria-hidden="true">
                   <circle cx="11" cy="11" r="9" />
                 </svg>
+                {withIcon && <CategoryIcon category={categoryOf(f.category)} size={24} decorative />}
                 <div className="nm-wrap" aria-hidden="true">
                   <span className="nm">{f.name}</span>
                   {f.vendor && <span className="sub">{f.vendor}</span>}
@@ -136,8 +139,23 @@ function suggestedFood(item: RepeatItem): Food {
   }
 }
 
+/* 類型組標：圖示＋組名＋（吃過提示，或這一餐吃過幾次）。圖示是裝飾，組名已經是同一句話。 */
+function renderGroup(g: FoodGroup, seen: SeenMark | undefined, rows: (f: Food) => ReactNode) {
+  const name = g.category ?? '未分類'
+  return (
+    <div key={name} className="grp">
+      <h3 className="grp-head">
+        <CategoryIcon category={g.category} size={32} badge={seen && (seen.when === 'yesterday' ? 'yesterday' : 'today')} decorative />
+        <span className="gn">{name}</span>
+        {seen ? <span className="seen">{seenText(seen)}</span> : g.count > 0 && <span className="cnt"><span className="sr-only">這一餐吃過 </span><span className="num">{g.count}</span> 次</span>}
+      </h3>
+      <ul className="food-list">{g.foods.map(rows)}</ul>
+    </div>
+  )
+}
+
 export default function LogSheet(props: LogSheetProps) {
-  const { open, meal: initialMeal, foods, dayData, targets, repeatByMeal, onClose, onCreateIntake, onCreateFood } = props
+  const { open, meal: initialMeal, foods, dayData, targets, repeatByMeal, seenByMeal, onClose, onCreateIntake, onCreateFood } = props
 
   const [meal, setMeal] = useState<MealKey | null>(initialMeal)
   const [view, setView] = useState<View>('list')
@@ -163,6 +181,9 @@ export default function LogSheet(props: LogSheetProps) {
      撈不到就靜靜略過「常吃」分段，不擋清單其他功能可用。 */
   const [recent, setRecent] = useState<Map<MealKey, number[]> | null>(null)
   const [lastQty, setLastQty] = useState<Map<string, number>>(new Map())
+  const [mealCounts, setMealCounts] = useState<Map<MealKey, Map<number, number>>>(new Map())
+  /** 「其他餐的」收合列展開了沒；每次打開 sheet 都收回去。 */
+  const [elsewhereOpen, setElsewhereOpen] = useState(false)
   const recentFetchedRef = useRef(false)
 
   /* 從建議段勾起來的品項留一份快照：封存的食物 foods 查不到，切餐別後建議段也換了，
@@ -186,6 +207,7 @@ export default function LogSheet(props: LogSheetProps) {
     setBusy(false)
     setErr(null)
     setFoodForm(BLANK_FOOD_FORM)
+    setElsewhereOpen(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -204,6 +226,7 @@ export default function LogSheet(props: LogSheetProps) {
         const stats = recentStats(await listRecentIntake())
         setLastQty(stats.lastQty)
         setRecent(stats.recent)
+        setMealCounts(stats.counts)
       } catch {
         /* 常吃只是排序優化，撈不到不影響「全部食物」清單能不能用，也不用打全域 Notice */
       }
@@ -360,6 +383,7 @@ export default function LogSheet(props: LogSheetProps) {
      去重就是清單，建表要付新表＋外鍵＋遷移＋RLS 的代價卻買不到東西。
      規則本體在 lib（食品庫那邊也要用同一套，v2.29 precommit-review 抓到重複實作）。 */
   const vendorOptions = useMemo(() => vendorOptionsOf(foods), [foods])
+  const catById = useMemo(() => new Map(foods.map((f) => [f.id, categoryOf(f.category)])), [foods])
   const trimmedQuery = filterQuery.trim()
   const pickedFoods = [...picks.keys()].map(foodById).filter((f): f is Food => !!f)
 
@@ -418,6 +442,13 @@ export default function LogSheet(props: LogSheetProps) {
       .filter((f): f is Food => !!f)
       .slice(0, 5)
     const restFoods = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
+    /* 依類型分組：組序看這一餐吃過幾次（常吃那份歷史），組內沿用軟性排序；只在其他餐吃過的類型收在最底。
+       次數要用整個食品庫查類型，不能只看 restFoods——已勾、常吃那幾樣也是這一類吃過的次數。 */
+    const grouped = groupByCategory(restFoods, meal, mealCounts, (id) => catById.get(id))
+    const seen = meal ? seenByMeal[meal] : undefined
+    const seenOf = (g: FoodGroup) => (g.category ? seen?.get(g.category) : undefined)
+    const row = (f: Food) => renderFoodRow(f, false, handlers)
+    const elsewhereNames = grouped.elsewhere.map((g) => g.category ?? '未分類')
     browseBody = (
       <>
         {suggestItems.length > 0 && (
@@ -436,7 +467,7 @@ export default function LogSheet(props: LogSheetProps) {
                 全選
               </button>
             </div>
-            <ul className="food-list">{suggestItems.map((i) => renderFoodRow(suggestedFood(i), false, suggestHandlers))}</ul>
+            <ul className="food-list">{suggestItems.map((i) => renderFoodRow(suggestedFood(i), false, suggestHandlers, true))}</ul>
           </>
         )}
         {recentFoods.length > 0 && (
@@ -448,7 +479,24 @@ export default function LogSheet(props: LogSheetProps) {
         {restFoods.length > 0 && (
           <>
             <div className="sect-lb">全部食物</div>
-            <ul className="food-list">{restFoods.map((f) => renderFoodRow(f, false, handlers))}</ul>
+            <div className="food-groups">
+              {grouped.main.map((g) => renderGroup(g, seenOf(g), row))}
+              {grouped.elsewhere.length > 0 && (
+                <button
+                  className="grp-more"
+                  type="button"
+                  aria-expanded={elsewhereOpen}
+                  onClick={() => setElsewhereOpen((v) => !v)}
+                >
+                  <CategoryStack categories={grouped.elsewhere.slice(0, 3).map((g) => g.category)} />
+                  <span className="what">其他餐的（{elsewhereNames.join('、')}）</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+              )}
+              {elsewhereOpen && grouped.elsewhere.map((g) => renderGroup(g, seenOf(g), row))}
+            </div>
           </>
         )}
         {suggestItems.length === 0 && recentFoods.length === 0 && restFoods.length === 0 && (
@@ -484,7 +532,11 @@ export default function LogSheet(props: LogSheetProps) {
                   className="chip"
                   type="button"
                   aria-pressed={meal === m.key}
-                  onClick={() => setMeal(m.key)}
+                  onClick={() => {
+                    setMeal(m.key)
+                    // 換餐別，「其他餐的」收的是另一批類型，收回去
+                    setElsewhereOpen(false)
+                  }}
                 >
                   {m.label}
                 </button>

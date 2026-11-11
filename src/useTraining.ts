@@ -149,7 +149,8 @@ export function useTraining(userId: string | null): TrainingState {
         setView(await trainingRuntime.write(id, ops))
         setError(null)
       } catch (e) {
-        setError(errorText(e))
+        // 本機寫入失敗＝這筆真的沒存到；前綴由畫面加（queueStore 的訊息不帶，v2.127）。同步失敗走上面那條，伺服器已收到，不加
+        setError(`這筆沒有存下來：${errorText(e)}`)
         throw e
       }
       void flushOnly()

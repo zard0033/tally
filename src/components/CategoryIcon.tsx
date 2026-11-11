@@ -6,7 +6,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { FoodCategory } from '@/lib/categories'
 
-export type CategoryBadge = 'noon' | 'yesterday'
+export type CategoryBadge = 'today' | 'yesterday'
 
 const ICONS: Record<FoodCategory, ReactNode> = {
   '燒臘': (
@@ -190,9 +190,9 @@ const UNSORTED: ReactNode = (
   </>
 )
 
-/* 小太陽＝今天稍早（中午）吃過，淺底；月牙＝昨天吃過，深底。一亮一暗，縮到 11px 靠明暗就分得開。 */
+/* 小太陽＝今天其他餐吃過（多半是中午），淺底；月牙＝昨天吃過，深底。一亮一暗，縮到 11px 靠明暗就分得開。 */
 const BADGES: Record<CategoryBadge, ReactNode> = {
-  noon: (
+  today: (
     <>
       <circle cx="10" cy="10" r="10" fill="var(--sun-pale)" />
       <path d="M10 2.6v1.8M10 15.6v1.8M2.6 10h1.8M15.6 10h1.8M4.8 4.8l1.2 1.2M14 14l1.2 1.2M4.8 15.2L6 14M14 6l1.2-1.2" stroke="var(--sun-deep)" strokeWidth="1.6" strokeLinecap="round" />
@@ -207,7 +207,7 @@ const BADGES: Record<CategoryBadge, ReactNode> = {
   ),
 }
 
-const BADGE_TEXT: Record<CategoryBadge, string> = { noon: '中午吃過', yesterday: '昨天吃過' }
+const BADGE_TEXT: Record<CategoryBadge, string> = { today: '今天吃過', yesterday: '昨天吃過' }
 
 export interface CategoryIconProps {
   /** null＝還沒分類，畫中性的「未分類」圖示。 */

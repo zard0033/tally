@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 晚）：v2.126 天空從第一屏 39%→34%（「還能吃」接在大數字前、山坡帶 60→48、左谷右山、太陽月亮雲跟著降），光暈改放射漸層。v2.125 前景紙色地面＋踏腳石可點、v2.124 霧化縮小＋Safari 狀態列色條皆已上線。AI 分類 112 樣全分完。
-下一步：①真機看 v2.123–v2.126、Safari 狀態列 ②窄螢幕（360）四位數大數字可能被正午太陽光暈擦到（review 估算，未實測）③tally.spec「填份量後直接按加入」偶發紅待觀察 ④視覺第二批（記一筆 sheet）。
+現況（2026-11-11 夜）：v2.127 記一筆 sheet「全部食物」依類型分組＋吃過徽章（今天＝小太陽、昨天＝月牙，只午晚餐）、只在其他餐吃過的類型收在最底、chip 選中改墨藍實心；順手修失敗訊息重複前綴。v2.123–v2.126 今日頁天空系列已上線。
+下一步：①真機看 v2.123–v2.127、Safari 狀態列 ②窄螢幕（360）四位數大數字與正午光暈（未實測）③tally.spec「填份量後直接按加入」偶發紅待觀察 ④視覺第三批（其他頁換皮、食品庫類型標籤換 CategoryIcon、左滑勾縮著）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -38,7 +38,7 @@
 **待辦（2026-11-11 整理，依序）**
 1. **讓 CI 轉綠**（擋住所有部署）：使用者 push 後手動觸發 `e2e-diag`（specs `spring-sheet training`、grep `頂緣留 12px|組列左滑露出紅鈕`）拿 Linux 截圖／trace／視窗尺寸。頂緣 88 的嫌疑：根元素橫向溢出 → Linux GTK 捲軸佔 8px → `--kb`=8（本機可先量 scrollWidth 是否 > clientWidth）。左滑嫌疑：拖曳沒起手，或補發的 click 在 150ms 後把列關回去（要 trace 分辨）。
 2. **視覺第一批**（v2.122 地基＋今日頁，截圖 `D:/Temp/tally-shots/`）：兩軸 review → commit → push。給使用者看的三件：今日頁改成整頁一起捲（插畫撐高 70px，否則展開最後一列會被蓋）、記兩餐後晚餐建議卡落在第一屏下緣、大數字 56px（樣張 96px）。
-3. 視覺第二批：記一筆 sheet 換皮＋依類型分組＋吃過徽章；併做確認列「+這次」、寫入失敗訊息重複前綴。
+3. ~~視覺第二批~~：v2.127 已做（分組＋徽章＋chip＋重複前綴；「+這次」早在 v2.100 就做了）。我定的四條可逆假設見 DESIGN v2.127，真機看過再定。
 4. 視覺第三批：其他頁換皮（含原 B3／B4）、食品庫類型標籤換 `CategoryIcon`；併做 `.tr-check:active` 左滑時還縮著。
 5. 視覺第四批：App 圖示 A（`_design-sample/app-icon-options.html` `#hill`），favicon／apple-touch-icon／manifest、`?v=` 遞增。
 6. 偶發紅的修法（2026-11-10 讀碼調查）：rest-timer `tick` 改成點完等 `aria-pressed` 翻轉（信心高：連點沒等寫入，問 RPE 的判斷錯過不補）；training「檢視器收合中點搜尋框」改等 `.sheet-close-guard` detached（中）；interaction「慢態有出口」改逐秒推進時鐘 `toPass`（低，假說解釋不了全部）。
@@ -52,7 +52,7 @@
 - ~~動作庫封存點下去沒有回饋~~：v2.103 已改成封存前先跳確認框（2026-11-10 critic 指出這條早於 v2.103、已過時）。
 - `.tr-check:active`／`.tr-all:active` 與 `[data-pressed]` 並存：左滑超過 10px 後勾還縮著。修法：`:active` 只留給鍵盤（`:focus-visible:active`）。
 - 佇列格式認不得時每次操作都丟錯、沒有出路（要不要做「原樣備份、清空重來」的逃生口）。
-- 寫入失敗訊息可能重複前綴「這筆沒有存下來：這筆沒有存下來：…」；sheet 關閉後焦點落到 body。
+- sheet 關閉後焦點落到 body（重複前綴已在 v2.127 修）。
 - e2e 偶發紅：清單、原因與做法只看 wiki `e2e-reference`。
 - 主 repo `npm audit` 有 1 critical／13 high（與功能無關）。
 - 其餘 v2.91–v2.93 review 的 LOW 條目在 git 歷史，真機驗完再看。

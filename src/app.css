@@ -1125,7 +1125,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .chip-bar { display: flex; align-items: center; flex-shrink: 0; padding-right: var(--s-2); }
 .chip-bar .chiprow { flex: 1; min-width: 0; }
 
-/* 餐別 chip 列：沿用分頁列的選中態語言（主藍文字 ＋ accent inset 邊框） */
+/* 餐別 chip 列：選中＝墨藍實心白字（v2.127 故事書方向，樣張 storybook-merged.html 第 2 節；原本是主藍字＋細框） */
 .chiprow { display: flex; gap: var(--s-2); padding: var(--s-3) var(--s-5);
   flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
 .chiprow::-webkit-scrollbar { display: none; }
@@ -1137,7 +1137,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* v2.30：選擇器從 [aria-current="true"] 換成 [aria-pressed="true"]——語意修正，
    視覺完全不變（見 LogSheet.tsx／FoodLibrary.tsx 該處註解）。 */
-.chip[aria-pressed="true"] { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--card); }
 
 .sect-lb { padding: var(--s-4) var(--s-5) var(--s-1); font-size: var(--t-xs);
   color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }
@@ -1166,6 +1166,27 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .food-list li { border-bottom: 1px solid var(--rule-subtle); }
 .food-list li:last-child { border-bottom: none; }
 .food-scroll .muted { color: var(--ink-muted); padding: var(--s-4) var(--s-5); margin: 0; }
+
+/* ── 「全部食物」依類型分組（v2.127，樣張 storybook-merged.html 第 2 節）──
+   組標＝32px 類型圖示（吃過的蓋徽章）＋組名＋右邊小字（吃過提示，沒有就是這一餐吃過幾次）。
+   一般品項列不放圖示：組標已經說了，每列都放會吵；建議列各自不同類，才放 24px。 */
+.sheet { --ci-ring: var(--card); }
+.grp-head { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; margin: 0;
+  padding: var(--s-2) var(--s-5) 0; font-size: var(--t-base); font-weight: 400; }
+.grp-head .gn { font-weight: 700; color: var(--ink); }
+.grp-head .seen { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); }
+.grp-head .cnt { font-size: var(--t-xs); color: var(--ink-muted); }
+.grp-head .cnt .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
+/* 收合列：三個小圖示疊一排＋「其他餐的（…）」＋往下的 chevron；展開後 chevron 翻上 */
+.grp-more { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 48px;
+  margin-top: var(--s-2); padding: 0 var(--s-5); border: none; border-top: 1px solid var(--rule);
+  background: none; text-align: left; font-family: inherit; font-size: var(--t-base); color: var(--ink-muted);
+  cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.grp-more:active { opacity: .6; }
+.grp-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.grp-more .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grp-more > svg { width: 16px; height: 16px; flex-shrink: 0; transition: transform var(--dur-base) var(--ease); }
+.grp-more[aria-expanded="true"] > svg { transform: rotate(180deg); }
 
 .food-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 44px;
   padding: var(--s-2) 0; border: none; background: none; text-align: left;
@@ -1444,7 +1465,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout,
   .chip, .icon-btn, .datectl-title svg, .date-today-btn, .pick-bar-btn,
   .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
-  .qty-btn, .ed-del, .seg button { transition-duration: .01ms; }
+  .qty-btn, .ed-del, .seg button, .grp-more, .grp-more > svg { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
      單獨的 class 選擇器贏不過，要原樣列出來才壓得過。
      .item-slide 的位移是 motion 在 JS 端驅動的，降速在 Today.tsx 走 reduceMotion() */
