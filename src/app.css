@@ -60,7 +60,7 @@
      天空上的字另有 --ink-sky。 */
   --sky: #CADDED; --ink-sky: #3F5372;
   --hill-far: #A9C3DC; --hill-mid: #7DA0C4; --hill-near: #3D6894; --tree: #5A84B0;
-  --sun: #F0B94A; --sun-deep: #A8761A; --sun-noodle: #D99A2B; --sun-pale: #FFF1CF; --sun-glow: #FBF0D6; --moon: #F7E7C4;
+  --sun: #F0B94A; --sun-deep: #A8761A; --sun-noodle: #D99A2B; --sun-pale: #FFF1CF; --moon: #F7E7C4;
   --clay: #C8613A; --clay-deep: #9E4A2A; --crumb: #FBEFD3;
   --plate: #DCE8F2; --plate-deep: #C9D7E5; --snow: #FFFFFF;
   /* 天空上量尺的軌道：--track 對 --sky 只差 1.02:1，要用半透明白才看得到 */
@@ -152,12 +152,12 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* ── 今日頁的天空（v2.122）：日期元件與「還能吃」坐在插圖上 ──
    插圖（.scene）絕對定位鋪滿這一塊，所以天空跟著內容長高（月曆展開時）而山坡永遠貼底。
-   底部內距＝山坡帶的高度：寬 393 時是 60px，跟著寬度等比例（插圖是等比縮放的；padding 的 % 是對寬度算）。
+   底部內距＝山坡帶的高度：寬 393 時是 48px（v2.126，原本 60），跟著寬度等比例（插圖是等比縮放的；padding 的 % 是對寬度算）。
    container-type 讓插圖裡的東西拿得到這一塊的寬度（cqw）：絕對定位的 bottom 寫 % 是對高度算，雲要跟山坡帶走就只能用 cqw。
    天空上的次要字換成 --ink-sky：--ink-muted 對 --sky 只有 4.30:1，--ink-sky 是 5.60:1；
    停用的日期格用 --rule-field（3.09:1），--ink-faint 在天空上只剩 2.58:1。 */
 .sky { position: relative; isolation: isolate; background: var(--sky); container-type: inline-size;
-  padding-bottom: calc(60 / 393 * 100%);
+  padding-bottom: calc(48 / 393 * 100%);
   --ink-muted: var(--ink-sky); --ink-faint: var(--rule-field); }
 .sky > .topbar, .sky > .gauge { position: relative; z-index: 1; }
 /* 天空頂端少留一點：週列已經佔掉 60 多 px，省下來的高度留給時間軸（晚上那一餐的建議要在第一屏看得到） */
@@ -174,14 +174,17 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .scene svg { display: block; overflow: visible; }
 /* 同 .ci：全站 `.screen svg` 的線條圖示預設（stroke currentColor 1.6px）要在插圖裡關掉，否則每塊山坡都被描一圈黑邊 */
 .screen .scene svg { fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; }
-.scene-hills { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: auto; }
-/* 雲坐在山坡帶上方 84px：山坡帶高＝寬度的 60/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
-.scene-clouds { position: absolute; right: 3%; bottom: calc(60 / 393 * 100cqw + 84px); width: 32%; height: auto; }
+/* bottom -1px：天空高度常帶小數，山坡圖的底緣會差不到 1px、露出一絲天空色的橫線（440 寬實測）；多畫 1px 被 .scene 切掉 */
+.scene-hills { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: auto; }
+/* 雲坐在山坡帶上方（數字見下一條）：山坡帶高＝寬度的 48/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
+/* v2.126 天空矮了：雲縮到 26% 寬、離山坡帶 52px，頂端才不會碰到週列 */
+.scene-clouds { position: absolute; right: 3%; bottom: calc(48 / 393 * 100cqw + 52px); width: 26%; height: auto; }
 /* 太陽沿著右半邊的弧線走（位置由 lib/todayScene.ts 算，TodayScene 換成 --sun-x／--sun-b）。
    left／bottom 不做過場：一分鐘只挪 0.05%，動畫沒有意義；只有進場時升起一次。 */
 .scene-sun { position: absolute; left: var(--sun-x); bottom: var(--sun-b); width: 76px; height: 76px;
   margin: 0 0 -38px -38px; animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
-.scene-moon { position: absolute; left: 82%; bottom: 128px; width: 60px; height: 60px; margin: 0 0 -30px -30px;
+/* 右半邊的山在 v2.126 隆起：月亮要高過山頭，又不能碰到週列 */
+.scene-moon { position: absolute; left: 82%; bottom: 116px; width: 60px; height: 60px; margin: 0 0 -30px -30px;
   animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes scene-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 /* 字級是插圖座標（viewBox 393 寬裡的 12.5 單位），跟著插圖等比縮放，不是字級 token——DESIGN「今日頁插圖」的例外 */
@@ -211,6 +214,10 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 
 /* ── 熱量量尺 ── */
 .gauge { padding: var(--s-1) var(--s-5) var(--s-3); }
+/* 今日頁（v2.126）：「還能吃」不再獨佔一行，接在大數字前面同一條基線——讀起來就是「還能吃 1108 卡」；
+   上下距收到 0／--s-2。天空原本佔 393×745 第一屏的 39%，這兩處加上山坡帶 60→48 省下約 40px */
+.sky .gauge { padding: 0 var(--s-5) var(--s-2); }
+.sky .gauge-top > div { display: flex; align-items: baseline; gap: var(--s-2); }
 .gauge-lead { font-size: var(--t-md); font-weight: 700; color: var(--ink); letter-spacing: var(--track-md); line-height: 1.2; }
 /* .gauge-num／.gauge-unit 每日目標頁的大數字也用（DailyGoal），這兩條是全站的基準 */
 .gauge-num { font-family: var(--font-num); font-size: var(--t-hero); font-weight: 600;

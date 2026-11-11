@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 晚）：v2.125 今日頁天空接上頁面——最前景近山改紙色地面、踏腳石反色（主藍勾／墨字）且可以點（開該餐記錄）；impeccable critique 快照在 .impeccable/critique（未進版控）。v2.124 霧化帶縮小＋Safari 狀態列色條。AI 分類 112 樣全分完。
-下一步：①真機看 v2.123–v2.125、Safari 狀態列是否接上天空 ②critique 剩的：天空佔第一屏 39%、太陽光暈灰盤 ③tally.spec「填份量後直接按加入」偶發紅待觀察 ④視覺第二批（記一筆 sheet）。
+現況（2026-11-11 晚）：v2.126 天空從第一屏 39%→34%（「還能吃」接在大數字前、山坡帶 60→48、左谷右山、太陽月亮雲跟著降），光暈改放射漸層。v2.125 前景紙色地面＋踏腳石可點、v2.124 霧化縮小＋Safari 狀態列色條皆已上線。AI 分類 112 樣全分完。
+下一步：①真機看 v2.123–v2.126、Safari 狀態列 ②窄螢幕（360）四位數大數字可能被正午太陽光暈擦到（review 估算，未實測）③tally.spec「填份量後直接按加入」偶發紅待觀察 ④視覺第二批（記一筆 sheet）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

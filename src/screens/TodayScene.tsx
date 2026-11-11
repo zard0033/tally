@@ -3,13 +3,13 @@
    山坡上四塊踏腳石＝四餐，記過的那一餐亮起來、現在該記的那一塊有一圈慢慢呼吸的光。
    整幅 aria-hidden：它說的事情（幾點、哪餐記了）時間軸都用文字說過一次。
    位置怎麼算在 src/lib/todayScene.ts；這裡只把比例擺上去。 */
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useId, useState, type CSSProperties } from 'react'
 import { localDate } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
 import { FIXED_SCENE_MIN, minutesOf, nextMeal, NO_STONES, rememberStones, skyAt, stonesFor, type Sky } from '@/lib/todayScene'
 
 /* 踏腳石沿著小徑擺，座標在 393×76 的山坡帶裡。y 跟著小徑的起伏走（樣張原圖的 300 高場景下半段，縮成 76）。
-   畫面只露出下面 60（viewBox 從 y=16 起）：上緣那 16 是遠山的山頭，靠 overflow:visible 照樣畫出來、但不佔版面。 */
+   畫面只露出下面 48（viewBox 從 y=28 起，v2.126；原本 60）：上緣以上是山頭，靠 overflow:visible 照樣畫出來、但不佔版面。 */
 const STONE_AT: [number, number][] = [
   [36, 60],
   [132, 59],
@@ -20,8 +20,9 @@ const STONE_AT: [number, number][] = [
 function sunStyle(sky: Sky): CSSProperties {
   if (sky.kind === 'moon') return {}
   /* 弧線只走畫面右半邊：左半是「還能吃」的大數字，太陽不該從字後面升起。
-     地平線在山坡帶裡（底下 24px，被山擋住），正午比地平線高 110px，剛好落在大數字的右邊。 */
-  return { '--sun-x': `${60 + 34 * sky.t}%`, '--sun-b': `${24 + 110 * sky.h}px` } as CSSProperties
+     地平線在山坡帶裡（底下 20px，被山擋住），正午比地平線高 74px，剛好落在大數字的右邊。
+     v2.126 天空矮了 40px，原本的 110px 會讓正午的太陽爬到週列上（實測蓋住「14」）。 */
+  return { '--sun-x': `${60 + 34 * sky.t}%`, '--sun-b': `${20 + 74 * sky.h}px` } as CSSProperties
 }
 
 /* 太陽一分鐘挪一次就夠了（一分鐘只走 0.05%，肉眼看不出來，但開著不關的話傍晚會落山）。時間收在插圖這一塊裡，
@@ -66,6 +67,7 @@ export default function TodayScene({
   if (next !== mem) setMem(next)
   const { known, lit } = next
   const stones = known && stonesFor(known, isToday ? nextMeal(known, now) : null)
+  const glowId = useId()
 
   return (
     <div className="scene" aria-hidden="true">
@@ -81,26 +83,36 @@ export default function TodayScene({
       </svg>
       {sky.kind === 'sun' ? (
         <svg className="scene-sun" style={sunStyle(sky)} viewBox="-50 -50 100 100">
-          <circle r="46" fill="var(--sun-glow)" opacity=".6" />
+          {/* 光暈用放射漸層往外淡掉（v2.126）：原本是一片 .6 透明的平塗圓，疊在天空上混成灰米色的盤子，像髒污不像光 */}
+          <defs>
+            <radialGradient id={glowId}>
+              <stop offset=".55" stopColor="var(--sun-pale)" stopOpacity=".95" />
+              <stop offset="1" stopColor="var(--sun-pale)" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle r="48" fill={`url(#${glowId})`} />
           <circle r="28" fill="var(--sun)" />
         </svg>
       ) : (
         <svg className="scene-moon" viewBox="-30 -30 60 60">
-          <circle r="27" fill="var(--sun-glow)" opacity=".5" />
+          <defs>
+            <radialGradient id={glowId}>
+              <stop offset=".5" stopColor="var(--moon)" stopOpacity=".7" />
+              <stop offset="1" stopColor="var(--moon)" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle r="28" fill={`url(#${glowId})`} />
           <path d="M3.6-15.8a16 16 0 1 0 9.6 26.4 13 13 0 0 1-9.6-26.4z" fill="var(--snow)" />
         </svg>
       )}
-      <svg className="scene-hills" viewBox="0 16 393 60">
-        <path d="M0 12 C 60 -6, 120 -4, 178 6 S 292 -18, 393 -6 V76 H0Z" fill="var(--hill-far)" />
-        <path d="M0 30 C 80 12, 170 16, 240 26 S 350 14, 393 20 V76 H0Z" fill="var(--hill-mid)" />
+      {/* v2.126：左半邊壓成一片低谷、右半邊隆起。左邊是大數字與量尺，山頭不能爬到字後面——
+          量尺的淡色數字（--ink-sky）在遠山上只剩 4.28:1，所以左半邊的山要低於山坡帶上緣（y 28）；右邊讓給太陽與樹 */}
+      <svg className="scene-hills" viewBox="0 28 393 48">
+        <path d="M0 31 C 90 30, 180 30, 240 28 S 326 -10, 393 -4 V76 H0Z" fill="var(--hill-far)" />
+        <path d="M0 37 C 90 33, 180 33, 250 30 S 350 16, 393 22 V76 H0Z" fill="var(--hill-mid)" />
         <g transform="translate(286 20)">
           <rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--tree)" />
           <circle cx="0" cy="2" r="11" fill="var(--tree)" />
-        </g>
-        {/* 小樹壓低 6：原位置樹冠頂離上面的量尺只剩十幾 px，擠在一起（2026-11-11 真機） */}
-        <g transform="translate(118 23)">
-          <rect x="-1.5" y="4" width="3" height="10" rx="1.5" fill="var(--tree)" />
-          <circle cx="0" cy="1" r="7.5" fill="var(--tree)" />
         </g>
         {/* 最前面這層是紙：頁面就是畫裡的地面，營養素與餐別長在這塊地上（v2.125）。原本是最深的 --hill-near，
             整頁最暗的一條直接貼最亮的紙（5.19:1），天空讀起來像貼上去的一塊長方形 */}
