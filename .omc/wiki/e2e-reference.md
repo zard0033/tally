@@ -41,6 +41,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-11 push 後全量（`c769ce8`，v2.127–v2.129）：541 條 8 份全過、0 偶發。之前三輪全紅都是環境：runner 解析不到 `*.ubuntu.com`（azure 鏡像、官方鏡像都一樣，GitHub 狀態頁沒公告），8 份卡在 apt 裝字型，最多 1 份撐過去；workflow 改成 apt 前把 `/etc/resolv.conf` 換成 1.1.1.1／8.8.8.8 就好了。撐過去那 1 份測出真紅：`interaction:901` 在讀取一次失敗就拋（v2.128）後，開機「載入中…」一閃而過、Linux CI 量不到——本機量得到，**本機綠不代表 CI 綠，動到時序的改動要找「斷言中間態」的測試**。
+
 2026-11-11 v2.128（冷啟動不等重試、全站 AI 一份設定、設定頁 AI 段，未跑全量、未推）：vitest 1058 過；build、lint 過。`meal-suggest`＋`settings-nav`＋`service-worker`＋`quota-warning`＋`inline-edit` 104 過、`training`「連不上伺服器」1 過、smoke 55 過（smoke 第一輪紅 1：`tally.spec` 的「零真實網路請求」把 stub 接住的 read-label 額度查詢也算進去，改成排除 read-label）。冷啟動（token 有效）e2e 實測 7644 ms → 334 ms，門檻 12 秒收到 3 秒。mutation：vitest 6 處（辨識只用校準過的、白名單、額度欄位驗型別、credits 嚴格 true、log 遮 key、空白辨識串）都紅；e2e 3 處（拿掉 `rest.retry=false` 回到 7.6 秒、分類不帶 model、寫入後重撈不重試）都紅；**第一次「分類不帶 model」的 mutant 讓 tsc 擋掉 build、測試根本沒跑，不算數**，改成能編譯的寫法才得到真的紅。**陷阱：關掉 postgrest-js 退避重試後，靠「等 7 秒退避」的斷言會變成量不到中間態**（weight-trend 的骨架斷言拿掉）。新 stub 開關 `__dropIntake`（下一次當日清單查詢斷一次網）、`__credits`、`__readLabelModels`。訓練頁同步的 1 秒重試沒有 e2e 守。
 
 2026-11-11 記一筆 sheet 依類型分組（v2.127，未跑全量）：`npx vitest run` 1046 過；build、lint 過；`e2e:affected --dry` 印 FULL。`meal-suggest`＋`quota-warning`＋`inline-edit` 85 過、`training` 寫入失敗 2 過、smoke 55 過（review 修正前後各跑一輪，兩輪都綠）。新增 e2e 1 條（分組、組序、徽章、收合、搜尋不分組、早餐不提示、換餐別收回）。mutation：vitest 7 處（沒歷史不收、次數排序、這一餐吃過的不收、早餐不提示、只收餐點類型、最早那餐，第 3 處第一次**活下來**——fixture 晚餐和早餐的類型剛好不重疊，補一條重疊的才紅）；e2e 1 處（拿掉徽章）紅。**陷阱：`openApp` 不釘時鐘，sheet 的預設餐別跟著跑測時刻走**（`openAppAt` 才釘 09:00）。以前每個餐別看到的清單都一樣所以沒差；這批讓「別餐吃過的類型收起來」之後，晚上跑就紅了 quota-warning 兩條、inline-edit 有兩條是潛在紅（CI runner 是 UTC，台灣晚上推等於午餐）。通則：**開 sheet 點特定食物前先點餐別 chip 釘住**，不要靠預設餐別。

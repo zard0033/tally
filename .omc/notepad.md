@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 夜）：v2.127 已推（d96a500），CI 兩輪都因 runner DNS 解析不到 azure apt 鏡像而沒跑測試，舊版仍在線上。v2.128 本機 commit 未推（autopilot 擋 push）：冷啟動不等重試（7s→0.3s）、全站 AI 一份設定、設定頁 AI 段（額度＋主模型）、workflow 換 apt 鏡像。
-下一步：①推 v2.128（含 workflow 修正）＋部署 read-label，看 CI ②真機看 v2.123–v2.128 ③360 寬實測 ④rest-timer 偶發紅修法 ⑤視覺第三批。
+現況（2026-11-11 夜）：v2.127–v2.129 已上線（CI 全量 541 過、0 偶發，c769ce8）。v2.127 記一筆 sheet 依類型分組＋吃過徽章；v2.128 冷啟動不等重試（7s→0.3s）、全站 AI 一份設定、設定頁 AI 段（額度＋主模型）；v2.129 營養標示辨識改走主模型（DeepSeek 先，只過合成標示冒煙）。read-label v15 已部署。CI 改問公共 DNS（runner 解析不到 *.ubuntu.com）。
+下一步：①真機看 v2.123–v2.129（設定頁額度、拍標示讀數）②Qwen 當分類主模型會逾時（待決）③360 寬實測 ④rest-timer 偶發紅修法 ⑤視覺第三批。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
