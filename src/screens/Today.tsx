@@ -3,7 +3,7 @@
    左滑刪除自 v2.1 改用 motion drag 手刻（取代 react-swipeable-list——那個套件拖曳中
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
@@ -155,11 +155,13 @@ export default function Today(props: TodayProps) {
   const targetKcal = Math.round(targets.kcal)
   const over = eatenKcal !== null && targetKcal - eatenKcal < 0
 
+  const edge = useSkyEdge()
+
   return (
     <div className={`main${over ? ' is-over' : ''}`} data-screen="today">
       {/* v2.122：天空與三大營養素跟著時間軸一起捲（.timeline 是整頁唯一的捲動區）。插圖把頂端撐高了約 70px，
           固定不動的話 393×745 下時間軸只剩不到 300px，展開最後一列的編輯區（約 322px）整塊放不進去。 */}
-      <div className="timeline">
+      <div className="timeline" ref={edge.ref} onScroll={edge.sync}>
         {/* v2.122：日期元件與「還能吃」坐在插圖的天空上。插圖在最底層、絕對定位，跟著這一塊的高度走——
             月曆展開時天空往上長，山坡永遠貼在最下面。 */}
         <div className="sky">
@@ -750,4 +752,27 @@ function SuggestRow({
       )}
     </>
   )
+}
+
+/* Safari 26 不讀 theme-color，狀態列的顏色是從頁面頂端的固定色條取的（App 的 .edge-top，v2.124）。
+   天空還頂著色條時把色條染成天空色，狀態列跟天空接起來；天空捲走了換回紙色。離開今日頁就拿掉，色條回到紙色。 */
+function useSkyEdge() {
+  const ref = useRef<HTMLDivElement>(null)
+  const sync = useCallback(() => {
+    const sky = ref.current?.querySelector('.sky')
+    const strip = document.querySelector('.edge-top')
+    const onSky = !!sky && !!strip && sky.getBoundingClientRect().bottom > strip.getBoundingClientRect().bottom
+    const root = document.documentElement
+    // 捲動每一格都會叫到這裡：值沒變就不碰 DOM
+    if (onSky === (root.dataset.edge === 'sky')) return
+    if (onSky) root.dataset.edge = 'sky'
+    else delete root.dataset.edge
+  }, [])
+  useEffect(() => {
+    sync()
+    return () => {
+      delete document.documentElement.dataset.edge
+    }
+  }, [sync])
+  return { ref, sync }
 }

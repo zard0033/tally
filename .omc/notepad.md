@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 晚）：v2.123 上線（785d14d）。AI 分類 112 樣已分 82；qwen 15 樣要 31–42 秒、兩批逾時，分類改 deepseek 優先、qwen 備援（函式已部署）。使用者抽看發現 4 樣分錯（麥味登滿分堡、Q-Burger 中式特餐→速食；菜燕春青→其他正餐；早餐店豆漿 vs 奶茶不一致），可在食品庫手改。
-下一步：①使用者開 app 後數 category is null（剩 30）②真機看 v2.123 ③問用 Safari 還是主畫面 App（狀態列紙色帶）④視覺第二批（記一筆 sheet）。
+現況（2026-11-11 晚）：AI 分類 112 樣全分完（deepseek 優先）。v2.124：霧化帶縮到底部列高、Safari 狀態列色條（今日頁天空頂著時染天空色，iOS 26 真機未驗）。今日頁天空與頁面割裂：impeccable critique 診斷＝深藍近山貼紙 5.19:1＋冷暖斷層＋上下兩套畫法；方向 A（前景改紙色地面）推薦、C（天空改紙）、B（紙頁蓋風景）不推。
+下一步：①使用者選割裂方向（樣張在 D:/Temp/tally-shots）②真機看 v2.123／v2.124、Safari 狀態列 ③踏腳石假可點（critique P2）④視覺第二批。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

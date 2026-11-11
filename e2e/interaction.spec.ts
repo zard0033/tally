@@ -1063,6 +1063,27 @@ test('飲食頁底部列浮起：霧化帶與空白不攔截，兩顆鈕點得�
    `padding-bottom` 不算進去——編輯區下緣會落在底部列底下，右側的刪除鈕剛好在 CTA 底下。
    修法是時間軸的 `scroll-padding-bottom`。不縮視窗：編輯區約 322px，393×745 的時間軸扣掉底部列還剩約 360px 放得下；
    視窗再矮，編輯區本身就大過可見範圍，量出來的是別的事。展開後內容才溢出，所以 scrollIntoView 會被觸發。 */
+test('狀態列色條：天空頂著時染天空色，捲走、換分頁就回紙色（Safari 26 從這條取狀態列顏色）', async ({ page }) => {
+  await openApp(page)
+  const state = () =>
+    page.evaluate(() => ({ edge: document.documentElement.dataset.edge ?? null, bg: getComputedStyle(document.querySelector('.edge-top')!).backgroundColor }))
+  const SKY = 'rgb(202, 221, 237)'
+  const PAPER = 'rgb(242, 242, 237)'
+  expect(await state()).toEqual({ edge: 'sky', bg: SKY })
+  // fixture 的內容不夠長、捲不走天空：塞一段高內容再捲到天空整塊離開色條
+  await page.locator('.timeline').evaluate((tl) => {
+    const pad = document.createElement('div')
+    pad.style.height = '1200px'
+    tl.appendChild(pad)
+    tl.scrollTop = (tl.querySelector('.sky') as HTMLElement).offsetHeight + 40
+  })
+  await expect.poll(state).toEqual({ edge: null, bg: PAPER })
+  await page.locator('.timeline').evaluate((tl) => (tl.scrollTop = 0))
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  await page.locator('.tab[aria-label="設定"]').click()
+  await expect.poll(state).toEqual({ edge: null, bg: PAPER })
+})
+
 test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，不被蓋住', async ({ page }) => {
   await openApp(page)
   const last = page.locator('.timeline .item-row').last()

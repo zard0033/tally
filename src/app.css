@@ -91,9 +91,11 @@
   --fill: #E3E7E6;
   /* 欄位聚焦的主藍光暈（3px） */
   --accent-ring: rgba(46, 94, 147, .18);
-  /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
-  --fog-h: 168px; --fog-blur: 9px;
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
+  /* 霧化邊緣（scroll-edge）只蓋底部列後面那一段（v2.124）：原本 168px，是底部列的兩倍多、淡到底是實心紙色，
+     真機上整個畫面下面三分之一都霧掉（使用者 2026-11-11）。浮起交給膠囊與 CTA 自己的 --shadow-2，霧化只負責
+     別讓字跟按鈕疊在一起。模糊量樣張實測含蓄，真機看了可調到 12–14px */
+  --fog-h: calc(var(--bar-h) + var(--s-4)); --fog-blur: 9px;
   --rest-ask-h: 88px; /* 條上多一列 RPE 問題時多出來的高度（實測 86.8px：問題＋四顆 chip＋間距），.main.has-rest-ask 的列表留白用；改問題列的版面要重量 */
   --rest-h: 52px; /* 組間休息倒數條（RestBar）的高度；條與 .main.has-rest 的列表底部留白共用，改一處兩邊跟著走 */
   /* 鍵盤升起時 sheet 頂緣與狀態列（safe-area）之間留的空隙（v2.65）；.sheet 與 .sheet-fit 共用 */
@@ -161,6 +163,14 @@ button { -webkit-user-select: none; user-select: none; }
 /* 天空頂端少留一點：週列已經佔掉 60 多 px，省下來的高度留給時間軸（晚上那一餐的建議要在第一屏看得到） */
 .sky > .topbar { padding-top: var(--s-2); }
 .scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+/* 狀態列色條（v2.124）。Safari 26 不讀 theme-color：它在頁面頂端中線往內 4px 找寬度 ≥90% 的 fixed 元素，
+   拿它的 background-color 染狀態列；找不到就露出 body 的紙色——今日頁天空上面那條紙色帶就是這樣來的。
+   深度要超過 10px 才取 background-color（joe-bell/skills apple-web-app 的 theme-color-and-status-bar，引 WebKit
+   LocalFrameView::fixedContainerEdges；iOS 26 真機沒人驗過，iOS 27 驗過換色會跟著變）。
+   z-index 4：蓋過內容與浮起的底部列，但在 scrim（10）之下，開 sheet 時一起被調暗。 */
+.edge-top { position: fixed; top: 0; left: 0; right: 0; height: max(12px, env(safe-area-inset-top, 0px)); z-index: 4;
+  background: var(--paper); pointer-events: none; }
+html[data-edge="sky"] .edge-top { background: var(--sky); }
 .scene svg { display: block; overflow: visible; }
 /* 同 .ci：全站 `.screen svg` 的線條圖示預設（stroke currentColor 1.6px）要在插圖裡關掉，否則每塊山坡都被描一圈黑邊 */
 .screen .scene svg { fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; }

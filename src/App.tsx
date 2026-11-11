@@ -1031,6 +1031,8 @@ export default function App() {
 
   return (
     <div className="screen" id="view-app">
+      {/* Safari 26 從這條取狀態列的顏色（見 app.css .edge-top）；要是真的元素，::before 不會被取樣 */}
+      <div className="edge-top" aria-hidden="true" />
       <main className={floatingBar ? 'main has-floating-bar' : 'main'}>
         {tab === 'training' ? (
           <Training
