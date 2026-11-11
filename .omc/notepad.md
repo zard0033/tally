@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11）：視覺第一批 v2.122（故事書配色＋Nunito＋類型圖示＋今日頁插畫）連同 CI 紅的根因修正一起推上（見 MANUAL 待辦 1、2 更新）；CI 全綠才會部署 v2.119–v2.122。已修：三份「等落定」在 spring 衝過頭時誤判（改到 harness springSettled）、Linux 左滑選到文字（.swipe-row 鎖選取）、檢視器那條改頁內記錄、rest-timer 連點競態（測試＋app withPendingDone）。autopilot 已手動停（active=false），push 不再被擋。
-下一步：盯這次 CI；綠了＝線上換新視覺，請使用者真機看今日頁。接著視覺第二批（記一筆 sheet＋類型分組）。
+現況（2026-11-11）：CI 全綠、已部署（run 42942213668，c47a3e3）——線上是 v2.119–v2.122：每日目標兩修、類型 AI 分類＋避開重複、拿掉提示音、視覺第一批（故事書配色＋Nunito＋類型圖示＋今日頁插畫）。CI 首跑 Linux 才紅的全修掉（等落定誤判、選取攔下左滑、檢視器時序、rest-timer 連點競態含 app 修正）。autopilot 已停。
+下一步：①請使用者真機看今日頁新視覺、每日目標頁、訓練打勾問 RPE、要點編輯（.ex-body 鎖選取）②開 app 觸發類型 AI 補判後抽看分類結果 ③視覺第二批（記一筆 sheet＋類型分組＋確認列「+這次」＋失敗訊息重複前綴）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

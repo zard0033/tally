@@ -21,6 +21,7 @@
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）
+- [lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）](lesson-ci-linux-e2e-2026-11-11.md) — # lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）
 - [lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）](lesson-meal-suggest-2026-11-04.md) — # lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）
 - [lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）](lesson-meal-suggest-v2-2026-11-10.md) — # lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
