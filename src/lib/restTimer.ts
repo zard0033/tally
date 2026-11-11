@@ -11,7 +11,7 @@ export const REST_SEC = 90
 export const REST_ADJUST_SEC = 15
 /** 剩餘時間的上限：＋15 加到超過這個值就夾在這個值。 */
 const REST_MAX_MS = 600_000
-/** 歸零後多久內回到前景，還算「準時看到」（播提示音、自動收起）；超過就只顯示已過多久，不補響。 */
+/** 歸零後多久內回到前景，還算「準時看到」（自動收起）；超過就只顯示已過多久。 */
 const REST_ON_TIME_MS = 2_000
 /** 準時歸零後條停留多久自動收起（從 endAt 起算）。 */
 export const REST_AUTO_HIDE_MS = 3_000
@@ -48,7 +48,7 @@ export function overtimeText(ms: number): string {
   return `休息結束 · 已過 ${Math.floor(over / 60)}:${String(over % 60).padStart(2, '0')}`
 }
 
-/** 歸零那刻使用者在前景看著嗎（播提示音、自動收起的條件）：超時不到 REST_ON_TIME_MS。 */
+/** 歸零那刻使用者在前景看著嗎（自動收起的條件）：超時不到 REST_ON_TIME_MS。 */
 export function firedOnTime(endAt: number, now: number): boolean {
   return now - endAt < REST_ON_TIME_MS
 }

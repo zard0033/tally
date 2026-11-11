@@ -579,6 +579,12 @@ export const RPE_CHIPS = [
 /** 組編輯 sheet 的五格；6 只有這裡有（休息條只問有沒有逼近極限）。DDL 的 check 是 5–10。 */
 export const RPE_SHEET_VALUES = [6, 7, 8, 9, 10] as const
 
+/** 把「已送出、畫面還沒反映」的勾套到這一份 sets 上。寫入要先 await 存檔才重繪（不是樂觀更新），
+ *  連續快速打勾時，後一下的判斷若只看畫面上的 sets，會把前一下還在路上的那組當成沒做。 */
+export function withPendingDone<T extends Row>(sets: readonly T[], pending: ReadonlyMap<string, boolean>): T[] {
+  return sets.map((s) => (pending.has(s.id) ? { ...s, done: pending.get(s.id) } : s))
+}
+
 /** 勾完 setId 這一組之後，這個動作還有沒有未完成的組。沒有＝這個動作做完了（休息條該問 RPE）。找不到這組回 false。 */
 export function completesExercise(sets: readonly Row[], setId: string): boolean {
   return sets.some((s) => s.id === setId) && sets.every((s) => s.id === setId || s.done === true)

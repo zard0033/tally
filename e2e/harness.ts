@@ -207,6 +207,23 @@ export async function armClickDuringClose(page: Page, screen: string, point: { x
 export const closeClickResult = (page: Page) =>
   page.evaluate(() => (window as unknown as { __closeClick: Promise<{ sheetStillThere: boolean; elapsedMs: number }> }).__closeClick)
 
+/** 等 SpringSheet 的 spring 落定在 0：相隔 80ms 的兩次讀數都在 0 附近（translateY，JS 動畫，`getAnimations()` 看不到）。
+ *  只看「兩次讀數一樣」會在衝過頭的最高點誤判（那一瞬速度≈0；CI 沒有 GPU、幀更慢，2026-11-11 診斷實測停在 −8）；
+ *  只看「在 0 附近」會在 spring 往回穿過 0 的那一瞬誤判。兩個都要。呼叫點的終點必須是 0（拖住不放時不能用）。 */
+export async function springSettled(el: Locator) {
+  const ty = () => el.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
+  await expect
+    .poll(
+      async () => {
+        const a = await ty()
+        await el.page().waitForTimeout(80)
+        return Math.max(Math.abs(a), Math.abs(await ty()))
+      },
+      { message: 'spring 應落定在 0', timeout: 5000 },
+    )
+    .toBeLessThan(0.5)
+}
+
 /** 元素中心點，給 armClickDuringClose 用。 */
 export async function centerOf(locator: Locator) {
   const box = (await locator.boundingBox())!

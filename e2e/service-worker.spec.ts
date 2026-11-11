@@ -123,7 +123,19 @@ test('首次安裝後，伺服器關掉也能開 App；快取只含同源外殼�
   const urls = await cachedPaths(page)
   expect(urls.length).toBeGreaterThan(0)
   expect(urls.every((u) => u.startsWith('/tally/'))).toBe(true)
-  expect(urls.some((u) => u.endsWith('.woff2'))).toBe(true) // 字型要在，否則離線掉字
+  /* 字型要在，否則離線掉字。v2.122 起數字字型（Nunito 子集，每個字重約 2.1 KB）小於 Vite 的 assetsInlineLimit（4 KB），
+     直接以 data URL 內嵌在 CSS 裡，沒有獨立的 .woff2——所以改驗快取裡的 CSS 真的帶著字型。 */
+  const cssHasFont = await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      for (const req of await (await caches.open(name)).keys()) {
+        if (!new URL(req.url).pathname.endsWith('.css')) continue
+        const res = await (await caches.open(name)).match(req)
+        if ((await res!.text()).includes('data:font/woff2')) return true
+      }
+    }
+    return false
+  })
+  expect(cssHasFont, '快取裡的 CSS 該內嵌數字字型').toBe(true)
   expect(urls.some((u) => u.endsWith('reset.html'))).toBe(false)
 
   await stopServer()

@@ -13,66 +13,67 @@
 
    例外：--accent／--card 等少數 token 名稱兩邊真的撞了（shadcn 在
    src/index.css 的 :root 也定義了 --accent，值是它自己的 oklch 灰階，不是我們的
-   jade）。這個檔案不用 @import 併入 index.css（CSS 規定 @import 必須排在所有一般
+   主藍）。這個檔案不用 @import 併入 index.css（CSS 規定 @import 必須排在所有一般
    規則之前，併進去的話仍會被排在 index.css 下方的 :root{} 之前，同名 token 反而被
    shadcn 蓋掉——實測踩過），而是在 main.tsx 用第二個獨立的 CSS import、排在
    `import './index.css'` 之後，讓這裡的 :root 在最終樣式表的 cascade 順序上確實
    排在 shadcn 後面，同名 unlayered token 才會照這裡的值生效。
    ═══════════════════════════════════════════════════ */
-/* 數字專用字體（v2.7）。Archivo 天生帶 tabular figures：十個數字量出來的寬度差只有
-   0.09px（Outfit 12.89px／Space Grotesk 8.88px／Manrope 9.68px／Sora 14.56px，且對它們
-   套 font-variant-numeric: tabular-nums 完全無效——Google Fonts 的靜態字重實例不帶那個
-   OpenType feature）。DESIGN.md 規定數字要用 tabular-nums 對齊，換成別的字體時間軸
-   每列的卡數會左右跳，這條約束不可退讓，見 DESIGN.md v2.7 版本紀錄。
-   完整拉丁 woff2（不做數字 subset）：省下的十幾 KB 買不到「不用建 subset pipeline」的代價。
-   放 src/assets/ 讓 Vite 處理（加 hash、有快取控制）。
-   v2.13：原本只抓 600 一個字重，副作用是任何請求較輕字重（`.item .kc`／`.pair .tgt` 這類
-   次要數字沒有另外設 font-weight，理論上該跟著環境繼承 400）的元素，瀏覽器都只有 600
-   這一張字形可用，實際全部長一樣粗，主次數字的視覺層級被字型切換這件事悄悄抹平了
-   （真機回報「字重應該要有分別」，2026-08-02）。補一份 400，兩個 CSS 規則都不用動——
-   沒特別設字重的元素本來就是要繼承 400，字形一到位它們自然分流，不用逐一補
-   font-weight。 */
-@font-face {
-  font-family: 'Archivo Num';
-  src: url('./assets/archivo-400.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Archivo Num';
-  src: url('./assets/archivo-600.woff2') format('woff2');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
+/* 數字專用字體（v2.122：Archivo → Nunito）。Nunito（OFL 1.1，googlefonts/nunito v3.602）的十個數字
+   字寬全是 600 單位（hmtx 實讀，五個字重都一樣），天生等寬，不靠 tabular-nums 開關——DESIGN.md「時間軸卡數
+   不能左右跳」那條硬約束照樣守得住。
+   **靜態字重、不用可變字型**：可變版一個檔就有 200–1000，但 Windows 上的 WebKit（e2e 跑的那個）不吃 wght 軸，
+   全部數字都畫成預設的 200 細體；拆成五個靜態檔各約 2.1 KB，哪個引擎都一樣。用到的字重：400（沒特別設的
+   次要數字）、600、700、800、900（主數字）。
+   只留數字與數字周邊的符號（0–9 空白 % + , - . / : · × – —）；fontTools 的 varLib.instancer 切字重、subset 切字集，
+   layout features 全拿掉（kern 會讓數字之間的距離不等寬）。unicode-range 讓其他字元直接走系統字，
+   「週二 11/10」這類混排自動 fallback。 */
+@font-face { font-family: 'Tally Num'; src: url('./assets/nunito-num-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0020, U+0025, U+002B-003A, U+00B7, U+00D7, U+2013-2014; }
+@font-face { font-family: 'Tally Num'; src: url('./assets/nunito-num-600.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap; unicode-range: U+0020, U+0025, U+002B-003A, U+00B7, U+00D7, U+2013-2014; }
+@font-face { font-family: 'Tally Num'; src: url('./assets/nunito-num-700.woff2') format('woff2');
+  font-weight: 700; font-style: normal; font-display: swap; unicode-range: U+0020, U+0025, U+002B-003A, U+00B7, U+00D7, U+2013-2014; }
+@font-face { font-family: 'Tally Num'; src: url('./assets/nunito-num-800.woff2') format('woff2');
+  font-weight: 800; font-style: normal; font-display: swap; unicode-range: U+0020, U+0025, U+002B-003A, U+00B7, U+00D7, U+2013-2014; }
+@font-face { font-family: 'Tally Num'; src: url('./assets/nunito-num-900.woff2') format('woff2');
+  font-weight: 900; font-style: normal; font-display: swap; unicode-range: U+0020, U+0025, U+002B-003A, U+00B7, U+00D7, U+2013-2014; }
 
 :root {
+  /* v2.122 故事書：灰白紙面、墨藍字、安靜的藍。對比值見 DESIGN.md「色彩」。 */
   /* 表面 */
-  --paper: #FAF6F0; --card: #FCF9F3; --raised: #F4EAD8;
-  --rule: #E0D3BD; --rule-subtle: #ECE1CD;
-  /* 控件邊界專用：--rule 對 paper 只有 1.37:1，而輸入框的底色 --paper 對
-     sheet 底 --card 幾乎沒有色差，邊框是唯一的邊界線索，WCAG 1.4.11 要 3:1。
-     **v2.32 從 #9F8570 調深到 #9A8069**：舊值只照 --paper 校準（3.22:1），搬到
-     今日頁編輯區那塊更深的 --raised 上就掉到 2.90:1、悄悄不合格了。新值對三種
-     表面全部實算過關——raised 3.11、card 3.53、paper 3.44——一個 token 走遍全站，
-     不必為每種底色各養一個。只用於控件邊界，**內容分隔線仍用 --rule**。 */
-  --rule-field:   #9A8069;
+  --paper: #F2F2ED; --card: #FFFFFF; --raised: #E6EAEB;
+  --rule: #DEE2E2; --rule-subtle: #E6E9E8;
+  /* 進度條軌道（v2.122 從 --rule 分出來：分隔線要淡、軌道要撐得住填色的 3:1） */
+  --track: #D5DDE5;
+  /* 控件邊界專用（WCAG 1.4.11 要 3:1）。對四種會出現控件的底色實算：paper 3.83、card 4.30、
+     raised 3.55、fill 3.45。只用於控件邊界，**內容分隔線仍用 --rule**。 */
+  --rule-field:   #6E7B8E;
   /* 文字 */
-  --ink: #3D2210; --ink-muted: #7A5C44; --ink-faint: #A88C76;
-  /* 主色 jade */
-  --accent: #1C7059; --accent-dark: #155747; --accent-soft: #CFE9E0; --on-accent: #FFFFFF;
+  --ink: #1D2B45; --ink-muted: #56647C; --ink-faint: #7D8898;
+  /* 主色：主藍 */
+  --accent: #2E5E93; --accent-dark: #234A75; --accent-soft: #DCE8F2; --on-accent: #FFFFFF;
   /* 破表 */
-  --over: #9A4330; --over-fill: #B8533A; --over-stripe: rgba(255,255,255,.22);
+  --over: #A23E2C; --over-fill: #B04A33; --over-stripe: rgba(255,255,255,.22);
 
-  /* 全站中文與一般文字用系統字體。數字為主的顯示元素另外套 --font-num（Archivo，
-     見上方 @font-face）——中文與數字混排的文字元素不套，兩種字體同一句話裡並排會破碎 */
+  /* 插圖與類型圖示（今日頁頂端那幅、src/components/CategoryIcon）。只給圖形用，不拿來寫字——
+     天空上的字另有 --ink-sky。 */
+  --sky: #CADDED; --ink-sky: #3F5372;
+  --hill-far: #A9C3DC; --hill-mid: #7DA0C4; --hill-near: #3D6894; --tree: #5A84B0;
+  --sun: #F0B94A; --sun-deep: #A8761A; --sun-noodle: #D99A2B; --sun-pale: #FFF1CF; --sun-glow: #FBF0D6; --moon: #F7E7C4;
+  --clay: #C8613A; --clay-deep: #9E4A2A; --crumb: #FBEFD3;
+  --plate: #DCE8F2; --plate-deep: #C9D7E5; --snow: #FFFFFF;
+  /* 天空上量尺的軌道：--track 對 --sky 只差 1.02:1，要用半透明白才看得到 */
+  --sky-track: rgba(255, 255, 255, .7);
+
   --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-  --font-num: 'Archivo Num', -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --font-num: 'Tally Num', -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 
   --t-xs: .72rem; --t-sm: .8rem; --t-base: .875rem; --t-md: 1rem; --t-lg: 1.25rem; --t-hero: 2.75rem;
+  /* 今日頁「還能吃」的大數字（v2.122）。只有這一處，其他頁的大數字仍是 --t-hero */
+  --t-display: 3.5rem;
   /* tracking 隨字級走：大字收緊、小字放開 */
-  --track-hero: -.022em; --track-md: -.008em; --track-lg: -.005em; --track-base: 0; --track-xs: .015em;
+  --track-display: -.03em; --track-hero: -.022em; --track-md: -.008em; --track-lg: -.005em; --track-base: 0; --track-xs: .015em;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
   --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
   --ease: cubic-bezier(.4, 0, .2, 1);
@@ -81,15 +82,15 @@
      sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
      的位移上會像被彈出來。抽屜類元件用較長的時間與更早煞車的曲線（見 DESIGN.md v1.9） */
   --dur-sheet: 280ms; --dur-mid: 220ms; --dur-base: 160ms; --dur-fast: 100ms; --ease-sheet: cubic-bezier(.32, .72, 0, 1);
-  /* 全站基礎（spec.md「全站基礎：精緻度改版」，2026-10-16 核可）。暖棕色陰影、三級為限——
-     取代 DESIGN.md 原本的「不用陰影」：卡片貼地、浮層浮起、sheet 最上層。 */
-  --shadow-1: 0 1px 2px rgba(61, 34, 16, .07), 0 0 0 1px rgba(61, 34, 16, .04);
-  --shadow-2: 0 4px 14px rgba(61, 34, 16, .12), 0 1px 3px rgba(61, 34, 16, .08);
-  --shadow-3: 0 -8px 32px rgba(61, 34, 16, .16), inset 0 1px 0 rgba(255, 255, 255, .6);
-  /* 欄位：填色（對 cream 只有 1.18:1）＋ 2px 底線（--rule-field 對 cream 3.53:1、對填色 3.00:1，兩邊都過 3:1） */
-  --fill: #F1E6D2;
-  /* 欄位聚焦的 jade 光暈（3px） */
-  --accent-ring: rgba(28, 112, 89, .18);
+  /* 全站基礎（spec.md「全站基礎：精緻度改版」，2026-10-16 核可）。三級陰影為限，v2.122 起色相跟著
+     墨藍（rgba(29,43,69,…)）——卡片貼地、浮層浮起、sheet 最上層。 */
+  --shadow-1: 0 1px 2px rgba(29, 43, 69, .06), 0 0 0 1px rgba(29, 43, 69, .04);
+  --shadow-2: 0 6px 18px -6px rgba(29, 43, 69, .28), 0 1px 3px rgba(29, 43, 69, .08);
+  --shadow-3: 0 -10px 30px rgba(29, 43, 69, .18), inset 0 1px 0 rgba(255, 255, 255, .6);
+  /* 欄位：填色（對 paper 1.11:1、對 card 1.25:1）＋ 2px 底線（--rule-field 對填色 3.45:1） */
+  --fill: #E3E7E6;
+  /* 欄位聚焦的主藍光暈（3px） */
+  --accent-ring: rgba(46, 94, 147, .18);
   /* 霧化邊緣（scroll-edge）：高度與模糊量；樣張實測含蓄，真機看了可調到 12–14px */
   --fog-h: 168px; --fog-blur: 9px;
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
@@ -147,29 +148,80 @@ button { -webkit-user-select: none; user-select: none; }
 /* position:relative 是 .undo-bar 的定位基準（它絕對定位浮在時間軸底部） */
 .main { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 
+/* ── 今日頁的天空（v2.122）：日期元件與「還能吃」坐在插圖上 ──
+   插圖（.scene）絕對定位鋪滿這一塊，所以天空跟著內容長高（月曆展開時）而山坡永遠貼底。
+   底部內距＝山坡帶的高度：寬 393 時是 60px，跟著寬度等比例（插圖是等比縮放的；padding 的 % 是對寬度算）。
+   container-type 讓插圖裡的東西拿得到這一塊的寬度（cqw）：絕對定位的 bottom 寫 % 是對高度算，雲要跟山坡帶走就只能用 cqw。
+   天空上的次要字換成 --ink-sky：--ink-muted 對 --sky 只有 4.30:1，--ink-sky 是 5.60:1；
+   停用的日期格用 --rule-field（3.09:1），--ink-faint 在天空上只剩 2.58:1。 */
+.sky { position: relative; isolation: isolate; background: var(--sky); container-type: inline-size;
+  padding-bottom: calc(60 / 393 * 100%);
+  --ink-muted: var(--ink-sky); --ink-faint: var(--rule-field); }
+.sky > .topbar, .sky > .gauge { position: relative; z-index: 1; }
+/* 天空頂端少留一點：週列已經佔掉 60 多 px，省下來的高度留給時間軸（晚上那一餐的建議要在第一屏看得到） */
+.sky > .topbar { padding-top: var(--s-2); }
+.scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.scene svg { display: block; overflow: visible; }
+/* 同 .ci：全站 `.screen svg` 的線條圖示預設（stroke currentColor 1.6px）要在插圖裡關掉，否則每塊山坡都被描一圈黑邊 */
+.screen .scene svg { fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; }
+.scene-hills { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: auto; }
+/* 雲坐在山坡帶上方 84px：山坡帶高＝寬度的 60/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
+.scene-clouds { position: absolute; right: 3%; bottom: calc(60 / 393 * 100cqw + 84px); width: 32%; height: auto; }
+/* 太陽沿著右半邊的弧線走（位置由 lib/todayScene.ts 算，TodayScene 換成 --sun-x／--sun-b）。
+   left／bottom 不做過場：一分鐘只挪 0.05%，動畫沒有意義；只有進場時升起一次。 */
+.scene-sun { position: absolute; left: var(--sun-x); bottom: var(--sun-b); width: 76px; height: 76px;
+  margin: 0 0 -38px -38px; animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
+.scene-moon { position: absolute; left: 82%; bottom: 128px; width: 60px; height: 60px; margin: 0 0 -30px -30px;
+  animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes scene-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+/* 字級是插圖座標（viewBox 393 寬裡的 12.5 單位），跟著插圖等比縮放，不是字級 token——DESIGN「今日頁插圖」的例外 */
+.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--snow); }
+/* 現在該記的那一塊：一圈慢慢呼吸的光。**只呼吸兩次（4.8 秒）就停在亮的那一格**：跟內容並排、會動超過 5 秒的東西
+   要能暫停（WCAG 2.2.2），這個 app 一次只開三秒，兩次已經夠被看到。減少動態時整個不動（下方 media query） */
+.stone-pulse { transform-box: fill-box; transform-origin: center; animation: stone-pulse 2.4s cubic-bezier(.4, 0, .2, 1) 2; }
+@keyframes stone-pulse { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .35; transform: scale(1.25); } }
+/* 剛記下那一餐：那塊石頭亮起來時跳一下（只有「從沒亮變成亮」那一次，見 TodayScene） */
+.stone.just-lit .stone-mark { transform-box: fill-box; transform-origin: center; animation: stone-lit 520ms cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes stone-lit { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .scene-sun, .scene-moon, .stone-pulse, .stone.just-lit .stone-mark { animation: none; }
+}
+
 /* ── 熱量量尺 ── */
-.gauge { padding: var(--s-1) var(--s-5) var(--s-4); }
-.gauge-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: var(--s-3); }
-.gauge-lead { font-size: var(--t-sm); color: var(--ink-muted); margin-bottom: 2px;
-  letter-spacing: var(--track-xs); }
+.gauge { padding: var(--s-1) var(--s-5) var(--s-3); }
+.gauge-lead { font-size: var(--t-md); font-weight: 700; color: var(--ink); letter-spacing: var(--track-md); line-height: 1.2; }
+/* .gauge-num／.gauge-unit 每日目標頁的大數字也用（DailyGoal），這兩條是全站的基準 */
 .gauge-num { font-family: var(--font-num); font-size: var(--t-hero); font-weight: 600;
   letter-spacing: var(--track-hero); line-height: .95; font-variant-numeric: tabular-nums; }
 .gauge-unit { font-size: var(--t-sm); color: var(--ink-muted); margin-left: var(--s-1); }
-.gauge-side { font-size: var(--t-xs); text-align: right; line-height: 1.4;
-  letter-spacing: var(--track-xs); }
-.bar { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; }
+/* 今日頁天空上的主數字（v2.122）：Nunito 900、56px。全頁最圓、最大的東西——跟插圖的圓山坡、圓太陽同一個手感。
+   只套在 .sky 裡，其他頁仍是上面那組 --t-hero */
+.sky .gauge-num { font-size: var(--t-display); font-weight: 900; letter-spacing: var(--track-display); line-height: .9; }
+.sky .gauge-unit { font-size: var(--t-lg); font-weight: 700; color: var(--ink); letter-spacing: var(--track-lg); }
+.gauge-meta { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-2); }
+.gauge-side { font-size: var(--t-sm); line-height: 1.4; letter-spacing: var(--track-xs); }
+.gauge-side .cur { font-weight: 800; }
+.bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .bar .fill { height: 100%; border-radius: 4px; background: var(--accent); }
+/* 天空上的量尺：軌道換半透明白（--track 對天空只差 1.02:1，畫在天上會整條不見）。
+   這層白疊在天空上實算：主藍填色 6.09:1、破表填色 4.93:1，都過圖形的 3:1。 */
+.gauge .bar { width: 116px; flex-shrink: 0; height: 6px; border-radius: 3px; background: var(--sky-track); }
+.gauge .bar .fill { border-radius: 3px; }
 
 /* ── 三大營養素 ── */
-.macros { display: flex; gap: var(--s-4); padding: 0 var(--s-5) var(--s-4); }
+.macros { display: flex; gap: var(--s-4); padding: var(--s-3) var(--s-5) var(--s-2); border-bottom: 1px solid var(--rule); }
 .macro { flex: 1; min-width: 0; }
 .macro .lbl { font-size: var(--t-xs); color: var(--ink-muted); margin-bottom: var(--s-1);
   white-space: nowrap; letter-spacing: var(--track-xs); }
-/* 容器固定 6px、條靠底：破表長高時才不會把標籤列頂歪（實測過的 3px 錯位） */
-.macro .track-box { height: 6px; display: flex; align-items: flex-end; }
-.macro .track { width: 100%; height: 3px; border-radius: 2px; background: var(--rule); overflow: hidden; }
-.macro .fill { height: 100%; border-radius: 2px; background: var(--accent); }
+/* 容器固定 8px、條靠底：破表長高時才不會把標籤列頂歪（實測過的 3px 錯位） */
+.macro .track-box { height: 8px; display: flex; align-items: flex-end; }
+.macro .track { width: 100%; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+/* 脂肪、碳水用墨色填；蛋白質（唯一「要追」的那條）用主藍。墨對軌道 10.31:1、主藍 4.88:1 */
+.macro .fill { height: 100%; border-radius: 2px; background: var(--ink); }
+.macro.is-protein .fill { background: var(--accent); }
 .macro .val { font-size: var(--t-xs); margin-top: var(--s-1); letter-spacing: var(--track-xs); }
+/* 當前值放大一級到 14px／800（Nunito）：393 寬最壞字寬「100.1/263 差 163」實量仍在欄寬內（e2e 鎖住），再大就擠不下 */
+.macro .val .cur { font-size: var(--t-base); font-weight: 800; }
 .macro .val .gap { margin-left: var(--s-1); color: var(--ink-muted); font-weight: 400; }
 
 /* ── 破表狀態（DESIGN.md v1.1 · C + F） ── */
@@ -182,35 +234,34 @@ button { -webkit-user-select: none; user-select: none; }
 /* 破表的是「已吃」那個值，目標值本身沒有超標——只染前半 */
 .macro.over .val .cur, .is-over .gauge-side .cur { color: var(--over); }
 /* 主訊號：破表的營養素條長高一倍，三條並排時直接分成兩類 */
-.macro.over .track { height: 6px; border-radius: 3px; }
-.macro.over .fill { border-radius: 3px; }
+.macro.over .track { height: 8px; border-radius: 4px; }
+.macro.over .fill { border-radius: 4px; }
 
 /* ── 時間軸 ── */
-/* 捲軸不佔版面；頂部漸層取代 1px 硬線。底部刻意不做漸層——捲到底時最後一項會被淡掉 */
-.timeline { flex: 1; overflow-y: auto; padding: var(--s-4) var(--s-5) var(--s-2);
-  scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10px); }
+/* v2.122：.timeline 是今日頁整頁唯一的捲動區——天空（日期、還能吃、插圖）與三大營養素都在裡面，跟著餐別一起捲走。
+   插圖把頂端撐高了，固定不動的話時間軸剩不到 300px。頂端的淡出遮罩跟著拿掉：沒有固定的頂欄可以讓內容「滑進去」了。
+   捲軸不佔版面。底部刻意不做漸層——捲到底時最後一項會被淡掉 */
+.timeline { flex: 1; overflow-y: auto; padding: 0 0 var(--s-2); scrollbar-width: none; }
+.meals { padding: var(--s-3) var(--s-5) 0; }
 .timeline::-webkit-scrollbar { display: none; }
-.node { display: grid; grid-template-columns: 18px 1fr; gap: var(--s-3); }
-.rail { display: flex; flex-direction: column; align-items: center; }
-/* 圓點對齊餐別標題的視覺中線：(19.2px 行高 − 9px 點) / 2 ≈ 5px */
-.dot { width: 9px; height: 9px; border-radius: var(--r-pill); background: var(--accent);
-  margin-top: 5px; flex-shrink: 0; }
-/* 待記錄的餐次包在 44px 觸控行裡、文字垂直置中，圓點要跟著下移才對得上 */
-.dot.todo { background: transparent; border: 1.5px solid var(--ink-faint); margin-top: 17px; }
-.line { width: 1px; flex: 1; background: var(--rule); margin: var(--s-1) 0; }
-.line.todo { background: repeating-linear-gradient(to bottom, var(--rule) 0 3px, transparent 3px 7px); }
-.node-body { min-width: 0; padding-bottom: var(--s-5); }
+.node-body { min-width: 0; padding-bottom: var(--s-4); }
 /* 待記錄行自帶 44px 觸控高度，不必再補滿間距 */
 .node-body.is-todo { padding-bottom: var(--s-2); }
 .node:last-child .node-body { padding-bottom: 0; }
 .timeline .muted { color: var(--ink-muted); margin: 0; }
+/* 有建議的待記錄餐：整塊浮成一張白卡。卡片畫在 ::before 上、往外推，**不佔版面**（不加 margin／padding）——
+   建議列的高度與「有建議比沒建議高 48px」是鎖在 e2e 裡的版面契約（DESIGN「今日頁的餐建議」，量的是相鄰兩餐的間距）。
+   上下各往內收 --s-1：卡片上緣到餐名、「加入」到卡片下緣都約 8px，晚餐與點心兩張卡連著出現時中間也留 8px。
+   點心是最後一節、底下沒有 .is-todo 那段 --s-2 內距，卡片改往外畫 --s-1，下緣離「加入」一樣 8px。 */
+.node-body.has-sg { position: relative; isolation: isolate; }
+.node-body.has-sg::before { content: ''; position: absolute; inset: var(--s-1) calc(var(--s-3) * -1); z-index: -1;
+  border-radius: 18px; background: var(--card); box-shadow: var(--shadow-1); }
+.node:last-child .node-body.has-sg::before { bottom: calc(var(--s-1) * -1); }
 
 /* 餐別標題列同時是「追加這一餐」的入口，所以是原生 button */
 /* min-height 44：它是「追加這一餐」的入口，且緊貼下方同樣 44px 的品項列，
    原本只有約 27px，單手大拇指很容易按成隔壁那條 */
-.node-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-2);
+.node-head { display: flex; align-items: center; gap: var(--s-2);
   width: 100%; min-height: 44px; padding: 0 0 var(--s-2); border: none;
   border-bottom: 1px solid var(--rule);
   background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
@@ -223,9 +274,10 @@ button { -webkit-user-select: none; user-select: none; }
    與品項名（400）仍差兩級，層級沒有塌掉。 */
 .node-name { font-weight: 600; font-size: var(--t-md); line-height: 1.2;
   letter-spacing: var(--track-md); }
-.node-kcal { font-family: var(--font-num); font-size: var(--t-base); font-weight: 600;
+.node-kcal { margin-left: auto; font-family: var(--font-num); font-size: var(--t-base); font-weight: 700;
   line-height: 1.2; font-variant-numeric: tabular-nums; }
-.items { margin: var(--s-2) 0 0; padding: 0; list-style: none; }
+/* 品項列往兩側各懸出 --s-3：列本身有底色與圓角（滑開、展開時看得到），內距收回來之後文字仍對齊餐別標題 */
+.items { margin: var(--s-1) calc(var(--s-3) * -1) 0; padding: 0; list-style: none; }
 
 /* ── 品項列：左滑露出刪除鈕（v2.1：motion drag 手刻，取代 react-swipeable-list） ──
    結構是兩層：.item-delete 固定壓在列的右緣底下，.item-slide 是唯一會動的那層
@@ -244,7 +296,7 @@ button { -webkit-user-select: none; user-select: none; }
 .item-slide { position: relative; z-index: 1; }
 .item-content { width: 100%; border-radius: var(--r-tab);
   display: flex; justify-content: space-between; align-items: center; gap: var(--s-3);
-  min-height: 44px; padding: var(--s-1) 0; border: none; background: var(--card); text-align: left;
+  min-height: 44px; padding: var(--s-1) var(--s-3); border: none; background: var(--paper); text-align: left;
   font-family: inherit; font-size: var(--t-base); color: inherit; line-height: 1.45;
   letter-spacing: var(--track-base); cursor: pointer;
   -webkit-appearance: none; appearance: none;
@@ -330,7 +382,7 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* 刪除：--over 是破表狀態的專用色，`.item-delete` 用實心紅圓沒問題是因為它只在左滑
    時短暫出現；這一顆是展開期間常駐的，填色會讓警告色變成常態元素、也會壓過真正的
-   主角（改份量）。改成不填色的描邊圖示——對 --raised 實算 5.47:1（圖形需 3:1）。
+   主角（改份量）。改成不填色的描邊圖示——對編輯區底 --card 實算 6.44:1（圖形需 3:1）。
    負 margin 讓 44px 觸控區懸出容器的水平內距，圖示右緣因此與上一行的熱量數字對齊：
    帶框的 stepper／分段器需要內距才不貼壁，無框的圖示不需要，兩者對齊基準本來就不同。 */
 /* 觸控區 44px 維持不變，但**圖示置中、整顆鈕往右推**，而不是「盒子不動、圖示靠右」——
@@ -358,7 +410,7 @@ button { -webkit-user-select: none; user-select: none; }
   -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
 /* 選中態＝會滑動的白塊（.seg-thumb，spring 驅動，見 SegmentedControl）＋字重 600 與墨色字。
-   白塊 --card 對填色軌道只有 1.18:1，所以字重 600 仍是非顏色訊號（沿用原本分頁列的同一筆帳）。 */
+   白塊 --card 對填色軌道只有 1.25:1，所以字重 600 仍是非顏色訊號（沿用原本分頁列的同一筆帳）。 */
 .seg button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
 .seg-thumb { position: absolute; inset: 0; border-radius: 10px; background: var(--card);
   box-shadow: var(--shadow-1); }
@@ -386,8 +438,8 @@ button { -webkit-user-select: none; user-select: none; }
 
 /* ── 餐建議（待記錄那一列底下的一行） ── */
 .sg { position: relative; margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
-  padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-tab); background: var(--raised); }
-/* 「換一個」之後整列淡綠閃一下，同「剛加入」的 flash（純透明度，減少動態不關） */
+  padding: 0; border-radius: var(--r-tab); }
+/* 「換一個」之後整列淡藍（--accent-soft）閃一下，同「剛加入」的 flash（純透明度，減少動態不關） */
 .sg-flash { position: absolute; inset: 0; border-radius: inherit; background: var(--accent-soft); opacity: 0;
   pointer-events: none; animation: flash 700ms var(--ease) forwards; }
 .sg-src { flex-shrink: 0; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
@@ -414,6 +466,20 @@ button { -webkit-user-select: none; user-select: none; }
 .sg-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sg-add[aria-disabled="true"] { opacity: .6; cursor: default; }
 .sg + .sheet-error { margin-top: var(--s-1); }
+
+/* ── 食物類型圖示（v2.122，src/components/CategoryIcon.tsx） ──
+   淡藍圓盤＋圖；徽章疊右上，外圈一道 2px 的底色環把它跟盤子切開（環色跟著底色走：--ci-ring；不叫 --ring，那是 shadcn 的 focus ring token）。 */
+.ci { --s: 40px; position: relative; display: inline-block; flex-shrink: 0; width: var(--s); height: var(--s);
+  border-radius: var(--r-pill); background: var(--plate); vertical-align: middle; }
+/* 全站的 `.screen svg` 預設是線條圖示（stroke currentColor、fill none）；這裡是平塗插圖，要把預設改回 SVG 的原樣 */
+span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); stroke: none; stroke-width: 1;
+  stroke-linecap: butt; stroke-linejoin: miter; }
+.ci.is-sm .ci-art { transform: scale(1.14); }
+.ci-badge { position: absolute; right: -12%; top: -12%; width: 50%; height: 50%; border-radius: var(--r-pill);
+  box-shadow: 0 0 0 2px var(--ci-ring, var(--paper)); }
+.ci-stack { display: inline-flex; flex-shrink: 0; }
+.ci-stack .ci + .ci { margin-left: calc(var(--s) * -.28); box-shadow: 0 0 0 2px var(--ci-ring, var(--paper)); }
+.has-sg { --ci-ring: var(--card); }
 
 /* ── 主 CTA（v2.3：56px 實心圓、只有加號，見底部列 .bottom-bar） ── */
 .cta { display: flex; align-items: center; justify-content: center;
@@ -447,7 +513,7 @@ button { -webkit-user-select: none; user-select: none; }
    置中且不與底部列左右任一端對齊，位置本身就在說「我不是這一組的」——底部列合併
    CTA 與分頁後右下角已被 CTA 佔住，且它是 5 秒就消失的暫時物件，進常駐列會讓每次
    刪除都改變那一列的構成。深色底是不動用第二個訊號色就能拉開對比的唯一做法
-   （不用陰影，DESIGN.md）——jade 會與底部列的 CTA 撞成同色。
+   （不用陰影，DESIGN.md）——主藍會與底部列的 CTA 撞成同色。
    外層 div 只負責定位與 role=status 的播報（含 sr-only 的「已刪除」）。 */
 /* pointer-events: none 在容器上、auto 在鈕上——**看得見的只有置中那顆 84px pill，
    但容器是滿寬 353×44 的命中區**。v2.2 時它是滿寬可見條，遮住哪裡看得出來；v2.3 縮成
@@ -499,12 +565,12 @@ button { -webkit-user-select: none; user-select: none; }
 .tab:active { opacity: .6; }
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 選中態底色（v2.4：--raised → --accent-soft）。純圖示分頁的選中/未選中圖示色
-   jade #1C7059 對 ink-muted #7A5C44 亮度只差 1.02:1，兩者差異幾乎只在色相；
-   --raised 對 --card 又只有 1.14:1，實際只剩 1px inset 邊框在扛狀態訊號。
+   主藍 --accent 對未選中的 --ink-muted 亮度只差 1.12:1（v2.122 色票實算；v2.4 當時的 jade 對棕是 1.02:1），
+   兩者差異幾乎只在色相；--raised 對 --card 又只有 1.21:1，實際只剩 1px inset 邊框在扛狀態訊號。
    --accent-soft 是本檔既有的「選取底色 / focus halo」token，不新增 token；
    1px accent inset 邊框與 aria-current 仍保留。
-   **底色換掉買到的是色相差，不是亮度差**（實算：--accent-soft 對 --card 1.22:1，
-   換之前的 --raised 是 1.14:1），所以另外加一個**非顏色訊號**：選中的圖示描邊 1.6→2.2
+   **底色換掉買到的是色相差，不是亮度差**（v2.122 實算：--accent-soft 對 --card 1.24:1，
+   --raised 是 1.21:1），所以另外加一個**非顏色訊號**：選中的圖示描邊 1.6→2.2
    加粗。這與 DESIGN.md「破表靠 3px→6px 高度差當主訊號、顏色是第二層」同一個原則——
    只有色相差的狀態訊號在色弱者眼裡等於沒有（review 實算後補，2026-07-30）。
    v2.5：底色與邊框從「直接畫在選中的 .tab 上」改成一個會在兩顆分頁間滑過去的
@@ -530,7 +596,7 @@ button { -webkit-user-select: none; user-select: none; }
   padding: var(--s-6) var(--s-5) calc(32px + env(safe-area-inset-bottom)); text-align: center; }
 .login .mid { flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: var(--s-4); }
-/* mark：48px 幾何 T（方向 3，見 App icon 規則），無背景方塊，直接是 jade 圖形 */
+/* mark：48px 幾何 T（方向 3，見 App icon 規則），無背景方塊，直接是主藍圖形 */
 .login .mark rect { fill: var(--accent); }
 .login .hero-q { font-size: var(--t-lg); font-weight: 500; color: var(--ink);
   letter-spacing: var(--track-lg); margin: 0; }
@@ -657,7 +723,7 @@ button { -webkit-user-select: none; user-select: none; }
 .goal-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 記得越多越準：還不能改用時直接說差什麼。 */
 .goal-meter { padding: var(--s-1) var(--s-4) var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
-.goal-meter-track { height: 4px; margin-bottom: var(--s-2); border-radius: 2px; background: var(--rule); overflow: hidden; }
+.goal-meter-track { height: 4px; margin-bottom: var(--s-2); border-radius: 2px; background: var(--track); overflow: hidden; }
 .goal-meter-track i { display: block; height: 100%; background: var(--accent); }
 .goal-note-in { margin: 0 var(--s-3) var(--s-3); }
 .goal-pick .val small { margin-left: var(--s-1); font-weight: 400; color: var(--ink-faint); }
@@ -805,7 +871,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .lib-cat-err { padding: 0 var(--s-3) var(--s-2); }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
-/* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.04:1 會隱形（與就地編輯區同一筆帳） */
+/* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.03:1 會隱形（與就地編輯區同一筆帳） */
 .lib-edit { padding: var(--s-3); background: var(--card); }
 .lib-edit .field-float { margin-bottom: var(--s-3); }
 .lib-edit .field-row { display: flex; gap: var(--s-2); }
@@ -1016,7 +1082,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .sheet svg { stroke: currentColor; fill: none; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 /* 純裝飾的 sheet 把手，尺寸沿用 iOS 慣例（36×4），不對應任何 token */
-.handle { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--rule);
+.handle { width: 36px; height: 4px; border-radius: var(--r-pill); background: var(--track);
   margin: var(--s-2) auto 0; flex-shrink: 0; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between;
   padding: var(--s-2) var(--s-3) 0 var(--s-5); flex-shrink: 0; }
@@ -1034,7 +1100,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .chip-bar { display: flex; align-items: center; flex-shrink: 0; padding-right: var(--s-2); }
 .chip-bar .chiprow { flex: 1; min-width: 0; }
 
-/* 餐別 chip 列：沿用分頁列的選中態語言（jade 文字 ＋ accent inset 邊框） */
+/* 餐別 chip 列：沿用分頁列的選中態語言（主藍文字 ＋ accent inset 邊框） */
 .chiprow { display: flex; gap: var(--s-2); padding: var(--s-3) var(--s-5);
   flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
 .chiprow::-webkit-scrollbar { display: none; }
@@ -1064,7 +1130,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .search-box svg { width: 16px; height: 16px; color: var(--ink-muted); flex-shrink: 0; }
 .search-box input { border: none; background: none; font-family: inherit;
   font-size: var(--t-md); color: var(--ink); flex: 1; min-width: 0; outline: none; padding: 0; }
-/* placeholder 也是文字，要過 4.5:1。--ink-faint 只有 2.92:1 */
+/* placeholder 也是文字，要過 4.5:1。--ink-faint 對欄位填色只有 2.88:1 */
 .search-box input::placeholder { color: var(--ink-muted); }
 
 /* 唯一捲動區 */
@@ -1085,7 +1151,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
 /* 未勾選的圈是「這份清單可以多選」唯一的視覺訊號，圖形元素要 3:1。
-   --ink-faint 實算 2.99:1，差一點——DESIGN.md 逼 chevron 改色的同一條理由 */
+   用 --ink-muted 不用 --ink-faint（裝飾色）：舊色票時 --ink-faint 只有 2.99:1 沒過；v2.122 對 sheet 的 --card
+   是 3.59:1 剛擦過，但這是唯一的訊號，不回退——DESIGN.md 逼 chevron 改色的同一條理由 */
 .food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-muted); }
 .food-row[aria-pressed="true"] .chk { color: var(--accent); }
 .food-row .nm-wrap { min-width: 0; flex: 1; }
@@ -1113,7 +1180,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    **這個 class 唯一的消費者是 e2e 測試的排序/分組斷言（`quota-warning.spec.ts`）**——
    下一輪清理看到這裡沒有對應規則，不要當成殘留死碼刪掉。 */
 
-/* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪底色會與 cream 打架）。
+/* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪 --accent-soft 會變成一大片色塊）。
    input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
 .food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
   padding: var(--s-1) 0; }
@@ -1243,7 +1310,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    條色用 --rule：欄位底是 --fill，--raised 對它只有約 1.03:1、而且是較淺的那個，條會整個隱形。 */
 .form-lock[disabled] .field-float:has(input:placeholder-shown)::after {
   content: ''; position: absolute; left: var(--s-3); right: var(--s-3); top: 40px; height: 12px;
-  border-radius: 6px; background: var(--rule); pointer-events: none;
+  border-radius: 6px; background: var(--track); pointer-events: none;
   animation: skeleton-breathe 1.1s ease-in-out infinite; }
 @keyframes skeleton-breathe { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
 
@@ -1285,7 +1352,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    label 仍是真的 label 元素、排在 input 後面（DOM 順序沒動，只是用定位放到框上方），
    只是用定位放到框上方。placeholder=" " 保留給 `:placeholder-shown`（骨架與其他判斷用），
    不是拿 placeholder 冒充 label（WCAG 3.3.2）。
-   邊界：填色對 cream 只有 1.18:1，靠 2px `--rule-field` 底線（對 cream 3.53:1、對填色 3.00:1）。
+   邊界：填色對 --paper 只有 1.11:1，靠 2px `--rule-field` 底線（對 --paper 3.83:1、對填色 3.45:1）。
    底線用背景漸層畫成一條兩端各縮進 12px 的直線（`--line` 換色），不用 border-bottom 也不用 inset box-shadow：
    兩者在圓角 12 下都會沿轉角彎成一道月牙，讀起來像按鈕的立體邊而不是底線（截圖才看出來）。 */
 .field-row { display: flex; gap: var(--s-3); }
@@ -1300,7 +1367,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   font-family: inherit; font-size: var(--t-md); color: var(--ink);
   padding: 0 var(--s-3); -webkit-appearance: none; appearance: none;
   transition: box-shadow var(--dur-base) var(--ease); }
-/* 聚焦：底線變 jade、整欄換 --card 底並加 3px jade 光暈 */
+/* 聚焦：底線變主藍、整欄換 --card 底並加 3px 主藍光暈（--accent-ring） */
 .field-float input:focus, .field-float select:focus, .search-box:focus-within, .tr-search:focus-within,
 .tr-field input:focus, .tr-field textarea:focus { outline: none;
   --line: var(--accent);
@@ -1460,7 +1527,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   align-items: center; justify-content: center; border-radius: var(--r-pill); cursor: pointer;
   -webkit-appearance: none; appearance: none; flex-shrink: 0; }
 .tr-ib:active { opacity: .6; }
-/* 刪除類的圖示鈕（訓練中頂欄的「刪除這次訓練」、動作卡的移除）：用 --over（對 paper 6.06:1）。v2.101 */
+/* 刪除類的圖示鈕（訓練中頂欄的「刪除這次訓練」、動作卡的移除）：用 --over（對 paper 5.73:1）。v2.101 */
 .tr-ib.is-danger { color: var(--over); }
 .tr-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tr-ib svg { width: 20px; height: 20px; }
@@ -1516,7 +1583,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex.is-cardio .sub > span { min-width: 0; overflow-wrap: anywhere; }
 .ex.is-cardio .sub .is-missing { color: var(--ink); font-weight: 700; }
 /* 動作示意縮圖（ExerciseThumb）：正方形（Gym visual 的圖是 180×180、白底 3D 人形標出肌群）、尺寸固定、底色先鋪，
-   圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字。1px 內描邊讓白底圖在米色卡片上有個邊。
+   圖載入前後列不跳高跳寬；沒有圖的動作用肌群單字。1px 內描邊讓白底圖在淺色卡片上有個邊。
    52px：列的 min-height 是 56，縮圖與放大鈕都 ≤ 55，有圖與沒圖（肌群單字）的列才一樣高。 */
 .ex-thumb { display: block; width: 52px; height: 52px; flex-shrink: 0; border-radius: 8px; background: var(--fill); object-fit: cover;
   outline: 1px solid var(--rule-subtle); outline-offset: -1px; }
@@ -1550,7 +1617,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   text-align: center; }
 .ex-viewer-credit { margin: 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; }
 /* 列表類畫面（動作庫、加動作、課表編輯、訓練中）底部的著作權標示（GymVisualCredit）；用 --ink-muted：
-   這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 只有 2.99:1）。 */
+   這是授權要求每次使用都附的文字，不是裝飾，對比要夠（--ink-faint 對 --paper 只有 3.20:1，文字要 4.5:1）。 */
 .img-credit { margin: var(--s-4) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
 /* 要點條（展開的動作卡頂部）：有要點＝柔和底色塊、最多兩行，點一下原地變輸入框；沒寫過＝同一個色塊，只是字換成淡色「加要點」
    （v2.102：使用者要預設狀態就跟有值時的輸入框一樣，點進去只多出游標與聚焦外框，整條不跳）。
@@ -1612,7 +1679,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-val:active { transform: scale(.97); }
 .tr-val:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .set.done .tr-val { color: var(--ink); }
-/* 圈裡一直有勾：未勾淡灰、已勾綠實心；圈 .86→1 不彈跳 */
+/* 圈裡一直有勾：未勾淡灰、已勾主藍實心；圈 .86→1 不彈跳 */
 .tr-check { width: 48px; height: 48px; border-radius: var(--r-pill); border: none; background: var(--fill);
   color: var(--ink-faint); display: flex; align-items: center; justify-content: center; cursor: pointer;
   -webkit-appearance: none; appearance: none; justify-self: center;
@@ -1622,9 +1689,9 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 勾與雙勾的按下回饋（v2.92）：縮小＋底色深一階。標記由 usePressed 的 [data-pressed] 給（iOS 在可捲容器裡的 :active 靠不住），
    :active 留著給鍵盤空白鍵。只縮放的話手指蓋住圓心就看不到——圓周縮進才 3px；底色變深在指縫與圓周露出來的地方看得到。
-   未勾 --fill → --rule（1.19:1，與 --fill 對 --card 同一級差；--rule-subtle 只有 1.05:1 看不出來）、已勾 --accent → --accent-dark。
+   未勾 --fill → --track（v2.122 起，原 --rule，理由見下一行）、已勾 --accent → --accent-dark。
    顏色沿用上面 transition 清單的 160ms，不另開。 */
-.tr-all:active, .tr-all[data-pressed], .tr-check:active, .tr-check[data-pressed] { transform: scale(.88); background: var(--rule); }
+.tr-all:active, .tr-all[data-pressed], .tr-check:active, .tr-check[data-pressed] { transform: scale(.88); background: var(--track); } /* v2.122：--rule 對 --fill 只差 1.05:1，按下去看不出深一階；--track 是 1.10:1，加上縮放夠用 */
 .tr-all.is-on:active, .tr-all.is-on[data-pressed],
 .set.done .tr-check:active, .set.done .tr-check[data-pressed] { background: var(--accent-dark); }
 /* 全部完成：資料一次換完，這一輪被換的列依序延後（--cascade-delay 由元件內聯給，間隔 CASCADE_STEP_MS＝60ms）。
@@ -1640,11 +1707,13 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   .tr-val:active { transform: none; }
   .ex-head .sub { animation: none; }
 }
-/* 同步剩餘組數：被改到的列淡綠閃一下（逐列錯開 50ms，延遲由元件內聯給） */
+/* 同步剩餘組數：被改到的列淡藍（--accent-soft）閃一下（逐列錯開 50ms，延遲由元件內聯給） */
 .set.is-synced { animation: set-flash 700ms var(--ease) both; }
 @keyframes set-flash { 0%, 100% { background-color: transparent; } 20% { background-color: var(--accent-soft); } }
 /* 左滑刪除（SwipeDelete）：位移層要有底色，紅圓鈕壓在它底下，滑開才露出 */
-.swipe-row { position: relative; overflow: clip; }
+/* 整列是手勢區、等同控件（v2.38 只鎖控件的延伸）：組號不是 button，往下拖會從它選起字、一路選到「新增一組」；
+   Linux WebKit 下一次左滑按在選取上就變成拖曳文字，pointer 被取消、列拉不開（2026-11-11 CI 截圖） */
+.swipe-row { position: relative; overflow: clip; -webkit-user-select: none; user-select: none; }
 .swipe-slide { position: relative; z-index: 1; background: var(--card); }
 /* 新增一組：接在最後一組下方的整列（虛線框、全寬） */
 .tr-addset { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
@@ -1689,7 +1758,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
 .step-num.is-input:focus { outline: none; }
 .set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
-/* 組編輯 sheet 的 RPE 區：五格（6–10）填色膠囊；選中＝淡綠底。欄位名稱右側接一行淡色說明（v2.104，原本在五格下面） */
+/* 組編輯 sheet 的 RPE 區：五格（6–10）填色膠囊；選中＝淡藍底（--accent-soft）。欄位名稱右側接一行淡色說明（v2.104，原本在五格下面） */
 .rpe-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-2); }
 .rpe-opt { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; cursor: pointer;
@@ -1756,12 +1825,13 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-field input { width: 100%; min-height: 48px; padding: 0 var(--s-3); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   font-size: var(--t-md); color: var(--ink); -webkit-appearance: none; appearance: none; }
 .tr-field input.is-text, .tr-field textarea { font-family: var(--font-body); font-variant-numeric: normal; }
-/* placeholder 也是文字（有氧 sheet 的「上次 30」、預設組次的「1–20」），要過 4.5:1：--ink-muted 對 --fill 4.94:1，--ink-faint 只有 2.54:1 */
+/* placeholder 也是文字（有氧 sheet 的「上次 30」、預設組次的「1–20」），要過 4.5:1：--ink-muted 對 --fill 4.80:1，--ink-faint 只有 2.88:1 */
 .tr-field input::placeholder { color: var(--ink-muted); opacity: 1; }
+/* 下拉箭頭的 data-URI 進不了 CSS 變數，顏色只能寫死：%2356647C＝--ink-muted #56647C，改 token 時要跟著改 */
 .tr-field select { --line: var(--rule-field); width: 100%; min-height: 48px; border: none; border-radius: var(--r-tab);
   background-color: var(--fill); padding: 0 40px 0 var(--s-3); font-family: var(--font-body); font-size: var(--t-md);
   color: var(--ink); -webkit-appearance: none; appearance: none;
-  background-image: linear-gradient(var(--line), var(--line)), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237A5C44' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: linear-gradient(var(--line), var(--line)), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356647C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat, no-repeat; background-position: center bottom, right 12px center;
   background-size: calc(100% - 2 * var(--s-3)) 2px, 18px; }
 .tr-field textarea { width: 100%; min-height: 96px; padding: var(--s-3); font-size: var(--t-md); line-height: 1.6; color: var(--ink);
@@ -1799,7 +1869,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-row.has-zoom > .ex-zoom, .tr-row.has-zoom > .tr-ib { position: relative; z-index: 1; }
 .tr-row-end { margin-right: calc(var(--s-3) * -1); }
 /* 拖曳握把（樣張 ⑤）：只有它能拖，touch-action: none 讓觸控按下握把時不會去捲頁面；
-   被拿起的列＝jade 外框＋微微抬高（--raised 底），不用陰影。 */
+   被拿起的列＝主藍外框＋微微抬高（--raised 底），不用陰影。 */
 .tr-grip { width: 44px; height: 44px; margin-left: calc(var(--s-3) * -1); display: flex; align-items: center;
   justify-content: center; border: none; background: none; color: var(--ink-muted); cursor: grab;
   touch-action: none; flex-shrink: 0; -webkit-appearance: none; appearance: none; }

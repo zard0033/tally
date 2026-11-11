@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 早）：線上仍是 11-10 晚以前的版本——CI（8 片×1 worker）剩 2 條 Linux 才紅（spring-sheet 頂緣 88≠96、training 組列左滑），擋住部署；v2.119–v2.121（每日目標兩修、類型分類＋避開重複、拿掉提示音）已在 main 等部署。視覺第一批 v2.122（地基＋今日頁）做完、待 review 與 commit。OMC push 防護在 autopilot 狀態下擋推送，OMC CLI 壞（缺 regexp-tree）清不掉狀態，push 要使用者自己打。
-下一步：見 MANUAL「待辦（2026-11-11 整理）」。
+現況（2026-11-11）：視覺第一批 v2.122（故事書配色＋Nunito＋類型圖示＋今日頁插畫）連同 CI 紅的根因修正一起推上（見 MANUAL 待辦 1、2 更新）；CI 全綠才會部署 v2.119–v2.122。已修：三份「等落定」在 spring 衝過頭時誤判（改到 harness springSettled）、Linux 左滑選到文字（.swipe-row 鎖選取）、檢視器那條改頁內記錄、rest-timer 連點競態（測試＋app withPendingDone）。autopilot 已手動停（active=false），push 不再被擋。
+下一步：盯這次 CI；綠了＝線上換新視覺，請使用者真機看今日頁。接著視覺第二批（記一筆 sheet＋類型分組）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -77,6 +77,7 @@
 [追加 2026-11-10] 使用者要拿掉組間休息提示音（e2e 跑時一直叫；iOS 一播就暫停 YouTube Music）。程式與 rest-timer.spec 已改（連無聲解鎖都拿掉、precache 不收 wav），未跑 e2e、未寫 DESIGN 版本紀錄（等類型分類 agent 交回再排版本號）；待使用者確認刪 `src/assets/rest-chime.wav`、`scripts/build-rest-chime.mjs`。推翻 2026-10-20「要提示音」的裁決。
 [裁決 2026-11-10] 視覺方向：故事書為底＋圖鑑的「每類一個圖示」（用故事書筆法與藍白配色、靠形狀分）；「吃過」＝圖示右上角徽章（太陽＝中午、月牙＝昨天）；字體 A（不要宋體；B 粉圓之後要加成本低）；App 圖示 A 山丘日出＋小徑（使用者：碗太偏飲食，app 還有訓練；B 計數記號有現代感但符號讓人認不出是誰）。待解：「滷味／鹽水雞」竹籤圖示、「其他正餐」餐罩偏西式。
 [授權 2026-11-10 夜，使用者睡前] 整夜自動跑、**每批 review＋測試過就自動 push**（雲端全綠才部署）；無法決定的善用 skill 自己判斷。範圍：視覺改版四批（今日頁→記一筆 sheet＋類型分組→其他頁→App 圖示）、小修（確認列「+這次」、失敗訊息重複前綴、左滑勾縮著、動作庫封存回饋）、**「一句話記一餐」先測準度、沒問題就實作**、**「慢態有出口」也要查**。早上要看到：notepad 交接已更新、全部 push 完。
+[授權 2026-11-11 早] 使用者：「有異動的話都要推」——每批照 review → 測試 → commit → push 自己推完，不必每次停下來列清單等確認；推了什麼在回報裡列出。OMC autopilot 執行中 push 會被 guardrail 擋（見 memory autopilot-git-guardrail）。
 [未修 2026-11-10] rest-timer.spec 等不到 RPE 問題列 `[data-rpe-ask]`：乾淨 HEAD 單跑兩次各 2 紅（445、571 行），全量時 4 紅（378、498、629），原因沒查。
 [追加 2026-11-10] 使用者回饋每日目標三個數字看不懂 → 照算式排重構（樣張 daily-goal-v2.html 兩輪核可，DESIGN v2.118）；用詞「公式推導／紀錄回推」、維持熱量標 TDEE、脂碳規則收進 ⓘ 都是使用者定的。
 [裁決 2026-11-10] 真機驗過：每日目標新版面與 ⓘ、換一個與超 N 卡、一鍵加入與復原都 OK。iOS 捷徑有在跑（體重停在 10-23 是沒開 app）。「慢態有出口」先不查。

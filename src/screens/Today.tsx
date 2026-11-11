@@ -6,8 +6,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
+import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import DateStrip from '@/components/DateStrip'
 import { DeleteIcon } from '@/components/DeleteIcon'
+import { iconStack, leadCategory } from '@/lib/categories'
 import { isPlannable, weekdayDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
@@ -16,6 +18,7 @@ import { macroExceeds, macroGap, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import { suggestLabel, type RepeatByMeal, type RepeatSuggestion, type SuggestSource } from '@/lib/mealSuggest'
 import ItemEditor from './ItemEditor'
+import TodayScene from './TodayScene'
 import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -154,107 +157,119 @@ export default function Today(props: TodayProps) {
 
   return (
     <div className={`main${over ? ' is-over' : ''}`} data-screen="today">
-      {/* v2.53：日期元件從 v2.4 的 `‹ 日期 ›` 膠囊換成週列＋月曆（src/components/DateStrip.tsx；
-          決策與被推翻的舊決定見 DESIGN.md「日期切換」）。h1 在元件裡面。 */}
-      <header className="topbar">
-        <DateStrip date={currentDate} marked={markedDates} onSelect={onGoToDate} onViewMonth={onViewMonth} />
-      </header>
+      {/* v2.122：天空與三大營養素跟著時間軸一起捲（.timeline 是整頁唯一的捲動區）。插圖把頂端撐高了約 70px，
+          固定不動的話 393×745 下時間軸只剩不到 300px，展開最後一列的編輯區（約 322px）整塊放不進去。 */}
+      <div className="timeline">
+        {/* v2.122：日期元件與「還能吃」坐在插圖的天空上。插圖在最底層、絕對定位，跟著這一塊的高度走——
+            月曆展開時天空往上長，山坡永遠貼在最下面。 */}
+        <div className="sky">
+          <TodayScene key={currentDate} date={currentDate} logged={rows && new Set(rows.map((r) => r.meal))} />
+          {/* v2.53：日期元件從 v2.4 的 `‹ 日期 ›` 膠囊換成週列＋月曆（src/components/DateStrip.tsx；
+              決策與被推翻的舊決定見 DESIGN.md「日期切換」）。h1 在元件裡面。 */}
+          <header className="topbar">
+            <DateStrip date={currentDate} marked={markedDates} onSelect={onGoToDate} onViewMonth={onViewMonth} />
+          </header>
 
-      {/* 補遺①：這個 aria-label 原本寫死「今日熱量」，**在歷史日就已經是錯的**（不是這輪引入，
-          但這輪明知就不能照抄）。改成跟著檢視日走，讀屏使用者才知道自己在看哪一天。 */}
-      <section className="gauge" aria-label={`${weekdayDate(currentDate)} 熱量`}>
-        <div className="gauge-top">
-          <div>
-            <div className="gauge-lead">{eatenKcal === null ? '還能吃' : isPast ? '攝取' : over ? '超出' : '還能吃'}</div>
-            <div aria-live="polite">
-              <span className="gauge-num">
-                {eatenKcal === null ? '—' : isPast ? eatenKcal : Math.abs(targetKcal - eatenKcal)}
-              </span>
-              <span className="gauge-unit">卡</span>
-            </div>
-          </div>
-          <div
-            className="gauge-side pair"
-            role="group"
-            aria-label={eatenKcal === null ? undefined : `已攝取 ${eatenKcal} 大卡，目標 ${targetKcal} 大卡`}
-          >
-            <span aria-hidden="true">
-              <span className="cur">{eatenKcal ?? '—'}</span>
-              <span className="sep">/</span>
-              <span className="tgt">{targetKcal}</span>
-            </span>
-          </div>
-        </div>
-        <div className="bar" aria-hidden="true">
-          <div className="fill" style={{ width: `${eaten ? pct(eaten.kcal, targets.kcal) : 0}%` }} />
-        </div>
-      </section>
-
-      <section className="macros" aria-label="三大營養素">
-        {(['protein', 'fat', 'carb'] as const).map((key) => {
-          const cur = eaten ? eaten[key] : null
-          const target = targets[key]
-          /* 蛋白質永遠不轉破表（v2.20 訂正，使用者裁決）。DESIGN.md 的「三大營養素判定」
-             一直只列舉脂肪與碳水，LogSheet 的逐筆預警條也明講「不含蛋白質——它的語意是
-             『達標』不是『超標』」，但這裡的實作對三項一視同仁，於是減脂使用者好不容易
-             把蛋白質吃到 136.5/126，畫面回他一條紅色斜紋警告。同一份 DESIGN.md 拒絕做
-             綠色達標的理由是「六天資料從沒達標過」，現在達標了卻被當成錯誤，方向剛好相反。
-             （hallmark 視覺稽核抓到，屬既有 bug 不是本輪引入。） */
-          const macroOver = key !== 'protein' && cur !== null && macroExceeds(cur, target)
-          const curTxt = cur === null ? '—' : cur.toFixed(1)
-          const tgtTxt = String(Math.round(target))
-          // 歷史日不顯示：缺口問的是「還能補多少」，過去的日子沒有這個問題
-          const gap = isPast || cur === null ? null : macroGap(cur, target)
-          return (
-            <div className={`macro${macroOver ? ' over' : ''}`} key={key}>
-              <div className="lbl">{MACRO_LABEL[key]}</div>
-              <div className="track-box" aria-hidden="true">
-                <div className="track">
-                  <div className="fill" style={{ width: `${cur === null ? 0 : pct(cur, target)}%` }} />
+          {/* 補遺①：這個 aria-label 原本寫死「今日熱量」，**在歷史日就已經是錯的**（不是這輪引入，
+              但這輪明知就不能照抄）。改成跟著檢視日走，讀屏使用者才知道自己在看哪一天。 */}
+          <section className="gauge" aria-label={`${weekdayDate(currentDate)} 熱量`}>
+            <div className="gauge-top">
+              <div>
+                <div className="gauge-lead">{eatenKcal === null ? '還能吃' : isPast ? '攝取' : over ? '超出' : '還能吃'}</div>
+                <div aria-live="polite">
+                  <span className="gauge-num">
+                    {eatenKcal === null ? '—' : isPast ? eatenKcal : Math.abs(targetKcal - eatenKcal)}
+                  </span>
+                  <span className="gauge-unit">卡</span>
                 </div>
               </div>
+            </div>
+            {/* 量尺縮成大數字底下的一小段，數對接在右邊：「還能吃」才是主角，這兩個是它的出處 */}
+            <div className="gauge-meta">
+              <div className="bar" aria-hidden="true">
+                <div className="fill" style={{ width: `${eaten ? pct(eaten.kcal, targets.kcal) : 0}%` }} />
+              </div>
               <div
-                className="val pair"
+                className="gauge-side pair"
                 role="group"
-                /* 「超出目標 126 克」會被讀成「超出了 126 克」，但 126 是目標值本身。
-                   拆成兩個子句消歧義（v2.20，同樣的寫法要記得同步 LogSheet 的 macro-line）。 */
-                aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克${gap === null ? '' : `，還差 ${gap} 克`}`}
+                aria-label={eatenKcal === null ? undefined : `已攝取 ${eatenKcal} 大卡，目標 ${targetKcal} 大卡`}
               >
                 <span aria-hidden="true">
-                  <span className="cur">{curTxt}</span>
+                  <span className="cur">{eatenKcal ?? '—'}</span>
                   <span className="sep">/</span>
-                  <span className="tgt">{tgtTxt}</span>
-                  {gap !== null && <span className="gap">差 {gap}</span>}
+                  <span className="tgt">{targetKcal}</span>
                 </span>
               </div>
             </div>
-          )
-        })}
-      </section>
+          </section>
+        </div>
 
-      <div className="timeline">
-        {rows === null ? (
-          <p className="muted">載入中…</p>
-        ) : (
-          renderTimeline(rows, currentDate, {
-            active,
-            justAddedIds,
-            onOpenSheet,
-            toggleEdit,
-            setSwipe,
-            closeActive,
-            handleDelete,
-            handleChangeQty,
-            handleChangeMeal,
-            handleChangeDetail,
-            editErr,
-            repeatByMeal,
-            onAddRepeat,
-            onSwapRepeat,
-            repeatBusyKey,
-            repeatErr,
-          })
-        )}
+        <section className="macros" aria-label="三大營養素">
+          {(['protein', 'fat', 'carb'] as const).map((key) => {
+            const cur = eaten ? eaten[key] : null
+            const target = targets[key]
+            /* 蛋白質永遠不轉破表（v2.20 訂正，使用者裁決）。DESIGN.md 的「三大營養素判定」
+               一直只列舉脂肪與碳水，LogSheet 的逐筆預警條也明講「不含蛋白質——它的語意是
+               『達標』不是『超標』」，但這裡的實作對三項一視同仁，於是減脂使用者好不容易
+               把蛋白質吃到 136.5/126，畫面回他一條紅色斜紋警告。同一份 DESIGN.md 拒絕做
+               綠色達標的理由是「六天資料從沒達標過」，現在達標了卻被當成錯誤，方向剛好相反。
+               （hallmark 視覺稽核抓到，屬既有 bug 不是本輪引入。） */
+            const macroOver = key !== 'protein' && cur !== null && macroExceeds(cur, target)
+            const curTxt = cur === null ? '—' : cur.toFixed(1)
+            const tgtTxt = String(Math.round(target))
+            // 歷史日不顯示：缺口問的是「還能補多少」，過去的日子沒有這個問題
+            const gap = isPast || cur === null ? null : macroGap(cur, target)
+            return (
+              <div className={`macro${macroOver ? ' over' : ''}${key === 'protein' ? ' is-protein' : ''}`} key={key}>
+                <div className="lbl">{MACRO_LABEL[key]}</div>
+                <div className="track-box" aria-hidden="true">
+                  <div className="track">
+                    <div className="fill" style={{ width: `${cur === null ? 0 : pct(cur, target)}%` }} />
+                  </div>
+                </div>
+                <div
+                  className="val pair"
+                  role="group"
+                  /* 「超出目標 126 克」會被讀成「超出了 126 克」，但 126 是目標值本身。
+                     拆成兩個子句消歧義（v2.20，同樣的寫法要記得同步 LogSheet 的 macro-line）。 */
+                  aria-label={cur === null ? undefined : `${MACRO_LABEL[key]} ${curTxt} 克，${macroOver ? '已超出，目標' : '目標'} ${tgtTxt} 克${gap === null ? '' : `，還差 ${gap} 克`}`}
+                >
+                  <span aria-hidden="true">
+                    <span className="cur">{curTxt}</span>
+                    <span className="sep">/</span>
+                    <span className="tgt">{tgtTxt}</span>
+                    {gap !== null && <span className="gap">差 {gap}</span>}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </section>
+
+        <div className="meals">
+          {rows === null ? (
+            <p className="muted">載入中…</p>
+          ) : (
+            renderTimeline(rows, currentDate, {
+              active,
+              justAddedIds,
+              onOpenSheet,
+              toggleEdit,
+              setSwipe,
+              closeActive,
+              handleDelete,
+              handleChangeQty,
+              handleChangeMeal,
+              handleChangeDetail,
+              editErr,
+              repeatByMeal,
+              onAddRepeat,
+              onSwapRepeat,
+              repeatBusyKey,
+              repeatErr,
+            })
+          )}
+        </div>
       </div>
     </div>
   )
@@ -516,18 +531,14 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
 
   return (
     <>
-      {MEALS.map((meal, i) => {
+      {MEALS.map((meal) => {
         const items = byMeal.get(meal.key) ?? []
-        const nextMeal = MEALS[i + 1]
-        const nextDone = i < MEALS.length - 1 && (byMeal.get(nextMeal.key)?.length ?? 0) > 0
         return (
           <MealNode
             key={`${meal.key}-${date}`}
             meal={meal}
             date={date}
             items={items}
-            nextDone={nextDone}
-            isLast={i === MEALS.length - 1}
             nameCount={nameCount}
             h={h}
           />
@@ -556,16 +567,12 @@ function MealNode({
   meal,
   date,
   items,
-  nextDone,
-  isLast,
   nameCount,
   h,
 }: {
   meal: Meal
   date: string
   items: IntakeRow[]
-  nextDone: boolean
-  isLast: boolean
   nameCount: Map<string, number>
   h: TimelineHelpers
 }) {
@@ -581,16 +588,14 @@ function MealNode({
   const repeatKey = `${date}|${meal.key}`
 
   return (
+    /* v2.122：左邊的時間軸圓點與虛實線拿掉了——哪幾餐記了改由插圖的踏腳石說，這裡只留餐別本身。 */
     <div className="node">
-      <div className="rail" aria-hidden="true">
-        <div className={`dot${done ? '' : ' todo'}`} />
-        {!isLast && <div className={`line${nextDone ? '' : ' todo'}`} />}
-      </div>
-      <div className={`node-body${done ? '' : ' is-todo'}`}>
+      <div className={`node-body${done ? '' : ' is-todo'}${!done && suggestion ? ' has-sg' : ''}`}>
         {done ? (
           <>
             <button className="node-head" type="button" onClick={() => h.onOpenSheet(meal.key)}>
               <span className="node-name">{meal.label}</span>
+              <CategoryStack categories={iconStack(items.map((r) => r.foods?.category))} />
               <span className="node-kcal">{Math.round(sumIntake(items).kcal)}</span>
             </button>
             <ul className="items">
@@ -697,6 +702,7 @@ function SuggestRow({
     <>
       <div className="sg">
         {flash > 0 && <span className="sg-flash" key={flash} aria-hidden="true" />}
+        <CategoryIcon category={leadCategory(suggestion.items.map((it) => it.category))} size={32} decorative />
         <span className="sg-src">{src}</span>
         <span className="sg-items">{label}</span>
         {over === null ? (

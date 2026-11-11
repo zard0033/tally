@@ -7,11 +7,12 @@
     <title>重置離線快取 · Tally</title>
     <!-- 救援頁（spec.md 階段 1 甲 AC 7）。刻意獨立：不載入 App 的任何檔案，所以 App 或 SW 壞掉時它仍能開。
          vite.config.ts 讓它「不進 precache」且「列入 navigateFallbackDenylist」，導覽它一定走網路。
-         色值抄自 DESIGN.md 的 token，這頁不能引用 app.css（雜湊檔名會變、且正是可能壞掉的那一批）。 -->
+         色值抄自 DESIGN.md「色彩」的 token（v2.122 色票），這頁不能引用 app.css（雜湊檔名會變、且正是可能壞掉的那一批），
+         所以只能寫死——改 token 時要跟著改這裡。 -->
     <style>
       :root {
-        --paper: #FAF6F0; --ink: #3D2210; --ink-muted: #7A5C44;
-        --accent: #1C7059; --accent-dark: #155747; --on-accent: #FFFFFF; --over: #9A4330;
+        --paper: #F2F2ED; --ink: #1D2B45; --ink-muted: #56647C;
+        --accent: #2E5E93; --accent-dark: #234A75; --on-accent: #FFFFFF; --over: #A23E2C;
         --s-2: 8px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --r-btn: 16px;
       }
       * { box-sizing: border-box; }

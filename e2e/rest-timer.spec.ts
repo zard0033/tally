@@ -73,7 +73,14 @@ const plays = (page: Page) => page.evaluate(() => (window as unknown as W).__pla
 
 const bar = (page: Page) => page.locator('.tr-rest')
 const barText = (page: Page) => page.locator('.tr-rest [data-rest-text]')
-const tick = (page: Page, n: number) => page.locator('.ex .set').nth(n).locator('.tr-check').click()
+/* 點完等勾的狀態真的翻過去才回：寫入先 await IndexedDB 才更新畫面（不是樂觀更新），連點時第 3 下若早於第 2 下落地，
+   「這是最後一組嗎」用的是舊畫面、判成不問 RPE，之後也不會補問——問題列就等不到（2026-11-10 讀碼調查，乾淨 HEAD 單跑也紅）。 */
+const tick = async (page: Page, n: number) => {
+  const check = page.locator('.ex .set').nth(n).locator('.tr-check')
+  const was = await check.getAttribute('aria-pressed')
+  await check.click()
+  await expect(check).toHaveAttribute('aria-pressed', was === 'true' ? 'false' : 'true')
+}
 const btn = (page: Page, name: string) => bar(page).getByRole('button', { name })
 
 async function openTraining(page: Page) {

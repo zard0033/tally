@@ -207,7 +207,7 @@ test('編輯區四排控件同一個填色，欄位底線是 --rule-field，編�
   const styleOf = (sel: string, prop: 'backgroundColor' | 'backgroundImage') =>
     page.locator(`${ROW} ${sel}`).first().evaluate((el, p) => getComputedStyle(el)[p as 'backgroundColor'], prop)
 
-  const FILL = 'rgb(241, 230, 210)'
+  const FILL = 'rgb(227, 231, 230)' // --fill #E3E7E6（v2.122）
   const [editor, stepper, seg, nameField, macroField] = await Promise.all([
     styleOf('.item-editor', 'backgroundColor'),
     styleOf('.qty-stepper', 'backgroundColor'),
@@ -215,15 +215,15 @@ test('編輯區四排控件同一個填色，欄位底線是 --rule-field，編�
     styleOf('.ed-detail .field-float input', 'backgroundColor'),
     styleOf('.ed-detail .field-row input', 'backgroundColor'),
   ])
-  expect(editor, '編輯區底不是 --card（填色對 --raised 會隱形）').toBe('rgb(252, 249, 243)')
-  expect([stepper, seg, nameField, macroField], '四排控件該是 --fill #F1E6D2').toEqual([FILL, FILL, FILL, FILL])
+  expect(editor, '編輯區底不是 --card（填色對 --raised 會隱形）').toBe('rgb(255, 255, 255)')
+  expect([stepper, seg, nameField, macroField], '四排控件該是 --fill #E3E7E6').toEqual([FILL, FILL, FILL, FILL])
 
   const [lineName, lineMacro] = await Promise.all([
     styleOf('.ed-detail .field-float input', 'backgroundImage'),
     styleOf('.ed-detail .field-row input', 'backgroundImage'),
   ])
   for (const line of [lineName, lineMacro]) {
-    expect(line, '欄位底線該是 2px --rule-field #9A8069').toContain('rgb(154, 128, 105)')
+    expect(line, '欄位底線該是 2px --rule-field #6E7B8E').toContain('rgb(110, 123, 142)')
   }
 
   // 分段控制的白塊只有一塊、掛在選中的那顆鈕裡（午餐，fixture 的 id 102 是午餐）

@@ -4,7 +4,7 @@
    **鍵盤升起時的位置（`--kb`／`--vvtop`）桌面測不出來，只能真機驗**（DESIGN v2.34–v2.35 同一條限制）。 */
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
-import { armClickDuringClose, centerOf, closeClickResult, openApp } from './harness'
+import { armClickDuringClose, centerOf, closeClickResult, openApp, springSettled } from './harness'
 
 const sheet = (page: Page) => page.locator('[data-screen="start-sheet"]')
 const scrim = (page: Page) => page.locator('.scrim')
@@ -19,16 +19,7 @@ async function openStartSheet(page: Page) {
 
 /** sheet 目前的 translateY（px）。 */
 const ty = (el: Locator) => el.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
-/** 等 spring 落定：y 連續兩次讀到同一個值。 */
-async function settled(el: Locator) {
-  await expect
-    .poll(async () => {
-      const a = await ty(el)
-      await el.page().waitForTimeout(80)
-      return Math.abs((await ty(el)) - a) < 0.1 ? a : NaN
-    })
-    .not.toBeNaN()
-}
+const settled = springSettled
 
 /** 在把手上按下、往下拖 dy px（分 steps 步、每步間隔 gap ms），再放開。 */
 async function dragHandle(page: Page, dy: number, steps: number, gap: number) {
@@ -210,8 +201,8 @@ test('開啟中點一下把手：sheet 接回去落定在 0（不會停在半路
   await openStartSheet(page)
   await page.waitForTimeout(50) // 開啟 spring 還在跑
   await tapGrab(page)
-  /* 輪詢到收斂，不是「兩次讀數差很小就算停」：spring 尾巴很長，全套件負載下 `settled()` 會在 y≈0.5 就判停
-     （讀到過 0.52）。卡在半路的 sheet 永遠到不了 0，所以輪詢同樣會紅。 */
+  /* 輪詢到收斂在 0（這裡要的是「一直停在半路」也紅；`springSettled` 現在同樣要求停在 0，這段保留是為了 3 秒的較短時限）。
+     舊版 settled 只看兩次讀數差很小，負載下讀到過 0.52 就判停，才另寫這段。 */
   await expect
     .poll(async () => Math.abs(await ty(sheet(page))), { message: '點一下之後應落定回 0', timeout: 3000 })
     .toBeLessThan(0.5)

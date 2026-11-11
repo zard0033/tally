@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FOOD_CATEGORIES, categoryOf, isMealType, normalizeCategory, withCategories } from './categories'
+import { FOOD_CATEGORIES, categoryOf, iconStack, isMealType, leadCategory, normalizeCategory, withCategories } from './categories'
 
 describe('固定清單', () => {
   it('餐點類型 12 個、搭配類 5 個，順序照 spec', () => {
@@ -64,5 +64,29 @@ describe('withCategories', () => {
       { food_id: 3, foods: null },
     ])
     expect(rows[0].foods!.category, '不改原本的列').toBeNull()
+  })
+})
+
+describe('iconStack', () => {
+  it('照出現順序去重，最多三個', () => {
+    expect(iconStack(['飲料', '便當', '飲料', '點心', '配菜'])).toEqual(['飲料', '便當', '點心'])
+  })
+  it('未分類併成一個 null；清單外的值收斂成其他正餐', () => {
+    expect(iconStack([null, undefined, '奇怪的值', null])).toEqual([null, '其他正餐'])
+  })
+  it('空的就是空的', () => {
+    expect(iconStack([])).toEqual([])
+  })
+})
+
+describe('leadCategory', () => {
+  it('餐點類型優先於搭配類，不管順序', () => {
+    expect(leadCategory(['配菜', '健康餐盒'])).toBe('健康餐盒')
+  })
+  it('只有搭配類就用第一個搭配類', () => {
+    expect(leadCategory([null, '飲料', '點心'])).toBe('飲料')
+  })
+  it('全都沒分類是 null', () => {
+    expect(leadCategory([null, undefined])).toBeNull()
   })
 })

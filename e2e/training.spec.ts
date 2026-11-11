@@ -3,7 +3,7 @@
    fetch 全 stub；注意 stub 的寫入不落地（寫進去的列下一次 GET 不會出現）。 */
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
-import { armClickDuringClose, centerOf, closeClickResult, gotoDate, leg, openApp, shiftIso, slowDrag } from './harness'
+import { armClickDuringClose, centerOf, closeClickResult, gotoDate, leg, openApp, shiftIso, slowDrag, springSettled } from './harness'
 import { FIX, TODAY } from './fixtures'
 import { SEEDED_FIX } from './seeded'
 
@@ -890,17 +890,7 @@ test('封存的動作：歷史訓練照樣顯示名稱', async ({ page }) => {
    `--kb` 設在 sheet 元素身上、不設在 documentElement：App.tsx 的 `sync()` 每次 visualViewport 事件
    都會把 root 的 `--kb` 蓋回 0px，而第三條正好要派發那個事件（理由同 food-library.spec 的 `--kb` 那條）。 */
 
-/** 等 sheet 的開啟 spring 落定（translateY 連續兩次讀到同一個值）；JS 動畫，`getAnimations()` 看不到。 */
-async function sheetSettled(sheet: Locator) {
-  const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
-  await expect
-    .poll(async () => {
-      const a = await ty()
-      await sheet.page().waitForTimeout(80)
-      return Math.abs((await ty()) - a) < 0.1 ? a : NaN
-    })
-    .not.toBeNaN()
-}
+const sheetSettled = springSettled
 
 async function openLegEdit(page: Page) {
   await openApp(page, {}, LIBRARY_FIX)
@@ -2466,13 +2456,13 @@ test('組列左滑：減少動態下開著再往左拉，放手直接回到露�
 })
 
 /* ── 勾與雙勾的按下回饋（v2.92，真機回報按住沒有「被壓下去」的感覺）──
-   預期值由 DESIGN.md 的 token 換算，不讀頁面算出來的值：--fill #F1E6D2、--rule #E0D3BD、--accent #1C7059、--accent-dark #155747；
+   預期值由 DESIGN.md 的 token 換算，不讀頁面算出來的值：--fill #E3E7E6、--track #D5DDE5、--accent #2E5E93、--accent-dark #234A75（v2.122）；
    按下縮放 .88。桌面只能證明「標記會掛上、樣式吃得到標記」，iOS 真機的 :active 與手指遮蔽無法在這裡驗。 */
 const RGB = {
-  fill: 'rgb(241, 230, 210)',
-  rule: 'rgb(224, 211, 189)',
-  accent: 'rgb(28, 112, 89)',
-  accentDark: 'rgb(21, 87, 71)',
+  fill: 'rgb(227, 231, 230)',
+  track: 'rgb(213, 221, 229)',
+  accent: 'rgb(46, 94, 147)',
+  accentDark: 'rgb(35, 74, 117)',
 }
 const PRESSED_SCALE = 'matrix(0.88, 0, 0, 0.88, 0, 0)'
 const look = (el: Locator) =>
@@ -2488,7 +2478,7 @@ async function pressAt(page: Page, el: Locator) {
   await page.mouse.down()
 }
 
-test('勾與全部完成雙勾：按住縮小、底色深一階（未勾 → --rule、已勾 → --accent-dark），放開回復', async ({ page }) => {
+test('勾與全部完成雙勾：按住縮小、底色深一階（未勾 → --track、已勾 → --accent-dark），放開回復', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -2498,7 +2488,7 @@ test('勾與全部完成雙勾：按住縮小、底色深一階（未勾 → --r
 
   expect(await look(check)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
   await pressAt(page, check)
-  await expect.poll(() => look(check)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.rule, pressed: true })
+  await expect.poll(() => look(check)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.track, pressed: true })
   await page.mouse.up() // 放開＝點了一下：這一組打勾
   await expect.poll(() => look(check)).toMatchObject({ transform: 'none', bg: RGB.accent, pressed: false })
 
@@ -2509,7 +2499,7 @@ test('勾與全部完成雙勾：按住縮小、底色深一階（未勾 → --r
 
   expect(await look(all)).toMatchObject({ transform: 'none', bg: RGB.fill, pressed: false })
   await pressAt(page, all)
-  await expect.poll(() => look(all)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.rule, pressed: true })
+  await expect.poll(() => look(all)).toMatchObject({ transform: PRESSED_SCALE, bg: RGB.track, pressed: true })
   await page.mouse.up() // 全部打勾
   await expect.poll(() => look(all)).toMatchObject({ transform: 'none', bg: RGB.accent, pressed: false })
   await pressAt(page, all)
@@ -2530,7 +2520,7 @@ test('勾的按下回饋不靠 :active：觸控的 pointerdown 就進入按下�
     await el.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 })
     await expect.poll(() => look(el), { message: '只派 pointerdown（沒有 :active）也縮小、變深' }).toMatchObject({
       transform: PRESSED_SCALE,
-      bg: RGB.rule,
+      bg: RGB.track,
       pressed: true,
       active: false,
     })
@@ -2576,12 +2566,12 @@ test('勾與雙勾：減少動態下按住不縮放、底色照樣變深', async
   const all = page.locator('.ex .tr-all')
 
   await check.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0 })
-  await expect.poll(() => look(check)).toMatchObject({ pressed: true, bg: RGB.rule })
+  await expect.poll(() => look(check)).toMatchObject({ pressed: true, bg: RGB.track })
   expect((await look(check)).transform, '標記路徑：不縮放').toBe('none')
   await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup')))
 
   await pressAt(page, all) // 滑鼠按住：:active 與標記兩條都在
-  await expect.poll(() => look(all)).toMatchObject({ pressed: true, active: true, bg: RGB.rule })
+  await expect.poll(() => look(all)).toMatchObject({ pressed: true, active: true, bg: RGB.track })
   expect((await look(all)).transform, ':active 路徑：不縮放').toBe('none')
   await page.mouse.move(0, 0) // 移開再放，不觸發全部完成
   await page.mouse.up()
@@ -4368,6 +4358,9 @@ async function openViewerOverPicker(page: Page, zoom: 'leg-press' | 'first-row' 
   await startBlank(page)
   await page.locator('.tr-bottom .tr-secondary').click()
   const picker = page.locator('[data-screen="exercise-picker"]')
+  /* 先等選單的開啟 spring 落定再點縮圖：還在動時 Playwright 判 not stable 重試，第 4 次重試會強制
+     scrollIntoView({block:'start'})，把第一列捲到頂、搜尋框跟著被推出畫面 130px（2026-11-11 trace 實證，app 沒捲） */
+  await sheetSettled(picker)
   await (zoom === 'first-row' ? picker.locator('.ex-zoom').first() : picker.getByRole('button', { name: '放大腿推舉的示意圖' })).click()
   await expect(viewer(page)).toBeVisible()
   await page.waitForTimeout(900) // 等開啟 spring 落定，關閉鈕的座標才準
@@ -4399,11 +4392,36 @@ test('檢視器關閉鈕連按兩下：第二下不會穿透選到底下的動�
 test('檢視器收合中點搜尋框：收合結束後焦點留在搜尋框，不被搶回縮圖', async ({ page }) => {
   await openViewerOverPicker(page, 'first-row') // 搜尋框跟著清單捲，要開最上面那列才看得到它
   const search = page.locator('[data-screen="exercise-picker"] input[aria-label="搜尋動作"]')
+  // 清單已在 openViewerOverPicker 裡等到落定，不會再動：座標在點關閉之前就量，點關閉之後少一次往返
+  await expect(search, '前提：搜尋框在畫面內').toBeInViewport()
   const point = await centerOf(search)
+  /* 罩子何時拿掉、點下去那一刻檢視器還在不在，都在頁內記：罩子只活頁內 effect 起算的 300ms，罩子拿掉到檢視器卸載
+     也只剩約 300ms，從 Node 端去追（toBeAttached／waitFor／toHaveCount 各一次往返）負載下會追丟或拖過窗口
+     （2026-11-11 review；verify 實跑 5 次紅 1 次）。點擊仍用真滑鼠：合成事件重現不了搶焦點。 */
+  await page.evaluate(() => {
+    const w = window as unknown as { __guard: { seen: boolean; gone: boolean }; __viewerAtDown: boolean | null }
+    w.__guard = { seen: false, gone: false }
+    w.__viewerAtDown = null
+    new MutationObserver(() => {
+      const on = !!document.querySelector('.sheet-close-guard')
+      if (on) w.__guard.seen = true
+      else if (w.__guard.seen) w.__guard.gone = true
+    }).observe(document.body, { childList: true, subtree: true })
+    // 罩子拿掉之後才開始記：點「關閉」那一下也會觸發 pointerdown，先記到它的話這個前提永遠是 true、等於沒驗
+    window.addEventListener('pointerdown', () => {
+      if (w.__guard.gone && w.__viewerAtDown === null) w.__viewerAtDown = !!document.querySelector('[data-screen="exercise-viewer"]')
+    }, { capture: true })
+  })
   await viewer(page).getByRole('button', { name: '關閉', exact: true }).click()
-  await page.waitForTimeout(SHEET_CLOSE_GUARD_MS + 60)
-  await expect(viewer(page), '前提：點擊落在收合中（卸載前才有搶焦點的問題）').toHaveCount(1)
+  await page.waitForFunction(() => (window as unknown as { __guard: { gone: boolean } }).__guard.gone, null, { polling: 'raf', timeout: 3000 })
   await page.mouse.click(point.x, point.y)
+  // 在頁內挑出值、回一般物件：evaluate 直接回 window 只會拿到 "ref: <Window>" 字串
+  const at = await page.evaluate(() => {
+    const w = window as unknown as { __guard: { seen: boolean }; __viewerAtDown: boolean | null }
+    return { seen: w.__guard.seen, atDown: w.__viewerAtDown }
+  })
+  expect(at.seen, '前提：收合開始後有擋連按的透明罩').toBe(true)
+  expect(at.atDown, '前提：點擊落在收合中（卸載前才有搶焦點的問題）').toBe(true)
   await expect(search).toBeFocused()
   await expect(viewer(page)).toHaveCount(0)
   await page.waitForTimeout(100)

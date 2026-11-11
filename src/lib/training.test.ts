@@ -14,6 +14,7 @@ import {
   RPE_CHIPS,
   RPE_SHEET_VALUES,
   completesExercise,
+  withPendingDone,
   lastSetRpe,
   setLastSetRpeOps,
   PRESET_EXERCISES,
@@ -1406,6 +1407,14 @@ describe('RPE（spec.md「階段 4 乙」）', () => {
     expect(completesExercise([set('a', false)], 'a')).toBe(true) // 只有一組
     expect(completesExercise([set('a', true)], 'zz')).toBe(false) // 找不到這組
     expect(completesExercise([], 'a')).toBe(false)
+  })
+  it('withPendingDone：還在路上的勾要算進去——連點第 2、3 組時，第 3 下判斷「最後一組」不能把第 2 組當成沒做', () => {
+    const set = (id: string, done: boolean): Row => ({ id, done })
+    const shown = [set('a', true), set('b', false), set('c', false)] // 第 2 組已點、寫入還沒落地，畫面仍是沒做
+    expect(completesExercise(shown, 'c'), '只看畫面：錯判成還有沒做的').toBe(false)
+    expect(completesExercise(withPendingDone(shown, new Map([['b', true]])), 'c')).toBe(true)
+    expect(withPendingDone(shown, new Map([['a', false]]))[0].done, '還在路上的取消勾也算').toBe(false)
+    expect(withPendingDone(shown, new Map()), '沒有在路上的就原樣').toEqual(shown)
   })
   it('lastSetRpe：每一組都打勾才算做完；rpe 是最後一組的值（不取最大值），最後一組沒填＝null；沒有組＝沒做完', () => {
     const set = (done: boolean, rpe?: number | null): Row => ({ id: `${Math.random()}`, done, ...(rpe === undefined ? {} : { rpe }) })

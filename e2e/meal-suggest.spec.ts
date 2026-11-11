@@ -114,6 +114,10 @@ test('一鍵加入：一次寫入全部品項、欄位取自來源、品項長�
   // 有建議的那餐比沒建議的高多少（時間軸被推的量，DESIGN「今日頁的餐建議」）：列 44 ＋ 上距 --s-1
   const bodyH = (label: string) => nodeOf(page, label).locator('.node-body').evaluate((n) => n.getBoundingClientRect().height)
   expect((await bodyH('早餐')) - (await bodyH('午餐'))).toBe(48)
+  // 時間軸真正被推的量要看相鄰兩餐的間距：.node-body 的高度不含 margin，加在它外面的外距只有這裡量得到
+  const nodeTop = (label: string) => nodeOf(page, label).evaluate((n) => (n as HTMLElement).offsetTop)
+  const stride = async (a: string, b: string) => (await nodeTop(b)) - (await nodeTop(a))
+  expect((await stride('早餐', '午餐')) - (await stride('午餐', '晚餐'))).toBe(48)
 
   // 閃爍只有 1.3 秒，機器忙時來回一趟可能就過了：在頁內記下有沒有掛上、動畫有沒有跑
   await page.evaluate(() => {
@@ -1373,7 +1377,7 @@ test('第二版：全都超過熱量上限，給超最少的並標「超 N 卡�
   await expect(card.locator('.sg-kc')).toHaveClass(/is-over/)
   await expect(addOf(page, '晚餐')).toHaveAttribute('aria-label', '加入建議的晚餐：拿鐵，150 卡，超過 10 卡')
   const color = await card.locator('.sg-kc').evaluate((e) => getComputedStyle(e).color)
-  expect(color, '超標用 --over（#9A4330）').toBe('rgb(154, 67, 48)')
+  expect(color, '超標用 --over（#A23E2C，v2.122 起）').toBe('rgb(162, 62, 44)')
   await swapOf(page, '晚餐').click()
   await expect(card.locator('.sg-kc')).toHaveText('超 240 卡')
 

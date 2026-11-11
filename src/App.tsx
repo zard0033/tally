@@ -444,16 +444,18 @@ export default function App() {
     },
     [handleSetFoodCategory, markManual],
   )
+  /* 今日頁的類型圖示也看同一份：剛補判或手動改的類型，不必等下次重撈就換圖示。 */
+  const rowsWithCategories = useMemo(() => rows && withCategories(rows, categoryOverrides), [rows, categoryOverrides])
   /* 避開重複看的是類型：當日清單與回看資料是補判前撈的，蓋上這次 session 補上或手動改的類型。 */
   const suggestionsByMeal = useMemo(
     () =>
       suggestMeals(
         repeatHistory && withCategories(repeatHistory, categoryOverrides),
         currentDate,
-        rows && withCategories(rows, categoryOverrides),
+        rowsWithCategories,
         gapCtx,
       ),
-    [repeatHistory, currentDate, rows, gapCtx, categoryOverrides],
+    [repeatHistory, currentDate, rowsWithCategories, gapCtx, categoryOverrides],
   )
   /* 「換一個」換到第幾名只記在畫面上：換了日期、當天紀錄有變（新增、刪除、改份量）、或目標變了，就回第一名。
      用簽章比對，不用 rows 的 identity——重撈回來同一份資料不該把使用者換到的那一組洗掉。
@@ -1058,7 +1060,7 @@ export default function App() {
           </div>
         ) : tab === 'today' ? (
           <Today
-            dayData={{ date: currentDate, rows }}
+            dayData={{ date: currentDate, rows: rowsWithCategories }}
             targets={targets}
             currentDate={currentDate}
             markedDates={markedDates}

@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { SHEET_CLOSE_GUARD_MS } from '../src/lib/durations'
 import { FIX, TODAY, TOMORROW, USER_ID, YDAY } from './fixtures'
 import {
-  armClickDuringClose, centerOf, check, closeClickResult, currentIso, deleteViaTap, gotoDate, grabPoint, leg, must, mustText, nextDay, numFrom, openApp, prevDay, rowState,
+  armClickDuringClose, centerOf, check, closeClickResult, currentIso, deleteViaTap, gotoDate, grabPoint, leg, must, mustText, nextDay, numFrom, openApp, openAppAt, prevDay, rowState,
   shiftIso, slowDrag, waitCount,
 } from './harness'
 import { seedFetchStub, type AuthMode } from './stub'
@@ -1095,6 +1095,61 @@ test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會�
   await page.click('.pick-bar-btn')
   expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中').toBe(true)
   await expect(page.locator('[data-screen="settings"]'), '收合中的點擊被 scrim 吃掉了').toBeVisible({ timeout: 1500 })
+})
+
+/* v2.122 review：插圖的踏腳石不能把「還沒讀到」畫成「四餐都沒記」（DESIGN「載入態」），資料一到也不能讓本來就記過的餐
+   一起彈。今天只留午餐、早上 9 點開（openAppAt）：記一筆預設進早餐，早餐是唯一「從沒記變成記了」的那塊。
+   兩次 GET 都用 __holdIntake 停住，載入態才量得到；彈跳用 MutationObserver 全程記，不是落定後取樣一次。 */
+test('踏腳石：載入中不畫成都沒記；資料第一次到時不彈，記一筆後只有新記的那餐彈', async ({ page }) => {
+  type W = { __holdIntake: Set<string>; __heldIntake: unknown[]; __releaseIntake: () => void; __lit: string[] }
+  const fix = { ...FIX, intake: FIX.intake.filter((r) => r.meal === 'lunch') }
+  // 開機時停住昨天的預取：昨天才不會在快取裡，換過去一定進載入態
+  await openAppAt(page, TODAY, { intakePersist: true, holdIntake: [YDAY] }, fix)
+  const stones = page.locator('.scene .stone')
+  const done = page.locator('.scene .stone.is-done')
+  const loading = page.locator('.timeline').getByText('載入中…')
+  await expect(stones).toHaveCount(4)
+  await expect(done).toHaveText(['午餐'])
+  await page.evaluate(() => {
+    const w = window as unknown as W
+    w.__lit = []
+    const grab = () =>
+      document.querySelectorAll('.scene .stone.just-lit').forEach((g) => {
+        if (!w.__lit.includes(g.textContent ?? '')) w.__lit.push(g.textContent ?? '')
+      })
+    new MutationObserver(grab).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
+  })
+  const lit = () => page.evaluate(() => (window as unknown as W).__lit)
+  const hold = (d: string) => page.evaluate((x) => (window as unknown as W).__holdIntake.add(x), d)
+  const release = () => page.evaluate(() => (window as unknown as W).__releaseIntake())
+
+  // 一、換到還沒讀到的昨天：插圖重掛、什麼都還不知道 → 不畫石頭；資料到了只記基準、不彈
+  await hold(YDAY)
+  await prevDay(page)
+  await expect(loading).toBeVisible()
+  await expect(stones, '還沒讀到不能畫成四塊空心（那是「讀到了、都沒記」）').toHaveCount(0)
+  await release()
+  await expect(done).toHaveText(['午餐'])
+  await expect(stones).toHaveCount(4)
+  expect(await lit(), '第一次讀到時本來就記過的不是剛亮').toEqual([])
+
+  // 二、回到今天（快取命中）記一筆早餐，存檔後的重撈停住：載入中沿用上一份，資料回來只彈早餐
+  await nextDay(page)
+  await expect(done).toHaveText(['午餐'])
+  await page.click('button.cta')
+  await page.waitForSelector('.food-row')
+  await page.locator('.food-row').first().click()
+  await page.waitForSelector('.pick-bar')
+  await hold(TODAY)
+  await page.click('.pick-bar-btn')
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).__heldIntake.length), '存檔後的重撈要停住').toBe(1)
+  await expect(loading).toBeVisible()
+  await expect(done, '載入中沿用上一份，不閃回都沒記').toHaveText(['午餐'])
+  await expect(stones).toHaveCount(4)
+  await release()
+  await expect(done).toHaveText(['早餐', '午餐'])
+  await expect(page.locator('.scene .stone.just-lit')).toHaveText(['早餐'])
+  expect(await lit(), '只有新記的早餐彈，本來就記過的午餐不彈').toEqual(['早餐'])
 })
 
 /* 全頁錯誤畫面不能變成死路（2026-11-02 整體盤點抓到）。失敗的那天不是正在看的那天時，

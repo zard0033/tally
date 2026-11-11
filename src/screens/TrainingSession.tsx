@@ -50,6 +50,7 @@ import {
   setsOfDetail,
   toggleAllDoneOps,
   updateExerciseOps,
+  withPendingDone,
   workoutSummary,
   type MuscleGroup,
   type Row,
@@ -146,6 +147,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const cascadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sorting, setSorting] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  /* 已送出、還沒落地的勾（setId → done）：判斷「這是不是這個動作的最後一組、要不要問 RPE」時一起算，見 withPendingDone */
+  const pendingDone = useRef(new Map<string, { done: boolean; token: symbol }>())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -420,10 +423,16 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                   endCascade() // 逐組進行中單點一組：不該被逐組的延遲拖慢；已經起跑的其他列不受影響
                   if (s.done === true && item.sets.some((x) => x.id === ask?.setId)) setAsk(null) // 取消勾：這個動作不算做完了，不再問
                   if (s.done !== true) {
-                    rest.start() // 未完成→完成才起算；放在寫入之前，iOS 才認它是使用者手勢（解鎖提示音）
-                    setAsk(completesExercise(item.sets, s.id) && lastSetRpe(item.sets).rpe === null ? { setId: s.id, picked: null } : null)
+                    rest.start() // 未完成→完成才起算
+                    const sets = withPendingDone(item.sets, new Map([...pendingDone.current].map(([id, p]) => [id, p.done])))
+                    setAsk(completesExercise(sets, s.id) && lastSetRpe(sets).rpe === null ? { setId: s.id, picked: null } : null)
                   }
-                  void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }])
+                  // 每一下各帶一個 token：同一組連點兩下時，第一筆寫完不能把第二筆還在路上的紀錄刪掉
+                  const token = Symbol()
+                  pendingDone.current.set(s.id, { done: s.done !== true, token })
+                  void run([{ op: 'update', table: 'workout_sets', rowId: s.id, payload: { done: s.done !== true } }]).finally(() => {
+                    if (pendingDone.current.get(s.id)?.token === token) pendingDone.current.delete(s.id)
+                  })
                 }}
                 onDeleteSet={(setId) => {
                   setSwipeId(null)

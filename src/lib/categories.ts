@@ -44,3 +44,20 @@ export function withCategories<T extends { food_id: number; foods: { category: s
     return c && r.foods ? { ...r, foods: { ...r.foods, category: c } } : r
   })
 }
+
+/** 一餐要疊幾個類型圖示：照出現順序去重、未分類也算一種（同一個中性圖示），最多 max 個。 */
+export function iconStack(raw: readonly (string | null | undefined)[], max = 3): (FoodCategory | null)[] {
+  const out: (FoodCategory | null)[] = []
+  for (const v of raw) {
+    const c = categoryOf(v)
+    if (!out.includes(c)) out.push(c)
+    if (out.length === max) break
+  }
+  return out
+}
+
+/** 一組建議的代表類型：先挑餐點類型（便當、麵食…），沒有才用搭配類，全都沒分類就是 null。 */
+export function leadCategory(raw: readonly (string | null | undefined)[]): FoodCategory | null {
+  const cats = raw.map(categoryOf)
+  return cats.find((c) => c !== null && isMealType(c)) ?? cats.find((c) => c !== null) ?? null
+}

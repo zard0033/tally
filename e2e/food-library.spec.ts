@@ -7,7 +7,7 @@
    留白——在 stub 升級之前，那條測起來只會鎖住 stub 的行為，不是產品的行為。 */
 import { test, expect, type Page } from '@playwright/test'
 import { FIX } from './fixtures'
-import { openApp } from './harness'
+import { openApp, springSettled } from './harness'
 import type { ClassifyStub } from './stub'
 
 async function openLibrary(page: Page) {
@@ -21,18 +21,7 @@ async function openLibrary(page: Page) {
   await expect(page.locator('.lib-row').first()).toBeVisible()
 }
 
-/* 等新增食物 sheet 的開啟 spring 落定：translateY 連續兩次讀到同一個值。
-   SpringSheet 是 JS 動畫，`getAnimations()` 看不到它，固定睡眠也不保證（量過約 1 秒才完全靜止）。 */
-async function settled(sheet: ReturnType<Page['locator']>) {
-  const ty = () => sheet.evaluate((n) => new DOMMatrix(getComputedStyle(n).transform).m42)
-  await expect
-    .poll(async () => {
-      const a = await ty()
-      await sheet.page().waitForTimeout(80)
-      return Math.abs((await ty()) - a) < 0.1 ? a : NaN
-    })
-    .not.toBeNaN()
-}
+const settled = springSettled
 
 const foodWrites = (page: Page) =>
   page.evaluate(() =>
@@ -695,9 +684,12 @@ test('開啟 sheet 後焦點進到 sheet 裡（aria-hidden 蓋不到的地方）
   await openLibrary(page)
   await page.locator('.lib-fab').click()
   await expect(page.locator('[data-screen="food-add-sheet"]')).toBeVisible()
-  const inSheet = await page.evaluate(() =>
-    !!document.activeElement?.closest('[data-screen="food-add-sheet"]'))
-  expect(inSheet, '焦點沒進 sheet——會留在 aria-hidden 底下的觸發鈕上').toBe(true)
+  // 輪詢：焦點移進 sheet 是 Base UI 非同步做的，一出現就只讀一次會在負載下讀早（乾淨基線也紅過）。要守的是「一直卡在觸發鈕上」
+  await expect
+    .poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-screen="food-add-sheet"]')), {
+      message: '焦點沒進 sheet——會留在 aria-hidden 底下的觸發鈕上',
+    })
+    .toBe(true)
 })
 
 test('辨識失敗只留一行字，欄位不動、仍可手動完成新增', async ({ page }) => {
