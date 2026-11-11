@@ -1711,9 +1711,12 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .set.is-synced { animation: set-flash 700ms var(--ease) both; }
 @keyframes set-flash { 0%, 100% { background-color: transparent; } 20% { background-color: var(--accent-soft); } }
 /* 左滑刪除（SwipeDelete）：位移層要有底色，紅圓鈕壓在它底下，滑開才露出 */
-/* 整列是手勢區、等同控件（v2.38 只鎖控件的延伸）：組號不是 button，往下拖會從它選起字、一路選到「新增一組」；
-   Linux WebKit 下一次左滑按在選取上就變成拖曳文字，pointer 被取消、列拉不開（2026-11-11 CI 截圖） */
-.swipe-row { position: relative; overflow: clip; -webkit-user-select: none; user-select: none; }
+/* 動作卡展開區整塊是手勢與控件區（v2.38 只鎖控件的延伸）：組列可左滑、往下拖會從空白處選起字，
+   Linux WebKit 下一次左滑按在選取上就變成拖曳文字、pointer 被取消、列拉不開（2026-11-11 CI 截圖：只鎖 .swipe-row 不夠，
+   反白落在「新增一組」周圍的空白）。要點平常是 button；編輯時的 textarea 解回來，輸入不受影響 */
+.ex-body { -webkit-user-select: none; user-select: none; }
+.ex-body textarea { -webkit-user-select: text; user-select: text; }
+.swipe-row { position: relative; overflow: clip; }
 .swipe-slide { position: relative; z-index: 1; background: var(--card); }
 /* 新增一組：接在最後一組下方的整列（虛線框、全寬） */
 .tr-addset { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
