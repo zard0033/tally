@@ -1003,7 +1003,7 @@ test('類型標籤：393 寬命中區 ≥ 44×44、不撐出這一列', async ({
   expect(sel!.y + sel!.height, '命中區撐出列底，會蓋到下一列').toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 0.5)
 })
 
-test('拍營養標示帶上設定頁選的主模型（函式只用校準過的模型讀圖，由函式決定；這裡只驗有送）', async ({ page }) => {
+test('拍營養標示帶上設定頁選的主模型（函式那端決定怎麼用，這裡只驗有送）', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('tally.ai-model', 'qwen/qwen3.7-flash'))
   await openApp(page)
   await openLibrary(page)

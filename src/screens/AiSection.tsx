@@ -3,7 +3,7 @@
    不做 BYOK 輸入 key：單人 app，key 進資料庫或瀏覽器都只是多一個外洩面。 */
 import { useState } from 'react'
 import { getAiModel, setAiModel } from '@/aiPref'
-import { AI_MODELS, aiModelLabel, formatUsd, VISION_CALIBRATED } from '@/lib/aiModels'
+import { AI_MODELS, aiModelLabel, formatUsd } from '@/lib/aiModels'
 import type { AiCredits } from '@/lib/api'
 
 export type CreditsState = { status: 'loading' } | { status: 'ok'; data: AiCredits } | { status: 'err' }
@@ -26,7 +26,6 @@ function creditsText(c: CreditsState): string {
 export default function AiSection({ credits }: { credits: CreditsState }) {
   const [model, setModel] = useState(getAiModel)
   const [saveErr, setSaveErr] = useState(false)
-  const visionNote = VISION_CALIBRATED.map(aiModelLabel).join('、')
   return (
     <>
       <h2>AI</h2>
@@ -67,7 +66,7 @@ export default function AiSection({ credits }: { credits: CreditsState }) {
         </label>
       </div>
       <p className="settings-note">
-        食物類型的自動分類用主模型，回錯誤或被限流時換另一個；逾時不會換——Qwen 想得久，一批可能超過時限，留到下次開 App 再補。拍營養標示固定用 {visionNote}：讀數的準度只在它身上驗過，換模型要先重跑校準照片。
+        拍營養標示與食物類型的自動分類都用主模型，回錯誤或被限流時換另一個；逾時不會換——Qwen 想得久，分類一批可能超過時限，留到下次開 App 再補。
       </p>
     </>
   )

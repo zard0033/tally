@@ -200,7 +200,7 @@ test('主模型：預設 DeepSeek；改成 Qwen 存在這支手機（重新整�
   await openSettings(page)
   const row = page.locator('[data-row="ai-model"]')
   await expect(row.locator('.lb-sub')).toHaveText('DeepSeek V4.1 Flash')
-  await expect(page.locator('.settings-note')).toContainText('拍營養標示固定用 Qwen 3.7 Flash')
+  await expect(page.locator('.settings-note')).toContainText('拍營養標示與食物類型的自動分類都用主模型')
 
   await page.getByLabel('主模型').selectOption('qwen/qwen3.7-flash')
   await expect(row.locator('.lb-sub')).toHaveText('Qwen 3.7 Flash')

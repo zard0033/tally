@@ -429,7 +429,7 @@ const SCAN_TIMEOUT = 55_000
  */
 export async function scanLabel(imageDataUri: string, model?: string): Promise<LabelReading> {
   const { data, error } = await supabase.functions.invoke<LabelReading>('read-label', {
-    // model＝設定頁選的主模型；函式只用校準過的模型讀圖，選了別的就照舊（見 handler 的 visionChain）
+    // model＝設定頁選的主模型；函式只用讀得了圖的模型（見 handler 的 visionChain）
     body: { image: imageDataUri, model },
     signal: AbortSignal.timeout(SCAN_TIMEOUT),
   })

@@ -10,7 +10,7 @@
    401 因此只剩「驗證失敗」一個成因，不會有「別的錯誤碰巧也回 401」的假綠。 */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose'
-import { AI_MODELS, CATEGORIES, handleRequest, VISION_CALIBRATED } from './handler.ts'
+import { AI_MODELS, CATEGORIES, handleRequest, VISION_MODELS } from './handler.ts'
 import { FOOD_CATEGORIES } from '../../../src/lib/categories.ts'
 import * as front from '../../../src/lib/aiModels.ts'
 
@@ -261,8 +261,9 @@ describe('read-label 辨識', () => {
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
     const sent = JSON.parse(init.body as string)
-    expect(sent.model).toBe('qwen/qwen3.7-flash')
-    expect(sent).not.toHaveProperty('models') // 辨識不換模型：提示詞是在 qwen 上校準的
+    // v2.128：跟分類一樣走主模型＋備援（預設 deepseek 先、qwen 備援），model 與 models 一起送語意不明，只送陣列
+    expect(sent.models).toEqual(['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'])
+    expect(sent).not.toHaveProperty('model')
     expect(sent.messages[0].content[0].text).toContain('一律讀「每份」那欄')
     expect(sent.messages[0].content[1].image_url.url).toBe(IMAGE)
 
@@ -520,21 +521,21 @@ describe('read-label 分類模式', () => {
 })
 
 /* 全站 AI 統一（v2.128，使用者 2026-11-11）：一份 AI_MODELS（主模型＋備援），請求可帶 model 指定主模型。
-   辨識只用校準過的模型（VISION_CALIBRATED）。 */
+   辨識只用讀得了圖的模型（VISION_MODELS）。 */
 describe('read-label 模型設定（全站統一）', () => {
   const FOODS = [{ id: 1, name: '叉燒飯', vendor: '燒臘店' }]
   const DS = 'deepseek/deepseek-v4.1-flash'
   const QW = 'qwen/qwen3.7-flash'
   const sentBody = (spy: ReturnType<typeof stubUpstream>) => JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
 
-  it('㉛ 白名單與校準清單跟前端 src/lib/aiModels.ts 同一份（Edge Function 不能 import src，只能比對）', () => {
+  it('㉛ 白名單與讀圖清單跟前端 src/lib/aiModels.ts 同一份（Edge Function 不能 import src，只能比對）', () => {
     expect([...AI_MODELS]).toEqual(front.AI_MODELS.map((m) => m.id))
-    expect([...VISION_CALIBRATED]).toEqual([...front.VISION_CALIBRATED])
+    expect([...VISION_MODELS]).toEqual([...front.VISION_MODELS])
     expect(front.DEFAULT_AI_MODEL).toBe(AI_MODELS[0])
   })
 
-  it('㉛b 白名單與校準清單一定有交集——沒有的話辨識會變成沒指定模型（函式那端也會直接回 500，不外呼）', () => {
-    expect(AI_MODELS.some((m) => VISION_CALIBRATED.includes(m))).toBe(true)
+  it('㉛b 白名單與讀圖清單一定有交集——沒有的話辨識會變成沒指定模型（函式那端也會直接回 500，不外呼）', () => {
+    expect(AI_MODELS.some((m) => VISION_MODELS.includes(m))).toBe(true)
   })
 
   it('㉜ 分類：指定的主模型排第一、另一個當備援；沒指定或白名單外照預設順序（不 400）', async () => {
@@ -553,14 +554,20 @@ describe('read-label 模型設定（全站統一）', () => {
     }
   })
 
-  it('㉝ 辨識：只用校準過的模型——主模型選 deepseek 也照舊只送 qwen（換之前要重跑校準照片）', async () => {
-    for (const model of [DS, QW, undefined, 'openai/gpt-9-ultra']) {
+  it('㉝ 辨識：跟分類同一串（指定的主模型第一、另一個備援）；兩個都讀得了圖', async () => {
+    const cases: [unknown, string[]][] = [
+      [QW, [QW, DS]],
+      [DS, [DS, QW]],
+      [undefined, [DS, QW]],
+      ['openai/gpt-9-ultra', [DS, QW]],
+    ]
+    for (const [model, chain] of cases) {
       const spy = stubUpstream(upstreamReply(GOOD_READING))
       const res = await handleRequest(post(await validToken(), { image: IMAGE, model }), JWKS, OR_KEY)
       expect(res.status).toBe(200)
       const sent = sentBody(spy)
-      expect(sent.model, String(model)).toBe(QW)
-      expect(sent).not.toHaveProperty('models')
+      expect(sent.models, String(model)).toEqual(chain)
+      expect(sent).not.toHaveProperty('model')
     }
   })
 })

@@ -44,9 +44,11 @@ const OPENROUTER_API = 'https://openrouter.ai/api/v1'
    31–42 秒（會先想兩千多 token）、兩批超過函式的 45 秒逾時，deepseek 同樣 15 樣 2–14 秒、有三十幾家在供。
    分類準度：真實資料 82 樣兩個模型分錯的各有一兩樣，沒看出哪邊明顯差（使用者 2026-11-11 抽看）。 */
 export const AI_MODELS = ['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'] as const
-/* 營養標示辨識的提示詞只在這些模型上校準過準度（spec.md「拍照讀營養標示」的三輪實測）。主模型選了沒校準的，
-   辨識照舊用校準過的——**要把別的模型加進來，先拿校準照片重跑一次**（照片與實測不在 repo，在使用者手上）。 */
-export const VISION_CALIBRATED: readonly string[] = ['qwen/qwen3.7-flash']
+/* 讀得了營養標示的模型（主模型＋備援裡只留這些）。qwen 是 2026-08 三輪真實照片校準過的；deepseek 是使用者 2026-11-11
+   決定換的——**只過了合成標示的冒煙測試**（雙欄、每份 320g，兩次六欄全中、1.5–3.7 秒；同一輪 qwen 一次全中一次 429），
+   沒有真實照片校準（當初的照片不在 repo）。讀數一律是草稿、使用者送出前看得到，所以先換、真機遇到讀錯再回來。
+   **加模型前先確認它吃圖**（OpenRouter `/models` 的 `input_modalities`）：2026-08 時 DeepSeek 全系列都不吃。 */
+export const VISION_MODELS: readonly string[] = ['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash']
 
 /** 請求指定的主模型在白名單內就排第一、其餘照預設順序當備援；沒指定或不認得就用預設順序——
  *  不回 400：舊前端不帶這個欄位，白名單外的值也不該讓分類整個失敗。白名單是為了不讓人指定任意（貴的）模型。 */
@@ -55,9 +57,9 @@ export function modelChain(requested: unknown): string[] {
   return typeof requested === 'string' && all.includes(requested) ? [requested, ...all.filter((m) => m !== requested)] : all
 }
 
-/** 辨識用的那一串：主模型＋備援裡只留校準過的。 */
+/** 辨識用的那一串：主模型＋備援裡只留讀得了圖的。 */
 export function visionChain(requested: unknown): string[] {
-  return modelChain(requested).filter((m) => VISION_CALIBRATED.includes(m))
+  return modelChain(requested).filter((m) => VISION_MODELS.includes(m))
 }
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
 {"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
@@ -500,13 +502,15 @@ export async function handleRequest(
     return json({ error: BAD_REQUEST }, 400, cors)
   }
 
-  /* 7. 辨識。不重試、不換模型、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：
-        前端讓使用者手打。上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
-  /* 白名單與校準清單哪天沒交集，這串就是空的：送出去會變成沒指定模型（`model: undefined` 被 JSON 省略），
+  /* 7. 辨識。不重試、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：前端讓使用者手打。
+        v2.128 起跟分類一樣走主模型＋備援（OpenRouter 的 `models`：上一個回錯誤、含 429 才換，逾時不換）：
+        qwen 只有一家在供，2026-11-11 冒煙測試兩次就被 429 擋一次。
+        上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
+  /* 白名單與讀圖清單哪天沒交集，這串就是空的：送出去會變成沒指定模型（`model: undefined` 被 JSON 省略），
      OpenRouter 用帳號預設模型讀圖——沒驗過準度、可能很貴。寧可整個失敗（security review L1）。 */
   const chain = visionChain(body.model)
   if (chain.length === 0) {
-    diag('500 no-calibrated-model')
+    diag('500 no-vision-model')
     return json({ error: MISCONFIGURED }, 500, cors)
   }
   const t0 = Date.now()
