@@ -175,7 +175,9 @@ button { -webkit-user-select: none; user-select: none; }
   animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes scene-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 /* 字級是插圖座標（viewBox 393 寬裡的 12.5 單位），跟著插圖等比縮放，不是字級 token——DESIGN「今日頁插圖」的例外 */
-.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--snow); }
+/* 小徑的虛線從字底下穿過會像被劃掉：字描一圈近山的顏色、描邊畫在填色底下（paint-order），把字底下的點蓋掉 */
+.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--snow);
+  paint-order: stroke; stroke: var(--hill-near); stroke-width: 5px; stroke-linejoin: round; }
 /* 現在該記的那一塊：一圈慢慢呼吸的光。**只呼吸兩次（4.8 秒）就停在亮的那一格**：跟內容並排、會動超過 5 秒的東西
    要能暫停（WCAG 2.2.2），這個 app 一次只開三秒，兩次已經夠被看到。減少動態時整個不動（下方 media query） */
 .stone-pulse { transform-box: fill-box; transform-origin: center; animation: stone-pulse 2.4s cubic-bezier(.4, 0, .2, 1) 2; }
@@ -249,14 +251,6 @@ button { -webkit-user-select: none; user-select: none; }
 .node-body.is-todo { padding-bottom: var(--s-2); }
 .node:last-child .node-body { padding-bottom: 0; }
 .timeline .muted { color: var(--ink-muted); margin: 0; }
-/* 有建議的待記錄餐：整塊浮成一張白卡。卡片畫在 ::before 上、往外推，**不佔版面**（不加 margin／padding）——
-   建議列的高度與「有建議比沒建議高 48px」是鎖在 e2e 裡的版面契約（DESIGN「今日頁的餐建議」，量的是相鄰兩餐的間距）。
-   上下各往內收 --s-1：卡片上緣到餐名、「加入」到卡片下緣都約 8px，晚餐與點心兩張卡連著出現時中間也留 8px。
-   點心是最後一節、底下沒有 .is-todo 那段 --s-2 內距，卡片改往外畫 --s-1，下緣離「加入」一樣 8px。 */
-.node-body.has-sg { position: relative; isolation: isolate; }
-.node-body.has-sg::before { content: ''; position: absolute; inset: var(--s-1) calc(var(--s-3) * -1); z-index: -1;
-  border-radius: 18px; background: var(--card); box-shadow: var(--shadow-1); }
-.node:last-child .node-body.has-sg::before { bottom: calc(var(--s-1) * -1); }
 
 /* 餐別標題列同時是「追加這一餐」的入口，所以是原生 button */
 /* min-height 44：它是「追加這一餐」的入口，且緊貼下方同樣 44px 的品項列，
@@ -437,10 +431,15 @@ button { -webkit-user-select: none; user-select: none; }
 .todo-row .chev { width: 14px; height: 14px; color: var(--ink-muted); }
 
 /* ── 餐建議（待記錄那一列底下的一行） ── */
-.sg { position: relative; margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
-  padding: 0; border-radius: var(--r-tab); }
+/* v2.123：建議是一格「虛線空位」——還沒記的那餐留一個位置，記了之後同一個位置換成實際的品項，從虛變實。
+   v2.122 的白卡把暫時的提示畫成整頁最搶眼的東西、記完卡片一收版面就縮，使用者看不懂（2026-11-11）。
+   框往左右各推出 --s-2、內距補回同樣的量：裡面的圖示與字仍對齊餐名，品項那段不因為多了框而變窄。
+   高度仍是 44（border-box），「有建議比沒建議高 48px」的版面契約不變（e2e 鎖住）。 */
+.sg { --sg-bw: 1.5px; position: relative; margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
+  margin-inline: calc(var(--s-2) * -1); padding: 0 calc(var(--s-2) - var(--sg-bw)); border: var(--sg-bw) dashed var(--ink-faint);
+  border-radius: var(--r-tab); }
 /* 「換一個」之後整列淡藍（--accent-soft）閃一下，同「剛加入」的 flash（純透明度，減少動態不關） */
-.sg-flash { position: absolute; inset: 0; border-radius: inherit; background: var(--accent-soft); opacity: 0;
+.sg-flash { position: absolute; inset: 0; border-radius: calc(var(--r-tab) - var(--sg-bw)); background: var(--accent-soft); opacity: 0;
   pointer-events: none; animation: flash 700ms var(--ease) forwards; }
 .sg-src { flex-shrink: 0; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .sg-items { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -479,7 +478,6 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
   box-shadow: 0 0 0 2px var(--ci-ring, var(--paper)); }
 .ci-stack { display: inline-flex; flex-shrink: 0; }
 .ci-stack .ci + .ci { margin-left: calc(var(--s) * -.28); box-shadow: 0 0 0 2px var(--ci-ring, var(--paper)); }
-.has-sg { --ci-ring: var(--card); }
 
 /* ── 主 CTA（v2.3：56px 實心圓、只有加號，見底部列 .bottom-bar） ── */
 .cta { display: flex; align-items: center; justify-content: center;

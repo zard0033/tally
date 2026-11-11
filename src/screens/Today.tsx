@@ -590,7 +590,7 @@ function MealNode({
   return (
     /* v2.122：左邊的時間軸圓點與虛實線拿掉了——哪幾餐記了改由插圖的踏腳石說，這裡只留餐別本身。 */
     <div className="node">
-      <div className={`node-body${done ? '' : ' is-todo'}${!done && suggestion ? ' has-sg' : ''}`}>
+      <div className={`node-body${done ? '' : ' is-todo'}`}>
         {done ? (
           <>
             <button className="node-head" type="button" onClick={() => h.onOpenSheet(meal.key)}>

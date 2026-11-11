@@ -65,8 +65,9 @@ export default function TodayScene({ date, logged }: { date: string; logged: Rea
           <ellipse cx="22" cy="24" rx="20" ry="8.5" />
           <ellipse cx="38" cy="17" rx="15" ry="10" />
           <ellipse cx="54" cy="25" rx="17" ry="7" />
-          <ellipse cx="96" cy="10" rx="12" ry="5.5" />
-          <ellipse cx="105" cy="6.5" rx="8.5" ry="6" />
+          {/* 右邊那朵小的跟大朵差不多高：原本高 14 個單位，440 寬時頂到週列「15」那一格（2026-11-11 真機） */}
+          <ellipse cx="96" cy="24" rx="12" ry="5.5" />
+          <ellipse cx="105" cy="20.5" rx="8.5" ry="6" />
         </g>
       </svg>
       {sky.kind === 'sun' ? (
@@ -87,7 +88,8 @@ export default function TodayScene({ date, logged }: { date: string; logged: Rea
           <rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--hill-near)" />
           <circle cx="0" cy="2" r="11" fill="var(--tree)" />
         </g>
-        <g transform="translate(118 17)">
+        {/* 小樹壓低 6：原位置樹冠頂離上面的量尺只剩十幾 px，擠在一起（2026-11-11 真機） */}
+        <g transform="translate(118 23)">
           <rect x="-1.5" y="4" width="3" height="10" rx="1.5" fill="var(--hill-near)" />
           <circle cx="0" cy="1" r="7.5" fill="var(--tree)" />
         </g>
@@ -112,11 +114,13 @@ export default function TodayScene({ date, logged }: { date: string; logged: Rea
                 </g>
               ) : s.state === 'next' ? (
                 <>
+                  {/* 墊一塊近山色的底：小徑的虛線穿過踏腳石會像線從圈裡串過去，石頭該壓在路上 */}
+                  <circle r="13" fill="var(--hill-near)" />
                   <circle className="stone-pulse" r="13" fill="none" stroke="var(--snow)" strokeWidth="1.5" />
                   <circle r="8" fill="none" stroke="var(--snow)" strokeWidth="2.4" />
                 </>
               ) : (
-                <circle r="6" fill="none" stroke="var(--snow)" strokeWidth="2" strokeOpacity=".9" />
+                <circle r="6" fill="var(--hill-near)" stroke="var(--snow)" strokeWidth="2" strokeOpacity=".9" />
               )}
               <text x={s.state === 'next' ? 23 : 14} y="4.5" className="stone-label" opacity={s.state === 'todo' ? 0.9 : 1}>
                 {s.label}

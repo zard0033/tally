@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 午）：線上 v2.119–v2.122。AI 分類從沒成功（112 樣全 null：qwen 429＋40 樣一批逾時）。已修、本機已 commit：分類加 deepseek-v4.1-flash 備援、一批 15 樣；**read-label 部署（--use-api --no-verify-jwt）與 push 待使用者授權**。
-下一步：①上線後請使用者開 app，`db query --read-only` 數 category is null 驗收 ②今日頁視覺問題（時間軸虛線穿字、空進度條、雲壓日期、狀態列接縫）併入視覺第二批 ③AI 設定頁＋額度（MANUAL）。
+現況（2026-11-11 下午）：AI 分類備援已上線（e9bf10f，CI 綠）。v2.123 今日頁：插圖虛線不穿字、雲離開週列、小樹壓低；建議白卡改虛線空位（使用者選）。
+下一步：①請使用者開 app 後 `db query --read-only` 數 category is null 驗收分類 ②真機看 v2.123 ③問使用者平常用 Safari 還是主畫面 App，決定狀態列紙色帶要不要修（Safari 26 不讀 theme-color）④視覺第二批（記一筆 sheet）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
