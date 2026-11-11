@@ -165,7 +165,7 @@ export default function Today(props: TodayProps) {
         {/* v2.122：日期元件與「還能吃」坐在插圖的天空上。插圖在最底層、絕對定位，跟著這一塊的高度走——
             月曆展開時天空往上長，山坡永遠貼在最下面。 */}
         <div className="sky">
-          <TodayScene key={currentDate} date={currentDate} logged={rows && new Set(rows.map((r) => r.meal))} />
+          <TodayScene key={currentDate} date={currentDate} logged={rows && new Set(rows.map((r) => r.meal))} onPick={onOpenSheet} />
           {/* v2.53：日期元件從 v2.4 的 `‹ 日期 ›` 膠囊換成週列＋月曆（src/components/DateStrip.tsx；
               決策與被推翻的舊決定見 DESIGN.md「日期切換」）。h1 在元件裡面。 */}
           <header className="topbar">

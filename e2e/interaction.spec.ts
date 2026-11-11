@@ -1063,6 +1063,25 @@ test('飲食頁底部列浮起：霧化帶與空白不攔截，兩顆鈕點得�
    `padding-bottom` 不算進去——編輯區下緣會落在底部列底下，右側的刪除鈕剛好在 CTA 底下。
    修法是時間軸的 `scroll-padding-bottom`。不縮視窗：編輯區約 322px，393×745 的時間軸扣掉底部列還剩約 360px 放得下；
    視窗再矮，編輯區本身就大過可見範圍，量出來的是別的事。展開後內容才溢出，所以 scrollIntoView 會被觸發。 */
+test('踏腳石可以點：點哪一塊就開哪一餐的記錄（v2.125）', async ({ page }) => {
+  await openApp(page)
+  const sheet = page.locator('[data-screen="log-sheet"]')
+  // 點心那顆在山坡帶最低處，命中區最容易被切掉：44px 要完整留在插圖裡
+  const snack = (await page.locator('.stone-hit[data-meal="snack"]').boundingBox())!
+  const scene = (await page.locator('.scene').boundingBox())!
+  expect(snack.height).toBe(44)
+  expect(snack.y + snack.height).toBeLessThanOrEqual(scene.y + scene.height + 0.5)
+  for (const [key, label] of [['dinner', '晚餐'], ['breakfast', '早餐'], ['snack', '點心']] as const) {
+    // 用真的滑鼠點在石頭的中心：命中區被別的元素蓋住的話，點到的就不是它
+    const box = (await page.locator(`.stone-hit[data-meal="${key}"]`).boundingBox())!
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await expect(sheet).toBeVisible()
+    await expect(sheet.locator('.chiprow .chip[aria-pressed="true"]')).toHaveText(label)
+    await page.keyboard.press('Escape')
+    await expect(sheet).toHaveCount(0)
+  }
+})
+
 test('狀態列色條：天空頂著時染天空色，捲走、換分頁就回紙色（Safari 26 從這條取狀態列顏色）', async ({ page }) => {
   await openApp(page)
   const state = () =>

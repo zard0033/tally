@@ -43,8 +43,17 @@ function useNow(): Date {
   return now
 }
 
-/** logged：這天哪幾餐有紀錄；null＝還在載入（DESIGN「載入態」：還沒讀到不能畫成讀到空）。 */
-export default function TodayScene({ date, logged }: { date: string; logged: ReadonlySet<MealKey> | null }) {
+/** logged：這天哪幾餐有紀錄；null＝還在載入（DESIGN「載入態」：還沒讀到不能畫成讀到空）。
+ *  onPick：點踏腳石＝開那一餐的記錄（v2.125；跟時間軸的餐別列同一個入口）。 */
+export default function TodayScene({
+  date,
+  logged,
+  onPick,
+}: {
+  date: string
+  logged: ReadonlySet<MealKey> | null
+  onPick: (meal: MealKey) => void
+}) {
   const now = useNow()
   const isToday = date === localDate(now)
   const sky = skyAt(isToday ? minutesOf(now) : FIXED_SCENE_MIN)
@@ -85,20 +94,22 @@ export default function TodayScene({ date, logged }: { date: string; logged: Rea
         <path d="M0 12 C 60 -6, 120 -4, 178 6 S 292 -18, 393 -6 V76 H0Z" fill="var(--hill-far)" />
         <path d="M0 30 C 80 12, 170 16, 240 26 S 350 14, 393 20 V76 H0Z" fill="var(--hill-mid)" />
         <g transform="translate(286 20)">
-          <rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--hill-near)" />
+          <rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--tree)" />
           <circle cx="0" cy="2" r="11" fill="var(--tree)" />
         </g>
         {/* 小樹壓低 6：原位置樹冠頂離上面的量尺只剩十幾 px，擠在一起（2026-11-11 真機） */}
         <g transform="translate(118 23)">
-          <rect x="-1.5" y="4" width="3" height="10" rx="1.5" fill="var(--hill-near)" />
+          <rect x="-1.5" y="4" width="3" height="10" rx="1.5" fill="var(--tree)" />
           <circle cx="0" cy="1" r="7.5" fill="var(--tree)" />
         </g>
-        <path d="M0 42 C 90 32, 200 35, 290 42 S 370 39, 393 41 V76 H0Z" fill="var(--hill-near)" />
+        {/* 最前面這層是紙：頁面就是畫裡的地面，營養素與餐別長在這塊地上（v2.125）。原本是最深的 --hill-near，
+            整頁最暗的一條直接貼最亮的紙（5.19:1），天空讀起來像貼上去的一塊長方形 */}
+        <path d="M0 42 C 90 32, 200 35, 290 42 S 370 39, 393 41 V76 H0Z" fill="var(--paper)" />
         <path
           d="M36 60 C 90 52, 120 66, 168 58 S 230 53, 262 60 S 330 67, 358 59"
           fill="none"
-          stroke="var(--snow)"
-          strokeOpacity=".45"
+          stroke="var(--ink-faint)"
+          strokeOpacity=".7"
           strokeWidth="2"
           strokeDasharray="1 7"
           strokeLinecap="round"
@@ -109,26 +120,43 @@ export default function TodayScene({ date, logged }: { date: string; logged: Rea
             <g key={s.key} className={`stone is-${s.state}${lit.has(s.key) ? ' just-lit' : ''}`} transform={`translate(${x} ${y})`}>
               {s.state === 'done' ? (
                 <g className="stone-mark">
-                  <circle r="9" fill="var(--snow)" />
-                  <path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--hill-near)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle r="9" fill="var(--accent)" />
+                  <path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               ) : s.state === 'next' ? (
                 <>
-                  {/* 墊一塊近山色的底：小徑的虛線穿過踏腳石會像線從圈裡串過去，石頭該壓在路上 */}
-                  <circle r="13" fill="var(--hill-near)" />
-                  <circle className="stone-pulse" r="13" fill="none" stroke="var(--snow)" strokeWidth="1.5" />
-                  <circle r="8" fill="none" stroke="var(--snow)" strokeWidth="2.4" />
+                  {/* 墊一塊地面色的底：小徑的虛線穿過踏腳石會像線從圈裡串過去，石頭該壓在路上 */}
+                  <circle r="13" fill="var(--paper)" />
+                  <circle className="stone-pulse" r="13" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+                  <circle r="8" fill="none" stroke="var(--accent)" strokeWidth="2.4" />
                 </>
               ) : (
-                <circle r="6" fill="var(--hill-near)" stroke="var(--snow)" strokeWidth="2" strokeOpacity=".9" />
+                <circle r="6" fill="var(--paper)" stroke="var(--ink-faint)" strokeWidth="2" />
               )}
-              <text x={s.state === 'next' ? 23 : 14} y="4.5" className="stone-label" opacity={s.state === 'todo' ? 0.9 : 1}>
+              <text x={s.state === 'next' ? 23 : 14} y="4.5" className="stone-label">
                 {s.label}
               </text>
             </g>
           )
         })}
       </svg>
+      {/* 踏腳石可以點（v2.125）：點了開那一餐的記錄，跟時間軸的餐別列同一個入口。它長得像按鈕，不能點就是假的操作暗示。
+          插圖整幅 aria-hidden，這幾顆是給手指的捷徑：tabIndex -1、不進讀屏——鍵盤與讀屏用時間軸的餐別列，不重複一份。
+          命中區蓋住石頭加餐名（插圖座標 64 寬），高 44px；位置跟山坡帶一樣用 cqw 算。 */}
+      {stones?.map((s, i) => {
+        const [x, y] = STONE_AT[i]
+        return (
+          <button
+            key={s.key}
+            type="button"
+            className="stone-hit"
+            tabIndex={-1}
+            data-meal={s.key}
+            style={{ '--x': x, '--y': y } as CSSProperties}
+            onClick={() => onPick(s.key)}
+          />
+        )
+      })}
     </div>
   )
 }

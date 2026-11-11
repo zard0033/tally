@@ -185,9 +185,19 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
   animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes scene-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 /* 字級是插圖座標（viewBox 393 寬裡的 12.5 單位），跟著插圖等比縮放，不是字級 token——DESIGN「今日頁插圖」的例外 */
-/* 小徑的虛線從字底下穿過會像被劃掉：字描一圈近山的顏色、描邊畫在填色底下（paint-order），把字底下的點蓋掉 */
-.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--snow);
-  paint-order: stroke; stroke: var(--hill-near); stroke-width: 5px; stroke-linejoin: round; }
+/* 小徑的虛線從字底下穿過會像被劃掉：字描一圈地面（紙）的顏色、描邊畫在填色底下（paint-order），把字底下的點蓋掉。
+   v2.125 起踏腳石站在紙色地面上：餐名墨色 12.60:1（原本白字對近山 5.82） */
+.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--ink);
+  paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
+/* 踏腳石的命中區（v2.125）：插圖座標換成 cqw——山坡帶寬 393 單位＝.sky 的寬，viewBox 底在 76。
+   中心落在石頭往右 16 單位（石頭＋餐名一起蓋住），寬 64 單位、高 44px */
+.stone-hit { position: absolute; left: calc((var(--x) - 16) / 393 * 100cqw);
+  /* 低處的石頭（點心、早餐）照算會伸出山坡帶底下、被 .scene 的 overflow 切掉一截：碰底就整塊往上推，保住 44px */
+  bottom: max(0px, calc((76 - var(--y)) / 393 * 100cqw - 22px));
+  width: calc(64 / 393 * 100cqw); height: 44px; padding: 0; border: none; border-radius: var(--r-pill); background: none;
+  cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
+/* 手機沒有 hover，按下必須立刻有回饋：石頭加餐名底下浮一塊淡主藍 */
+.stone-hit:active { background: var(--accent-soft); }
 /* 現在該記的那一塊：一圈慢慢呼吸的光。**只呼吸兩次（4.8 秒）就停在亮的那一格**：跟內容並排、會動超過 5 秒的東西
    要能暫停（WCAG 2.2.2），這個 app 一次只開三秒，兩次已經夠被看到。減少動態時整個不動（下方 media query） */
 .stone-pulse { transform-box: fill-box; transform-origin: center; animation: stone-pulse 2.4s cubic-bezier(.4, 0, .2, 1) 2; }
