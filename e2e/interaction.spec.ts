@@ -903,7 +903,9 @@ test('token 有效但資料請求連不上：亮「重試」提示；網路回�
   await page.clock.install()
   await seedFetchStub(page, FIX, TODAY, USER_ID, { dataDown: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  // 不斷言開機的「載入中…」：v2.128 起讀取一次失敗就拋，那個中間態一閃而過，CI 上量不到（2026-11-11 CI 紅過）
+  // 不斷言開機的「載入中…」：v2.128 起讀取一次失敗就拋，那個中間態一閃而過，CI 上量不到（2026-11-11 CI 紅過）。
+  // 但要等 App 掛上（.notice 從開機到失敗都在）再快轉：掛上之前快轉的時間，失敗那段根本還沒開始算
+  await expect(page.locator('.notice')).toBeVisible()
   // v2.128 起關掉 postgrest-js 的退避重試，一次失敗就拋；仍分段快轉，留著不怕之後有人又開了重試
   // （一口氣跳的話，退避的續行要等這次 tick 結束才跑，下一段計時器還沒排進去；waitRecovered 同理）
   for (let i = 0; i < 30 && (await page.locator('.notice .headline').count()) === 0; i++) {
