@@ -42,3 +42,5 @@ test-results/
 e2e/shots/
 playwright-report/
 blob-report/
+# impeccable skill 的 critique 紀錄（本機產物；重點寫進 DESIGN.md 的版本紀錄）
+/.impeccable/
