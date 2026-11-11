@@ -218,14 +218,15 @@ test('離線冷啟動、token 已過期：實際 6 秒內亮離線提示（AC 2�
   await expect(page.locator('.notice .action-btn')).toHaveText('重新載入') // 離線優先路徑的按鈕
 })
 
-/* 這條的量測值約 7 秒，來源是 postgrest-js 對 GET 網路錯誤的內建重試（1＋2＋4 秒），不是 DB_TIMEOUT
-   （注入的 TypeError 是立刻失敗，8 秒逾時從頭到尾沒被碰到）。所以它守的是「合理範圍內」，不是某個
-   產品常數；supabase-js 若升級改了重試設定，這裡會先紅。**不要拿它跟真機回報的秒數比**：那是真實網路堆疊。 */
-test('離線冷啟動、token 仍有效：12 秒內亮失敗提示（注入失敗；數字來自 postgrest-js 的重試退避）', async ({ page }) => {
+/* 原本約 7 秒，來源是 postgrest-js 對 GET 網路錯誤的內建重試（1＋2＋4 秒）；v2.128 關掉重試（api.ts 直接設
+   `supabase.rest.retry`，使用者 2026-11-11 裁決），注入的 TypeError 立刻失敗、DB_TIMEOUT 碰不到。
+   **這條也是那行設定的守衛**：supabase-js 升版改了欄位名、重試又回來時，會超過 3 秒先紅。
+   **不要拿它跟真機回報的秒數比**：那是真實網路堆疊。 */
+test('離線冷啟動、token 仍有效：3 秒內亮失敗提示（注入失敗；不再等 postgrest-js 的重試退避）', async ({ page }) => {
   const ms = await coldStartOffline(page, 3600)
   test.info().annotations.push({ type: 'cold-start-valid-token', description: `${ms} ms` })
   console.log(`[cold-start] token 有效：${ms} ms`)
-  expect(ms, `冷啟動花了 ${ms} ms，超出 postgrest-js 重試退避（約 7 秒）加載入的合理範圍`).toBeLessThan(12_000)
+  expect(ms, `冷啟動花了 ${ms} ms：超過 3 秒多半是 postgrest-js 的退避重試又回來了（api.ts 的 rest.retry）`).toBeLessThan(3_000)
   await expect(page.locator('.notice .action-btn')).toHaveText('重試') // 一般失敗提示的按鈕
   // friendlyError 把注入的 TypeError 轉成這句；真 401 的訊息不會是它，這條斷言把兩者分開
   await expect(page.locator('.notice'), '失敗原因不是離線的 TypeError').toContainText('連不上網路')

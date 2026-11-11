@@ -18,6 +18,7 @@ interface StubWindow {
   __heldIntake: (() => void)[]
   __releaseIntake: () => void
   __failIntake: Set<string>
+  __dropIntake: Set<string>
 }
 
 /** 來源列。food_id 一定要有：fix.intake 的列沒有這欄，落進回看區間會變成 food_id 是 undefined 的建議，
@@ -1576,4 +1577,28 @@ test('第三版：sheet 全部食物依類型分組、組序看這一餐吃過�
   await expect(more, '換餐別收的是另一批類型，展開狀態要收回').toHaveAttribute('aria-expanded', 'false')
   await expect(sheet.locator('.grp .ci-badge')).toHaveCount(0)
   await expect(sheet.locator('.grp .seen')).toHaveCount(0)
+})
+
+/* v2.128 全站讀取一次失敗就拋（冷啟動不等退避）；但寫入成功後的那次重撈照舊重試——資料已經存了，
+   一次網路抖動就整頁「讀不到這天的紀錄」看起來像沒存到，會被再加一次。兩個寫入入口（卡片、sheet）各驗一次。 */
+test('寫入成功後重撈碰到一次斷線：照舊重試撐過去，不亮「讀不到這天的紀錄」、新的那幾筆在畫面上', async ({ page }) => {
+  await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
+  const drop = () => page.evaluate((d) => (window as unknown as StubWindow).__dropIntake.add(d), MON)
+  const dropped = () => page.evaluate((d) => !(window as unknown as StubWindow).__dropIntake.has(d), MON)
+
+  // 卡片一鍵加入（refreshDay 路徑）
+  await drop()
+  await addOf(page, '早餐').click()
+  await expect.poll(dropped, '注入的斷線要真的被那次重撈吃到').toBe(true)
+  await expect(items(page)).toHaveCount(2, { timeout: 8000 })
+  await expect(page.locator('.notice')).toHaveCount(0)
+
+  // sheet 加入（loadDay 路徑）
+  await openMealSheet(page, '午餐')
+  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).first().click()
+  await drop()
+  await sheetOf(page).locator('.pick-bar-btn').click()
+  await expect.poll(dropped, '注入的斷線要真的被那次重撈吃到').toBe(true)
+  await expect(items(page)).toHaveCount(3, { timeout: 8000 })
+  await expect(page.locator('.notice')).toHaveCount(0)
 })

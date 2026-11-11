@@ -10,8 +10,9 @@
    401 因此只剩「驗證失敗」一個成因，不會有「別的錯誤碰巧也回 401」的假綠。 */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose'
-import { CATEGORIES, handleRequest } from './handler.ts'
+import { AI_MODELS, CATEGORIES, handleRequest, VISION_CALIBRATED } from './handler.ts'
 import { FOOD_CATEGORIES } from '../../../src/lib/categories.ts'
+import * as front from '../../../src/lib/aiModels.ts'
 
 const now = () => Math.floor(Date.now() / 1000)
 
@@ -515,5 +516,147 @@ describe('read-label 分類模式', () => {
     expect(res.status).toBe(200)
     const sent = JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
     expect(JSON.stringify(sent)).not.toContain('image_url')
+  })
+})
+
+/* 全站 AI 統一（v2.128，使用者 2026-11-11）：一份 AI_MODELS（主模型＋備援），請求可帶 model 指定主模型。
+   辨識只用校準過的模型（VISION_CALIBRATED）。 */
+describe('read-label 模型設定（全站統一）', () => {
+  const FOODS = [{ id: 1, name: '叉燒飯', vendor: '燒臘店' }]
+  const DS = 'deepseek/deepseek-v4.1-flash'
+  const QW = 'qwen/qwen3.7-flash'
+  const sentBody = (spy: ReturnType<typeof stubUpstream>) => JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+
+  it('㉛ 白名單與校準清單跟前端 src/lib/aiModels.ts 同一份（Edge Function 不能 import src，只能比對）', () => {
+    expect([...AI_MODELS]).toEqual(front.AI_MODELS.map((m) => m.id))
+    expect([...VISION_CALIBRATED]).toEqual([...front.VISION_CALIBRATED])
+    expect(front.DEFAULT_AI_MODEL).toBe(AI_MODELS[0])
+  })
+
+  it('㉛b 白名單與校準清單一定有交集——沒有的話辨識會變成沒指定模型（函式那端也會直接回 500，不外呼）', () => {
+    expect(AI_MODELS.some((m) => VISION_CALIBRATED.includes(m))).toBe(true)
+  })
+
+  it('㉜ 分類：指定的主模型排第一、另一個當備援；沒指定或白名單外照預設順序（不 400）', async () => {
+    const cases: [unknown, string[]][] = [
+      [QW, [QW, DS]],
+      [DS, [DS, QW]],
+      [undefined, [DS, QW]],
+      ['openai/gpt-9-ultra', [DS, QW]],
+      [42, [DS, QW]],
+    ]
+    for (const [model, chain] of cases) {
+      const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+      const res = await handleRequest(post(await validToken(), { foods: FOODS, model }), JWKS, OR_KEY)
+      expect(res.status).toBe(200)
+      expect(sentBody(spy).models, String(model)).toEqual(chain)
+    }
+  })
+
+  it('㉝ 辨識：只用校準過的模型——主模型選 deepseek 也照舊只送 qwen（換之前要重跑校準照片）', async () => {
+    for (const model of [DS, QW, undefined, 'openai/gpt-9-ultra']) {
+      const spy = stubUpstream(upstreamReply(GOOD_READING))
+      const res = await handleRequest(post(await validToken(), { image: IMAGE, model }), JWKS, OR_KEY)
+      expect(res.status).toBe(200)
+      const sent = sentBody(spy)
+      expect(sent.model, String(model)).toBe(QW)
+      expect(sent).not.toHaveProperty('models')
+    }
+  })
+})
+
+/* 額度模式（v2.128，設定頁的 AI 額度）：body `{credits:true}`，代查 OpenRouter 的 credits 與 key 兩個端點。 */
+describe('read-label 額度模式', () => {
+  /** 依網址回不同的假上游；回傳 spy。 */
+  function stubCredits(credits: unknown, key: unknown, status = 200) {
+    const spy = vi.fn(async (url: string) =>
+      new Response(JSON.stringify(url.endsWith('/credits') ? credits : key), { status }),
+    )
+    globalThis.fetch = spy as unknown as typeof fetch
+    return spy
+  }
+
+  it('㉞ 成功：打 credits 與 key 兩個端點（key 只在 header），只回數字欄位，label 等其他欄位不轉發', async () => {
+    const spy = stubCredits(
+      { data: { total_credits: 10, total_usage: 2.5 } },
+      { data: { label: `sk-or-v1-abc…${OR_KEY.slice(-4)}`, usage_daily: 0.01, usage_monthly: 0.3, limit_remaining: null, is_free_tier: false } },
+    )
+    const res = await handleRequest(post(await validToken(), { credits: true }, SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SITE)
+    const body = await res.json()
+    expect(body).toEqual({ total_credits: 10, total_usage: 2.5, usage_daily: 0.01, usage_monthly: 0.3, limit_remaining: null })
+    expect(JSON.stringify(body)).not.toContain('sk-or')
+
+    const urls = spy.mock.calls.map((c) => (c as unknown as [string])[0]).sort()
+    expect(urls).toEqual(['https://openrouter.ai/api/v1/credits', 'https://openrouter.ai/api/v1/key'])
+    for (const c of spy.mock.calls) {
+      const init = (c as unknown as [string, RequestInit])[1]
+      expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
+      expect(init.method ?? 'GET').toBe('GET')
+    }
+  })
+
+  it('㉞b 只有一個端點壞了：另一邊的數字照給、壞的那邊是 null；兩邊都壞才 502', async () => {
+    const spy = vi.fn(async (url: string) =>
+      url.endsWith('/credits')
+        ? new Response('forbidden', { status: 403 })
+        : new Response(JSON.stringify({ data: { usage_daily: 0.01, usage_monthly: 0.3, limit_remaining: 5 } }), { status: 200 }),
+    )
+    globalThis.fetch = spy as unknown as typeof fetch
+    const res = await handleRequest(post(await validToken(), { credits: true }), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ total_credits: null, total_usage: null, usage_daily: 0.01, usage_monthly: 0.3, limit_remaining: 5 })
+  })
+
+  it('㉟ 上游欄位不是數字（字串、NaN、缺）→ null，不把怪值交給前端', async () => {
+    stubCredits({ data: { total_credits: '10', total_usage: null } }, { data: {} })
+    const res = await handleRequest(post(await validToken(), { credits: true }), JWKS, OR_KEY)
+    expect(await res.json()).toEqual({ total_credits: null, total_usage: null, usage_daily: null, usage_monthly: null, limit_remaining: null })
+  })
+
+  it('㊱ 上游壞掉 → 502 {error}，不含金鑰與上游原文；驗證閘一樣有效（偽造 token 401、沒 key 500，都不外呼）', async () => {
+    const token = await validToken()
+    const leaky = { error: { message: `Invalid API key: ${OR_KEY}` } }
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (const setup of [
+      () => stubCredits(leaky, leaky, 401),
+      () => stubCredits('<html>', '<html>', 500),
+      // 200 但不是 JSON：兩邊都解析失敗＝兩邊都壞（stubCredits 會先 JSON 編碼，這裡要回原始文字）
+      () => {
+        globalThis.fetch = vi.fn(async () => new Response('<html>Bad Gateway</html>', { status: 200 })) as unknown as typeof fetch
+      },
+      () => {
+        globalThis.fetch = vi.fn(() => {
+          throw new Error(`fetch failed: Bearer ${OR_KEY}`)
+        }) as unknown as typeof fetch
+      },
+    ]) {
+      setup()
+      const res = await handleRequest(post(token, { credits: true }), JWKS, OR_KEY)
+      expect(res.status).toBe(502)
+      const text = JSON.stringify(await res.json())
+      expect(text).not.toContain(OR_KEY)
+      expect(text).not.toContain('Invalid API key')
+    }
+    // log 也不能有 key：丟出來的錯誤訊息夾著 key，進 log 前要遮掉（security review L2）
+    expect(JSON.stringify(logs.mock.calls)).not.toContain(OR_KEY)
+    expect(JSON.stringify(logs.mock.calls)).toContain('[redacted]')
+    logs.mockRestore()
+
+    globalThis.fetch = vi.fn(() => {
+      throw new Error('測試中不得有任何對外呼叫')
+    }) as unknown as typeof fetch
+    const forged = await sign(foreignKeys.privateKey, validClaims, { iat: now(), exp: now() + 3600 })
+    expect((await handleRequest(post(forged, { credits: true }), JWKS, OR_KEY)).status).toBe(401)
+    expect((await handleRequest(post(token, { credits: true }), JWKS, undefined)).status).toBe(500)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('㊲ credits 不是 true（字串、1）不算額度查詢：照原本的辨識路徑驗 body', async () => {
+    for (const credits of ['true', 1]) {
+      const res = await handleRequest(post(await validToken(), { credits }), JWKS, OR_KEY)
+      expect(res.status).toBe(400)
+    }
   })
 })

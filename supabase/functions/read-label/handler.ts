@@ -1,5 +1,7 @@
 /* read-label 的安全外殼：先確認呼叫者是誰，通過了才把圖片轉給 OpenRouter 讀營養標示。
    第二個模式（2026-11-10，spec.md C 節「第三版」）：body 帶 `foods` 時改成純文字分類，替食物挑類型。
+   第三個模式（2026-11-11，v2.128）：body 帶 `credits: true` 時代查 OpenRouter 額度給設定頁，只回數字。
+   三個模式的模型都由同一份 `AI_MODELS`（主模型＋備援）決定，見下方。
    存在的理由是 spec.md「安全（不可妥協）」——repo 是 public，辨識用的 API key 不能進前端 bundle，
    所以必須有一層「先確認呼叫者是誰、再動作」的後端代理。金鑰只活在這一層，
    而且**永遠不出現在任何回應裡**：上游的錯誤原文一律不轉發，只回固定字串。
@@ -33,14 +35,30 @@ const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
 
 /* OpenRouter 的 OpenAI 相容端點。模型與提示詞照抄 dev-flow 校準階段實測通過的那份，
    兩條不可省的規則寫在提示詞裡：兩欄並列時一律讀「每份」、serving_g 沒印就填 null 不回推。 */
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-const MODEL = 'qwen/qwen3.7-flash'
-/* 分類模式：deepseek 先、qwen 備援（OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。
-   2026-11-11 線上 log：qwen 只有阿里巴巴一家在供，第一天分類全被 429 擋光；加了備援之後換成慢——qwen 一批 15 樣
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions' // 等於 `${OPENROUTER_API}/chat/completions`
+const OPENROUTER_API = 'https://openrouter.ai/api/v1'
+/* **全站 AI 的唯一設定**（使用者 2026-11-11：全站統一成一份，主模型＋備援；v2.128）。順序＝預設的主模型、備援
+   （OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。也是前端「選主模型」的白名單：
+   前端那份鏡像在 src/lib/aiModels.ts（Edge Function 不能 import src），兩份由 handler.test.ts 比對。
+   deepseek 在前（2026-11-11 線上 log）：qwen 只有阿里巴巴一家在供，分類第一天全被 429 擋光；qwen 一批 15 樣
    31–42 秒（會先想兩千多 token）、兩批超過函式的 45 秒逾時，deepseek 同樣 15 樣 2–14 秒、有三十幾家在供。
-   準度：真實資料 82 樣兩個模型分錯的各有一兩樣，沒看出哪邊明顯差（使用者 2026-11-11 抽看）。
-   只給分類用：辨識的提示詞是在 qwen 上校準準度的，換模型讀圖沒驗過。 */
-const CLASSIFY_MODELS = ['deepseek/deepseek-v4.1-flash', MODEL]
+   分類準度：真實資料 82 樣兩個模型分錯的各有一兩樣，沒看出哪邊明顯差（使用者 2026-11-11 抽看）。 */
+export const AI_MODELS = ['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'] as const
+/* 營養標示辨識的提示詞只在這些模型上校準過準度（spec.md「拍照讀營養標示」的三輪實測）。主模型選了沒校準的，
+   辨識照舊用校準過的——**要把別的模型加進來，先拿校準照片重跑一次**（照片與實測不在 repo，在使用者手上）。 */
+export const VISION_CALIBRATED: readonly string[] = ['qwen/qwen3.7-flash']
+
+/** 請求指定的主模型在白名單內就排第一、其餘照預設順序當備援；沒指定或不認得就用預設順序——
+ *  不回 400：舊前端不帶這個欄位，白名單外的值也不該讓分類整個失敗。白名單是為了不讓人指定任意（貴的）模型。 */
+export function modelChain(requested: unknown): string[] {
+  const all: string[] = [...AI_MODELS]
+  return typeof requested === 'string' && all.includes(requested) ? [requested, ...all.filter((m) => m !== requested)] : all
+}
+
+/** 辨識用的那一串：主模型＋備援裡只留校準過的。 */
+export function visionChain(requested: unknown): string[] {
+  return modelChain(requested).filter((m) => VISION_CALIBRATED.includes(m))
+}
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
 {"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
 name 填包裝上的**正式完整品名**（通常標在成分欄前面的「品名:」後面，例如「伯朗奶茶-減糖香濃原味(三合一)」），
@@ -95,6 +113,11 @@ function corsHeaders(req: Request): Record<string, string> {
    砍掉的是「回傳給呼叫端的錯誤細節」，不是「伺服器自己留線索」。第一次上線除錯時發現
    沒有這個等於把眼睛蒙起來：前端把所有失敗收斂成同一句，而 Supabase 預設的 log 只有
    boot/shutdown，看不出函式回了什麼。**永遠不要把 openrouterKey 或完整 token 放進來。** */
+/** catch 到的錯誤訊息進 log 前把 key 遮掉：Deno 的 fetch 錯誤目前不帶 header，但別的 runtime 可能帶（security review L2）。 */
+function redact(e: unknown, key: string): string {
+  return (e instanceof Error ? e.message : String(e)).replaceAll(key, '[redacted]').slice(0, 200)
+}
+
 function diag(tag: string, extra?: Record<string, unknown>): void {
   console.error(`[read-label] ${tag}`, extra ? JSON.stringify(extra) : '')
 }
@@ -216,14 +239,14 @@ function parseCategories(content: string, asked: Set<number>): { id: number; cat
 }
 
 /** 分類模式：已通過驗證才會走到這裡（與辨識共用 1–5 步）。失敗一律 READ_FAILED，前端留 null 等下次。 */
-async function classify(foods: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+async function classify(foods: unknown, model: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
   const input = parseClassifyInput(foods)
   if (!input) {
     diag('400 bad-foods', { isArray: Array.isArray(foods), len: Array.isArray(foods) ? foods.length : null })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   const t0 = Date.now()
-  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey, CLASSIFY_MODELS)
+  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey, modelChain(model))
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   const results = parseCategories(reply.content, new Set(input.map((f) => f.id)))
   if (!results) {
@@ -236,6 +259,64 @@ async function classify(foods: unknown, openrouterKey: string, cors: Record<stri
   return json({ results }, 200, cors)
 }
 
+/** 額度查詢的回應：只有數字（或 null＝上游沒給／不是數字）。單位是 OpenRouter 的美元。 */
+export interface AiCredits {
+  total_credits: number | null
+  total_usage: number | null
+  usage_daily: number | null
+  usage_monthly: number | null
+  /** key 有設上限時剩多少；沒設上限是 null。 */
+  limit_remaining: number | null
+}
+
+/**
+ * 額度查詢（設定頁的「AI 額度」，v2.128）。已通過驗證才會走到這裡（與另兩個模式共用 1–5 步）。
+ * key 只用在對 OpenRouter 的 header；上游回的整包只挑數字欄位、逐欄驗型別，其他（key 的 label 等）一律不轉發。
+ */
+async function credits(openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+  const t0 = Date.now()
+  const get = (path: string) =>
+    fetch(`${OPENROUTER_API}/${path}`, {
+      headers: { Authorization: `Bearer ${openrouterKey}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+  /* 兩個端點各自成敗：一邊壞了（例如 OpenRouter 收緊某個帳號端點的權限）另一邊的數字照給，那幾欄是 null；
+     兩邊都壞才 502（v2.128 review）。 */
+  const read = async (path: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const r = await get(path)
+      if (!r.ok) {
+        diag('credits-part-not-ok', { path, status: r.status })
+        return null
+      }
+      return ((await r.json()) as { data?: Record<string, unknown> } | null)?.data ?? {}
+    } catch (e) {
+      diag('credits-part-threw', { path, reason: redact(e, openrouterKey) })
+      return null
+    }
+  }
+  try {
+    const [cd, kd] = await Promise.all([read('credits'), read('key')])
+    if (cd === null && kd === null) {
+      diag('502 credits-both-failed')
+      return json({ error: READ_FAILED }, 502, cors)
+    }
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    const out: AiCredits = {
+      total_credits: n(cd?.total_credits),
+      total_usage: n(cd?.total_usage),
+      usage_daily: n(kd?.usage_daily),
+      usage_monthly: n(kd?.usage_monthly),
+      limit_remaining: n(kd?.limit_remaining),
+    }
+    diag('200 credits ok', { ms: Date.now() - t0 })
+    return json(out, 200, cors)
+  } catch (e) {
+    diag('502 credits-threw', { reason: redact(e, openrouterKey) })
+    return json({ error: READ_FAILED }, 502, cors)
+  }
+}
+
 type Usage = { prompt?: number; completion?: number; think?: number; cost?: number } | undefined
 
 /**
@@ -246,7 +327,7 @@ type Usage = { prompt?: number; completion?: number; think?: number; cost?: numb
 async function askModel(
   content: unknown[],
   openrouterKey: string,
-  models: readonly string[] = [MODEL],
+  models: readonly string[],
 ): Promise<{ content: string; model: string | undefined; usage: Usage } | null> {
   try {
     const upstream = await fetch(OPENROUTER_URL, {
@@ -307,7 +388,7 @@ async function askModel(
     return { content: raw, model: typeof data.model === 'string' ? data.model.slice(0, 80) : undefined, usage }
   } catch (e) {
     // 連不上、逾時、回的不是 JSON。catch 到的 error 可能夾帶請求內容甚至 header，絕不進回應。
-    diag('502 fetch-threw', { reason: e instanceof Error ? e.message : String(e) })
+    diag('502 fetch-threw', { reason: redact(e, openrouterKey) })
     return null
   }
 }
@@ -390,7 +471,8 @@ export async function handleRequest(
         401 也才維持只有「驗證失敗」一個成因。 */
   if (!openrouterKey) return json({ error: MISCONFIGURED }, 500, cors)
 
-  /* 6. 讀 body。帶 `foods` 的是分類模式（純文字，見 classify）；其餘是辨識模式，只認 image。 */
+  /* 6. 讀 body。`credits: true` 是額度查詢（設定頁，見 credits）；帶 `foods` 的是分類模式（純文字，見 classify）；
+        其餘是辨識模式，只認 image。分類與辨識都可帶 `model`（設定頁選的主模型），見 modelChain。 */
   let body: Record<string, unknown>
   try {
     const parsed: unknown = await req.json()
@@ -404,7 +486,8 @@ export async function handleRequest(
     })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
-  if ('foods' in body) return classify(body.foods, openrouterKey, cors)
+  if (body.credits === true) return credits(openrouterKey, cors)
+  if ('foods' in body) return classify(body.foods, body.model, openrouterKey, cors)
 
   // 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。
   const image = body.image
@@ -419,6 +502,13 @@ export async function handleRequest(
 
   /* 7. 辨識。不重試、不換模型、不降級（spec.md「明確不做」有列理由）——失敗的路已經存在且免費：
         前端讓使用者手打。上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
+  /* 白名單與校準清單哪天沒交集，這串就是空的：送出去會變成沒指定模型（`model: undefined` 被 JSON 省略），
+     OpenRouter 用帳號預設模型讀圖——沒驗過準度、可能很貴。寧可整個失敗（security review L1）。 */
+  const chain = visionChain(body.model)
+  if (chain.length === 0) {
+    diag('500 no-calibrated-model')
+    return json({ error: MISCONFIGURED }, 500, cors)
+  }
   const t0 = Date.now()
   const reply = await askModel(
     [
@@ -426,6 +516,7 @@ export async function handleRequest(
       { type: 'image_url', image_url: { url: image } },
     ],
     openrouterKey,
+    chain,
   )
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   const { content, usage } = reply

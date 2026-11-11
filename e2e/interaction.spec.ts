@@ -904,8 +904,8 @@ test('token 有效但資料請求連不上：亮「重試」提示；網路回�
   await seedFetchStub(page, FIX, TODAY, USER_ID, { dataDown: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('.notice .muted')).toHaveText('載入中…')
-  // postgrest-js 對 GET 的網路錯誤退避重試 1＋2＋4 秒才放棄。要分段快轉：一口氣跳的話，每一段退避的
-  // 續行（promise）要等這次 tick 結束才跑，下一段計時器根本還沒排進去（waitRecovered 同理）
+  // v2.128 起關掉 postgrest-js 的退避重試，一次失敗就拋；仍分段快轉，留著不怕之後有人又開了重試
+  // （一口氣跳的話，退避的續行要等這次 tick 結束才跑，下一段計時器還沒排進去；waitRecovered 同理）
   for (let i = 0; i < 30 && (await page.locator('.notice .headline').count()) === 0; i++) {
     await page.clock.runFor(1000)
   }
@@ -1228,8 +1228,8 @@ test('慢請求在換日之後才失敗：不對正在看的這天彈別天的�
     ;(window as unknown as { __dataDown: boolean }).__dataDown = true
   })
   await page.click('button.date-today-btn') // 在慢請求落地前回到今天（命中快取）
-  // 慢請求落地後失敗，postgrest-js 再退避重試才真的拋出（實測 14 秒還沒到、20 秒已到）
-  await page.waitForTimeout(20000)
+  // 慢請求（1.5 秒）落地後失敗就拋（v2.128 起不再退避重試；原本要等到 14–20 秒）
+  await page.waitForTimeout(4000)
 
   await waitCount(page, '.notice', 0, '別天的讀取失敗不該蓋掉正在看的這天')
   await waitCount(page, '.timeline .item', todayItems, '正在看的這天的品項不該受影響')

@@ -106,6 +106,12 @@ export async function seedFetchStub(
         /* 分類模式的回應控制（見 StubOptions.classify），測試中途可改。__classifyCalls＝每次送來的 foods。 */
         __classify: ClassifyStub
         __classifyCalls: { id: number; name: string; vendor: string | null }[][]
+        /* 額度查詢（read-label 的 `credits: true`，設定頁的 AI 額度）。null＝回 502（設定頁顯示「讀不到額度」）；
+           測試中途可改。__creditsCalls＝打了幾次。 */
+        __credits: Record<string, unknown> | null
+        __creditsCalls: number
+        /* 分類與辨識送來的 `model`（設定頁選的主模型），依序記下。 */
+        __readLabelModels: (string | undefined)[]
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
         __authMode: AuthMode | null
         /* 設 true＝資料請求連不上（見 StubOptions.dataDown）。 */
@@ -127,6 +133,9 @@ export async function seedFetchStub(
         __heldIntake: (() => void)[]
         __releaseIntake: () => void
         __failIntake: Set<string>
+        /* __dropIntake＝這個日期的下一次當日清單查詢斷一次網（丟 TypeError，跟真的斷線同一種錯），用掉就清：
+           造「寫入成功、重撈剛好碰到網路抖一下」。postgrest-js 會重試這種錯，所以只有開了重試的查詢撐得過去（v2.128）。 */
+        __dropIntake: Set<string>
       }
       w.__authMode = authMode
       w.__dataDown = dataDown
@@ -136,6 +145,7 @@ export async function seedFetchStub(
       w.__heldIntake = []
       w.__releaseIntake = () => w.__heldIntake.splice(0).forEach((release) => release())
       w.__failIntake = new Set()
+      w.__dropIntake = new Set()
       w.__kcalFail = false
       w.__kcalWindow = null
       w.__kcalHold = null
@@ -149,6 +159,9 @@ export async function seedFetchStub(
       w.__scan = null
       w.__classify = classify
       w.__classifyCalls = []
+      w.__credits = null
+      w.__creditsCalls = 0
+      w.__readLabelModels = []
 
       const TRAINING_TABLES = [
         'exercises',
@@ -236,12 +249,17 @@ export async function seedFetchStub(
            所以「測試忘了打開」不會靜默變成放行。 */
         /* 分類模式：body 帶 foods。排在拍照辨識之前（同一個網址）。 */
         if (u.includes('/functions/v1/read-label')) {
-          let sent: { foods?: { id: number; name: string; vendor: string | null }[] } = {}
+          let sent: { foods?: { id: number; name: string; vendor: string | null }[]; credits?: boolean; model?: string; image?: string } = {}
           try {
             sent = JSON.parse(String(opts.body ?? '{}'))
           } catch {
             sent = {}
           }
+          if (sent.credits === true) {
+            w.__creditsCalls++
+            return w.__credits ? json(w.__credits) : json({ error: '辨識失敗' }, 502)
+          }
+          if (sent.foods || sent.image) w.__readLabelModels.push(sent.model)
           if (sent.foods) {
             w.__classifyCalls.push(sent.foods)
             const c = w.__classify
@@ -452,6 +470,7 @@ export async function seedFetchStub(
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)
           if (m) {
             w.__intakeCalls.push(m[1])
+            if (w.__dropIntake.delete(m[1])) throw new TypeError('Load failed')
             if (intakeDelayMs) await new Promise((r) => setTimeout(r, intakeDelayMs))
             // 延遲期間才斷線：造「慢請求晚到才失敗」，開頭那道檢查攔不到
             if (intakeDelayMs && w.__dataDown) throw new TypeError('Load failed')

@@ -10,6 +10,7 @@
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { getAiModel } from '@/aiPref'
 import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
 import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
@@ -213,7 +214,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
           vendorOptions={vendorOptions}
           portalContainer={addSheetRef}
           vendorAutoFocus={!!addSourceName}
-          onScan={scanLabel}
+          onScan={(img) => scanLabel(img, getAiModel())}
           onBusyChange={setScanBusy}
         />
       </div>

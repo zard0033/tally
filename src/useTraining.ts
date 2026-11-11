@@ -10,6 +10,9 @@ import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import { trainingRuntime } from './trainingSync'
 
+/** 完整同步失敗後，隔多久再試一次才亮「連不上」。1 秒是假設（夠舊連線被丟掉、又不會讓人等太久），沒有實測。 */
+const SYNC_RETRY_MS = 1000
+
 export interface TrainingState {
   /** null＝還沒讀到（載入中），與「讀到了但是空的」要分開。 */
   view: TrainingView | null
@@ -52,7 +55,7 @@ export function useTraining(userId: string | null): TrainingState {
       queued.current = kind === 'sync' || queued.current === 'sync' ? 'sync' : 'flush'
       return running.current
     }
-    const perform = async (k: 'flush' | 'sync') => {
+    const perform = async (k: 'flush' | 'sync', retried = false): Promise<void> => {
       const id = userRef.current
       if (!id) return
       try {
@@ -73,6 +76,12 @@ export function useTraining(userId: string | null): TrainingState {
           setError(null)
         }
       } catch (e) {
+        /* 完整同步失敗先隔一下再試一次才說「連不上」：iOS 主畫面 App 從背景回來，第一個請求常死在舊連線上，
+           v2.128 關掉 postgrest-js 的退避重試後，沒有這次重試每次回前景都會閃那條（v2.128 review）。 */
+        if (k === 'sync' && !retried && userRef.current === id) {
+          await new Promise((r) => setTimeout(r, SYNC_RETRY_MS))
+          return perform(k, true)
+        }
         if (userRef.current === id) setError(errorText(e))
       }
     }

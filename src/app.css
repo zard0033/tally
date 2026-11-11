@@ -677,6 +677,13 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 .entry-row .chev { width: 14px; height: 14px; color: var(--ink-muted); flex-shrink: 0; }
 /* 體重趨勢入口的 sparkline：純示意，沒有座標軸／刻度，只暗示「有資料」 */
 .entry-row .spark { width: 72px; height: 24px; flex-shrink: 0; margin-left: var(--s-2); }
+/* AI 段（v2.128）：額度列是唯讀的，不是按鈕；主模型列整列是透明原生 select 的命中區（同 .goal-pick），iOS 叫出系統滾輪 */
+.entry-row.entry-static { cursor: default; }
+.entry-row.entry-static:active { opacity: 1; }
+label.entry-row { position: relative; }
+.entry-select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: var(--t-md); cursor: pointer; }
+label.entry-row:has(.entry-select:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings-note { margin: var(--s-2) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
 
 /* 子頁共用頂欄：返回鈕＋標題，每日目標／食品庫管理／體重趨勢都用這個，取代 .topbar
    （後者是今日頁與設定頁根層專用，日期切換那組規則跟這裡無關） */

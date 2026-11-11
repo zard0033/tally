@@ -4,6 +4,7 @@
 
    體重趨勢頁的內容（圖表、明細、範圍切換）由 weight-trend.spec.ts 守，這裡只驗進得去、回得來。 */
 import { test, expect, type Page } from '@playwright/test'
+import { FIX } from './fixtures'
 import { openApp } from './harness'
 
 const ENTRIES = [
@@ -52,13 +53,14 @@ test('進次級頁收起底部列，三個入口的返回鍵都要把它還原',
   }
 })
 
-test('設定頁入口分兩組加小標：目標與身體、資料庫', async ({ page }) => {
+test('設定頁入口分三組加小標：目標與身體、資料庫、AI', async ({ page }) => {
   await openApp(page)
   await openSettings(page)
 
-  await expect(page.locator('.settings h2')).toHaveText(['目標與身體', '資料庫'])
+  await expect(page.locator('.settings h2')).toHaveText(['目標與身體', '資料庫', 'AI'])
   const groups = page.locator('.settings .entry-list')
-  await expect(groups).toHaveCount(2)
+  await expect(groups).toHaveCount(3)
+  await expect(groups.nth(2).locator('.entry-row .lb')).toHaveText(['AI 額度', '主模型'])
   await expect(groups.nth(0).locator('.entry-row .lb')).toHaveText(['每日目標', '更新身體數據', '體重趨勢'])
   await expect(groups.nth(1).locator('.entry-row .lb')).toHaveText(['食品庫管理', '動作庫管理'])
   // 小標緊貼在自己那組上面
@@ -158,4 +160,59 @@ test('更新身體數據時斷網：顯示看得懂的錯誤，不是原始錯�
   })
   await page.locator('#settings-sheet-root .pick-bar-btn').click()
   await expect(page.locator('#settings-sheet-root .sheet-error')).toHaveText('連不上網路，請確認 Wi-Fi 或行動網路')
+})
+
+/* ── AI 段（v2.128，使用者 2026-11-11：做 AI 設定頁、全站 AI 統一）──
+   額度由 read-label 的額度模式代查（stub 的 __credits）；主模型存這支手機的 localStorage，分類與辨識都帶上。 */
+const setCredits = (page: Page, v: Record<string, unknown> | null) =>
+  page.evaluate((c) => {
+    ;(window as unknown as { __credits: unknown }).__credits = c
+  }, v)
+const creditsCalls = (page: Page) => page.evaluate(() => (window as unknown as { __creditsCalls: number }).__creditsCalls)
+const creditsRow = (page: Page) => page.locator('[data-row="ai-credits"] .lb-sub')
+
+test('AI 額度：剩餘＝總額減已用、本月用量；進設定頁查一次，進子頁面再回來不重查', async ({ page }) => {
+  await openApp(page)
+  await setCredits(page, { total_credits: 10, total_usage: 2.5, usage_daily: 0.01, usage_monthly: 0.3, limit_remaining: null })
+  await openSettings(page)
+  await expect(creditsRow(page)).toHaveText('剩 $7.50・本月用了 $0.30')
+  await page.locator('.entry-row', { hasText: '每日目標' }).click()
+  await page.locator('.lib-topbar .icon-btn[aria-label="返回設定"]').click()
+  await expect(creditsRow(page)).toHaveText('剩 $7.50・本月用了 $0.30')
+  expect(await creditsCalls(page)).toBe(1)
+  // 額度列是唯讀的，不是按鈕
+  await expect(page.locator('[data-row="ai-credits"]')).not.toHaveRole('button')
+})
+
+test('AI 額度：查不到就寫「讀不到額度」，不跳全域錯誤、不擋其他設定', async ({ page }) => {
+  await openApp(page)
+  await openSettings(page) // stub 預設 __credits=null → 502
+  await expect(creditsRow(page)).toHaveText('讀不到額度')
+  await expect(page.locator('.notice')).toHaveCount(0)
+  await page.locator('.entry-row', { hasText: '食品庫管理' }).click()
+  await expect(page.locator('[data-screen="food-library"]')).toBeVisible()
+})
+
+test('主模型：預設 DeepSeek；改成 Qwen 存在這支手機（重新整理還在），之後的背景分類帶上它', async ({ page }) => {
+  // 一樣未分類的食物：開機會補判，那次請求要帶設定頁選的主模型
+  const fix = { ...FIX, foods: FIX.foods.map((f, i) => (i === 0 ? { ...f, category: null } : f)) } as typeof FIX
+  await openApp(page, { classify: { mode: 'fail' } }, fix)
+  await openSettings(page)
+  const row = page.locator('[data-row="ai-model"]')
+  await expect(row.locator('.lb-sub')).toHaveText('DeepSeek V4.1 Flash')
+  await expect(page.locator('.settings-note')).toContainText('拍營養標示固定用 Qwen 3.7 Flash')
+
+  await page.getByLabel('主模型').selectOption('qwen/qwen3.7-flash')
+  await expect(row.locator('.lb-sub')).toHaveText('Qwen 3.7 Flash')
+  expect(await page.evaluate(() => localStorage.getItem('tally.ai-model'))).toBe('qwen/qwen3.7-flash')
+  // 開機那次補判是在改之前送的：帶的是預設
+  expect(await page.evaluate(() => (window as unknown as { __readLabelModels: unknown[] }).__readLabelModels)).toEqual(['deepseek/deepseek-v4.1-flash'])
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.gauge-num', { timeout: 5000 })
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __readLabelModels: unknown[] }).__readLabelModels), { message: '重新整理後的補判沒帶上選的主模型' })
+    .toEqual(['qwen/qwen3.7-flash'])
+  await openSettings(page)
+  await expect(row.locator('.lb-sub')).toHaveText('Qwen 3.7 Flash')
 })

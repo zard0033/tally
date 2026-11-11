@@ -386,7 +386,9 @@ test('Tally UI 回歸', async ({ page }) => {
   // 安全紅線：零真實網路請求是可斷言的事實，不是「沒看到報錯就當作沒發生」
   const blocked = await page.evaluate(() => (window as unknown as { __blocked: string[] }).__blocked)
   const allFetches = await page.evaluate(() => (window as unknown as { __allFetches: string[] }).__allFetches)
-  const nonStubSupabase = allFetches.filter((u) => u.includes('supabase.co') && !u.includes('/rest/v1/'))
+  /* read-label（Edge Function）由 stub 的專門分支回應（分類、辨識、額度），不會打出去；v2.128 起進設定頁就會查一次額度。
+     其他非 /rest/v1/ 的 Supabase 呼叫（auth、別的函式）照舊算漏網。 */
+  const nonStubSupabase = allFetches.filter((u) => u.includes('supabase.co') && !u.includes('/rest/v1/') && !u.includes('/functions/v1/read-label'))
 
   console.log(`\n${'─'.repeat(60)}`)
   if (consoleErrs.length) {

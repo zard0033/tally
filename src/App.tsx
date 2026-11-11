@@ -265,11 +265,11 @@ export default function App() {
 
   /* 讀當日清單給畫面用。發出之後這天被寫過，這份（不管成敗）就是舊的，重抓；不能只丟棄：
      loadDay 已經把 rows 清空，丟了就卡在載入中，而就地編輯成功後不會有別的 GET 來補。上限 3 次，到上限就用最後一份。 */
-  const listIntakeFresh = useCallback(async (date: string) => {
+  const listIntakeFresh = useCallback(async (date: string, afterWrite = false) => {
     for (let attempt = 1; ; attempt++) {
       const gen = dayGenRef.current.get(date)
       try {
-        const r = await listIntake(date)
+        const r = await listIntake(date, { retry: afterWrite })
         if (dayGenRef.current.get(date) === gen || attempt >= 3) return r
       } catch (e) {
         if (dayGenRef.current.get(date) === gen || attempt >= 3) throw e
@@ -357,11 +357,12 @@ export default function App() {
 
   /* 只換日期時不必重撈 profile／體重／食品庫——目標與食品庫不隨檢視日改變。
    *  這是「快取沒命中」的路徑，goToDate 命中快取時完全繞過這支函式。 */
+  /* afterWrite＝寫入成功後的重撈：照 postgrest-js 原本的退避重試（見 api.ts listIntake），一次網路抖動不該讓剛存好的看起來沒存到。 */
   const loadDay = useCallback(
-    async (date: string) => {
+    async (date: string, afterWrite = false) => {
       setRows(null)
       try {
-        const r = await listIntakeFresh(date)
+        const r = await listIntakeFresh(date, afterWrite)
         cacheRef.current.set(date, r) // 存原始 rows，濾除留給 filterPendingRow 在放進畫面時做
         /* 回來時人還在這一天嗎？不在就只寫快取、不動畫面。**加了快取之後這條 race 從
            罕見變成常態**：以前每次換日都要往返、延遲差不多，最後按的那天最後落地；
@@ -738,7 +739,7 @@ export default function App() {
       bumpDayGen(currentDate)
       invalidateRepeat(currentDate)
       setSheetOpen(false)
-      await loadDay(currentDate)
+      await loadDay(currentDate, true)
       flashAdded(created.map((r) => r.id))
     },
     [loadDay, commitDelete, settleRepeat, invalidateRepeat, flashAdded, bumpDayGen, currentDate],
@@ -748,9 +749,9 @@ export default function App() {
      （那支在 await 之後發現日期不符就 return，沒人把 rows 放回來）。
      失敗要把快取刪掉：否則切回來會看到寫入前的 rows 和還在的建議卡，再按一次就重複寫入。 */
   const refreshDay = useCallback(
-    async (date: string) => {
+    async (date: string, afterWrite = false) => {
       try {
-        const r = await listIntakeFresh(date)
+        const r = await listIntakeFresh(date, afterWrite)
         cacheRef.current.set(date, r)
         if (date === currentDateRef.current) setRows(filterPendingRow(r, date, pendingDelete.current, undoingIdsRef.current))
       } catch (e) {
@@ -780,7 +781,7 @@ export default function App() {
         const postedAt = Date.now()
         const ids = created.map((r) => r.id)
         invalidateRepeat(date)
-        await refreshDay(date)
+        await refreshDay(date, true)
         flashAdded(ids)
         // await 期間可能刪了別筆（提示條是那筆的，不能搶）或切走分頁（提示條定位是照今日頁算的）
         if (pendingDelete.current || tabRef.current !== 'today') return

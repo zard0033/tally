@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 夜）：v2.127 記一筆 sheet「全部食物」依類型分組＋吃過徽章（今天＝小太陽、昨天＝月牙，只午晚餐）、只在其他餐吃過的類型收在最底、chip 選中改墨藍實心；順手修失敗訊息重複前綴。v2.123–v2.126 今日頁天空系列已上線。
-下一步：①真機看 v2.123–v2.127、Safari 狀態列 ②窄螢幕（360）四位數大數字與正午光暈（未實測）③tally.spec「填份量後直接按加入」偶發紅待觀察 ④視覺第三批（其他頁換皮、食品庫類型標籤換 CategoryIcon、左滑勾縮著）。
+現況（2026-11-11 夜）：v2.127 已推（d96a500），CI 兩輪都因 runner DNS 解析不到 azure apt 鏡像而沒跑測試，舊版仍在線上。v2.128 本機 commit 未推（autopilot 擋 push）：冷啟動不等重試（7s→0.3s）、全站 AI 一份設定、設定頁 AI 段（額度＋主模型）、workflow 換 apt 鏡像。
+下一步：①推 v2.128（含 workflow 修正）＋部署 read-label，看 CI ②真機看 v2.123–v2.128 ③360 寬實測 ④rest-timer 偶發紅修法 ⑤視覺第三批。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -24,7 +24,7 @@
 - 移除動作的 ✕ 一律先跳確認框（沒打勾也問），所以沒做 undo。
 
 **待使用者決定**
-- 離線冷啟動約 7.5 秒（postgrest-js 重試 1＋2＋4；真機回報約 3 秒）：縮短＝一次失敗就亮提示，慢網路會閃錯誤。設定頁要不要放「重置離線快取」（建議不加）。
+- ~~離線冷啟動約 7.5 秒~~：使用者 2026-11-11 裁決縮短，v2.128 已做。設定頁要不要放「重置離線快取」（建議不加）。
 - 150 個預設動作新增的 134 個繁中名稱待確認（清單在 DESIGN v2.71）。
 - Gym visual：回覆信沒存，沒確認 public repo 內放圖檔是否涵蓋；列表底部標示是我對條款的解讀，沒向對方確認。
 - 健走摘要折行（「坡度」與「8%」被拆開）要不要黏住。
@@ -36,8 +36,8 @@
 - 同步細條 `role=status` 會不會讓 VoiceOver 每記一筆都播報「1 筆尚未同步」（Training.tsx:232）；吵就只在有失敗條目時進 live region。
 
 **待辦（2026-11-11 整理，依序）**
-1. **讓 CI 轉綠**（擋住所有部署）：使用者 push 後手動觸發 `e2e-diag`（specs `spring-sheet training`、grep `頂緣留 12px|組列左滑露出紅鈕`）拿 Linux 截圖／trace／視窗尺寸。頂緣 88 的嫌疑：根元素橫向溢出 → Linux GTK 捲軸佔 8px → `--kb`=8（本機可先量 scrollWidth 是否 > clientWidth）。左滑嫌疑：拖曳沒起手，或補發的 click 在 150ms 後把列關回去（要 trace 分辨）。
-2. **視覺第一批**（v2.122 地基＋今日頁，截圖 `D:/Temp/tally-shots/`）：兩軸 review → commit → push。給使用者看的三件：今日頁改成整頁一起捲（插畫撐高 70px，否則展開最後一列會被蓋）、記兩餐後晚餐建議卡落在第一屏下緣、大數字 56px（樣張 96px）。
+1. ~~讓 CI 轉綠~~（2026-11-11 已綠過；之後的紅是 runner DNS，v2.128 改 workflow）：使用者 push 後手動觸發 `e2e-diag`（specs `spring-sheet training`、grep `頂緣留 12px|組列左滑露出紅鈕`）拿 Linux 截圖／trace／視窗尺寸。頂緣 88 的嫌疑：根元素橫向溢出 → Linux GTK 捲軸佔 8px → `--kb`=8（本機可先量 scrollWidth 是否 > clientWidth）。左滑嫌疑：拖曳沒起手，或補發的 click 在 150ms 後把列關回去（要 trace 分辨）。
+2. ~~視覺第一批~~（已上線 v2.122–v2.126）（v2.122 地基＋今日頁，截圖 `D:/Temp/tally-shots/`）：兩軸 review → commit → push。給使用者看的三件：今日頁改成整頁一起捲（插畫撐高 70px，否則展開最後一列會被蓋）、記兩餐後晚餐建議卡落在第一屏下緣、大數字 56px（樣張 96px）。
 3. ~~視覺第二批~~：v2.127 已做（分組＋徽章＋chip＋重複前綴；「+這次」早在 v2.100 就做了）。我定的四條可逆假設見 DESIGN v2.127，真機看過再定。
 4. 視覺第三批：其他頁換皮（含原 B3／B4）、食品庫類型標籤換 `CategoryIcon`；併做 `.tr-check:active` 左滑時還縮著。
 5. 視覺第四批：App 圖示 A（`_design-sample/app-icon-options.html` `#hill`），favicon／apple-touch-icon／manifest、`?v=` 遞增。
@@ -87,5 +87,7 @@
 [待決 2026-11-04] 餐建議實作時補的假設（使用者還沒確認，`.omc/autopilot/spec.md` 本機有全文）：sheet 建議品項用來源快照；今日頁失敗時卡片多一行錯誤；sheet 建議段顯示單份、勾了才看到份量（今日頁卡片是整餐）；sheet 寫入中不可關閉，最壞約 26 秒。
 [未修 2026-11-04] 餐建議已知限制：卡片可能含 5 秒內的待刪列；查詢失敗不自動重試；改名或封存不更新建議；同食物兩列快照不同時卡片與 sheet 數字不同；切走後失敗要回該日才看到；卡片隨歷史失效消失時錯誤沒地方顯示；refreshDay 成功不清 Notice（窄時序要多按一次重試）；切走後小點回去才更新；sheet 路徑沒等在途 DELETE（既有）；連按 stepper 3 下以上且 GET 交錯時總量可能暫時是舊的；設定頁存檔後切日，load 不比對日期（既有）。
 [未修 2026-11-03] push 前 review 的 LOW：FoodLibrary 寫入還在路上時關掉再開別筆，前一筆回來會關掉新草稿（LogSheet 同款，原本就有、現在視窗變大）；FinishSheet 的狀態在 SpringSheet 之上，收合重開不重置；減少動態時 sheet 立刻卸載，透明罩跟著沒了，連按照舊穿透。
-[想法 2026-11-11] 設定頁放 AI 相關設定（BYOK 感）＋顯示 OpenRouter 額度。已查：現有 key 打 `GET /api/v1/credits`（total_credits／total_usage）與 `/api/v1/key`（usage_daily／monthly、limit_remaining）都回 200，可由 read-label 加唯讀模式回前端，key 不離開伺服器。BYOK 輸入 key 的部分對單人 app 價值低（key 進資料庫或瀏覽器都多一個外洩面），建議只做「選模型＋看額度」。
-[待決 2026-11-11] 使用者問「全局 AI 統一」：建議統一成一份設定（一個地方定主模型＋備援），但辨識營養標示換 deepseek 前要先重跑校準照片量準度；目前只有分類用備援。
+[已做 v2.128] [想法 2026-11-11] 設定頁放 AI 相關設定（BYOK 感）＋顯示 OpenRouter 額度。已查：現有 key 打 `GET /api/v1/credits`（total_credits／total_usage）與 `/api/v1/key`（usage_daily／monthly、limit_remaining）都回 200，可由 read-label 加唯讀模式回前端，key 不離開伺服器。BYOK 輸入 key 的部分對單人 app 價值低（key 進資料庫或瀏覽器都多一個外洩面），建議只做「選模型＋看額度」。
+[已做 v2.128，辨識模型待校準] [待決 2026-11-11] 使用者問「全局 AI 統一」：建議統一成一份設定（一個地方定主模型＋備援），但辨識營養標示換 deepseek 前要先重跑校準照片量準度；目前只有分類用備援。
+[裁決 2026-11-11 夜] 使用者：①離線冷啟動 7.5 秒要縮短（接受慢網路可能閃錯誤）②AI 設定頁要做（我建議的「選模型＋看額度」、不做 BYOK 輸入）③全站 AI 統一成一份設定（主模型＋備援）。使用者 AFK、授權 autopilot 做能自己決定的部分。
+[待決 2026-11-11] 主模型選 Qwen 時分類常逾時（一批 15 樣 31–42 秒、函式 45 秒、逾時不換備援），v2.128 只在設定頁說明行寫明。選項：擋掉 Qwen 當分類主模型／選 Qwen 時縮小批次（沒實測）。另：辨識換模型要先重跑校準照片；主模型要不要跨裝置同步（要 schema）。

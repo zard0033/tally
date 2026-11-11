@@ -200,7 +200,7 @@ test('連不上伺服器：資料來自本機底，列表與單一動作頁照�
     ;(window as unknown as { __dataDown: boolean }).__dataDown = true
     window.dispatchEvent(new Event('online'))
   })
-  // 等到重新載入真的失敗（postgrest-js 的 GET 會重試約 1＋2＋4 秒），之後看到的才是本機底而不是記憶體裡剛載好的那份
+  // 等到重新載入真的失敗（v2.128 起一次失敗就拋），之後看到的才是本機底而不是記憶體裡剛載好的那份
   await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('連不上伺服器，顯示的是本機資料', { timeout: 15_000 })
   await page.locator('[data-action="open-analysis"]').click()
   await expect(page.locator('[data-section="progress-list"] .tr-row')).toHaveCount(2)

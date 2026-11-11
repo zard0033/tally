@@ -123,8 +123,7 @@ test('連不上伺服器、手上又沒有資料可畫：說「連不上」，�
   await setDataDown(page, true)
   await page.locator('.tab[aria-label="設定"]').click()
   await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
-  // postgrest-js 的 GET 失敗會重試（1＋2＋4 秒），所以約 7 秒後才確定連不上；這段時間畫面是骨架，不下結論
-  await expect(page.locator('.trend-skel')).toBeVisible()
+  // v2.128 起讀取一次失敗就拋，骨架可能一閃而過，不再斷言它（原本要等 1＋2＋4 秒的退避）
   await expect(page.locator('[data-screen="weight-trend"]')).toContainText('連不上伺服器', { timeout: 20_000 })
   await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('還沒有體重紀錄')
   await expect(page.locator('.recharts-wrapper')).toHaveCount(0)

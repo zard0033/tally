@@ -1,5 +1,5 @@
 /* 設定頁：v2.21 起改成純入口列表（取代第一版唯讀 dl），入口分頭導到各自的頁面
-   （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。v2.99 起分兩組加小標，不再五列平鋪：
+   （每日目標／食品庫管理／動作庫管理／更新身體數據／體重趨勢）。v2.128 加第三組「AI」（AiSection.tsx）。v2.99 起分兩組加小標，不再五列平鋪：
    「目標與身體」（每日目標、更新身體數據、體重趨勢）與「資料庫」（食品庫管理、動作庫管理，都是自己的目錄，
    日常靠選擇器就地使用，整理才進管理頁；動作庫管理是 v2.96 從訓練頁搬來的）。「更新身體數據」不另做頁面，沿用
    既有的獨立 sheet 覆蓋層（地基裁決：編輯與記體重不共用 LogSheet 的 sheet），因為
@@ -11,11 +11,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import SubPageTop from '@/components/SubPageTop'
-import { listWeights, type Weight } from '@/lib/api'
+import { getAiCredits, listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { num } from '@/lib/formulas'
 import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparklinePoints } from '@/lib/weightTrend'
+import AiSection, { type CreditsState } from './AiSection'
 import DailyGoal from './DailyGoal'
 import ExerciseLibrary from './ExerciseLibrary'
 import FoodLibrary from './FoodLibrary'
@@ -49,6 +50,18 @@ export default function Settings(props: SettingsProps) {
 
   const [view, setView] = useState<View>('list')
   const [weights, setWeights] = useState<Weight[] | null>(null)
+  /* AI 額度：進設定頁查一次（切子頁面再回來不重查）。失敗只顯示「讀不到額度」，不重試、不打全域 Notice。 */
+  const [credits, setCredits] = useState<CreditsState>({ status: 'loading' })
+  useEffect(() => {
+    let alive = true
+    getAiCredits().then(
+      (data) => alive && setCredits({ status: 'ok', data }),
+      () => alive && setCredits({ status: 'err' }),
+    )
+    return () => {
+      alive = false
+    }
+  }, [])
   // 補登舊日期的體重不會改變「最新一筆」，所以存完體重要另外觸發重算
   const [weightSaves, setWeightSaves] = useState(0)
   const estimate = useMaintenanceEstimate(`${weightSaves}|${latestWeight.measured_on}|${latestWeight.weight_kg}`)
@@ -278,6 +291,7 @@ export default function Settings(props: SettingsProps) {
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         </div>
+        <AiSection credits={credits} />
         <button className="signout" type="button" onClick={onSignOut}>
           登出
         </button>

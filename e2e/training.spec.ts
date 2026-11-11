@@ -86,8 +86,8 @@ test('連不上伺服器：訓練分頁照常顯示本機的資料，並明講�
   await expect(row).toBeVisible()
 
   // 把資料請求切斷，再給一個「網路回來」的提示——這會觸發同步，同步讀不到伺服器。
-  // 讀不到要等：postgrest-js 對 GET 內建重試（約 1＋2＋4 秒），七張表約 7–8 秒才放棄。
-  // 畫面上的資料一直是本機的、不受影響，晚到的只是這句說明，所以 timeout 放寬到 15 秒。
+  // v2.128 起讀取一次失敗就拋（原本 postgrest-js 退避重試 1＋2＋4 秒、七張表約 7–8 秒才放棄）。
+  // 畫面上的資料一直是本機的、不受影響，晚到的只是這句說明；timeout 留寬，不靠退避秒數。
   await page.evaluate(() => {
     ;(window as unknown as { __dataDown: boolean }).__dataDown = true
     window.dispatchEvent(new Event('online'))

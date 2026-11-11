@@ -25,6 +25,16 @@ export const AUTH_STORAGE_KEY = authStorageKey(SUPABASE_URL)
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { storageKey: AUTH_STORAGE_KEY },
 })
+/* 讀取一次失敗就拋，不讓 postgrest-js 退避重試（v2.128，使用者 2026-11-11 裁決）。它預設對 GET 的網路錯誤
+   重試 1＋2＋4 秒，離線冷啟動要等約 7 秒才亮「讀不到你的資料」；代價是慢網路一次失敗也會閃錯誤、
+   503／520 的暫時錯誤不再自動重試（使用者接受）。supabase-js 2.111 的 `db` 選項不把 retry 轉給
+   PostgrestClient，只好直接設它的欄位（`from()` 每次都讀）；升版改了這個欄位名時，
+   service-worker.spec 的冷啟動門檻（3 秒）會先紅。 */
+{
+  // 欄位不見了（supabase-js 升版改名）不讓整個 App 在載入時炸掉：退回原本會重試的行為，由 e2e 的 3 秒門檻抓
+  const rest = (supabase as unknown as { rest?: { retry: boolean } }).rest
+  if (rest) rest.retry = false // 寫入後重撈例外，見 listIntake 的 retry
+}
 
 /* 逾時是必要件不是保險：連上了但不回的失敗形態，fetch 對它永遠不 reject。
    只掛在資料 CRUD 上，auth 呼叫（signInWithOAuth/getSession）不掛。
@@ -213,7 +223,9 @@ export async function listIntakeDates(from: string, to: string): Promise<Set<str
 }
 
 /** 營養值取 intake 自己的快照欄，不取 foods——改食物庫的營養值不該改寫過去的紀錄。 */
-export async function listIntake(date: string): Promise<IntakeRow[]> {
+/** retry＝這次照 postgrest-js 原本的退避重試（1＋2＋4 秒）。全站預設關掉（見檔頭 `rest.retry`），
+ *  只有「寫入成功後的重撈」打開：資料已經存了，一次網路抖動就整頁「讀不到」，看起來像沒存到、會被再加一次（v2.128 review）。 */
+export async function listIntake(date: string, { retry = false }: { retry?: boolean } = {}): Promise<IntakeRow[]> {
   /* foods 是多對一（每筆 intake 對一個 food），但沒有 Database schema 時 postgrest-js
      推不出關聯基數，型別預設當作陣列——實際回傳仍是單一物件，用明確泛型覆寫成真實形狀 */
   return unwrap(await supabase
@@ -224,6 +236,7 @@ export async function listIntake(date: string): Promise<IntakeRow[]> {
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true }) // 同批寫入的 created_at 相同，時間軸順序才穩
+    .retry(retry)
     .abortSignal(dbSignal()))
 }
 
@@ -414,9 +427,10 @@ const SCAN_TIMEOUT = 55_000
  * 不划算。真的頻繁發生再回來補（precommit review 指出這裡原本的理由「前端分不出來」是錯的
  * ——HTTP 狀態碼拿得到，真正的理由是分出來也沒有第二種該做的事）。
  */
-export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
+export async function scanLabel(imageDataUri: string, model?: string): Promise<LabelReading> {
   const { data, error } = await supabase.functions.invoke<LabelReading>('read-label', {
-    body: { image: imageDataUri },
+    // model＝設定頁選的主模型；函式只用校準過的模型讀圖，選了別的就照舊（見 handler 的 visionChain）
+    body: { image: imageDataUri, model },
     signal: AbortSignal.timeout(SCAN_TIMEOUT),
   })
   if (error || !data) throw new Error('辨識失敗')
@@ -437,10 +451,11 @@ export interface CategoryResult {
  * 請 `read-label` 的分類模式替一批食物分類（送品名＋店家，不送營養值）。函式那端已經把清單外的值收斂過，
  * 這裡再收斂一次——回應是外部資料，不在這批裡的 id 一律丟掉。模型漏回的食物就不在結果裡（維持 null、下次再補）。
  */
-export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[]): Promise<CategoryResult[]> {
+export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[], model?: string): Promise<CategoryResult[]> {
   const { data, error } = await supabase.functions.invoke<{ results?: unknown }>('read-label', {
-    // 函式那端任一樣超過 100 字就整批 400，而品名沒有長度上限（拍標示可能帶進長字串）；分類用不到全文
-    body: { foods: foods.map(({ id, name, vendor }) => ({ id, name: name.slice(0, CLASSIFY_TEXT_MAX), vendor: vendor?.slice(0, CLASSIFY_TEXT_MAX) ?? null })) },
+    // 函式那端任一樣超過 100 字就整批 400，而品名沒有長度上限（拍標示可能帶進長字串）；分類用不到全文。
+    // model＝設定頁選的主模型（白名單外函式會改用預設）
+    body: { foods: foods.map(({ id, name, vendor }) => ({ id, name: name.slice(0, CLASSIFY_TEXT_MAX), vendor: vendor?.slice(0, CLASSIFY_TEXT_MAX) ?? null })), model },
     signal: AbortSignal.timeout(CLASSIFY_TIMEOUT),
   })
   if (error || !data || !Array.isArray(data.results)) throw new Error('分類失敗')
@@ -450,4 +465,32 @@ export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[
     if (typeof r?.id === 'number' && asked.has(r.id) && !out.has(r.id)) out.set(r.id, normalizeCategory(r.category))
   }
   return [...out].map(([id, category]) => ({ id, category }))
+}
+
+/** 額度查詢的回應形狀（與 read-label handler 的 AiCredits 同一份）。單位是 OpenRouter 的美元；null＝上游沒給。 */
+export interface AiCredits {
+  total_credits: number | null
+  total_usage: number | null
+  usage_daily: number | null
+  usage_monthly: number | null
+  limit_remaining: number | null
+}
+
+const CREDITS_TIMEOUT = 15_000
+
+/** 設定頁的「AI 額度」：read-label 的額度模式代查 OpenRouter，key 不離開伺服器。回應是外部資料，逐欄驗型別。 */
+export async function getAiCredits(): Promise<AiCredits> {
+  const { data, error } = await supabase.functions.invoke<Record<string, unknown>>('read-label', {
+    body: { credits: true },
+    signal: AbortSignal.timeout(CREDITS_TIMEOUT),
+  })
+  if (error || !data || typeof data !== 'object') throw new Error('讀不到額度')
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  return {
+    total_credits: n(data.total_credits),
+    total_usage: n(data.total_usage),
+    usage_daily: n(data.usage_daily),
+    usage_monthly: n(data.usage_monthly),
+    limit_remaining: n(data.limit_remaining),
+  }
 }
