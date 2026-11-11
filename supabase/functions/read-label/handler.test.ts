@@ -387,8 +387,8 @@ describe('read-label 分類模式', () => {
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
     const sent = JSON.parse(init.body as string)
-    // qwen 限流（429）時由 OpenRouter 換 deepseek；兩個一起送 model 與 models 會讓 model 蓋過陣列的語意不明，只送陣列
-    expect(sent.models).toEqual(['qwen/qwen3.7-flash', 'deepseek/deepseek-v4.1-flash'])
+    // deepseek 先（qwen 一批常逼近 45 秒逾時），出錯或限流才由 OpenRouter 換 qwen；model 與 models 一起送語意不明，只送陣列
+    expect(sent.models).toEqual(['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'])
     expect(sent).not.toHaveProperty('model')
     const parts = sent.messages[0].content
     expect(parts).toHaveLength(1)

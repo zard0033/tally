@@ -35,11 +35,12 @@ const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
    兩條不可省的規則寫在提示詞裡：兩欄並列時一律讀「每份」、serving_g 沒印就填 null 不回推。 */
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'qwen/qwen3.7-flash'
-/* 分類模式的備援（OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。
-   qwen 只有阿里巴巴一家在供，2026-11-11 上線第一天分類全被 429 擋光；deepseek 有三十幾家。
-   只給分類用：辨識的提示詞是在 qwen 上校準準度的，換模型讀圖沒驗過。分類界線也是對 qwen 寫的，deepseek 只用 15 樣編的品名
-   實測過一次（全對）——真實準度要看 `200 classify ok` 的 model 欄、抽看 deepseek 分的那幾批（假設，未驗）。 */
-const CLASSIFY_MODELS = [MODEL, 'deepseek/deepseek-v4.1-flash']
+/* 分類模式：deepseek 先、qwen 備援（OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。
+   2026-11-11 線上 log：qwen 只有阿里巴巴一家在供，第一天分類全被 429 擋光；加了備援之後換成慢——qwen 一批 15 樣
+   31–42 秒（會先想兩千多 token）、兩批超過函式的 45 秒逾時，deepseek 同樣 15 樣 2–14 秒、有三十幾家在供。
+   準度：真實資料 82 樣兩個模型分錯的各有一兩樣，沒看出哪邊明顯差（使用者 2026-11-11 抽看）。
+   只給分類用：辨識的提示詞是在 qwen 上校準準度的，換模型讀圖沒驗過。 */
+const CLASSIFY_MODELS = ['deepseek/deepseek-v4.1-flash', MODEL]
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
 {"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
 name 填包裝上的**正式完整品名**（通常標在成分欄前面的「品名:」後面，例如「伯朗奶茶-減糖香濃原味(三合一)」），

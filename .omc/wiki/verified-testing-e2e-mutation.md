@@ -48,3 +48,4 @@ schemaVersion: 1
   事後拆要跨三處，比想像中貴。
 
 來源：`session-state/active.md`（2026-10-14 搬入後該檔已刪；更早的歷史在 `session-state/archive-*.md`）。
+- **`e2e/shots/` 每次跑 `tally.spec.ts`（smoke 也含）都會整個 `rm -rf`**（tally.spec.ts:47）：那裡雖然 gitignore 掉、看起來適合放一次性截圖腳本，放了會在下一輪 smoke 被刪。一次性 spec 跑完就搬走，或截圖存 `D:/Temp`。（2026-11-11）

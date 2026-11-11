@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-11 下午）：AI 分類備援已上線（e9bf10f，CI 綠）。v2.123 今日頁：插圖虛線不穿字、雲離開週列、小樹壓低；建議白卡改虛線空位（使用者選）。
-下一步：①請使用者開 app 後 `db query --read-only` 數 category is null 驗收分類 ②真機看 v2.123 ③問使用者平常用 Safari 還是主畫面 App，決定狀態列紙色帶要不要修（Safari 26 不讀 theme-color）④視覺第二批（記一筆 sheet）。
+現況（2026-11-11 晚）：v2.123 上線（785d14d）。AI 分類 112 樣已分 82；qwen 15 樣要 31–42 秒、兩批逾時，分類改 deepseek 優先、qwen 備援（函式已部署）。使用者抽看發現 4 樣分錯（麥味登滿分堡、Q-Burger 中式特餐→速食；菜燕春青→其他正餐；早餐店豆漿 vs 奶茶不一致），可在食品庫手改。
+下一步：①使用者開 app 後數 category is null（剩 30）②真機看 v2.123 ③問用 Safari 還是主畫面 App（狀態列紙色帶）④視覺第二批（記一筆 sheet）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
