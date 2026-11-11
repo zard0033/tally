@@ -60,9 +60,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # Linux runner 沒有中文字型，折行與高度類斷言會跟手機差很遠
-      - run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
-      - run: npx playwright install --with-deps webkit
+      # Linux runner 沒有中文字型，折行與高度類斷言會跟手機差很遠。
+      # apt 改走 archive.ubuntu.com：2026-11-11 runner 連兩輪解析不到 azure.archive.ubuntu.com，8 份全卡在這一步、
+      # 一條測試都沒跑。下一步 playwright 的 --with-deps 也走 apt，所以在這裡一起換。失敗隔 20 秒再試，最多三次。
+      - run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' /etc/apt/apt-mirrors.txt; fi
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y fonts-noto-cjk && break
+            [ "$i" = 3 ] && exit 1
+            sleep 20
+          done
+      - run: |
+          for i in 1 2 3; do
+            npx playwright install --with-deps webkit && break
+            [ "$i" = 3 ] && exit 1
+            sleep 20
+          done
       # GitHub runner 本來就設 CI=true，playwright.config 靠它開重試
       - run: npx playwright test --shard=${{ matrix.shard }}/8
       # 失敗時把截圖與 trace 留下來（config 是 retain-on-failure），本機沒有 Linux 可重現
