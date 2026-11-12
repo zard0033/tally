@@ -3065,33 +3065,51 @@ test('全部完成：欄頭雙勾一次打勾所有未完成的組；全勾時�
     .toEqual([false, false])
 })
 
+/* 卡片展開／收合要等「停在終點」才往下點（CI 2026-11-12 紅過：展開途中點勾、點「新增一組」都落空）。
+   終點＝收合時 .ex-body 不在；展開時只剩一個 .ex-body，motion 已把高度寫回 auto、不透明度 1。
+   要指定方向：收合剛點下去時退場的 .ex-body 還沒寫第一幀，讀起來仍是 auto／1，不指定會被當成「展開完成」提早放行。
+   不用「兩次讀數一樣」判落定：spring 衝過頭的最高點速度≈0，慢幀下會被誤判（wiki lesson-ci-linux-e2e ②）。 */
+async function toggleCard(card: Locator, want: 'open' | 'closed') {
+  await card.locator('.ex-toggle').click()
+  await expect
+    .poll(
+      () =>
+        card.locator('.ex-body').evaluateAll((els) => {
+          if (els.length === 0) return 'closed'
+          const s = (els[0] as HTMLElement).style
+          return els.length === 1 && s.height === 'auto' && s.opacity === '1' ? 'open' : 'moving'
+        }),
+      { message: `卡片沒停在${want === 'open' ? '展開' : '收合'}的終點` },
+    )
+    .toBe(want)
+}
+
 test('收合時第二行看進度（圓點＋下一組），展開時看肌群；新增一組是最後一組下方的整列', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
   await addExercise(page, '腿推舉')
   const card = page.locator('.ex').first()
-  const toggle = card.locator('.ex-toggle')
 
   await expect(card.locator('.sub .dot'), '展開時第二行是肌群，沒有圓點').toHaveCount(0)
-  await toggle.click()
+  await toggleCard(card, 'closed')
   await expect(card.locator('.set')).toHaveCount(0)
   await expect(card.locator('.sub .dot')).toHaveCount(2)
   await expect(card.locator('.sub .dot.is-done')).toHaveCount(0)
   await expect(card.locator('.sub')).toContainText('下一組 60 kg × 12')
   await expect(card.locator('.sub'), '不顯示分數').not.toContainText('0/2')
 
-  await toggle.click()
+  await toggleCard(card, 'open')
   await tick(page, 0)
-  await toggle.click()
+  await toggleCard(card, 'closed')
   await expect(card.locator('.sub .dot.is-done')).toHaveCount(1)
-  await toggle.click()
+  await toggleCard(card, 'open')
   await tick(page, 1)
-  await toggle.click()
+  await toggleCard(card, 'closed')
   await expect(card.locator('.sub')).toContainText('全部完成')
 
   // 新增一組：最後一組下方的整列，新組沿用最後一組的值
-  await toggle.click()
+  await toggleCard(card, 'open')
   const add = card.getByRole('button', { name: '新增一組' })
   await expect(card.locator('.ex-body > :last-child')).toHaveText('新增一組')
   await add.click()
