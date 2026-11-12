@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-12）：v2.130 拿掉選主模型（固定 DeepSeek 主、Qwen 備援；read-label 改成忽略 model，**新版函式還沒部署**——CLI 要使用者同意 `--yes`，線上舊版行為相同不急）；v2.131 食品庫類型標籤嵌圖示、左滑勾不再縮著；CI apt 每步限時 8 分＋全域 retries；刪 archivo 字型。rest-timer 偶發紅已結案。CI 全量待確認。
-下一步：①部署 read-label（等同意）②其他頁換皮選方向（截圖 D:/Temp/tally-shots/b3/）③一句話記一餐等選 (a)–(d) ④真機看 v2.123–v2.131 ⑤360 寬實測。
+現況（2026-11-12）：v2.130 拿掉選主模型（固定 DeepSeek 主、Qwen 備援；read-label v16 已部署，忽略 model）；v2.131 食品庫類型標籤嵌圖示、左滑勾不再縮著；CI apt 每步限時＋全域 retries；刪 archivo 字型。3367c86 CI 全量 8 份全綠、已部署。rest-timer 偶發紅結案。
+下一步：①其他頁換皮：使用者選「先出樣張」——設定頁＋訓練頁做 2–3 方向並排（截圖 D:/Temp/tally-shots/b3/）②一句話記一餐等選 (a)–(d) ③真機看 v2.123–v2.131（拍標示、分類走 v16）④360 寬實測。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
