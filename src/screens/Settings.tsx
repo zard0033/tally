@@ -10,7 +10,9 @@
    sheet-out／scrim-out 這組 keyframes。 */
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
+import SkyBand from '@/components/SkyBand'
 import SubPageTop from '@/components/SubPageTop'
+import { useSkyEdge } from '@/components/useSkyEdge'
 import { getAiCredits, listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
@@ -49,6 +51,7 @@ export default function Settings(props: SettingsProps) {
   } = props
 
   const [view, setView] = useState<View>('list')
+  const edge = useSkyEdge()
   const [weights, setWeights] = useState<Weight[] | null>(null)
   /* AI 額度：進設定頁查一次（切子頁面再回來不重查）。失敗只顯示「讀不到額度」，不重試、不打全域 Notice。 */
   const [credits, setCredits] = useState<CreditsState>({ status: 'loading' })
@@ -243,11 +246,11 @@ export default function Settings(props: SettingsProps) {
 
   return (
     <div className="main" data-screen="settings">
-      <header className="topbar">
-        <h1 className="today">設定</h1>
-      </header>
-
-      <div className="settings">
+      {/* v2.132：標題畫在橫幅的天空上，橫幅在捲動區裡、跟著清單捲走（設定頁本來就超過一屏，固定的話首屏少 96px） */}
+      <div className="settings has-band" ref={edge.ref} onScroll={edge.sync}>
+        <SkyBand object="tree">
+          <h1 className="today">設定</h1>
+        </SkyBand>
         <h2>目標與身體</h2>
         <div className="entry-list">
           <button className="entry-row" type="button" onClick={() => setView('goal')}>

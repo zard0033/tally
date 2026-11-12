@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>其他頁換皮：三個方向（設定頁 ＋ 訓練頁）</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（只在這份檔案裡用，不進 app） ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 880px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; row-gap: 28px; align-items: start; }
+  .colhead { display: flex; flex-direction: column; gap: 6px; }
+  .colhead h2 { margin: 0; font-size: var(--t-md); font-weight: 800; }
+  .colhead h2 small { font-weight: 600; color: var(--ink-muted); font-size: var(--t-sm); margin-left: 6px; }
+  .colhead ul { margin: 0; padding-left: 1.2em; font-size: var(--t-xs); line-height: 1.65; color: var(--ink-muted); }
+  .colhead ul b { color: var(--ink); font-weight: 700; }
+  .frame-block { display: flex; flex-direction: column; gap: 10px; }
+  .frame-label { font-size: var(--t-sm); font-weight: 700; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px; position: relative;
+    background: var(--paper); box-shadow: var(--shadow-2); }
+  .device > .screen { height: 745px; }
+
+  /* ── 插圖用的填色 class：全部指向 app.css 的 token，不寫 hex ── */
+  .screen svg.art { fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; display: block; }
+  .f-sky { fill: var(--sky); } .f-far { fill: var(--hill-far); } .f-mid { fill: var(--hill-mid); }
+  .f-near { fill: var(--hill-near); } .f-tree { fill: var(--tree); }
+  .f-sun { fill: var(--sun); } .f-sunD { fill: var(--sun-deep); } .f-sunP { fill: var(--sun-pale); }
+  .f-clay { fill: var(--clay); } .f-clayD { fill: var(--clay-deep); }
+  .f-plate { fill: var(--plate); } .f-plateD { fill: var(--plate-deep); } .f-snow { fill: var(--snow); }
+  .f-ink { fill: var(--ink); } .f-acc { fill: var(--accent); } .f-paper { fill: var(--paper); }
+  .o22 { opacity: .22; } .o3 { opacity: .3; } .o55 { opacity: .55; } .o6 { opacity: .6; } .o9 { opacity: .9; }
+  .stk-far { stroke: var(--hill-far); } .stk-clay { stroke: var(--clay); } .stk-snow { stroke: var(--snow); }
+
+  /* ── 設定頁／訓練頁 的列：沿用 app.css 的 .entry-row／.tr-row，這裡只補樣張才有的 ── */
+  .settings .entry-list + h2 { margin-top: var(--s-5); }
+
+  /* 方向 A：矮橫幅（≤ 96px）。同 .sky 的做法：天空上的次要字改指 --ink-sky */
+  .band { position: relative; isolation: isolate; flex-shrink: 0; height: 96px; background: var(--sky); overflow: hidden;
+    --ink-muted: var(--ink-sky); --ink-faint: var(--rule-field); }
+  .band > svg.art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  .band > .band-in { position: relative; z-index: 1; padding: var(--s-2) var(--s-5) 0; }
+  .band h1 { margin: 0; font-size: var(--t-lg); font-weight: 700; letter-spacing: var(--track-lg); line-height: 44px; }
+  .band .datectl-head { margin: 0 calc(var(--s-2) * -1); }
+  .band-in-flow { margin: 0 calc(var(--s-5) * -1) var(--s-3); }
+  .settings.in-band { padding-top: 0; }
+  .wk { padding: var(--s-1) var(--s-5) var(--s-2); flex-shrink: 0; }
+  .wk .datectl { padding-bottom: 0; }
+
+  /* 方向 B：設定列前的圓盤小圖示、空狀態小景 */
+  .ri { position: relative; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+    background: var(--plate); margin-right: var(--s-1); }
+  .ri svg.art { width: 100%; height: 100%; }
+  .ri.lg { width: 56px; height: 56px; margin-right: 0; }
+  .tr-row .ri { margin-right: 0; }
+  .empty-day { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 var(--s-1); }
+  .empty-day p { margin: 0; color: var(--ink-muted); }
+  .empty-day svg.vig { border-radius: 16px; }
+  .empty-row { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0 0; }
+  .empty-row p { margin: 0; flex: 1; min-width: 0; color: var(--ink-muted); text-wrap: balance; }
+
+  /* 方向 C：底部原野。畫在底部列後面，不佔內容空間 */
+  .meadow { position: absolute; left: 0; right: 0; bottom: 0; width: 393px; height: 200px; z-index: 0; pointer-events: none; }
+  .meadow-flow { width: 393px; height: 200px; margin: var(--s-4) calc(var(--s-5) * -1) calc(var(--s-4) * -1); }
+  .settings.has-meadow { padding-bottom: var(--s-4); }
+  .main.over-meadow { position: relative; z-index: 1; }
+</style>
+</head>
+<body>
+
+<!-- 圖示與插圖片段（48×48，貼在 --plate 圓盤裡；平塗、不描邊、形狀分辨不靠色塊） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- 每日目標：山頭插一面旗 -->
+    <symbol id="i-goal" viewBox="0 0 48 48">
+      <path d="M0 37c9-9 25-10 48-3v14H0z" class="f-mid"/>
+      <rect x="22.4" y="11" width="2.8" height="27" rx="1.4" class="f-ink"/>
+      <path d="M25.2 11.6l12.4 4.8-12.4 5z" class="f-clay"/>
+    </symbol>
+    <!-- 更新身體數據：體重計（俯視） -->
+    <symbol id="i-body" viewBox="0 0 48 48">
+      <rect x="9" y="10" width="30" height="28" rx="7.5" class="f-acc"/>
+      <path d="M15 27a9 9 0 0 1 18 0z" class="f-snow"/>
+      <path d="M24 27l4.4-6.4" stroke="var(--clay)" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      <circle cx="24" cy="27" r="2" class="f-clay"/>
+      <rect x="14" y="31.2" width="20" height="3" rx="1.5" class="f-far"/>
+    </symbol>
+    <!-- 體重趨勢：山坡上一路往上的踏腳石 -->
+    <symbol id="i-trend" viewBox="0 0 48 48">
+      <path d="M0 38c10-11 28-15 48-8v18H0z" class="f-far"/>
+      <path d="M0 43c12-6 28-8 48-3v8H0z" class="f-mid"/>
+      <g class="f-snow"><circle cx="12" cy="34" r="2.8"/><circle cx="22" cy="28.4" r="2.8"/><circle cx="32" cy="22.6" r="2.8"/></g>
+      <circle cx="37" cy="13" r="4.6" class="f-sun"/>
+    </symbol>
+    <!-- 食品庫管理：飯碗（跟「飯類」類型圖示同一只碗） -->
+    <symbol id="i-bowl" viewBox="0 0 48 48">
+      <path d="M11 22.4C11 13.4 37 13.4 37 22.4z" class="f-snow stk-far" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M9 22.4h30c0 8-6.8 14-15 14s-15-6-15-14z" class="f-acc"/>
+      <rect x="8.6" y="21.2" width="30.8" height="3.2" rx="1.6" class="f-mid"/>
+      <rect x="18" y="35.2" width="12" height="3" rx="1.5" class="f-ink"/>
+    </symbol>
+    <!-- 動作庫管理：啞鈴 -->
+    <symbol id="i-bell" viewBox="0 0 48 48">
+      <rect x="13" y="22.4" width="22" height="3.4" rx="1.7" class="f-ink"/>
+      <rect x="9" y="15.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+      <rect x="32.6" y="15.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+      <rect x="5" y="19.4" width="4.2" height="9.2" rx="2.1" class="f-ink"/>
+      <rect x="38.8" y="19.4" width="4.2" height="9.2" rx="2.1" class="f-ink"/>
+    </symbol>
+    <!-- AI 額度：一枚硬幣（黃色不負責輪廓，外圈用 --sun-deep） -->
+    <symbol id="i-coin" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="13.4" class="f-sunD"/>
+      <circle cx="24" cy="24" r="11.6" class="f-sun"/>
+      <path d="M24 17.6l1.9 4 4.4.5-3.2 3 .9 4.3-4-2.2-4 2.2.9-4.3-3.2-3 4.4-.5z" class="f-sunP"/>
+    </symbol>
+    <!-- 模型：兩顆閃光 -->
+    <symbol id="i-spark" viewBox="0 0 48 48">
+      <path d="M21 9c1 8.4 4.4 11.8 12.8 12.8C25.4 22.8 22 26.2 21 34.6 20 26.2 16.6 22.8 8.2 21.8 16.6 20.8 20 17.4 21 9z" class="f-acc"/>
+      <path d="M35.4 27c.5 4.2 2.2 5.9 6.4 6.4-4.2.5-5.9 2.2-6.4 6.4-.5-4.2-2.2-5.9-6.4-6.4 4.2-.5 5.9-2.2 6.4-6.4z" class="f-clay"/>
+    </symbol>
+    <!-- 訓練分析：三根長高的柱子 -->
+    <symbol id="i-bars" viewBox="0 0 48 48">
+      <rect x="9.5" y="26" width="7.4" height="12" rx="2.2" class="f-mid"/>
+      <rect x="20.3" y="19" width="7.4" height="19" rx="2.2" class="f-tree"/>
+      <rect x="31.1" y="11" width="7.4" height="27" rx="2.2" class="f-acc"/>
+      <rect x="7.5" y="37.4" width="33" height="3" rx="1.5" class="f-ink"/>
+    </symbol>
+    <!-- 課表：一本筆記本、夾著書籤、旁邊一支鉛筆 -->
+    <symbol id="i-note" viewBox="0 0 48 48">
+      <rect x="11" y="8.5" width="25" height="31" rx="4" class="f-acc"/>
+      <rect x="11" y="8.5" width="5.2" height="31" rx="2.6" class="f-ink o3"/>
+      <rect x="20" y="16" width="12" height="2.6" rx="1.3" class="f-snow"/>
+      <rect x="20" y="21.6" width="12" height="2.6" rx="1.3" class="f-snow"/>
+      <rect x="20" y="27.2" width="7.4" height="2.6" rx="1.3" class="f-snow"/>
+      <path d="M29.4 8.5h5.2v11.6l-2.6-2.2-2.6 2.2z" class="f-clay"/>
+      <g transform="rotate(28 37 31)"><rect x="34.4" y="22" width="5.2" height="14" rx="1.6" class="f-sun"/><path d="M34.4 36h5.2l-2.6 4.6z" class="f-sunD"/></g>
+    </symbol>
+    <!-- 設定／訓練橫幅與原野共用的雲 -->
+    <symbol id="cloud" viewBox="0 0 60 26">
+      <g class="f-snow o9"><ellipse cx="22" cy="17" rx="19" ry="8"/><ellipse cx="34" cy="11" rx="13" ry="9"/><ellipse cx="46" cy="17" rx="13" ry="7"/></g>
+    </symbol>
+    <!-- 原野（C）：far／mid 兩層山，沒有 --hill-near；CTA 那一角只有 far -->
+    <g id="m-base">
+  <circle cx="318" cy="46" r="30" class="f-sunP o6"/>
+  <circle cx="318" cy="46" r="19" class="f-sun"/>
+  <use href="#cloud" x="88" y="22" width="74" height="32"/>
+  <use href="#cloud" x="196" y="46" width="48" height="21"/>
+  <path d="M0 118C70 92 140 96 205 110S320 88 393 104V200H0z" class="f-far"/>
+  <g transform="translate(62 106)"><rect x="-1.4" y="3" width="2.8" height="9" rx="1.4" class="f-near"/><circle cx="0" cy="0" r="7.2" class="f-tree"/></g>
+  <g transform="translate(350 96)"><rect x="-1.8" y="5" width="3.6" height="14" rx="1.8" class="f-near"/><circle cx="0" cy="1" r="11" class="f-tree"/></g>
+  <path d="M0 142C70 120 170 124 250 146C280 154 300 170 312 200H0z" class="f-mid"/>
+</g>
+    <g id="m-bell">
+  <ellipse cx="258" cy="148" rx="26" ry="3.2" class="f-ink o22"/>
+  <g transform="translate(258 141) rotate(-8)">
+    <rect x="-15" y="-2" width="30" height="4" rx="2" class="f-ink"/>
+    <rect x="-21" y="-8.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+    <rect x="14.6" y="-8.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+    <rect x="-25" y="-5" width="4.2" height="10" rx="2.1" class="f-ink"/>
+    <rect x="20.8" y="-5" width="4.2" height="10" rx="2.1" class="f-ink"/>
+  </g>
+</g>
+  </defs>
+</svg>
+
+<h1 class="harness-title">其他頁換皮：三個方向 × 兩個畫面</h1>
+<p class="harness-sub">
+  故事書方向（v2.122–v2.127，今日頁與記錄 sheet 已核可）要帶到其餘頁面，這裡沒有核可樣張，所以先比三個結構不同的做法。
+  同一組內容：設定頁（含 AI 段）與訓練頁的空日（空課表、訓練分析）。393×745，全部引用 app.css 的 token，淺色一套。
+</p>
+
+<div class="grid">
+
+  <!-- ═════════ 欄標題與備註 ═════════ -->
+  <div class="colhead">
+    <h2>A　矮橫幅<small>每頁頂端一條 ≤ 96px 的天空</small></h2>
+    <ul>
+      <li><b>代價：垂直空間。</b>設定頁首屏多 61px（標題列 35→96px，橫幅跟著捲走）；訓練頁多約 28px 且固定不捲（日期標題是控件，坐在橫幅上）。</li>
+      <li><b>插圖工作：</b>1 張橫幅，換小物件（樹、啞鈴）。與今日頁最一致，每頁、每個狀態都有。</li>
+      <li><b>字在插圖上：</b>--ink 對 --sky 10.16:1、--ink-sky 對 --sky 5.60:1；字都避開山坡與雲。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>B　平頁面＋小插圖<small>只在列首與空狀態</small></h2>
+    <ul>
+      <li><b>代價：插圖工作最大。</b>8 個列首圖示＋2 張空狀態小景；頁面有資料時故事書味只剩小圖示，離今日頁最遠。</li>
+      <li><b>垂直空間：</b>設定頁不增加（空日訓練頁用掉約 100px，本來就是空的）。橫向少 44px：每日目標副標在 393 寬剛好放下，窄機（360）會被截成「…」。</li>
+      <li><b>字在插圖上：</b>沒有。文字都在紙面，--ink-muted 對 --paper 5.33:1；圖示旁一律有字。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>C　底部原野<small>頁面底部一片山坡，蓋在底部列後面</small></h2>
+    <ul>
+      <li><b>代價：看得到的時機。</b>訓練頁空日時下半螢幕本來是空的，剛好填滿；設定頁超過一屏，原野只在捲到底才出現（首屏沒有插圖）。</li>
+      <li><b>脆弱處：</b>訓練紀錄多了、內容長到蓋過山坡時，字會疊在山上，要再定一條「有內容就淡出」的規則。1 張共用，換小物件。</li>
+      <li><b>字在插圖上：</b>沒有；CTA --accent 對 --hill-far 3.67:1（圖形門檻 3:1），所以 CTA 後面只放最淺的山。</li>
+    </ul>
+  </div>
+
+  <!-- ═════════ 設定頁 ═════════ -->
+  <div class="frame-block">
+    <div class="frame-label">A · 設定</div>
+    <div class="device" id="A-settings"><div class="screen">
+      <div class="main has-floating-bar" data-screen="settings">
+        <div class="settings in-band">
+          <div class="band band-in-flow" aria-hidden="false">
+            <svg class="art" viewBox="0 0 393 96" aria-hidden="true">
+              <circle cx="326" cy="38" r="24" class="f-sunP o6"/>
+              <circle cx="326" cy="38" r="15" class="f-sun"/>
+              <use href="#cloud" x="226" y="22" width="60" height="26"/>
+              <use href="#cloud" x="352" y="12" width="34" height="15"/>
+              <path d="M0 64C70 44 130 48 190 60S300 42 393 54V96H0z" class="f-far"/>
+              <path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" class="f-mid"/>
+              <g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" class="f-near"/><circle cx="0" cy="1" r="8.5" class="f-tree"/></g>
+              <g transform="translate(120 70)"><rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" class="f-near"/><circle cx="0" cy="1" r="6" class="f-tree"/></g>
+              <path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" class="f-paper"/>
+            </svg>
+            <div class="band-in"><h1>設定</h1></div>
+          </div>
+          <div data-tpl="settings-list"></div>
+        </div>
+      </div>
+      <div class="fog" aria-hidden="true"></div>
+      <div data-tpl="bar-settings"></div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">B · 設定</div>
+    <div class="device" id="B-settings"><div class="screen">
+      <div class="main has-floating-bar" data-screen="settings">
+        <header class="topbar"><h1 class="today">設定</h1></header>
+        <div class="settings">
+          <div data-tpl="settings-list" data-icons="1"></div>
+        </div>
+      </div>
+      <div class="fog" aria-hidden="true"></div>
+      <div data-tpl="bar-settings"></div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">C · 設定（捲到底）</div>
+    <div class="device" id="C-settings"><div class="screen">
+      <div class="main has-floating-bar" data-screen="settings">
+        <header class="topbar"><h1 class="today">設定</h1></header>
+        <div class="settings has-meadow" data-scroll-end="1">
+          <div data-tpl="settings-list"></div>
+          <svg class="art meadow-flow" viewBox="0 0 393 200" aria-hidden="true"><use href="#m-base"/></svg>
+        </div>
+      </div>
+      <div data-tpl="bar-settings"></div>
+    </div></div>
+  </div>
+
+  <!-- ═════════ 訓練頁 ═════════ -->
+  <div class="frame-block">
+    <div class="frame-label">A · 訓練（空日）</div>
+    <div class="device" id="A-training"><div class="screen">
+      <div class="main has-floating-bar" data-screen="training">
+        <div class="band">
+          <svg class="art" viewBox="0 0 393 96" aria-hidden="true">
+            <circle cx="326" cy="38" r="24" class="f-sunP o6"/>
+            <circle cx="326" cy="38" r="15" class="f-sun"/>
+            <use href="#cloud" x="226" y="22" width="60" height="26"/>
+            <use href="#cloud" x="352" y="12" width="34" height="15"/>
+            <path d="M0 64C70 44 130 48 190 60S300 42 393 54V96H0z" class="f-far"/>
+            <path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" class="f-mid"/>
+            <g transform="translate(168 70) rotate(-8)">
+              <rect x="-13" y="-1.6" width="26" height="3.2" rx="1.6" class="f-ink"/>
+              <rect x="-18" y="-7" width="5.6" height="14" rx="2.8" class="f-acc"/>
+              <rect x="12.4" y="-7" width="5.6" height="14" rx="2.8" class="f-acc"/>
+              <rect x="-21.4" y="-4" width="3.6" height="8" rx="1.8" class="f-ink"/>
+              <rect x="17.8" y="-4" width="3.6" height="8" rx="1.8" class="f-ink"/>
+            </g>
+            <g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" class="f-near"/><circle cx="0" cy="1" r="8.5" class="f-tree"/></g>
+            <path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" class="f-paper"/>
+          </svg>
+          <div class="band-in">
+            <div class="datectl-head">
+              <h1 class="date-title"><button type="button" class="datectl-title">週四 11/12<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h1>
+            </div>
+          </div>
+        </div>
+        <div class="wk"><div class="datectl"><div data-tpl="week"></div></div></div>
+        <div class="tr-scroll">
+          <p class="muted">這天沒有訓練紀錄</p>
+          <div data-tpl="tr-sec-routines"></div>
+          <p class="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+          <div data-tpl="tr-analysis"></div>
+        </div>
+      </div>
+      <div class="fog" aria-hidden="true"></div>
+      <div data-tpl="bar-training"></div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">B · 訓練（空日）</div>
+    <div class="device" id="B-training"><div class="screen">
+      <div class="main has-floating-bar" data-screen="training">
+        <header class="topbar"><div class="datectl"><div data-tpl="datectl-full"></div></div></header>
+        <div class="tr-scroll">
+          <div class="empty-day">
+            <svg class="art vig" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true">
+              <rect width="160" height="96" class="f-sky"/>
+              <circle cx="122" cy="30" r="17" class="f-sunP o6"/>
+              <circle cx="122" cy="30" r="10.5" class="f-sun"/>
+              <use href="#cloud" x="26" y="14" width="46" height="20"/>
+              <path d="M0 60C30 44 70 48 100 57S140 47 160 51V96H0z" class="f-far"/>
+              <path d="M0 76C40 62 90 66 120 74S150 70 160 72V96H0z" class="f-mid"/>
+              <ellipse cx="66" cy="76" rx="24" ry="3" class="f-ink o22"/>
+              <g transform="translate(66 70) rotate(-9)">
+                <rect x="-15" y="-2" width="30" height="4" rx="2" class="f-ink"/>
+                <rect x="-21" y="-8.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+                <rect x="14.6" y="-8.5" width="6.4" height="17" rx="3.2" class="f-acc"/>
+                <rect x="-25" y="-5" width="4.2" height="10" rx="2.1" class="f-ink"/>
+                <rect x="20.8" y="-5" width="4.2" height="10" rx="2.1" class="f-ink"/>
+              </g>
+              <g transform="translate(132 70)"><rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" class="f-near"/><circle cx="0" cy="0" r="7" class="f-tree"/></g>
+            </svg>
+            <p>這天沒有訓練紀錄</p>
+          </div>
+          <div data-tpl="tr-sec-routines"></div>
+          <div class="empty-row">
+            <span class="ri lg" aria-hidden="true"><svg class="art" viewBox="0 0 48 48"><use href="#i-note"/></svg></span>
+            <p>還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+          </div>
+          <div data-tpl="tr-analysis" data-icons="1"></div>
+        </div>
+      </div>
+      <div class="fog" aria-hidden="true"></div>
+      <div data-tpl="bar-training"></div>
+    </div></div>
+  </div>
+
+  <div class="frame-block">
+    <div class="frame-label">C · 訓練（空日）</div>
+    <div class="device" id="C-training"><div class="screen">
+      <svg class="art meadow" viewBox="0 0 393 200" aria-hidden="true"><use href="#m-base"/><use href="#m-bell"/></svg>
+      <div class="main has-floating-bar over-meadow" data-screen="training">
+        <header class="topbar"><div class="datectl"><div data-tpl="datectl-full"></div></div></header>
+        <div class="tr-scroll">
+          <p class="muted">這天沒有訓練紀錄</p>
+          <div data-tpl="tr-sec-routines"></div>
+          <p class="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+          <div data-tpl="tr-analysis"></div>
+        </div>
+      </div>
+      <div data-tpl="bar-training"></div>
+    </div></div>
+  </div>
+
+</div>
+
+<!-- ═════════ 共用模板（三個方向都從這裡複製，保證只差設計的部分） ═════════ -->
+
+<!-- 設定頁清單：內容照 Settings.tsx／AiSection.tsx。data-ri 是方向 B 才會填的列首圖示 -->
+<template id="t-settings-list">
+  <h2>目標與身體</h2>
+  <div class="entry-list">
+    <button class="entry-row" type="button">
+      <i data-ri="i-goal"></i>
+      <span class="lb-wrap"><span class="lb">每日目標</span><span class="lb-sub">1789 卡・蛋白 140g・脂 66g・碳水 158g</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button class="entry-row" type="button">
+      <i data-ri="i-body"></i>
+      <span class="lb-wrap"><span class="lb">更新身體數據</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button class="entry-row" type="button">
+      <i data-ri="i-trend"></i>
+      <span class="lb-wrap"><span class="lb">體重趨勢</span><span class="lb-sub">最新 78.0 kg（11/12）</span></span>
+      <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="2,22 16,20 30,23 44,17 58,19 72,13 86,15 100,9 118,6" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+  <h2>資料庫</h2>
+  <div class="entry-list">
+    <button class="entry-row" type="button">
+      <i data-ri="i-bowl"></i>
+      <span class="lb-wrap"><span class="lb">食品庫管理</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button class="entry-row" type="button">
+      <i data-ri="i-bell"></i>
+      <span class="lb-wrap"><span class="lb">動作庫管理</span><span class="lb-sub">1 個動作</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+  <h2>AI</h2>
+  <div class="entry-list">
+    <div class="entry-row entry-static">
+      <i data-ri="i-coin"></i>
+      <span class="lb-wrap"><span class="lb">AI 額度</span><span class="lb-sub">剩 $7.50・本月用了 $0.30</span></span>
+    </div>
+    <div class="entry-row entry-static">
+      <i data-ri="i-spark"></i>
+      <span class="lb-wrap"><span class="lb">模型</span><span class="lb-sub">DeepSeek V4.1 Flash・備援 Qwen 3.7 Flash</span></span>
+    </div>
+  </div>
+  <p class="settings-note">拍營養標示與食物類型的自動分類都用這組模型，主模型回錯誤或被限流時換備援。</p>
+  <button class="signout" type="button">登出</button>
+  <p class="settings-credit">動作示意圖 © Gym visual — https://gymvisual.com/</p>
+</template>
+
+<template id="t-bar-settings">
+  <div class="bottom-bar is-floating">
+    <nav class="tabbar" aria-label="主要導覽">
+      <button class="tab" type="button" aria-label="飲食"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21"/><path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3"/></svg></button>
+      <button class="tab" type="button" aria-label="訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg></button>
+      <button class="tab" type="button" aria-label="設定" aria-current="page"><span class="tab-indicator" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </nav>
+  </div>
+</template>
+
+<template id="t-bar-training">
+  <div class="bottom-bar is-floating">
+    <nav class="tabbar" aria-label="主要導覽">
+      <button class="tab" type="button" aria-label="飲食"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21"/><path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3"/></svg></button>
+      <button class="tab" type="button" aria-label="訓練" aria-current="page"><span class="tab-indicator" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg></button>
+      <button class="tab" type="button" aria-label="設定"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </nav>
+    <button class="cta" type="button" aria-label="開始訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  </div>
+</template>
+
+<!-- 週列（DateStrip 的 markup）：週四 11/12 是今天也是選中；14、15 是未來日 -->
+<template id="t-week">
+  <div class="datectl-grid datectl-week" role="group" aria-label="這一週">
+    <button type="button" class="datectl-day"><span class="dw">一</span><span class="n">9</span></button>
+    <button type="button" class="datectl-day"><span class="dw">二</span><span class="n">10</span></button>
+    <button type="button" class="datectl-day"><span class="dw">三</span><span class="n">11</span></button>
+    <button type="button" class="datectl-day is-today" aria-pressed="true"><span class="dw">四</span><span class="n">12</span></button>
+    <button type="button" class="datectl-day"><span class="dw">五</span><span class="n">13</span></button>
+    <button type="button" class="datectl-day" disabled><span class="dw">六</span><span class="n">14</span></button>
+    <button type="button" class="datectl-day" disabled><span class="dw">日</span><span class="n">15</span></button>
+  </div>
+</template>
+
+<template id="t-datectl-full">
+  <div class="datectl-head">
+    <h1 class="date-title"><button type="button" class="datectl-title">週四 11/12<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h1>
+  </div>
+  <div data-tpl="week"></div>
+</template>
+
+<template id="t-tr-sec-routines">
+  <div class="tr-sec tr-sec-act">課表
+    <button class="tr-text-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新課表</button>
+  </div>
+</template>
+
+<template id="t-tr-analysis">
+  <div class="tr-card tr-entry">
+    <button class="tr-row" type="button">
+      <i data-ri="i-bars" data-fallback="lead"></i>
+      <span class="grow"><span class="nm">訓練分析</span><span class="sub">還沒有可估算的紀錄</span></span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+</template>
+
+<script>
+  const tpl = (id) => document.getElementById('t-' + id).content.cloneNode(true)
+
+  function fill(root) {
+    root.querySelectorAll('[data-tpl]').forEach((slot) => {
+      const frag = tpl(slot.dataset.tpl)
+      const icons = slot.dataset.icons === '1'
+      frag.querySelectorAll('[data-ri]').forEach((ph) => {
+        if (!icons) {
+          // 非 B：設定頁不放列首圖示；訓練分析維持原本的線條圖示
+          if (ph.dataset.fallback === 'lead') {
+            const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+            s.setAttribute('class', 'lead'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true')
+            s.innerHTML = '<path d="M4 19h16"/><path d="M5 15l4-5 4 3 6-8"/>'
+            ph.replaceWith(s)
+          } else ph.remove()
+          return
+        }
+        const span = document.createElement('span')
+        span.className = 'ri'
+        span.setAttribute('aria-hidden', 'true')
+        span.innerHTML = '<svg class="art" viewBox="0 0 48 48"><use href="#' + ph.dataset.ri + '"/></svg>'
+        ph.replaceWith(span)
+      })
+      slot.replaceWith(frag)
+    })
+  }
+  // 模板裡還有巢狀的 data-tpl（datectl-full 裡的 week），所以跑兩輪
+  fill(document); fill(document)
+
+
+  // C 設定頁：捲到底，原野才看得到
+  const toEnd = () => document.querySelectorAll('[data-scroll-end]').forEach((e) => { e.scrollTop = e.scrollHeight })
+  toEnd(); window.addEventListener('load', toEnd); document.fonts && document.fonts.ready.then(toEnd)
+</script>
+</body>
+</html>

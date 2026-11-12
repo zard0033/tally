@@ -1084,7 +1084,7 @@ test('踏腳石可以點：點哪一塊就開哪一餐的記錄（v2.125）', as
   }
 })
 
-test('狀態列色條：天空頂著時染天空色，捲走、換分頁就回紙色（Safari 26 從這條取狀態列顏色）', async ({ page }) => {
+test('狀態列色條：天空頂著時染天空色，捲走、進子頁面就回紙色（Safari 26 從這條取狀態列顏色）', async ({ page }) => {
   await openApp(page)
   const state = () =>
     page.evaluate(() => ({ edge: document.documentElement.dataset.edge ?? null, bg: getComputedStyle(document.querySelector('.edge-top')!).backgroundColor }))
@@ -1101,8 +1101,27 @@ test('狀態列色條：天空頂著時染天空色，捲走、換分頁就回�
   await expect.poll(state).toEqual({ edge: null, bg: PAPER })
   await page.locator('.timeline').evaluate((tl) => (tl.scrollTop = 0))
   await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  /* v2.132 起設定頁與訓練頁頂端也有天空（橫幅），換過去要「仍是天空色」——原本這裡驗的是換到設定頁回紙色。
+     換分頁時舊頁卸載與新頁掛上的先後曾讓色條被洗回紙色，所以照樣要驗；回紙色改驗設定頁捲走橫幅、進子頁面 */
   await page.locator('.tab[aria-label="設定"]').click()
+  await expect(page.locator('[data-screen="settings"]')).toBeVisible()
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  await page.locator('.settings').evaluate((el) => {
+    const pad = document.createElement('div')
+    pad.style.height = '1200px'
+    el.appendChild(pad)
+    el.scrollTop = (el.querySelector('.sky-band') as HTMLElement).offsetHeight + 40
+  })
   await expect.poll(state).toEqual({ edge: null, bg: PAPER })
+  await page.locator('.settings').evaluate((el) => (el.scrollTop = 0))
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  await page.getByRole('button', { name: /食品庫管理/ }).click()
+  await expect.poll(state).toEqual({ edge: null, bg: PAPER })
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
 })
 
 test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，不被蓋住', async ({ page }) => {

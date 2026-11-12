@@ -140,11 +140,8 @@ button { -webkit-user-select: none; user-select: none; }
 .pair .sep { color: var(--ink-muted); }                   /* 分隔符 */
 .pair .tgt { color: var(--ink-muted); }                   /* 固定的參考值 */
 
-/* ── 頂欄（今日頁放日期元件 .datectl，見下方；設定頁放靜態標題 .today） ── */
+/* ── 頂欄（今日頁與訓練頁放日期元件 .datectl，見下方；設定頁的標題 v2.132 起在 .sky-band 裡） ── */
 .topbar { position: relative; padding: var(--s-4) var(--s-5) 0; }
-/* .today：設定頁專用的靜態標題（今日頁改用 .datectl 裡的 .date-title） */
-.topbar .today { font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md);
-  margin: 0; line-height: 1.2; }
 
 /* ── 主區 ── */
 /* position:relative 是 .undo-bar 的定位基準（它絕對定位浮在時間軸底部） */
@@ -174,6 +171,24 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .scene svg { display: block; overflow: visible; }
 /* 同 .ci：全站 `.screen svg` 的線條圖示預設（stroke currentColor 1.6px）要在插圖裡關掉，否則每塊山坡都被描一圈黑邊 */
 .screen .scene svg { fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; }
+/* 平塗小插圖（v2.132：設定／訓練頁的橫幅、訓練頁的空狀態）：同上，把全站線條圖示的預設關掉 */
+.screen svg.art { display: block; fill: none; stroke: none; stroke-width: 1; stroke-linecap: butt; stroke-linejoin: miter; }
+
+/* ── 設定頁與訓練頁的矮橫幅（v2.132，SkyBand）──
+   插圖只鋪上面 --band-h；裡面的東西照常排版。天空上的字與今日頁同一套：主字 --ink（10.16:1），
+   次要字換 --ink-sky（5.60:1）——只換標題列那一塊，訓練頁的週列在橫幅下面的紙上，維持原本的 --ink-muted／--ink-faint。 */
+.sky-band { --band-h: 96px; position: relative; isolation: isolate; flex-shrink: 0; min-height: var(--band-h); }
+.sky-band > .band-art { position: absolute; top: 0; left: 0; width: 100%; height: var(--band-h); z-index: 0; }
+.sky-band > :not(.band-art) { position: relative; z-index: 1; }
+/* 設定頁：橫幅在捲動區裡、跟著清單捲走；左右推到螢幕邊（抵掉 .settings 的內距） */
+.settings.has-band { padding-top: 0; }
+.settings > .sky-band { margin: 0 calc(var(--s-5) * -1); } /* 下方距離由第一個 h2 的 margin-top（--s-5）給；左右負值要跟 .settings 的左右內距同步 */
+.sky-band .today { margin: 0; padding: var(--s-2) var(--s-5) 0; font-size: var(--t-lg); font-weight: 700;
+  letter-spacing: var(--track-lg); line-height: 44px; }
+/* 訓練頁：日期元件整個放進橫幅（DateStrip 不拆）。標題列撐到橫幅底＋--s-1，週列與展開的月曆就落在紙上 */
+.sky-band > .topbar { padding-top: var(--s-2); }
+.sky-band .datectl-head { --ink-muted: var(--ink-sky); align-items: flex-start;
+  min-height: calc(var(--band-h) - var(--s-2) + var(--s-1)); }
 /* bottom -1px：天空高度常帶小數，山坡圖的底緣會差不到 1px、露出一絲天空色的橫線（440 寬實測）；多畫 1px 被 .scene 切掉 */
 .scene-hills { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: auto; }
 /* 雲坐在山坡帶上方（數字見下一條）：山坡帶高＝寬度的 48/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
@@ -1498,6 +1513,14 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   transition: padding-bottom var(--dur-base) var(--ease); }
 .tr-scroll::-webkit-scrollbar { display: none; }
 .tr-scroll .muted { color: var(--ink-muted); margin: var(--s-4) 0 0; }
+/* 空狀態小插圖（v2.132，樣張方向 B）：這天沒有訓練＝一張小景置中、字在下面；還沒有課表＝圓盤裡一本筆記本、字在右邊 */
+.tr-empty-day { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 var(--s-1); }
+.tr-empty-day .art { border-radius: var(--r-btn); }
+.tr-scroll .tr-empty-day .muted, .tr-scroll .tr-empty-row .muted { margin: 0; }
+.tr-empty-row { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0 0; }
+.tr-empty-row .muted { flex: 1; min-width: 0; text-wrap: balance; }
+.tr-empty-ico { flex-shrink: 0; width: 56px; height: 56px; border-radius: var(--r-pill); overflow: hidden; background: var(--plate); }
+.tr-empty-ico .art { width: 100%; height: 100%; }
 .tr-sec { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs);
   margin: var(--s-4) 0 var(--s-2); }
 .tr-sec:first-child { margin-top: var(--s-2); }

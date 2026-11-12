@@ -13,7 +13,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
 import RoutineRow from '@/components/RoutineRow'
+import SkyBand from '@/components/SkyBand'
 import SubPageTop from '@/components/SubPageTop'
+import { useSkyEdge } from '@/components/useSkyEdge'
 import { localDate, weekdayDate } from '@/lib/dates'
 import { progressList } from '@/lib/strength'
 import type { TrainingView } from '@/lib/trainingRuntime'
@@ -87,6 +89,54 @@ function WorkoutRow({ card, onOpen }: { card: WorkoutCard; onOpen: () => void })
   )
 }
 
+/* 空狀態小插圖（v2.132，樣張方向 B）：裝飾，字在旁邊說過一次，所以 aria-hidden */
+function EmptyDayArt() {
+  return (
+    <svg className="art" viewBox="0 0 160 96" width="160" height="96" aria-hidden="true">
+      <rect width="160" height="96" fill="var(--sky)" />
+      <circle cx="122" cy="30" r="17" fill="var(--sun-pale)" opacity=".6" />
+      <circle cx="122" cy="30" r="10.5" fill="var(--sun)" />
+      <g transform="translate(26 14) scale(.767)" fill="var(--snow)" opacity=".9">
+        <ellipse cx="22" cy="17" rx="19" ry="8" />
+        <ellipse cx="34" cy="11" rx="13" ry="9" />
+        <ellipse cx="46" cy="17" rx="13" ry="7" />
+      </g>
+      <path d="M0 60C30 44 70 48 100 57S140 47 160 51V96H0z" fill="var(--hill-far)" />
+      <path d="M0 76C40 62 90 66 120 74S150 70 160 72V96H0z" fill="var(--hill-mid)" />
+      <ellipse cx="66" cy="76" rx="24" ry="3" fill="var(--ink)" opacity=".22" />
+      <g transform="translate(66 70) rotate(-9)">
+        <rect x="-15" y="-2" width="30" height="4" rx="2" fill="var(--ink)" />
+        <rect x="-21" y="-8.5" width="6.4" height="17" rx="3.2" fill="var(--accent)" />
+        <rect x="14.6" y="-8.5" width="6.4" height="17" rx="3.2" fill="var(--accent)" />
+        <rect x="-25" y="-5" width="4.2" height="10" rx="2.1" fill="var(--ink)" />
+        <rect x="20.8" y="-5" width="4.2" height="10" rx="2.1" fill="var(--ink)" />
+      </g>
+      <g transform="translate(132 70)">
+        <rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" fill="var(--hill-near)" />
+        <circle cx="0" cy="0" r="7" fill="var(--tree)" />
+      </g>
+    </svg>
+  )
+}
+
+/** 一本筆記本夾著書籤、旁邊一支鉛筆（48×48，放在 --plate 圓盤裡） */
+function NotebookArt() {
+  return (
+    <svg className="art" viewBox="0 0 48 48">
+      <rect x="11" y="8.5" width="25" height="31" rx="4" fill="var(--accent)" />
+      <rect x="11" y="8.5" width="5.2" height="31" rx="2.6" fill="var(--ink)" opacity=".3" />
+      <rect x="20" y="16" width="12" height="2.6" rx="1.3" fill="var(--snow)" />
+      <rect x="20" y="21.6" width="12" height="2.6" rx="1.3" fill="var(--snow)" />
+      <rect x="20" y="27.2" width="7.4" height="2.6" rx="1.3" fill="var(--snow)" />
+      <path d="M29.4 8.5h5.2v11.6l-2.6-2.2-2.6 2.2z" fill="var(--clay)" />
+      <g transform="rotate(28 37 31)">
+        <rect x="34.4" y="22" width="5.2" height="14" rx="1.6" fill="var(--sun)" />
+        <path d="M34.4 36h5.2l-2.6 4.6z" fill="var(--sun-deep)" />
+      </g>
+    </svg>
+  )
+}
+
 export default function Training({
   view,
   error,
@@ -107,6 +157,7 @@ export default function Training({
   const [nameOpen, setNameOpen] = useState(false)
   const [startBusy, setStartBusy] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const edge = useSkyEdge()
 
   const marked = useMemo(() => (view ? trainingDates(view.db) : new Set<string>()), [view])
   const cards = useMemo(() => (view ? workoutsOn(view.db, date, new Date()) : []), [view, date])
@@ -202,10 +253,13 @@ export default function Training({
   const status = view ? statusText(view) : null
 
   return (
-    <div className="main" data-screen="training">
-      <header className="topbar">
-        <DateStrip date={date} marked={marked} onSelect={onDateChange} onViewMonth={noop} />
-      </header>
+    <div className="main" data-screen="training" ref={edge.ref}>
+      {/* v2.132：日期標題坐在橫幅的天空上，週列在橫幅下面的紙上。橫幅固定不捲：標題是換日控件，捲走了就要捲回頂端才能換日 */}
+      <SkyBand object="dumbbell">
+        <header className="topbar">
+          <DateStrip date={date} marked={marked} onSelect={onDateChange} onViewMonth={noop} />
+        </header>
+      </SkyBand>
 
       {/* role=status 在固定的外層：掛在 button 上會取代按鈕的 role，讀屏就找不到入口（同封存提示的前例）。
           外層一直在、內層才依狀態換，狀態出現／消失時才會被播報。名稱是按鈕可見的文字，「查看詳情」走 aria-describedby */}
@@ -244,7 +298,10 @@ export default function Training({
         {view === null ? (
           <p className="muted">載入中…</p>
         ) : cards.length === 0 ? (
-          <p className="muted">這天沒有訓練紀錄</p>
+          <div className="tr-empty-day">
+            <EmptyDayArt />
+            <p className="muted">這天沒有訓練紀錄</p>
+          </div>
         ) : (
           <>
             {/* 進行中的與已完成的分開：App 重開後進行中的那一次還在，要一眼認得出來（AC 9） */}
@@ -282,7 +339,12 @@ export default function Training({
               </button>
             </div>
             {routines.active.length === 0 ? (
-              <p className="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+              <div className="tr-empty-row">
+                <span className="tr-empty-ico" aria-hidden="true">
+                  <NotebookArt />
+                </span>
+                <p className="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
+              </div>
             ) : (
               <div className="tr-card" data-section="routines">
                 {routines.active.map((c) => (
