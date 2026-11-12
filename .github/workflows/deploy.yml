@@ -63,9 +63,13 @@ jobs:
       # Linux runner 沒有中文字型，折行與高度類斷言會跟手機差很遠。
       # 2026-11-11 晚 runner 連三輪解析不到 *.ubuntu.com（azure 鏡像與官方鏡像都一樣，GitHub 狀態頁沒有公告），
       # 8 份裡最多 1 份撐過去、其餘一條測試都沒跑。改問公共 DNS；下一步 playwright 的 --with-deps 也走 apt，一起受惠。
-      # 失敗隔 30 秒再試，最多三次。
-      - run: |
+      # 失敗隔 30 秒再試，最多三次。2026-11-11 末輪公共 DNS 也沒救到（解析得到之後下載途中又斷），
+      # 有一份卡在這一步 25 分鐘才被整個 job 的逾時砍掉：每步自己限時，壞掉的那份早點紅，`gh run rerun --failed` 重跑就好。
+      - timeout-minutes: 8
+        run: |
           echo 'nameserver 1.1.1.1' | sudo tee /etc/resolv.conf > /dev/null
+          # 寫進 apt 設定而不是只加在這一步的指令上：下一步 playwright --with-deps 自己叫的 apt 也吃得到
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
           echo 'nameserver 8.8.8.8' | sudo tee -a /etc/resolv.conf > /dev/null
           getent hosts archive.ubuntu.com || echo '公共 DNS 也解析不到 archive.ubuntu.com'
           for i in 1 2 3; do
@@ -73,7 +77,8 @@ jobs:
             [ "$i" = 3 ] && exit 1
             sleep 30
           done
-      - run: |
+      - timeout-minutes: 8
+        run: |
           for i in 1 2 3; do
             npx playwright install --with-deps webkit && break
             [ "$i" = 3 ] && exit 1

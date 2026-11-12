@@ -1,18 +1,11 @@
 /* 設定頁的「AI」段（v2.128，使用者 2026-11-11 裁決：做 AI 設定頁、全站 AI 統一成一份設定）。
-   兩列：AI 額度（唯讀，read-label 代查 OpenRouter，key 不離開伺服器）與主模型（存這支手機，見 aiPref.ts）。
+   兩列唯讀：AI 額度（read-label 代查 OpenRouter，key 不離開伺服器）與模型。
+   v2.130 拿掉選主模型（使用者 2026-11-12：不讓 Qwen 當主模型——分類一批會超過函式時限；只剩一個選項，選單沒有意義）。
    不做 BYOK 輸入 key：單人 app，key 進資料庫或瀏覽器都只是多一個外洩面。 */
-import { useState } from 'react'
-import { getAiModel, setAiModel } from '@/aiPref'
-import { AI_MODELS, aiModelLabel, formatUsd } from '@/lib/aiModels'
+import { AI_MODELS, formatUsd } from '@/lib/aiModels'
 import type { AiCredits } from '@/lib/api'
 
 export type CreditsState = { status: 'loading' } | { status: 'ok'; data: AiCredits } | { status: 'err' }
-
-const CHEV = (
-  <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M9 6l6 6-6 6" />
-  </svg>
-)
 
 function creditsText(c: CreditsState): string {
   if (c.status === 'loading') return '讀取中…'
@@ -24,8 +17,7 @@ function creditsText(c: CreditsState): string {
 }
 
 export default function AiSection({ credits }: { credits: CreditsState }) {
-  const [model, setModel] = useState(getAiModel)
-  const [saveErr, setSaveErr] = useState(false)
+  const [main, backup] = AI_MODELS
   return (
     <>
       <h2>AI</h2>
@@ -36,38 +28,16 @@ export default function AiSection({ credits }: { credits: CreditsState }) {
             <span className="lb-sub" aria-live="polite">{creditsText(credits)}</span>
           </span>
         </div>
-        <label className="entry-row" htmlFor="ai-model" data-row="ai-model">
+        <div className="entry-row entry-static" data-row="ai-model">
           <span className="lb-wrap">
-            <span className="lb">主模型</span>
-            <span className="lb-sub">{saveErr ? '沒存到：這個瀏覽器不讓網站存資料' : aiModelLabel(model)}</span>
+            <span className="lb">模型</span>
+            <span className="lb-sub">
+              {main.label}・備援 {backup.label}
+            </span>
           </span>
-          {CHEV}
-          <select
-            id="ai-model"
-            className="entry-select"
-            aria-label="主模型"
-            value={model}
-            onChange={(e) => {
-              try {
-                setAiModel(e.target.value)
-                setModel(e.target.value)
-                setSaveErr(false)
-              } catch {
-                setSaveErr(true)
-              }
-            }}
-          >
-            {AI_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
       </div>
-      <p className="settings-note">
-        拍營養標示與食物類型的自動分類都用主模型，回錯誤或被限流時換另一個；逾時不會換——Qwen 想得久，分類一批可能超過時限，留到下次開 App 再補。
-      </p>
+      <p className="settings-note">拍營養標示與食物類型的自動分類都用這組模型，主模型回錯誤或被限流時換備援。</p>
     </>
   )
 }

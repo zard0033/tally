@@ -909,6 +909,9 @@ test('類型補判：開 app 後只送未分類的、一個類型寫一次且帶
   await expect(tagOf(page, '拿鐵')).toHaveText('飲料')
   await expect(tagOf(page, '溫泉蛋'), '原本就有類型的照舊').toHaveText('配菜')
   await expect(catSelect(page, '地瓜')).toHaveAttribute('aria-label', '地瓜 的類型：主食')
+  // v2.131：標籤左端是同類型的圖示，補判回來圖示跟著換
+  await expect(tagOf(page, '地瓜').locator('.ci')).toHaveAttribute('data-category', '主食')
+  await expect(tagOf(page, '溫泉蛋').locator('.ci')).toHaveAttribute('data-category', '配菜')
 })
 
 test('類型補判失敗：維持未分類、不寫入；重新開 app 再補一次就補上', async ({ page }) => {
@@ -916,6 +919,7 @@ test('類型補判失敗：維持未分類、不寫入；重新開 app 再補一
   await expect.poll(async () => (await classifyCalls(page)).length).toBe(1)
   await openLibrary(page)
   await expect(tagOf(page, '地瓜')).toHaveText('未分類')
+  await expect(tagOf(page, '地瓜').locator('.ci')).toHaveAttribute('data-category', '未分類')
   await expect(rows(page).filter({ hasText: '地瓜' }).locator('.lib-cat')).toHaveAttribute('data-empty', 'true')
   expect(await foodWrites(page), '失敗了不該寫任何東西').toHaveLength(0)
   await expect(page.locator('.notice'), '背景補判失敗不打擾使用者').toHaveCount(0)
@@ -1001,20 +1005,4 @@ test('類型標籤：393 寬命中區 ≥ 44×44、不撐出這一列', async ({
   expect(sel!.width).toBeGreaterThanOrEqual(44)
   expect(sel!.height).toBeGreaterThanOrEqual(44)
   expect(sel!.y + sel!.height, '命中區撐出列底，會蓋到下一列').toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 0.5)
-})
-
-test('拍營養標示帶上設定頁選的主模型（函式那端決定怎麼用，這裡只驗有送）', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('tally.ai-model', 'qwen/qwen3.7-flash'))
-  await openApp(page)
-  await openLibrary(page)
-  await page.locator('.lib-fab').click()
-  const sheet = page.locator('[data-screen="food-add-sheet"]')
-  await settled(sheet)
-  await page.evaluate((body) => {
-    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body }
-  }, SCAN_READING)
-  await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __readLabelModels: unknown[] }).__readLabelModels))
-    .toEqual(['qwen/qwen3.7-flash'])
 })

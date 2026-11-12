@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 40 pages | Last updated: 2026-11-10T01:49:25.629Z
+> 28 pages | Last updated: 2026-11-12T12:17:52.453Z
 
 ## debugging
 
@@ -16,12 +16,12 @@
 
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
 - [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
+- [lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）](lesson-ci-linux-e2e-2026-11-11.md) — # lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）
 - [lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）](lesson-cleanup-review-push-review-2026-11-02.md) — # lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）
 - [lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）](lesson-daily-goal-2026-11-04.md) — # lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）
-- [lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）](lesson-ci-linux-e2e-2026-11-11.md) — # lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）
 - [lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）](lesson-meal-suggest-2026-11-04.md) — # lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）
 - [lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）](lesson-meal-suggest-v2-2026-11-10.md) — # lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
@@ -43,17 +43,4 @@
 ## session-log
 
 - [phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）](phase2-round1-log-2-2026-10-13-14.md) — # phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）
-- [Session Log 2026-10-14](session-log-2026-10-14-66cbedf6.md) — # Session Log 2026-10-14
-- [Session Log 2026-10-19](session-log-2026-10-19-d5690309.md) — # Session Log 2026-10-19
-- [Session Log 2026-10-20](session-log-2026-10-20-0854adfe.md) — # Session Log 2026-10-20
-- [Session Log 2026-10-20](session-log-2026-10-20-498d8f5d.md) — # Session Log 2026-10-20
-- [Session Log 2026-10-20](session-log-2026-10-20-7de39221.md) — # Session Log 2026-10-20
-- [Session Log 2026-10-20](session-log-2026-10-20-b467eaf1.md) — # Session Log 2026-10-20
-- [Session Log 2026-10-21](session-log-2026-10-21-537aa75a.md) — # Session Log 2026-10-21
-- [Session Log 2026-10-22](session-log-2026-10-22-418f2a9c.md) — # Session Log 2026-10-22
-- [Session Log 2026-10-22](session-log-2026-10-22-ab471733.md) — # Session Log 2026-10-22
-- [Session Log 2026-10-27](session-log-2026-10-27-747b4e11.md) — # Session Log 2026-10-27
-- [Session Log 2026-10-27](session-log-2026-10-27-a6571a6a.md) — # Session Log 2026-10-27
-- [Session Log 2026-10-27](session-log-2026-10-27-d85a8454.md) — # Session Log 2026-10-27
-- [Session Log 2026-10-28](session-log-2026-10-28-193d7204.md) — # Session Log 2026-10-28
-- [Session Log 2026-10-28](session-log-2026-10-28-802b4059.md) — # Session Log 2026-10-28
+- [Session Log 2026-11-11](session-log-2026-11-11-b5c81c69.md) — # Session Log 2026-11-11

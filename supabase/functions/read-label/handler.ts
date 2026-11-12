@@ -37,9 +37,10 @@ const ALLOWED_ORIGINS = ['https://zard0033.github.io', 'http://localhost:5500']
    兩條不可省的規則寫在提示詞裡：兩欄並列時一律讀「每份」、serving_g 沒印就填 null 不回推。 */
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions' // 等於 `${OPENROUTER_API}/chat/completions`
 const OPENROUTER_API = 'https://openrouter.ai/api/v1'
-/* **全站 AI 的唯一設定**（使用者 2026-11-11：全站統一成一份，主模型＋備援；v2.128）。順序＝預設的主模型、備援
-   （OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。也是前端「選主模型」的白名單：
-   前端那份鏡像在 src/lib/aiModels.ts（Edge Function 不能 import src），兩份由 handler.test.ts 比對。
+/* **全站 AI 的唯一設定**（使用者 2026-11-11：全站統一成一份，主模型＋備援；v2.128）。順序＝主模型、備援
+   （OpenRouter `models` 陣列：上一個回錯誤——含 429 限流——才換下一個，逾時不換）。v2.130 起前端不能選主模型
+   （使用者 2026-11-12：不讓 qwen 當主模型，只剩一個選項就拿掉選單），請求帶 `model` 一律忽略。
+   前端那份鏡像在 src/lib/aiModels.ts（設定頁顯示用；Edge Function 不能 import src），兩份由 handler.test.ts 比對。
    deepseek 在前（2026-11-11 線上 log）：qwen 只有阿里巴巴一家在供，分類第一天全被 429 擋光；qwen 一批 15 樣
    31–42 秒（會先想兩千多 token）、兩批超過函式的 45 秒逾時，deepseek 同樣 15 樣 2–14 秒、有三十幾家在供。
    分類準度：真實資料 82 樣兩個模型分錯的各有一兩樣，沒看出哪邊明顯差（使用者 2026-11-11 抽看）。 */
@@ -50,17 +51,8 @@ export const AI_MODELS = ['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'] 
    **加模型前先確認它吃圖**（OpenRouter `/models` 的 `input_modalities`）：2026-08 時 DeepSeek 全系列都不吃。 */
 export const VISION_MODELS: readonly string[] = ['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash']
 
-/** 請求指定的主模型在白名單內就排第一、其餘照預設順序當備援；沒指定或不認得就用預設順序——
- *  不回 400：舊前端不帶這個欄位，白名單外的值也不該讓分類整個失敗。白名單是為了不讓人指定任意（貴的）模型。 */
-export function modelChain(requested: unknown): string[] {
-  const all: string[] = [...AI_MODELS]
-  return typeof requested === 'string' && all.includes(requested) ? [requested, ...all.filter((m) => m !== requested)] : all
-}
-
 /** 辨識用的那一串：主模型＋備援裡只留讀得了圖的。 */
-export function visionChain(requested: unknown): string[] {
-  return modelChain(requested).filter((m) => VISION_MODELS.includes(m))
-}
+const VISION_CHAIN: string[] = AI_MODELS.filter((m) => VISION_MODELS.includes(m))
 const PROMPT = `這是一張台灣包裝食品的營養標示照片。只回一個 JSON 物件，不要任何其他文字：
 {"name":"字串或null","basis":"per_serving 或 per_100g","serving_g":數字或null,"kcal":數字,"protein_g":數字,"fat_g":數字,"carb_g":數字}
 name 填包裝上的**正式完整品名**（通常標在成分欄前面的「品名:」後面，例如「伯朗奶茶-減糖香濃原味(三合一)」），
@@ -241,14 +233,14 @@ function parseCategories(content: string, asked: Set<number>): { id: number; cat
 }
 
 /** 分類模式：已通過驗證才會走到這裡（與辨識共用 1–5 步）。失敗一律 READ_FAILED，前端留 null 等下次。 */
-async function classify(foods: unknown, model: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+async function classify(foods: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
   const input = parseClassifyInput(foods)
   if (!input) {
     diag('400 bad-foods', { isArray: Array.isArray(foods), len: Array.isArray(foods) ? foods.length : null })
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   const t0 = Date.now()
-  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey, modelChain(model))
+  const reply = await askModel([{ type: 'text', text: CLASSIFY_PROMPT + JSON.stringify(input) }], openrouterKey, AI_MODELS)
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   const results = parseCategories(reply.content, new Set(input.map((f) => f.id)))
   if (!results) {
@@ -473,7 +465,7 @@ export async function handleRequest(
   if (!openrouterKey) return json({ error: MISCONFIGURED }, 500, cors)
 
   /* 6. 讀 body。`credits: true` 是額度查詢（設定頁，見 credits）；帶 `foods` 的是分類模式（純文字，見 classify）；
-        其餘是辨識模式，只認 image。分類與辨識都可帶 `model`（設定頁選的主模型），見 modelChain。 */
+        其餘是辨識模式，只認 image。 */
   let body: Record<string, unknown>
   try {
     const parsed: unknown = await req.json()
@@ -488,7 +480,7 @@ export async function handleRequest(
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   if (body.credits === true) return credits(openrouterKey, cors)
-  if ('foods' in body) return classify(body.foods, body.model, openrouterKey, cors)
+  if ('foods' in body) return classify(body.foods, openrouterKey, cors)
 
   // 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。
   const image = body.image
@@ -508,8 +500,7 @@ export async function handleRequest(
         上游的任何原文（含 error message、stack）都不轉發，一律收斂成 READ_FAILED。 */
   /* 白名單與讀圖清單哪天沒交集，這串就是空的：送出去會變成沒指定模型（`model: undefined` 被 JSON 省略），
      OpenRouter 用帳號預設模型讀圖——沒驗過準度、可能很貴。寧可整個失敗（security review L1）。 */
-  const chain = visionChain(body.model)
-  if (chain.length === 0) {
+  if (VISION_CHAIN.length === 0) {
     diag('500 no-vision-model')
     return json({ error: MISCONFIGURED }, 500, cors)
   }
@@ -520,7 +511,7 @@ export async function handleRequest(
       { type: 'image_url', image_url: { url: image } },
     ],
     openrouterKey,
-    chain,
+    VISION_CHAIN,
   )
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   // model＝實際回答的那個（主模型或備援）：真機讀錯時要分得出是誰讀的（v2.129 review）

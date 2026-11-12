@@ -520,8 +520,8 @@ describe('read-label 分類模式', () => {
   })
 })
 
-/* 全站 AI 統一（v2.128，使用者 2026-11-11）：一份 AI_MODELS（主模型＋備援），請求可帶 model 指定主模型。
-   辨識只用讀得了圖的模型（VISION_MODELS）。 */
+/* 全站 AI 統一（v2.128，使用者 2026-11-11）：一份 AI_MODELS（主模型＋備援）。辨識只用讀得了圖的模型（VISION_MODELS）。
+   v2.130（使用者 2026-11-12）：不讓 qwen 當主模型，前端不能選，請求帶的 model 一律忽略。 */
 describe('read-label 模型設定（全站統一）', () => {
   const FOODS = [{ id: 1, name: '叉燒飯', vendor: '燒臘店' }]
   const DS = 'deepseek/deepseek-v4.1-flash'
@@ -531,42 +531,28 @@ describe('read-label 模型設定（全站統一）', () => {
   it('㉛ 白名單與讀圖清單跟前端 src/lib/aiModels.ts 同一份（Edge Function 不能 import src，只能比對）', () => {
     expect([...AI_MODELS]).toEqual(front.AI_MODELS.map((m) => m.id))
     expect([...VISION_MODELS]).toEqual([...front.VISION_MODELS])
-    expect(front.DEFAULT_AI_MODEL).toBe(AI_MODELS[0])
   })
 
   it('㉛b 白名單與讀圖清單一定有交集——沒有的話辨識會變成沒指定模型（函式那端也會直接回 500，不外呼）', () => {
     expect(AI_MODELS.some((m) => VISION_MODELS.includes(m))).toBe(true)
   })
 
-  it('㉜ 分類：指定的主模型排第一、另一個當備援；沒指定或白名單外照預設順序（不 400）', async () => {
-    const cases: [unknown, string[]][] = [
-      [QW, [QW, DS]],
-      [DS, [DS, QW]],
-      [undefined, [DS, QW]],
-      ['openai/gpt-9-ultra', [DS, QW]],
-      [42, [DS, QW]],
-    ]
-    for (const [model, chain] of cases) {
+  it('㉜ 分類：一律 DeepSeek 主、Qwen 備援；請求帶 model（含指定 Qwen）也不改順序、不 400', async () => {
+    for (const model of [QW, DS, undefined, 'openai/gpt-9-ultra', 42]) {
       const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
       const res = await handleRequest(post(await validToken(), { foods: FOODS, model }), JWKS, OR_KEY)
       expect(res.status).toBe(200)
-      expect(sentBody(spy).models, String(model)).toEqual(chain)
+      expect(sentBody(spy).models, String(model)).toEqual([DS, QW])
     }
   })
 
-  it('㉝ 辨識：跟分類同一串（指定的主模型第一、另一個備援）；兩個都讀得了圖', async () => {
-    const cases: [unknown, string[]][] = [
-      [QW, [QW, DS]],
-      [DS, [DS, QW]],
-      [undefined, [DS, QW]],
-      ['openai/gpt-9-ultra', [DS, QW]],
-    ]
-    for (const [model, chain] of cases) {
+  it('㉝ 辨識：跟分類同一串，請求帶 model 一律忽略；兩個都讀得了圖', async () => {
+    for (const model of [QW, DS, undefined, 'openai/gpt-9-ultra']) {
       const spy = stubUpstream(upstreamReply(GOOD_READING))
       const res = await handleRequest(post(await validToken(), { image: IMAGE, model }), JWKS, OR_KEY)
       expect(res.status).toBe(200)
       const sent = sentBody(spy)
-      expect(sent.models, String(model)).toEqual(chain)
+      expect(sent.models, String(model)).toEqual([DS, QW])
       expect(sent).not.toHaveProperty('model')
     }
   })

@@ -427,10 +427,9 @@ const SCAN_TIMEOUT = 55_000
  * 不划算。真的頻繁發生再回來補（precommit review 指出這裡原本的理由「前端分不出來」是錯的
  * ——HTTP 狀態碼拿得到，真正的理由是分出來也沒有第二種該做的事）。
  */
-export async function scanLabel(imageDataUri: string, model?: string): Promise<LabelReading> {
+export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
   const { data, error } = await supabase.functions.invoke<LabelReading>('read-label', {
-    // model＝設定頁選的主模型；函式只用讀得了圖的模型（見 handler 的 visionChain）
-    body: { image: imageDataUri, model },
+    body: { image: imageDataUri },
     signal: AbortSignal.timeout(SCAN_TIMEOUT),
   })
   if (error || !data) throw new Error('辨識失敗')
@@ -451,11 +450,10 @@ export interface CategoryResult {
  * 請 `read-label` 的分類模式替一批食物分類（送品名＋店家，不送營養值）。函式那端已經把清單外的值收斂過，
  * 這裡再收斂一次——回應是外部資料，不在這批裡的 id 一律丟掉。模型漏回的食物就不在結果裡（維持 null、下次再補）。
  */
-export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[], model?: string): Promise<CategoryResult[]> {
+export async function classifyFoods(foods: Pick<Food, 'id' | 'name' | 'vendor'>[]): Promise<CategoryResult[]> {
   const { data, error } = await supabase.functions.invoke<{ results?: unknown }>('read-label', {
     // 函式那端任一樣超過 100 字就整批 400，而品名沒有長度上限（拍標示可能帶進長字串）；分類用不到全文。
-    // model＝設定頁選的主模型（白名單外函式會改用預設）
-    body: { foods: foods.map(({ id, name, vendor }) => ({ id, name: name.slice(0, CLASSIFY_TEXT_MAX), vendor: vendor?.slice(0, CLASSIFY_TEXT_MAX) ?? null })), model },
+    body: { foods: foods.map(({ id, name, vendor }) => ({ id, name: name.slice(0, CLASSIFY_TEXT_MAX), vendor: vendor?.slice(0, CLASSIFY_TEXT_MAX) ?? null })) },
     signal: AbortSignal.timeout(CLASSIFY_TIMEOUT),
   })
   if (error || !data || !Array.isArray(data.results)) throw new Error('分類失敗')

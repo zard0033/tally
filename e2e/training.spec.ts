@@ -2550,7 +2550,8 @@ test('在組列的勾上按下後開始左滑：按下狀態在拖曳中就清�
     await page.mouse.move(p.x, p.y)
     await page.waitForTimeout(16)
   }
-  await expect.poll(() => look(check), { message: '手指還按著、但已經在拖：不再是按下' }).toMatchObject({ pressed: false })
+  // 樣式也要回來（v2.131）：原本 :active 也套按下樣式，滑鼠／手指沒放開時 :active 一直在，標記清了勾還縮著
+  await expect.poll(() => look(check), { message: '手指還按著、但已經在拖：不再是按下' }).toMatchObject({ pressed: false, transform: 'none', bg: RGB.fill })
   await page.mouse.up()
   await expect(row, '拖曳真的發生了').toHaveClass(/is-open/)
   await expect(page.locator('.ex .set.done')).toHaveCount(0)

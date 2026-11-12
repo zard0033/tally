@@ -60,7 +60,7 @@ test('設定頁入口分三組加小標：目標與身體、資料庫、AI', asy
   await expect(page.locator('.settings h2')).toHaveText(['目標與身體', '資料庫', 'AI'])
   const groups = page.locator('.settings .entry-list')
   await expect(groups).toHaveCount(3)
-  await expect(groups.nth(2).locator('.entry-row .lb')).toHaveText(['AI 額度', '主模型'])
+  await expect(groups.nth(2).locator('.entry-row .lb')).toHaveText(['AI 額度', '模型'])
   await expect(groups.nth(0).locator('.entry-row .lb')).toHaveText(['每日目標', '更新身體數據', '體重趨勢'])
   await expect(groups.nth(1).locator('.entry-row .lb')).toHaveText(['食品庫管理', '動作庫管理'])
   // 小標緊貼在自己那組上面
@@ -193,26 +193,16 @@ test('AI 額度：查不到就寫「讀不到額度」，不跳全域錯誤、�
   await expect(page.locator('[data-screen="food-library"]')).toBeVisible()
 })
 
-test('主模型：預設 DeepSeek；改成 Qwen 存在這支手機（重新整理還在），之後的背景分類帶上它', async ({ page }) => {
-  // 一樣未分類的食物：開機會補判，那次請求要帶設定頁選的主模型
+test('模型列唯讀：固定 DeepSeek 主、Qwen 備援，沒有選單；背景分類不帶 model', async ({ page }) => {
+  // 一樣未分類的食物：開機會補判
   const fix = { ...FIX, foods: FIX.foods.map((f, i) => (i === 0 ? { ...f, category: null } : f)) } as typeof FIX
   await openApp(page, { classify: { mode: 'fail' } }, fix)
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __readLabelBodies: unknown[] }).__readLabelBodies.length)).toBe(1)
+  expect(await page.evaluate(() => (window as unknown as { __readLabelBodies: Record<string, unknown>[] }).__readLabelBodies[0])).not.toHaveProperty('model')
   await openSettings(page)
   const row = page.locator('[data-row="ai-model"]')
-  await expect(row.locator('.lb-sub')).toHaveText('DeepSeek V4.1 Flash')
-  await expect(page.locator('.settings-note')).toContainText('拍營養標示與食物類型的自動分類都用主模型')
-
-  await page.getByLabel('主模型').selectOption('qwen/qwen3.7-flash')
-  await expect(row.locator('.lb-sub')).toHaveText('Qwen 3.7 Flash')
-  expect(await page.evaluate(() => localStorage.getItem('tally.ai-model'))).toBe('qwen/qwen3.7-flash')
-  // 開機那次補判是在改之前送的：帶的是預設
-  expect(await page.evaluate(() => (window as unknown as { __readLabelModels: unknown[] }).__readLabelModels)).toEqual(['deepseek/deepseek-v4.1-flash'])
-
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.waitForSelector('.gauge-num', { timeout: 5000 })
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __readLabelModels: unknown[] }).__readLabelModels), { message: '重新整理後的補判沒帶上選的主模型' })
-    .toEqual(['qwen/qwen3.7-flash'])
-  await openSettings(page)
-  await expect(row.locator('.lb-sub')).toHaveText('Qwen 3.7 Flash')
+  await expect(row.locator('.lb-sub')).toHaveText('DeepSeek V4.1 Flash・備援 Qwen 3.7 Flash')
+  await expect(row.locator('select')).toHaveCount(0)
+  await expect(row).not.toHaveRole('button')
+  await expect(page.locator('.settings-note')).toContainText('拍營養標示與食物類型的自動分類都用這組模型')
 })

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { classifyFoods, listUncategorizedFoods, setFoodsCategory, type Food } from '@/lib/api'
-import { getAiModel } from '@/aiPref'
 import type { FoodCategory } from '@/lib/categories'
 
 /** 一次送幾樣給分類模式（函式那端上限 50）。原本 40，qwen 一批要想超過 45 秒、函式逾時（2026-11-11 線上 log）；
@@ -38,7 +37,7 @@ export function useFoodCategories(
     for (let i = 0; i < list.length; i += CLASSIFY_BATCH) {
       let results: Awaited<ReturnType<typeof classifyFoods>>
       try {
-        results = await classifyFoods(list.slice(i, i + CLASSIFY_BATCH), getAiModel())
+        results = await classifyFoods(list.slice(i, i + CLASSIFY_BATCH))
       } catch (e) {
         // 一批失敗不擋後面的批次；留 null 等下次開 app。印出來，欄位改名或函式壞掉時才查得到
         console.warn('[分類] 一批失敗，下次開 app 再補', e)

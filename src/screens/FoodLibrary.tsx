@@ -10,8 +10,8 @@
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getAiModel } from '@/aiPref'
 import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
+import CategoryIcon from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
@@ -214,7 +214,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
           vendorOptions={vendorOptions}
           portalContainer={addSheetRef}
           vendorAutoFocus={!!addSourceName}
-          onScan={(img) => scanLabel(img, getAiModel())}
+          onScan={scanLabel}
           onBusyChange={setScanBusy}
         />
       </div>
@@ -278,7 +278,10 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         <span className="nm">{f.name}</span>
                         {/* 原生 select 透明疊在標籤上當命中區（同每日目標的 .goal-pick），iOS 叫出系統滾輪 */}
                         <label className="lib-cat" data-empty={cat === null || undefined}>
-                          <span className="lib-cat-tag" aria-hidden="true">{cat ?? '未分類'}</span>
+                          <span className="lib-cat-tag" aria-hidden="true">
+                            <CategoryIcon category={cat} size={24} decorative />
+                            {cat ?? '未分類'}
+                          </span>
                           <select
                             aria-label={`${f.name} 的類型：${cat ?? '未分類'}`}
                             value={cat ?? ''}

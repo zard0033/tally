@@ -7,7 +7,6 @@
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
-import { getAiModel } from '@/aiPref'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import QtyStepper from '@/components/QtyStepper'
@@ -665,7 +664,7 @@ export default function LogSheet(props: LogSheetProps) {
               vendorOptions={vendorOptions}
               portalContainer={sheetRef}
               vendorAutoFocus
-              onScan={(img) => scanLabel(img, getAiModel())}
+              onScan={scanLabel}
               onBusyChange={setScanBusy}
             />
           </div>

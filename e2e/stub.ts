@@ -110,8 +110,8 @@ export async function seedFetchStub(
            測試中途可改。__creditsCalls＝打了幾次。 */
         __credits: Record<string, unknown> | null
         __creditsCalls: number
-        /* 分類與辨識送來的 `model`（設定頁選的主模型），依序記下。 */
-        __readLabelModels: (string | undefined)[]
+        /* 分類與辨識送來的整個 body，依序記下（驗不帶多餘欄位）。 */
+        __readLabelBodies: Record<string, unknown>[]
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
         __authMode: AuthMode | null
         /* 設 true＝資料請求連不上（見 StubOptions.dataDown）。 */
@@ -161,7 +161,7 @@ export async function seedFetchStub(
       w.__classifyCalls = []
       w.__credits = null
       w.__creditsCalls = 0
-      w.__readLabelModels = []
+      w.__readLabelBodies = []
 
       const TRAINING_TABLES = [
         'exercises',
@@ -259,7 +259,7 @@ export async function seedFetchStub(
             w.__creditsCalls++
             return w.__credits ? json(w.__credits) : json({ error: '辨識失敗' }, 502)
           }
-          if (sent.foods || sent.image) w.__readLabelModels.push(sent.model)
+          if (sent.foods || sent.image) w.__readLabelBodies.push(sent)
           if (sent.foods) {
             w.__classifyCalls.push(sent.foods)
             const c = w.__classify
