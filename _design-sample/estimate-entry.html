@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>樣張 — 估一筆：AI 描述＋檔位備援（A／B 兩版）</title>
+<style>
+/* 決策樣張，不連 app.css。色、字級、間距、圓角、陰影照 DESIGN.md 的 token 抄過來；
+   數字字型 Nunito 沒有內嵌，這頁的數字落回系統字（等寬靠 tabular-nums），上線時照 --font-num。
+   餐點、熱量、範圍、假設都是示意，不是實際估算結果。 */
+:root {
+  --paper: #F2F2ED; --card: #FFFFFF; --raised: #E6EAEB; --rule: #DEE2E2; --track: #D5DDE5;
+  --ink: #1D2B45; --ink-muted: #56647C; --ink-faint: #7D8898;
+  --accent: #2E5E93; --accent-dark: #234A75; --accent-soft: #DCE8F2; --on-accent: #FFFFFF;
+  --rule-field: #6E7B8E; --fill: #E3E7E6;
+  --over: #A23E2C; --sky: #CADDED; --ink-sky: #3F5372; --plate: #DCE8F2;
+  --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --t-xs: 0.72rem; --t-sm: 0.8rem; --t-base: 0.875rem; --t-md: 1rem; --t-lg: 1.25rem;
+  --track-md: -.008em; --track-xs: .015em;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+  --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(29,43,69,.06), 0 0 0 1px rgba(29,43,69,.04);
+  --shadow-3: 0 -10px 30px rgba(29,43,69,.18), inset 0 1px 0 rgba(255,255,255,.6);
+}
+
+/* ── 樣張外殼 ── */
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #E4E6E3; color: #202124; }
+body { font-family: var(--font-body); padding: 40px 40px 80px; }
+button, input, textarea { font: inherit; color: inherit; }
+button { -webkit-appearance: none; appearance: none; cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+ul { list-style: none; margin: 0; padding: 0; }
+.h-title { font-size: 24px; font-weight: 800; margin: 0 0 8px; }
+.h-sub { font-size: 14px; line-height: 1.75; color: #45484E; margin: 0 0 36px; max-width: 1240px; }
+.h-sub b, .notes b { color: #202124; }
+.part { margin: 0 0 64px; padding-top: 28px; border-top: 2px solid #CDD0CC; }
+.part > h2 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
+.part > p.lede { margin: 0 0 20px; font-size: 14px; color: #45484E; max-width: 1240px; line-height: 1.65; }
+.row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.fig { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.fig figcaption { max-width: 393px; line-height: 1.5; font-size: 13px; font-weight: 700; color: #34373C; }
+.notes { width: 520px; font-size: 13px; line-height: 1.7; color: #34373C; }
+.notes h3 { font-size: 14px; margin: 18px 0 6px; color: #202124; }
+.notes h3:first-child { margin-top: 0; }
+.notes p { margin: 0 0 8px; }
+.notes ul { padding-left: 1.1em; list-style: disc; }
+.notes li { margin: 0 0 4px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+.cmp th, .cmp td { padding: 6px 8px 6px 0; border-bottom: 1px solid #D0D3CF; text-align: left; vertical-align: top; }
+.cmp th { font-weight: 700; color: #202124; }
+
+/* ── 手機框 ── */
+.device { width: 393px; height: 745px; overflow: hidden; border-radius: 30px; position: relative; isolation: isolate;
+  background: var(--paper); color: var(--ink); box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 18px 40px -18px rgba(20,22,30,.35); }
+.num { font-variant-numeric: tabular-nums; }
+svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.behind { position: absolute; inset: 0; background: var(--sky); }
+.behind .date { position: absolute; left: 24px; top: 14px; font-size: 13px; font-weight: 600; color: var(--ink-sky); }
+.scrim { position: absolute; inset: 0; background: rgba(29,43,69,.32); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 38px; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 26px 26px 0 0; background: var(--paper); box-shadow: var(--shadow-3); }
+.handle { width: 38px; height: 5px; border-radius: 3px; margin: 8px auto 0; flex-shrink: 0; background: #C3CBD3; }
+.sheet-head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-1) var(--s-3) 0 var(--s-5); flex-shrink: 0; }
+.chips { display: flex; gap: var(--s-2); flex: 1; }
+.chip { min-height: 44px; padding: 0 var(--s-4); border-radius: var(--r-pill); display: inline-flex; align-items: center;
+  font-size: var(--t-base); font-weight: 600; color: var(--ink-muted); box-shadow: inset 0 0 0 1px #C4CCD4; border: none; background: none; }
+.chip.on { background: var(--ink); color: #fff; box-shadow: none; }
+.icon-btn { width: 44px; height: 44px; border: none; background: none; display: grid; place-items: center; color: var(--ink-muted); flex-shrink: 0; border-radius: 12px; }
+.icon-btn svg { width: 20px; height: 20px; }
+.search-wrap { padding: var(--s-3) var(--s-5) var(--s-2); flex-shrink: 0; }
+.field { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3); border-radius: var(--r-tab);
+  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 24px) 2px, var(--fill);
+  font-size: var(--t-md); color: var(--ink-muted); }
+.field svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--ink-muted); }
+.field .val { color: var(--ink); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field .ph { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field.focus { background: linear-gradient(var(--accent), var(--accent)) no-repeat center bottom / calc(100% - 24px) 2px, var(--card);
+  box-shadow: 0 0 0 3px var(--accent-soft); }
+.caret { display: inline-block; width: 1.5px; height: 18px; background: var(--accent); vertical-align: -3px; margin-left: 1px; }
+.list { flex: 1; min-height: 0; overflow: hidden; }
+.sect-lb { display: flex; align-items: center; justify-content: space-between; padding: var(--s-4) var(--s-5) var(--s-1);
+  font-size: var(--t-xs); font-weight: 700; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.sect-lb.acc { color: var(--accent); }
+.food-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 48px; padding: 2px var(--s-5);
+  border: none; background: none; text-align: left; }
+.food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-muted); }
+.nm-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nm-wrap .nm { font-size: var(--t-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.nm-wrap .sub { font-size: var(--t-xs); color: var(--ink-muted); }
+.food-row .kc { font-size: var(--t-sm); color: var(--ink-muted); }
+.ti { width: 32px; height: 32px; border-radius: 50%; background: var(--plate); flex-shrink: 0; display: grid; place-items: center; color: var(--accent); }
+.ti svg { width: 18px; height: 18px; }
+.grp { display: flex; align-items: center; gap: 10px; padding: var(--s-2) var(--s-5) 0; min-height: 42px; }
+.grp .gn { font-size: 15px; font-weight: 700; }
+.grp .cnt { font-size: 12px; color: var(--ink-muted); }
+.fog { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: linear-gradient(to bottom, rgba(242,242,237,0), var(--paper)); pointer-events: none; }
+
+/* 底部確認列（同 app.css .pick-bar） */
+.pick-bar { flex-shrink: 0; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5) calc(var(--s-3) + 20px);
+  border-top: 1px solid var(--rule); background: var(--card); }
+.pick-line { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.pick-line .sub { font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.pick-line .remain { font-size: var(--t-base); color: var(--ink-muted); }
+.macro-line { display: flex; justify-content: space-between; gap: var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); }
+.macro-line .add { margin-left: var(--s-1); font-weight: 400; }
+.macro-line .flag { color: var(--ink-muted); font-style: normal; }
+.pick-bar-btn { width: 100%; min-height: 52px; border: none; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent);
+  font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md); }
+
+/* ── 估一筆：共用零件 ── */
+.est-box { padding: var(--s-3) var(--s-5) 0; flex-shrink: 0; }
+.est-field { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 6px 0 var(--s-3); border-radius: var(--r-tab);
+  background: var(--card); box-shadow: inset 0 0 0 1.5px var(--accent-soft); font-size: var(--t-md); color: var(--ink-muted); }
+.est-field.focus { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 3px var(--accent-soft); }
+.est-field .spark { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.est-field .ph, .est-field .val { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.est-field .val { color: var(--ink); }
+.go { min-width: 44px; height: 36px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent);
+  font-size: var(--t-base); font-weight: 700; flex-shrink: 0; }
+.go.ghost { background: var(--fill); color: var(--ink-faint); }
+.tiers { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5) 0; flex-shrink: 0; }
+.tiers .lb { font-size: var(--t-xs); color: var(--ink-muted); flex-shrink: 0; letter-spacing: var(--track-xs); }
+.tier { min-height: 44px; padding: 0 var(--s-3); border-radius: var(--r-pill); border: none; background: var(--card); box-shadow: var(--shadow-1);
+  display: inline-flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.15; }
+.tier b { font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+.tier small { font-size: var(--t-xs); color: var(--ink-muted); }
+.tier.own { box-shadow: inset 0 0 0 1px #C4CCD4; background: none; }
+
+.thinking { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; font-size: var(--t-sm); color: var(--ink-muted); }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: .35; animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .7; } }
+.skel { margin: var(--s-2) var(--s-5) 0; height: 54px; border-radius: var(--r-tab); background: linear-gradient(90deg, var(--raised), #EEF1F1, var(--raised)); }
+
+/* 草稿卡：AI 回來的每一樣 */
+.draft { margin: var(--s-2) var(--s-5) 0; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1); overflow: hidden; }
+.draft-head { display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) var(--s-3) 0 var(--s-4); }
+.draft-head .t { font-size: var(--t-xs); font-weight: 700; color: var(--accent); letter-spacing: var(--track-xs); display: flex; align-items: center; gap: 6px; }
+.draft-head .t svg { width: 14px; height: 14px; }
+.draft-head .sent { font-size: var(--t-xs); color: var(--ink-muted); max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-item { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-2) 0 var(--s-2) var(--s-4); border-top: 1px solid var(--rule-subtle, #E6E9E8); }
+.d-item:first-of-type { border-top: none; }
+.d-item .nm { font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.d-item .nm em { font-style: normal; font-weight: 400; color: var(--ink-muted); font-size: var(--t-xs); margin-left: 4px; }
+.d-item .why { grid-column: 1 / 3; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; margin-top: 2px; }
+.d-item .why .rng { color: var(--ink); font-weight: 600; }
+.kc-in { display: flex; align-items: baseline; gap: 3px; justify-self: end; }
+.kc-in input { width: 64px; min-height: 40px; text-align: right; font-size: var(--t-md); font-weight: 700; color: var(--ink); border: none; border-radius: 10px;
+  padding: 0 8px; background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 12px) 2px, var(--fill); }
+.kc-in span { font-size: var(--t-xs); color: var(--ink-muted); }
+.d-del { grid-row: 1; grid-column: 3; width: 44px; height: 44px; border: none; background: none; color: var(--ink-faint); display: grid; place-items: center; }
+.d-del svg { width: 16px; height: 16px; }
+.d-keep { grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; min-height: 36px; font-size: var(--t-xs); color: var(--ink-muted); }
+.d-keep .box { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px var(--rule-field); background: var(--card); }
+.draft-foot { display: flex; justify-content: space-between; align-items: baseline; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--rule); font-size: var(--t-sm); color: var(--ink-muted); }
+.draft-foot b { color: var(--ink); font-size: var(--t-base); }
+.draft-foot .again { border: none; background: none; color: var(--accent); font-weight: 700; font-size: var(--t-sm); min-height: 44px; margin: -12px 0; padding: 0 2px; }
+
+/* 失敗 */
+.err { margin: var(--s-2) var(--s-5) 0; padding: var(--s-3) var(--s-4); border-radius: var(--r-tab); background: var(--card); box-shadow: var(--shadow-1);
+  font-size: var(--t-sm); color: var(--ink); display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.err .msg { line-height: 1.45; }
+.err .msg small { display: block; color: var(--ink-muted); font-size: var(--t-xs); }
+.err .retry { border: none; background: none; color: var(--accent); font-weight: 700; min-height: 44px; padding: 0 4px; flex-shrink: 0; }
+
+/* 鍵盤（只是佔位，顯示被蓋掉的高度；iOS 中文鍵盤含選字列約 336px） */
+.kb { position: absolute; left: 0; right: 0; bottom: 0; height: 336px; background: #D1D5DB; border-top: 1px solid #BFC4CB;
+  display: grid; place-items: center; color: #6B7280; font-size: 13px; z-index: 3; }
+
+/* B 的子畫面 */
+.back-row { display: flex; align-items: center; padding: var(--s-1) var(--s-3) 0; flex-shrink: 0; }
+.back-btn { display: flex; align-items: center; gap: var(--s-1); min-height: 44px; padding: 0 var(--s-2); border: none; background: none; color: var(--ink-muted); font-size: var(--t-sm); font-weight: 600; }
+.back-btn svg { width: 16px; height: 16px; }
+.sub-title { padding: var(--s-1) var(--s-5) 0; font-size: var(--t-lg); font-weight: 700; letter-spacing: -.005em; flex-shrink: 0; }
+.ta { margin: var(--s-3) var(--s-5) 0; min-height: 96px; padding: var(--s-3); border-radius: var(--r-tab); font-size: var(--t-md); line-height: 1.5; color: var(--ink-muted);
+  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 24px) 2px, var(--fill); flex-shrink: 0; }
+.ta.focus { color: var(--ink); background: linear-gradient(var(--accent), var(--accent)) no-repeat center bottom / calc(100% - 24px) 2px, var(--card); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ta-act { display: flex; justify-content: space-between; align-items: center; padding: var(--s-2) var(--s-5) 0; flex-shrink: 0; font-size: var(--t-xs); color: var(--ink-muted); }
+.ta-act .go { height: 44px; padding: 0 var(--s-5); font-size: var(--t-md); }
+.or { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-5) var(--s-5) 0; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.tier-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; flex-shrink: 0; }
+.tier-grid .tier { min-height: 64px; border-radius: var(--r-btn); }
+.tier-grid .tier b { font-size: var(--t-md); }
+.tier.kind { min-height: 92px; padding: var(--s-2) var(--s-2); gap: 2px; }
+.tier.kind i { font-style: normal; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.35; text-align: center; }
+.tier.kind small { margin-top: 2px; color: var(--ink-muted); }
+.own-row { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5) 0; font-size: var(--t-sm); color: var(--ink-muted); flex-shrink: 0; }
+.own-row .field { flex: 1; min-height: 44px; }
+.est-entry { display: flex; align-items: center; gap: var(--s-3); width: calc(100% - 40px); margin: var(--s-3) var(--s-5) 0; min-height: 56px; padding: 0 var(--s-3) 0 var(--s-3);
+  border: none; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1); text-align: left; }
+.est-entry .ti { background: var(--accent-soft); }
+.est-entry .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.est-entry .tx b { font-size: var(--t-base); color: var(--ink); }
+.est-entry .tx small { font-size: var(--t-xs); color: var(--ink-muted); }
+.est-entry > svg { width: 16px; height: 16px; color: var(--ink-faint); }
+.new-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 52px; padding: 0 var(--s-5); border: none; background: none; text-align: left; font-size: var(--t-base); color: var(--ink); }
+.new-row svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-muted); }
+.new-row.ai { color: var(--accent); font-weight: 700; }
+.new-row.ai svg { color: var(--accent); }
+.new-row + .new-row { border-top: 1px solid var(--rule); }
+.empty-msg { padding: var(--s-4) var(--s-5) var(--s-2); font-size: var(--t-sm); color: var(--ink-muted); }
+.only-kcal { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="u-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+  <symbol id="u-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="u-chk" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></symbol>
+  <symbol id="u-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="u-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="u-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <!-- 估算的記號：一枝鉛筆在紙上畫個大概（不用星星火花——那是「AI 很神」的通用符號，這裡要說的是「大概」） -->
+  <symbol id="u-est" viewBox="0 0 24 24"><path d="M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/><path d="M13.5 7.5l3 3"/><path d="M4 23h7" stroke-dasharray="1.5 2.5"/></symbol>
+  <symbol id="u-bowl" viewBox="0 0 24 24"><path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/></symbol>
+</svg>
+
+<h1 class="h-title">樣張 — 估一筆：AI 描述＋檔位備援　<span style="font-size:14px;font-weight:700;color:#fff;background:#2E5E93;border-radius:999px;padding:2px 10px;vertical-align:4px">使用者 2026-11-13 選 B</span></h1>
+<p class="h-sub">spec.md「A. 用一句話記一餐」2026-11-13 版。兩版只差<b>入口放哪</b>：<b>A 常駐在 sheet 頂部</b>（打開就能打字），<b>B 收進清單</b>（點進子畫面，跟現在的「新增食物」同一種走法）。草稿卡、檔位、確認列兩版共用。每版四格：打開時 → 輸入中（含鍵盤高度）→ AI 回來的草稿 → 失敗改用檔位。<b>餐點、熱量、範圍、假設都是示意</b>，不是實際估算結果；數字字型 Nunito 沒內嵌，這頁落回系統字。</p>
+
+<!-- ════════ A ════════ -->
+<section class="part" aria-labelledby="pa">
+  <h2 id="pa">A　常駐在頂部：餐別下面多一個描述框</h2>
+  <p class="lede">描述框在搜尋框上面、一直都在。點進去才長出檔位那一排；送出後草稿卡插在清單最上面，清單照常可以勾別的食物一起加入。</p>
+  <div class="row">
+
+    <figure class="fig">
+      <figcaption>A1　打開晚餐：描述框在搜尋框上面</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="est-box">
+            <div class="est-field"><svg class="spark ln" aria-hidden="true"><use href="#u-est"/></svg><span class="ph">描述吃了什麼，幫你估熱量</span><button class="go ghost" type="button" disabled>估</button></div>
+          </div>
+          <div class="search-wrap"><div class="field"><svg class="ln"><use href="#u-search"/></svg><span class="ph">搜尋品名或店家</span></div></div>
+          <div class="list">
+            <div class="sect-lb acc"><span>建議</span></div>
+            <ul>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">壯壯餐盒</span></span><span class="kc num">610</span></button></li>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">燙青菜</span></span><span class="kc num">100</span></button></li>
+            </ul>
+            <div class="sect-lb"><span>全部食物</span></div>
+            <div class="grp"><span class="ti"><svg class="ln"><use href="#u-bowl"/></svg></span><span class="gn">便當</span><span class="cnt">12 次</span></div>
+            <ul>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">招牌滷肉便當</span><span class="sub">林記飯館</span></span><span class="kc num">750</span></button></li>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">火雞肉飯便當</span><span class="sub">大金雞肉飯</span></span><span class="kc num">615</span></button></li>
+            </ul>
+          </div>
+          <div class="fog"></div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>A2　點進去打字：下面長出檔位，鍵盤蓋住清單</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="est-box">
+            <div class="est-field focus"><svg class="spark ln" aria-hidden="true"><use href="#u-est"/></svg><span class="val">夜市螺獅粉、梅子可樂、一份地瓜球<span class="caret"></span></span><button class="go" type="button">估</button></div>
+          </div>
+          <div class="tiers"><span class="lb">不想等</span>
+            <button class="tier" type="button"><b>小份</b><small class="num">400</small></button>
+            <button class="tier" type="button"><b>一般一餐</b><small class="num">700</small></button>
+            <button class="tier" type="button"><b>大餐</b><small class="num">1000</small></button>
+          </div>
+          <div class="search-wrap"><div class="field"><svg class="ln"><use href="#u-search"/></svg><span class="ph">搜尋品名或店家</span></div></div>
+          <div class="list"></div>
+        </div>
+        <div class="kb">鍵盤（含選字列約 336px）</div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>A3　約 6 秒後回來：草稿卡插在清單最上面，數字可以改、不對的刪掉</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="est-box">
+            <div class="est-field"><svg class="spark ln" aria-hidden="true"><use href="#u-est"/></svg><span class="ph">描述吃了什麼，幫你估熱量</span><button class="go ghost" type="button" disabled>估</button></div>
+          </div>
+          <div class="list">
+            <div class="draft" role="group" aria-label="估算草稿，3 樣">
+              <div class="d-item">
+                <span class="nm">螺獅粉<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="620" inputmode="numeric" aria-label="螺獅粉熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉螺獅粉"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">520–760</span>　米粉一碗約 250 克、酸筍與花生、湯約 400 毫升、紅油約 1 湯匙</span>
+              </div>
+              <div class="d-item">
+                <span class="nm">梅子可樂<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="150" inputmode="numeric" aria-label="梅子可樂熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉梅子可樂"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">110–190</span>　一杯約 500 毫升、全糖可樂加梅粉</span>
+              </div>
+              <div class="d-item">
+                <span class="nm">地瓜球<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="230" inputmode="numeric" aria-label="地瓜球熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉地瓜球"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">170–300</span>　一份約 10 顆、油炸</span>
+              </div>
+              <div class="draft-foot"><span>「夜市螺獅粉、梅子可樂、一份地瓜球」</span><button class="again" type="button">重估</button></div>
+            </div>
+            <div class="sect-lb acc"><span>建議</span></div>
+            <ul><li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">壯壯餐盒</span></span><span class="kc num">610</span></button></li></ul>
+          </div>
+          <div class="pick-bar">
+            <div class="pick-line"><span class="sub num">3 樣 · 1000 卡</span><span class="remain num">剩 110</span></div>
+            <div class="macro-line num"><span>蛋白 71/120<span class="add">(+22)</span></span><span>脂 52/63<span class="add">(+38)</span></span><span>碳 228/235<span class="add">(+141)</span></span></div>
+            <button class="pick-bar-btn" type="button">加入</button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>A4　估不出來（逾時、連不上）：句子留著、可以重試，或直接點檔位</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="est-box">
+            <div class="est-field"><svg class="spark ln" aria-hidden="true"><use href="#u-est"/></svg><span class="val">夜市螺獅粉、梅子可樂、一份地瓜球</span><button class="go" type="button">估</button></div>
+          </div>
+          <div class="err" role="status"><span class="msg">這次估不出來<small>連線逾時。可以重試，或先點一個份量記個大概。</small></span><button class="retry" type="button">重試</button></div>
+          <div class="tiers"><span class="lb">記個大概</span>
+            <button class="tier" type="button"><b>小份</b><small class="num">400</small></button>
+            <button class="tier" type="button" aria-pressed="true" style="box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft)"><b>一般一餐</b><small class="num">700</small></button>
+            <button class="tier" type="button"><b>大餐</b><small class="num">1000</small></button>
+          </div>
+          <div class="list">
+            <div class="draft" role="group" aria-label="估算草稿，1 樣">
+              <div class="d-item">
+                <span class="nm">晚餐<em>（估算・一般一餐）</em><span class="only-kcal">只估了熱量</span></span>
+                <label class="kc-in"><input class="num" value="700" inputmode="numeric" aria-label="熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why">蛋白質、脂肪、碳水記 0，營養素條會偏低</span>
+              </div>
+            </div>
+          </div>
+          <div class="pick-bar">
+            <div class="pick-line"><span class="sub num">1 樣 · 700 卡</span><span class="remain num">剩 410</span></div>
+            <div class="macro-line num"><span>蛋白 49/120<span class="add">(+0)</span></span><span>脂 14/63<span class="add">(+0)</span></span><span>碳 87/235<span class="add">(+0)</span></span></div>
+            <button class="pick-bar-btn" type="button">加入</button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ════════ B ════════ -->
+<section class="part" aria-labelledby="pb">
+  <h2 id="pb">B　收進清單：清單最上面一列「估一筆」，點進子畫面</h2>
+  <p class="lede">平常頂部跟現在一模一樣。清單最上面多一張「估一筆」卡；點進去是子畫面（返回、標題、描述框、檔位），跟「新增食物」同一種走法。搜尋找不到時，結果裡也多一列「估一筆『搜尋的字』」，句子直接帶進子畫面。</p>
+  <div class="row">
+
+    <figure class="fig">
+      <figcaption>B1　打開晚餐：頂部不變，清單最上面一張「估一筆」</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="search-wrap"><div class="field"><svg class="ln"><use href="#u-search"/></svg><span class="ph">搜尋品名或店家</span></div></div>
+          <div class="list">
+            <button class="est-entry" type="button"><span class="ti"><svg class="ln"><use href="#u-est"/></svg></span><span class="tx"><b>估一筆</b><small>食品庫沒有的，描述一下或點個份量</small></span><svg class="ln"><use href="#u-chev"/></svg></button>
+            <div class="sect-lb acc"><span>建議</span></div>
+            <ul>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">雞胸餐盒</span><span class="sub">壯壯餐盒</span></span><span class="kc num">610</span></button></li>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">燙青菜</span></span><span class="kc num">100</span></button></li>
+            </ul>
+            <div class="sect-lb"><span>全部食物</span></div>
+            <div class="grp"><span class="ti"><svg class="ln"><use href="#u-bowl"/></svg></span><span class="gn">便當</span><span class="cnt">12 次</span></div>
+            <ul>
+              <li><button class="food-row" type="button"><svg class="chk ln"><use href="#u-chk"/></svg><span class="nm-wrap"><span class="nm">招牌滷肉便當</span><span class="sub">林記飯館</span></span><span class="kc num">750</span></button></li>
+            </ul>
+          </div>
+          <div class="fog"></div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>B2　子畫面：上面描述；想不起來就選「那一餐大概是哪一種」（鍵盤收起時）</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="估一筆，晚餐">
+          <div class="handle"></div>
+          <div class="back-row"><button class="back-btn" type="button"><svg class="ln"><use href="#u-back"/></svg>晚餐</button></div>
+          <div class="sub-title">估一筆</div>
+          <div class="ta">例如：夜市螺獅粉、梅子可樂、一份地瓜球</div>
+          <div class="ta-act"><span>寫越具體越準：大小、份量、幾顆</span><button class="go ghost" type="button" disabled>估算</button></div>
+          <div class="or">想不起來吃了什麼？選最接近的一種，只記熱量</div>
+          <div class="tier-grid">
+            <button class="tier kind" type="button"><b>吃得簡單</b><i>飯糰、麵包、蛋餅</i><small class="num">約 400</small></button>
+            <button class="tier kind" type="button"><b>一般正餐</b><i>便當、一碗麵</i><small class="num">約 700</small></button>
+            <button class="tier kind" type="button"><b>吃很多</b><i>火鍋、夜市、聚餐</i><small class="num">約 1000</small></button>
+          </div>
+          <div class="own-row"><span>自己打</span><div class="field"><span class="ph">熱量</span></div><span>卡</span></div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>B3　回來的草稿留在子畫面；按「加入」寫入、整個 sheet 收起</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="估一筆，晚餐">
+          <div class="handle"></div>
+          <div class="back-row"><button class="back-btn" type="button"><svg class="ln"><use href="#u-back"/></svg>晚餐</button></div>
+          <div class="sub-title">估一筆</div>
+          <div class="list">
+            <div class="draft" role="group" aria-label="估算草稿，3 樣">
+              <div class="d-item">
+                <span class="nm">螺獅粉<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="620" inputmode="numeric" aria-label="螺獅粉熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉螺獅粉"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">520–760</span>　米粉一碗約 250 克、酸筍與花生、湯約 400 毫升、紅油約 1 湯匙</span>
+                <span class="d-keep"><span class="box"></span>存進食品庫</span>
+              </div>
+              <div class="d-item">
+                <span class="nm">梅子可樂<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="150" inputmode="numeric" aria-label="梅子可樂熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉梅子可樂"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">110–190</span>　一杯約 500 毫升、全糖可樂加梅粉</span>
+                <span class="d-keep"><span class="box"></span>存進食品庫</span>
+              </div>
+              <div class="d-item">
+                <span class="nm">地瓜球<em>（估算）</em></span>
+                <label class="kc-in"><input class="num" value="230" inputmode="numeric" aria-label="地瓜球熱量"><span>卡</span></label>
+                <button class="d-del" type="button" aria-label="刪掉地瓜球"><svg class="ln"><use href="#u-x"/></svg></button>
+                <span class="why"><span class="rng num">170–300</span>　一份約 10 顆、油炸</span>
+                <span class="d-keep"><span class="box"></span>存進食品庫</span>
+              </div>
+              <div class="draft-foot"><span>「夜市螺獅粉、梅子可樂、一份地瓜球」</span><button class="again" type="button">重估</button></div>
+            </div>
+          </div>
+          <div class="pick-bar">
+            <div class="pick-line"><span class="sub num">3 樣 · 1000 卡</span><span class="remain num">剩 110</span></div>
+            <div class="macro-line num"><span>蛋白 71/120<span class="add">(+22)</span></span><span>脂 52/63<span class="add">(+38)</span></span><span>碳 228/235<span class="add">(+141)</span></span></div>
+            <button class="pick-bar-btn" type="button">加入</button>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="fig">
+      <figcaption>B4　搜尋找不到：結果最上面多一列「估一筆『…』」，點了帶著句子進子畫面</figcaption>
+      <div class="device">
+        <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
+        <div class="sheet" role="dialog" aria-label="晚餐">
+          <div class="handle"></div>
+          <div class="sheet-head">
+            <div class="chips"><span class="chip">早餐</span><span class="chip">午餐</span><span class="chip on">晚餐</span><span class="chip">點心</span></div>
+            <button class="icon-btn" type="button" aria-label="關閉"><svg class="ln"><use href="#u-x"/></svg></button>
+          </div>
+          <div class="search-wrap"><div class="field focus"><svg class="ln"><use href="#u-search"/></svg><span class="val">夜市螺獅粉<span class="caret"></span></span></div></div>
+          <div class="list">
+            <div class="empty-msg">食品庫沒有「夜市螺獅粉」</div>
+            <button class="new-row ai" type="button"><svg class="ln"><use href="#u-est"/></svg>估一筆「夜市螺獅粉」</button>
+            <button class="new-row" type="button"><svg class="ln"><use href="#u-plus"/></svg>新增「夜市螺獅粉」到食品庫</button>
+          </div>
+        </div>
+        <div class="kb">鍵盤（含選字列約 336px）</div>
+      </div>
+    </figure>
+
+  </div>
+</section>
+
+<section class="part" aria-labelledby="pc">
+  <h2 id="pc">比較與待決</h2>
+  <div class="row">
+    <div class="notes">
+      <h3>A 與 B 差在哪</h3>
+      <table class="cmp">
+        <tr><th></th><th>A 常駐頂部</th><th>B 收進清單</th></tr>
+        <tr><td>打開 sheet 到能打字</td><td>點 1 下（描述框）</td><td>點 2 下（估一筆 → 描述框）</td></tr>
+        <tr><td>點檔位</td><td>點進描述框才出現；失敗時直接出現</td><td>子畫面裡一直都在，按鈕最大</td></tr>
+        <tr><td>頂部固定區</td><td>多約 60px（描述框），打字時再多約 52px（檔位）</td><td>不變</td></tr>
+        <tr><td>估算跟食品庫一起記</td><td>可以：草稿卡在清單上面，同時勾「燙青菜」一起加入</td><td>不行：子畫面只放草稿，要分兩次記</td></tr>
+        <tr><td>打字時鍵盤蓋住的</td><td>清單全部（A2）</td><td>子畫面下半，檔位被蓋住</td></tr>
+        <tr><td>搜尋找不到時</td><td>沒有額外的列（描述框本來就在上面）</td><td>多一列「估一筆『…』」（B4）</td></tr>
+      </table>
+      <p><b>我傾向 B。</b>每天開五次 sheet，大多數是點常吃的東西；「估一筆」一天最多一兩次。A 讓每一次打開都多一個框，在 745px 的畫面裡等於少看一列食物（DESIGN「記一筆 sheet」條為了省 52px 拿掉標題）。B 多的那一下，只發生在真的要估的時候；而且 B4 讓「搜尋找不到」這個最常見的觸發點直接接上。A 唯一明顯贏的是「估算跟食品庫的東西一起記」，例如夜市吃了螺獅粉、又喝了庫裡有的無糖豆漿。</p>
+    </div>
+    <div class="notes">
+      <h3>兩版共用的</h3>
+      <ul>
+        <li><b>草稿卡</b>：每樣一列，品名後面淡字「（估算）」、熱量框可以直接改（16px 輸入，iOS 不會放大）、右邊 ✕ 刪掉。下面一行先寫範圍、再寫 AI 的假設——錯最多的品項都是份量有歧義（鳳梨酥、蛋餅、拿鐵），讓人一眼看到「它以為是多大份」才改得對。</li>
+        <li><b>確認前不寫入</b>：按底部「加入」才寫，跟現在的確認列同一顆鈕、同一套小計與三大營養素（＋這次）。不另外寫「確認前不會記進去」——標題「估一筆」、每列的「（估算）」、底部的「加入」已經在講同一件事。</li>
+        <li><b>檔位</b>（2026-11-13 改，B2）：用途是「描述不出來」——忘了吃什麼、AI 估不出來、懶得打字。所以按「那一餐大概是哪一種」分，不按份量：<b>吃得簡單</b>（飯糰、麵包、蛋餅，約 400，我定的、沒出處）／<b>一般正餐</b>（便當、一碗麵，約 700，國健署成人一餐建議量）／<b>吃很多</b>（火鍋、夜市、聚餐，約 1000，國健署 2012 稿：傳統便當約 900、炸豬排便當約 1000）。例子幫回想、數字放最小。點了變成一列草稿，標「只估了熱量」，三大營養素記 0。A 版那排還是舊寫法，沒跟著改。</li>
+        <li><b>圖示</b>：用一枝鉛筆畫虛線，說「畫個大概」；不用星星火花——那個符號在講「AI 很厲害」，這裡要講的是「這是估的」。</li>
+        <li><b>等待</b>：實測 p50 約 7 秒、p90 約 19 秒；等待中描述框旁顯示三個點，清單照常可以用（A），或停在子畫面（B）。</li>
+      </ul>
+      <h3>還要你決定的（spec A 待決 ①–⑤，加一條新的）</h3>
+      <ul>
+        <li>① 多樣拆成多列（建議）還是合成一列。</li>
+        <li>②⑤ 入口放哪：<b>就是這份樣張的 A／B</b>。</li>
+        <li>③ 品名自動加「（估算）」——樣張照建議加。</li>
+        <li>④ 檔位三個數字與名稱；「小份 400」沒有出處。</li>
+        <li><b>新：離線時檔位能不能記？</b>DESIGN「寫入失敗（記一筆）」寫明<b>飲食寫入不做離線佇列</b>，所以完全沒網路時點檔位，按「加入」一樣會失敗、就地顯示重試。檔位真正有用的是「AI 太慢、估不出來、不想打字」。要離線也記得進去，得另外做飲食的離線佇列（推翻那條 YAGNI）——spec A 的 AC 13 寫了「離線進佇列」，跟現行規則衝突，要改其中一邊。</li>
+        <li>B 版的「存進食品庫」勾選（B3 有畫，A3 為了版面先省略）要不要留。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</body>
+</html>
