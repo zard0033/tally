@@ -42,6 +42,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-13 push 前全量（v2.133 App 圖示換成樣張 A，`?v=6`→7；動到 `vite.config.ts`（只改註解）＋precache 的圖示資產，屬例外清單，所以 push 前跑）：`--list` 540 條 21 檔，18.3 分鐘，539 過 1 紅。紅的是 `interaction`「慢態有出口」，偶發清單上、本機幾乎必紅、基線一樣，使用者說先不查。這批沒動登入與 session 路徑，判定與本批無關。push 前：`npx vitest run` 1056 全過（31 檔，PowerShell）；`npm run lint` 0 error；build 含在 e2e 裡。
+
 2026-11-11 push 後全量（`c769ce8`，v2.127–v2.129）：541 條 8 份全過、0 偶發。之前三輪全紅都是環境：runner 解析不到 `*.ubuntu.com`（azure 鏡像、官方鏡像都一樣，GitHub 狀態頁沒公告），8 份卡在 apt 裝字型，最多 1 份撐過去；workflow 改成 apt 前把 `/etc/resolv.conf` 換成 1.1.1.1／8.8.8.8 就好了。撐過去那 1 份測出真紅：`interaction:901` 在讀取一次失敗就拋（v2.128）後，開機「載入中…」一閃而過、Linux CI 量不到——本機量得到，**本機綠不代表 CI 綠，動到時序的改動要找「斷言中間態」的測試**。
 
 2026-11-11 v2.128（冷啟動不等重試、全站 AI 一份設定、設定頁 AI 段，未跑全量、未推）：vitest 1058 過；build、lint 過。`meal-suggest`＋`settings-nav`＋`service-worker`＋`quota-warning`＋`inline-edit` 104 過、`training`「連不上伺服器」1 過、smoke 55 過（smoke 第一輪紅 1：`tally.spec` 的「零真實網路請求」把 stub 接住的 read-label 額度查詢也算進去，改成排除 read-label）。冷啟動（token 有效）e2e 實測 7644 ms → 334 ms，門檻 12 秒收到 3 秒。mutation：vitest 6 處（辨識只用校準過的、白名單、額度欄位驗型別、credits 嚴格 true、log 遮 key、空白辨識串）都紅；e2e 3 處（拿掉 `rest.retry=false` 回到 7.6 秒、分類不帶 model、寫入後重撈不重試）都紅；**第一次「分類不帶 model」的 mutant 讓 tsc 擋掉 build、測試根本沒跑，不算數**，改成能編譯的寫法才得到真的紅。**陷阱：關掉 postgrest-js 退避重試後，靠「等 7 秒退避」的斷言會變成量不到中間態**（weight-trend 的骨架斷言拿掉）。新 stub 開關 `__dropIntake`（下一次當日清單查詢斷一次網）、`__credits`、`__readLabelModels`。訓練頁同步的 1 秒重試沒有 e2e 守。

@@ -58,7 +58,7 @@ export default defineConfig({
          網路；不在 denylist 的導覽會被 navigateFallback 吞成 App 首頁。
        - denylist 的比對對象是 pathname＋search，所以救援頁的規則允許帶 query、也允許無 .html 的網址
          （`/tally/reset.html?from=…`、`/tally/reset`），否則會被它要救的那支 SW 吞成 App 首頁。
-       - ignoreURLParametersMatching 加 `v`：index.html 以 `?v=6` 引用 favicon／manifest／apple-touch-icon，
+       - ignoreURLParametersMatching 加 `v`：index.html 以 `?v=7` 引用 favicon／manifest／apple-touch-icon，
          precache 條目不帶 query，不加的話離線時這三個請求會落到網路而失敗。
        - 救援路徑①：`SW_SELF_DESTROY=1`（見上方 KILL_SW）產出自我解除版 sw.js，推上去後手機下次
          開 App 就會把壞掉的 SW 換掉。 */

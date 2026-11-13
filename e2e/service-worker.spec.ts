@@ -144,9 +144,9 @@ test('首次安裝後，伺服器關掉也能開 App；快取只含同源外殼�
   await page.reload({ waitUntil: 'load' })
   await expect(page.getByText('用 Google 登入')).toBeVisible()
 
-  // index.html 以 ?v=6 引用的三個檔也要離線可取（precache 條目不帶 query，要靠 ignoreURLParametersMatching）
+  // index.html 以 ?v=7 引用的三個檔也要離線可取（precache 條目不帶 query，要靠 ignoreURLParametersMatching）
   const assetsOk = await page.evaluate(async () => {
-    const urlsWithQuery = ['/tally/favicon.svg?v=6', '/tally/manifest.webmanifest?v=6', '/tally/apple-touch-icon.png?v=6']
+    const urlsWithQuery = ['/tally/favicon.svg?v=7', '/tally/manifest.webmanifest?v=7', '/tally/apple-touch-icon.png?v=7']
     return Promise.all(urlsWithQuery.map((u) => fetch(u).then((r) => r.ok, () => false)))
   })
   expect(assetsOk).toEqual([true, true, true])
