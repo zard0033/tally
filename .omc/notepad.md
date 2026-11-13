@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-13 晚）：v2.134 估一筆已部署（d9998bb CI 全綠，修了 training:2936）；read-label 估算模式已部署（真帳號估算還沒試）。
-進行中：CI e2e 根治，分支 ci-e2e-hardening（容器＋字型快取已在 diag 驗過；burn-in；settled()）。證據改了方向：CI 紅的共同底層是 shard 前幾條跑在冷機器上（wiki e2e-reference 11-13），不做 144 處固定等待全面掃除。合併上 main 後看 8 份 shard 第一條耗時，懲罰還在就加每個 worker 先暖機。之後：使用者真機估一次；減重回饋圈見待辦 0。
+現況（2026-11-14）：main 2f59132 已部署（含估一筆 v2.134）。CI e2e 已改在 Playwright 容器跑（字型快取、不碰 ubuntu 鏡像）＋burn-in（改到的測試×5）＋github reporter 標 flaky；容器首輪 551 條 0 flaky。
+下一步：本機已 commit 的 globalSetup 暖機（f3b4d81 起，未推）推上去後，比對各 shard 第一條耗時（基線見 wiki e2e-reference 11-14）；暖機沒效就再查冷啟動機制。分支 ci-e2e-hardening 已併入 main、可刪（要問）。之後：使用者真機估一次；減重回饋圈見待辦 0。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

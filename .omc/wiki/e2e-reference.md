@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 容器上 main 第二輪（`2f59132`，run 43456770514）：**551 條 8 份全過、0 flaky，已部署**。SW spec 起不來的原因：preview 其實起來了（印出 `Local: http://localhost:5502`），是測試裡 `fetch('http://localhost:5502')` 連不上——推測 localhost 在容器裡同時解析成 ::1 與 127.0.0.1、vite 綁一個 fetch 連另一個；改成 preview 綁 127.0.0.1、測試也連 127.0.0.1 後 diag 與全量都綠。主 server（5501）也用 localhost 但沒事，因為 Playwright 的 webServer 檢查走 Node `http`、跟 vite 同一套解析。各份第一條（無暖機基線，第二次量）：meal-exit 5.3s、sync-sheet:171 8.3s、training:3015 11.1s、training:821 3.4s、estimate:61 7.8s——跟上一輪一致。下一步：globalSetup 暖機（`e2e/warmup.ts`，失敗只印 `::warning::` 不擋測試）上線後再量同一批。注意 diag 也有 `CI=true`，暖機上線後 diag 重現不了冷啟動。
+
 2026-11-13 容器上 main 第一輪（`cd492e3`，run 43440639196）：7 份全過、0 flaky；字型快取命中；burn-in 選到 meal-exit:7 跑 5 次全過。**shard 5 的 `service-worker.spec` 8 條全紅（兩次都紅）：自己 spawn 的 preview（5502）15 秒內沒起來**，本機 8 條全綠，原因待 diag 查（preview 的輸出原本被 `stdio: 'ignore'` 吞掉，已改成帶進錯誤訊息）。冷啟動懲罰在容器裡還在、約小一半：shard 第一條 meal-exit 5.0s（排後面 2.1s）、sync-sheet:171 8.2s（4.0s）、training:821 3.7s（1.5s）、training:3015 11.6s（6.6s）——diag 那次看不到懲罰是探針先暖過機。
 
 2026-11-13 CI e2e 根治（分支 `ci-e2e-hardening`）：統計 11-10 改雲端後 26 次 run（8 份×1 worker 之後 20 次）——紅 8 次＝5 次測試時序、2 次 apt 解析不到 ubuntu 鏡像（一條測試都沒跑）、1 次真 bug（interaction:901）；另有 9 次重試才過。**共同底層：shard 的前幾條跑在冷機器上**——每份 shard 第一條的耗時是同一條排在後面時的 2–5 倍（多 5–8 秒）：`meal-exit:7` 排第一 16 次 3.9–13.5s、排後面 2.3–3.1s；`sync-sheet:171` 第一 5–22s、平常 4s；`training:904` 4–13s、平常 2.3s。紅過抖過的 training:3067/3068、904–970 一帶都在 shard 開頭。裸 runner 上 apt 有跑 fontconfig trigger，所以不是字型快取沒建，冷啟動機制**未查明**。改成 Playwright 官方容器後 diag（run 43437585830，左滑 7 條×10）70 過、第一條沒有懲罰（2.2s vs 2.0s），**但 diag 先跑了探針可能已暖機，未證實**；合併後看 8 份 shard 第一條的耗時才算數，懲罰還在就加每個 worker 先暖機。本機用 rAF 燒主執行緒（每幀 25／50／80ms）模擬慢幀，左滑紅重現不出來，那個工具已拿掉。通則：**CI 偶發紅先看它在 shard 裡排第幾**（log 的 `✓ N e2e/…` 的 N），排前面的先懷疑冷啟動。
