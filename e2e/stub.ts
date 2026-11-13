@@ -110,6 +110,9 @@ export async function seedFetchStub(
            測試中途可改。__creditsCalls＝打了幾次。 */
         __credits: Record<string, unknown> | null
         __creditsCalls: number
+        /* 估一筆（read-label 的 `mode: 'estimate'`）。null＝回 502；測試中途可改。__estimateCalls＝每次送來的 text。 */
+        __estimate: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
+        __estimateCalls: string[]
         /* 分類與辨識送來的整個 body，依序記下（驗不帶多餘欄位）。 */
         __readLabelBodies: Record<string, unknown>[]
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
@@ -161,6 +164,8 @@ export async function seedFetchStub(
       w.__classifyCalls = []
       w.__credits = null
       w.__creditsCalls = 0
+      w.__estimate = null
+      w.__estimateCalls = []
       w.__readLabelBodies = []
 
       const TRAINING_TABLES = [
@@ -217,7 +222,8 @@ export async function seedFetchStub(
       /* 組 foods 關聯：先查 fix.foods，查不到再查 repeatWindow 同 food_id 的列——封存食物只放在 repeatWindow，
          因為 foods 查詢不看 filter，放進 fix.foods 就會被當成使用中的食物回給 listFoods。 */
       const intakeFoodsJoin = (foodId: unknown) => {
-        const food = (fix.foods as Record<string, unknown>[]).find((f) => f.id === foodId)
+        // 先查 foodStore：它一開始就是 fix.foods 的副本，再加上測試中新建的（估一筆建的封存食物也要 join 得到品名）
+        const food = foodStore.find((f) => f.id === foodId) ?? (fix.foods as Record<string, unknown>[]).find((f) => f.id === foodId)
         if (food) return { name: food.name, vendor: food.vendor, archived: food.archived ?? false, category: food.category ?? null }
         return fix.repeatWindow.find((r) => r.food_id === foodId)?.foods ?? null
       }
@@ -226,6 +232,8 @@ export async function seedFetchStub(
          只動符合的列（「手動改過的不被覆蓋」靠它），POST 的新食物也放進來。一般的 foods GET 照舊回 fix.foods，
          既有測試的資料不變。 */
       let foodStore = (fix.foods as Record<string, unknown>[]).map((f) => ({ ...f }))
+      // 新建食物的 id：第一筆仍是 999（既有測試斷言它），之後遞增——估一筆一次會建好幾筆
+      let nextFoodId = 999
       const foodFilter = (qs: URLSearchParams) => {
         const idParam = qs.get('id') ?? ''
         const ids = idParam.startsWith('in.(') ? idParam.slice(4, -1).split(',').map(Number) : idParam ? [Number(idParam.replace(/^eq\./, ''))] : null
@@ -249,7 +257,7 @@ export async function seedFetchStub(
            所以「測試忘了打開」不會靜默變成放行。 */
         /* 分類模式：body 帶 foods。排在拍照辨識之前（同一個網址）。 */
         if (u.includes('/functions/v1/read-label')) {
-          let sent: { foods?: { id: number; name: string; vendor: string | null }[]; credits?: boolean; model?: string; image?: string } = {}
+          let sent: { foods?: { id: number; name: string; vendor: string | null }[]; credits?: boolean; model?: string; image?: string; mode?: string; text?: string } = {}
           try {
             sent = JSON.parse(String(opts.body ?? '{}'))
           } catch {
@@ -258,6 +266,12 @@ export async function seedFetchStub(
           if (sent.credits === true) {
             w.__creditsCalls++
             return w.__credits ? json(w.__credits) : json({ error: '辨識失敗' }, 502)
+          }
+          if (sent.mode === 'estimate') {
+            w.__estimateCalls.push(String(sent.text))
+            const e = w.__estimate
+            if (e?.delayMs) await new Promise((r) => setTimeout(r, e.delayMs))
+            return e && e.mode === 'ok' ? json(e.body) : json({ error: '辨識失敗' }, 502)
           }
           if (sent.foods || sent.image) w.__readLabelBodies.push(sent)
           if (sent.foods) {
@@ -380,7 +394,7 @@ export async function seedFetchStub(
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body
             // 資料庫的預設值：還沒分類、沒手動改過
-            const created = { id: 999, category: null, category_manual: false, ...(rec as Record<string, unknown>) }
+            const created = { id: nextFoodId++, category: null, category_manual: false, ...(rec as Record<string, unknown>) }
             foodStore.push(created)
             return json([created], 201)
           }

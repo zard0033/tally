@@ -438,6 +438,15 @@ export default function App() {
     },
     [handleCreateFood, classifyNew],
   )
+  /* 「估一筆」的草稿列：沒勾存進食品庫就建立即封存；同樣補判類型（封存的也補，餐建議的避開重複要看它）。 */
+  const handleCreateEstimateFood = useCallback(
+    async (food: NewFood, keep: boolean) => {
+      const created = await handleCreateFood(food, { archived: !keep })
+      classifyNew(created)
+      return created
+    },
+    [handleCreateFood, classifyNew],
+  )
   const handleSetCategory = useCallback(
     async (id: number, category: FoodCategory) => {
       await handleSetFoodCategory(id, category)
@@ -1230,6 +1239,7 @@ export default function App() {
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}
           onCreateFood={handleCreateFoodAndClassify}
+          onCreateEstimateFood={handleCreateEstimateFood}
         />
       )}
     </div>

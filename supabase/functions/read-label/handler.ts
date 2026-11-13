@@ -1,7 +1,8 @@
 /* read-label 的安全外殼：先確認呼叫者是誰，通過了才把圖片轉給 OpenRouter 讀營養標示。
    第二個模式（2026-11-10，spec.md C 節「第三版」）：body 帶 `foods` 時改成純文字分類，替食物挑類型。
    第三個模式（2026-11-11，v2.128）：body 帶 `credits: true` 時代查 OpenRouter 額度給設定頁，只回數字。
-   三個模式的模型都由同一份 `AI_MODELS`（主模型＋備援）決定，見下方。
+   第四個模式（2026-11-13，spec.md A 節「用一句話記一餐」）：body 帶 `mode: 'estimate'` ＋ `text` 時估一句話裡每樣的熱量。
+   所有模式的模型都由同一份 `AI_MODELS`（主模型＋備援）決定，見下方。
    存在的理由是 spec.md「安全（不可妥協）」——repo 是 public，辨識用的 API key 不能進前端 bundle，
    所以必須有一層「先確認呼叫者是誰、再動作」的後端代理。金鑰只活在這一層，
    而且**永遠不出現在任何回應裡**：上游的錯誤原文一律不轉發，只回固定字串。
@@ -253,6 +254,119 @@ async function classify(foods: unknown, openrouterKey: string, cors: Record<stri
   return json({ results }, 200, cors)
 }
 
+/* ── 估算模式（估一筆） ── */
+
+/* **逐字等於 spec.md A 節「上線用的提示詞」**（AC 12，handler.test.ts 讀 spec.md 比對）：準度測試量的就是這一份，
+   上線的與測過的不能是兩份——改一個字都要先重測、再同步改 spec。使用者的句子直接接在最後一行後面，不加分隔。 */
+export const ESTIMATE_PROMPT = `你是台灣的營養估算助手。使用者會用一句話描述他吃了什麼，請估算熱量與三大營養素。
+
+規則：
+1. 一句話裡有幾樣食物就拆成幾樣，每樣一筆。
+2. 份量照台灣常見的份量估，取常見份量的中間值，不要往大份量或多油的方向假設；使用者有講大小、數量、重量就照他講的。連鎖店、超商、包裝食品如果你知道它的營養標示，優先用標示的數字。
+3. 每樣都寫出你的假設（例如「便當白飯約 200 克、主菜炸排骨一塊、用油約 1 湯匙」）。
+4. 熱量給一個點估計與一個合理範圍（kcal_low ≤ kcal ≤ kcal_high）：kcal_low 用小份量、少油的情況，kcal_high 用大份量、多油的情況。
+5. 只回 JSON，不要任何其他文字，格式：
+{"items":[{"name":"品名","kcal":0,"kcal_low":0,"kcal_high":0,"protein_g":0,"fat_g":0,"carb_g":0,"assumption":"假設"}]}
+
+使用者的描述：`
+
+/* 句子的上限（AC 3）。有界的理由同圖片：不替人把任意長的東西轉發給上游。
+   **以 Unicode 碼位計**（`[...s].length`），不用 `.length` 的 UTF-16 單位：罕用字與 emoji 是兩個單位，
+   用 `.length` 會讓同樣 300 個字因為字不同而時收時不收。前端輸入框若用 `maxLength`（UTF-16 單位）只會比這裡嚴，
+   不會出現前端放行、這裡擋下的句子。 */
+const MAX_SENTENCE = 300
+/** 一句最多拆幾樣（AC 4，設計決定）：300 字寫不出 20 樣，只是不收無界陣列。 */
+const MAX_ITEMS = 20
+/** 假設那一行的上限。提示詞的例子約 30 字；只顯示在草稿、不存，200 是寬鬆的界，擋的是模型失控吐長文。 */
+const MAX_ASSUMPTION = 200
+
+/** 估算的一樣（AC 4）。熱量範圍與假設只在草稿顯示、不存（spec A 節「資料」）。 */
+export interface EstimateItem {
+  /** 讀不到是 null、不算失敗：品名使用者在草稿裡自己改很快，數字才是要估的東西。 */
+  name: string | null
+  kcal: number
+  kcal_low: number
+  kcal_high: number
+  protein_g: number
+  fat_g: number
+  carb_g: number
+  assumption: string | null
+}
+
+/**
+ * 把模型回的文字解成 `{items}`。**任一樣不合法就整組回 null（＝失敗）**（AC 4）：悄悄丟掉一樣，
+ * 使用者在草稿裡不會發現少了一樣，而少記正是這功能要解的問題——寧可整組失敗讓他重試或改用檔位。
+ */
+export function parseEstimate(content: string): { items: EstimateItem[] } | null {
+  // 同 parseReading：先剝 ``` 再解；模型在 JSON 前後多講話（「以下是估算：」）時剝不掉，退一步取第一個 { 到最後一個 }。
+  const text = content.trim().replace(/^```(?:json)?/, '').replace(/```$/, '').trim()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    const from = text.indexOf('{')
+    const to = text.lastIndexOf('}')
+    if (from < 0 || to <= from) return null
+    try {
+      parsed = JSON.parse(text.slice(from, to + 1))
+    } catch {
+      return null
+    }
+  }
+  const list = (parsed as { items?: unknown } | null)?.items
+  if (!Array.isArray(list) || list.length === 0 || list.length > MAX_ITEMS) return null
+
+  /* 品名與假設：字串就 trim 後截到上限（以碼位截，不切斷罕用字），其餘（缺、null、型別不對、空白）一律 null。
+     理由同 parseReading 的 name：文字欄讀不到只是留白，不讓整組數字作廢。 */
+  const str = (v: unknown, max: number): string | null => {
+    const t = typeof v === 'string' ? [...v.trim()].slice(0, max).join('') : ''
+    return t || null
+  }
+  const items: EstimateItem[] = []
+  for (const it of list) {
+    if (typeof it !== 'object' || it === null) return null
+    const { name, kcal, kcal_low, kcal_high, protein_g, fat_g, carb_g, assumption } = it as Record<string, unknown>
+    if (!isNum(kcal) || !isNum(kcal_low) || !isNum(kcal_high)) return null
+    if (!isNum(protein_g) || !isNum(fat_g) || !isNum(carb_g)) return null
+    if (kcal < 0 || kcal > 3000) return null
+    if ([protein_g, fat_g, carb_g].some((g) => g < 0 || g > 300)) return null
+    if (!(kcal_low <= kcal && kcal <= kcal_high)) return null
+    // 逐欄重建，不把模型回的物件原樣往前端送
+    items.push({
+      name: str(name, MAX_TEXT), kcal, kcal_low, kcal_high, protein_g, fat_g, carb_g,
+      assumption: str(assumption, MAX_ASSUMPTION),
+    })
+  }
+  return { items }
+}
+
+/**
+ * 估算模式：已通過驗證才會走到這裡（與辨識共用 1–5 步）。失敗一律 READ_FAILED，前端顯示重試、句子留在框裡（AC 14）。
+ * 模型走 `AI_MODELS`（純文字，同分類），不為這個模式另訂模型（spec A 節「明確不做」）。
+ */
+async function estimate(text: unknown, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+  const sentence = typeof text === 'string' ? text.trim() : ''
+  const len = [...sentence].length
+  if (len < 1 || len > MAX_SENTENCE) {
+    // 不記句子本身（使用者的資料），只記型別與長度
+    diag('400 bad-text', { type: typeof text, len: typeof text === 'string' ? len : null })
+    return json({ error: BAD_REQUEST }, 400, cors)
+  }
+  const t0 = Date.now()
+  const reply = await askModel([{ type: 'text', text: ESTIMATE_PROMPT + sentence }], openrouterKey, AI_MODELS)
+  if (!reply) return json({ error: READ_FAILED }, 502, cors)
+  const result = parseEstimate(reply.content)
+  if (!result) {
+    // 不記原文：回覆裡是使用者吃了什麼（同 classify-unparseable）；只記形狀與哪個模型壞了格式
+    diag('502 estimate-unparseable', { model: reply.model, len: reply.content.length, head: reply.content.trimStart().slice(0, 1) })
+    return json({ error: READ_FAILED }, 502, cors)
+  }
+  /* 耗時與用量（AC 6）：耗時是對照前端 55 秒逾時的依據（準度測試 p90 18.8 秒，落到 Qwen 備援會慢很多），
+     用量是看這個模式一次花多少。不記句子與估算值（使用者的資料）；記樣數看模型拆得多細。 */
+  diag('200 estimate ok', { ms: Date.now() - t0, model: reply.model, usage: reply.usage, items: result.items.length })
+  return json(result, 200, cors)
+}
+
 /** 額度查詢的回應：只有數字（或 null＝上游沒給／不是數字）。單位是 OpenRouter 的美元。 */
 export interface AiCredits {
   total_credits: number | null
@@ -464,8 +578,8 @@ export async function handleRequest(
         401 也才維持只有「驗證失敗」一個成因。 */
   if (!openrouterKey) return json({ error: MISCONFIGURED }, 500, cors)
 
-  /* 6. 讀 body。`credits: true` 是額度查詢（設定頁，見 credits）；帶 `foods` 的是分類模式（純文字，見 classify）；
-        其餘是辨識模式，只認 image。 */
+  /* 6. 讀 body。`credits: true` 是額度查詢（設定頁，見 credits）；`mode: 'estimate'` 是估一筆（純文字，見 estimate）；
+        帶 `foods` 的是分類模式（純文字，見 classify）；其餘是辨識模式，只認 image。 */
   let body: Record<string, unknown>
   try {
     const parsed: unknown = await req.json()
@@ -480,6 +594,7 @@ export async function handleRequest(
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   if (body.credits === true) return credits(openrouterKey, cors)
+  if (body.mode === 'estimate') return estimate(body.text, openrouterKey, cors)
   if ('foods' in body) return classify(body.foods, openrouterKey, cors)
 
   // 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。

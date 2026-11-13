@@ -83,6 +83,8 @@ export interface LogSheetProps {
   onCreateIntake: (rows: NewIntake[]) => Promise<void>
   /** 新增食物到食品庫；成功回傳新列（含 id），LogSheet 自己決定要不要把它選起來。 */
   onCreateFood: (food: NewFood) => Promise<Food>
+  /** 「估一筆」的一列先建成 foods（keep＝false 就建立即封存），回傳新列給 LogSheet 記下 id 再寫 intake。 */
+  onCreateEstimateFood: (food: NewFood, keep: boolean) => Promise<Food>
 }
 
 export interface SettingsProps {

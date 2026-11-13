@@ -8,9 +8,11 @@
    差分設計（這才是重點）：四條路只有 **token 不一樣**，key、JWKS、handler 全同。
    過期那條刻意用**同一把有效 key** 簽，所以它被擋下只可能是 exp；缺／壞 JWKS 回的是 500 不是 401，
    401 因此只剩「驗證失敗」一個成因，不會有「別的錯誤碰巧也回 401」的假綠。 */
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose'
-import { AI_MODELS, CATEGORIES, handleRequest, VISION_MODELS } from './handler.ts'
+import { AI_MODELS, CATEGORIES, ESTIMATE_PROMPT, handleRequest, VISION_MODELS } from './handler.ts'
 import { FOOD_CATEGORIES } from '../../../src/lib/categories.ts'
 import * as front from '../../../src/lib/aiModels.ts'
 
@@ -651,5 +653,234 @@ describe('read-label 額度模式', () => {
       const res = await handleRequest(post(await validToken(), { credits }), JWKS, OR_KEY)
       expect(res.status).toBe(400)
     }
+  })
+})
+
+/* 估算模式（spec.md A 節「用一句話記一餐」）：body `{mode:'estimate', text}`。只新增、不改既有兩個模式（AC 1），
+   既有的辨識與分類測試一條不動，就是「沒帶 mode 的行為不變」的證明。 */
+describe('read-label 估算模式', () => {
+  const SENTENCE = '露營烤肉，五花肉、香腸、雞翅'
+  const item = (o: Record<string, unknown> = {}) => ({
+    name: '五花肉', kcal: 500, kcal_low: 400, kcal_high: 650, protein_g: 20, fat_g: 45, carb_g: 0,
+    assumption: '五花肉約 150 克', ...o,
+  })
+  const reply = (items: unknown[]) => upstreamReply(JSON.stringify({ items }))
+  const sentBody = (spy: ReturnType<typeof stubUpstream>) => JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+
+  it('㊳ 提示詞逐字等於 spec.md「上線用的提示詞」（AC 12）：上線的與測過的不能是兩份', () => {
+    // 工作目錄是 CRLF、git 裡是 LF，兩邊都正規化成 LF 再比；template literal 本身已把 CRLF 正規化成 LF
+    const spec = readFileSync(new URL('../../../spec.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+    const block = /\*\*上線用的提示詞\*\*[^\n]*\n[\s\S]*?```[^\n]*\n([\s\S]*?)\n```/.exec(spec)?.[1]
+    expect(block, '在 spec.md 找不到「上線用的提示詞」那段 code block').toBeDefined()
+    expect(ESTIMATE_PROMPT.replace(/\r\n/g, '\n')).toBe(block)
+    expect(ESTIMATE_PROMPT.endsWith('使用者的描述：')).toBe(true)
+  })
+
+  it('㊴ 驗證閘在估算模式一樣有效：沒 token／偽造 token → 401、沒有 key → 500，都不外呼（AC 2）', async () => {
+    const body = { mode: 'estimate', text: SENTENCE }
+    expect((await handleRequest(post(undefined, body, SITE), JWKS, OR_KEY)).status).toBe(401)
+    const forged = await sign(foreignKeys.privateKey, validClaims, { iat: now(), exp: now() + 3600 })
+    expect((await handleRequest(post(forged, body, SITE), JWKS, OR_KEY)).status).toBe(401)
+    expect((await handleRequest(post(await validToken(), body), JWKS, undefined)).status).toBe(500)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('㊵ text 缺、不是字串、空、只有空白、超過 300 字 → 400，不外呼（AC 3）', async () => {
+    const token = await validToken()
+    for (const text of [undefined, null, 123, ['a'], '', '   ', '\n\t', 'x'.repeat(301), ` ${'飯'.repeat(301)} `]) {
+      const res = await handleRequest(post(token, { mode: 'estimate', text }, SITE), JWKS, OR_KEY)
+      expect(res.status, JSON.stringify(text)?.slice(0, 40)).toBe(400)
+      expect(await res.json()).toEqual({ error: '請求格式不正確' })
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+    }
+  })
+
+  it('㊶ 剛好 300 字收（以碼位算：300 個罕用字是 600 個 UTF-16 單位也收；前後空白先 trim 掉不計）', async () => {
+    const token = await validToken()
+    for (const text of ['x'.repeat(300), '𠮷'.repeat(300), `  ${'飯'.repeat(300)}  `]) {
+      const spy = stubUpstream(reply([item()]))
+      const res = await handleRequest(post(token, { mode: 'estimate', text }), JWKS, OR_KEY)
+      expect(res.status, text.slice(0, 4)).toBe(200)
+      expect(sentBody(spy).messages[0].content[0].text).toBe(ESTIMATE_PROMPT + text.trim())
+    }
+  })
+
+  it('㊷ 成功：送純文字（提示詞＋句子）、走 AI_MODELS 那串，回 {items} 逐欄重建（AC 4）', async () => {
+    const items = [
+      item(),
+      item({ name: '香腸', kcal: 250, kcal_low: 200, kcal_high: 320, protein_g: 10, fat_g: 20, carb_g: 6, assumption: '香腸兩條' }),
+      item({ name: '雞翅', kcal: 300, kcal_low: 300, kcal_high: 300, protein_g: 25, fat_g: 20, carb_g: 0, assumption: '雞翅三支', extra: '多的' }),
+    ]
+    const spy = stubUpstream(reply(items))
+    const res = await handleRequest(post(await validToken(), { mode: 'estimate', text: SENTENCE }, SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SITE)
+    const body = await res.json()
+    expect(Object.keys(body)).toEqual(['items'])
+    expect(body.items).toHaveLength(3)
+    expect(body.items[2]).toEqual({
+      name: '雞翅', kcal: 300, kcal_low: 300, kcal_high: 300, protein_g: 25, fat_g: 20, carb_g: 0, assumption: '雞翅三支',
+    })
+    expect(body.items[0]).toEqual(item())
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${OR_KEY}`)
+    const sent = sentBody(spy)
+    // 純文字模式走整串 AI_MODELS（同分類），不是讀圖那串
+    expect(sent.models).toEqual([...AI_MODELS])
+    expect(sent).not.toHaveProperty('model')
+    const parts = sent.messages[0].content
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toEqual({ type: 'text', text: ESTIMATE_PROMPT + SENTENCE })
+  })
+
+  it('㊸ 模型把 JSON 包在 ``` 裡、或前後多講話，也解得開', async () => {
+    const token = await validToken()
+    const json = JSON.stringify({ items: [item()] })
+    for (const content of [
+      '```json\n' + json + '\n```',
+      '```\n' + json + '\n```',
+      '以下是估算：\n```json\n' + json + '\n```\n份量是常見的中間值。',
+      '以下是估算：' + json + '（僅供參考）',
+    ]) {
+      stubUpstream(upstreamReply(content))
+      const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)
+      expect(res.status, content.slice(0, 20)).toBe(200)
+      expect(await res.json()).toEqual({ items: [item()] })
+    }
+  })
+
+  it('㊹ 品名／假設缺、null、空白、型別不對 → null，整組照樣成功；有值的去掉前後空白', async () => {
+    const token = await validToken()
+    for (const o of [{ name: undefined, assumption: undefined }, { name: null, assumption: null }, { name: '  ', assumption: '' }, { name: 7, assumption: { a: 1 } }]) {
+      stubUpstream(reply([item(o)]))
+      const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)
+      expect(res.status, JSON.stringify(o)).toBe(200)
+      const got = (await res.json()).items[0]
+      expect(got.name).toBeNull()
+      expect(got.assumption).toBeNull()
+      expect(got.kcal).toBe(500)
+    }
+    stubUpstream(reply([item({ name: '  五花肉  ', assumption: ' 約 150 克 ' })]))
+    const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)
+    const got = (await res.json()).items[0]
+    expect([got.name, got.assumption]).toEqual(['五花肉', '約 150 克'])
+  })
+
+  /* 任一樣不合法就整組失敗（AC 4）：悄悄丟掉一樣，使用者不會發現少記了。每一條都在另外兩樣合法的情況下壞一樣。 */
+  it('㊺ 任一樣不合法 → 整組 502，不交出其餘幾樣', async () => {
+    const token = await validToken()
+    const ok = [item(), item({ name: '香腸' })]
+    const bad: [string, string][] = [
+      ['kcal_low > kcal', reply([...ok, item({ kcal_low: 501 })])],
+      ['kcal > kcal_high', reply([...ok, item({ kcal_high: 499 })])],
+      // JSON 寫不出 Infinity，但 1e999 解析出來就是 Infinity
+      ['kcal 非有限數', upstreamReply(JSON.stringify({ items: ok }).replace(/]}$/, ',' + JSON.stringify(item()).replace('"kcal":500', '"kcal":1e999') + ']}'))],
+      ['kcal 是字串', reply([...ok, item({ kcal: '500' })])],
+      ['kcal_high 缺', reply([...ok, item({ kcal_high: undefined })])],
+      ['protein_g 是 null', reply([...ok, item({ protein_g: null })])],
+      ['kcal > 3000', reply([...ok, item({ kcal: 3001, kcal_high: 3500 })])],
+      ['kcal < 0', reply([...ok, item({ kcal: -1, kcal_low: -10 })])],
+      ['脂肪 > 300 g', reply([...ok, item({ fat_g: 301 })])],
+      ['碳水 < 0', reply([...ok, item({ carb_g: -1 })])],
+      ['某一樣不是物件', reply([...ok, null])],
+      ['0 樣', reply([])],
+      ['21 樣', reply(Array.from({ length: 21 }, () => item()))],
+      ['items 不是陣列', upstreamReply('{"items":{"name":"五花肉"}}')],
+      ['沒有 items', upstreamReply(JSON.stringify(item()))],
+      ['不是 JSON', upstreamReply('估不出來，請描述得更具體一點')],
+      ['null', upstreamReply('null')],
+    ]
+    for (const [label, body] of bad) {
+      stubUpstream(body)
+      const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }, SITE), JWKS, OR_KEY)
+      expect(res.status, label).toBe(502)
+      expect(await res.json(), label).toEqual({ error: '辨識失敗' })
+    }
+  })
+
+  it('㊻ 邊界值收：kcal 0 與 3000、營養素 0 與 300、low＝kcal＝high、剛好 20 樣', async () => {
+    const token = await validToken()
+    for (const items of [
+      [item({ kcal: 0, kcal_low: 0, kcal_high: 0, protein_g: 0, fat_g: 0, carb_g: 0 })],
+      [item({ kcal: 3000, kcal_low: 3000, kcal_high: 3000, protein_g: 300, fat_g: 300, carb_g: 300 })],
+      Array.from({ length: 20 }, () => item()),
+    ]) {
+      stubUpstream(reply(items))
+      const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)
+      expect(res.status).toBe(200)
+      expect((await res.json()).items).toHaveLength(items.length)
+    }
+  })
+
+  it('㊼ 上游壞掉 → 502 固定字串，不含金鑰與上游原文（AC 5）', async () => {
+    const token = await validToken()
+    const leaky = JSON.stringify({ error: { message: `Invalid API key: ${OR_KEY}`, stack: 'at handler (file:///x.ts:1:1)' } })
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (const setup of [
+      () => stubUpstream(leaky, 401),
+      () => stubUpstream(leaky, 500),
+      () => stubUpstream('<html>Bad Gateway</html>', 200),
+      () => stubUpstream(JSON.stringify({ choices: [] }), 200),
+      () => {
+        globalThis.fetch = vi.fn(() => {
+          throw new Error(`fetch failed: Authorization: Bearer ${OR_KEY}`)
+        }) as unknown as typeof fetch
+      },
+    ]) {
+      setup()
+      const res = await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }, SITE), JWKS, OR_KEY)
+      expect(res.status).toBe(502)
+      const text = JSON.stringify(await res.json())
+      expect(text).toBe(JSON.stringify({ error: '辨識失敗' }))
+      expect(text).not.toContain('sk-or')
+    }
+    logs.mockRestore()
+  })
+
+  it('㊽ log：成功記耗時、用量、樣數，不記句子與估算值；400 與解析失敗也不記句子（AC 6）', async () => {
+    const token = await validToken()
+    const logs = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubUpstream(JSON.stringify({
+      model: 'deepseek/deepseek-v4.1-flash',
+      choices: [{ message: { content: JSON.stringify({ items: [item(), item({ name: '香腸' })] }) } }],
+      usage: { prompt_tokens: 300, completion_tokens: 120, cost: 0.0025 },
+    }))
+    expect((await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)).status).toBe(200)
+    const ok = logs.mock.calls.map((c) => c.join(' ')).find((l) => l.includes('200 estimate ok'))
+    expect(ok).toBeDefined()
+    const extra = JSON.parse(ok!.slice(ok!.indexOf('{')))
+    expect(Object.keys(extra).sort()).toEqual(['items', 'model', 'ms', 'usage'])
+    expect(extra.items).toBe(2)
+    expect(extra.model).toBe('deepseek/deepseek-v4.1-flash')
+    expect(extra.usage).toEqual({ prompt: 300, completion: 120, cost: 0.0025 })
+
+    stubUpstream(upstreamReply('露營烤肉的五花肉大概 500 卡'))
+    expect((await handleRequest(post(token, { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)).status).toBe(502)
+    expect((await handleRequest(post(token, { mode: 'estimate', text: `${SENTENCE}${'x'.repeat(300)}` }), JWKS, OR_KEY)).status).toBe(400)
+
+    const logged = JSON.stringify(logs.mock.calls)
+    expect(logged).toContain('estimate-unparseable')
+    expect(logged).toContain('400 bad-text')
+    expect(logged).not.toContain('露營')
+    expect(logged).not.toContain('五花肉')
+    expect(logged).not.toContain('150 克')
+    logs.mockRestore()
+  })
+
+  it('㊾ mode 不是 estimate（大小寫不同、沒帶）照原本的路徑走：帶圖就辨識、帶 foods 就分類', async () => {
+    const token = await validToken()
+    for (const mode of ['Estimate', 'other', undefined]) {
+      const spy = stubUpstream(upstreamReply(GOOD_READING))
+      const res = await handleRequest(post(token, { mode, text: SENTENCE, image: IMAGE }), JWKS, OR_KEY)
+      expect(res.status, String(mode)).toBe(200)
+      expect((await res.json()).basis).toBe('per_serving')
+      expect(JSON.stringify(sentBody(spy))).toContain('image_url')
+    }
+    stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+    const res = await handleRequest(post(token, { mode: 'other', foods: [{ id: 1, name: '叉燒飯', vendor: null }] }), JWKS, OR_KEY)
+    expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }] })
   })
 })

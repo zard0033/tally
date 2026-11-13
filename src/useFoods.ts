@@ -6,9 +6,10 @@ import { byFoodName } from '@/lib/foodForm'
 export function useFoods() {
   const [foods, setFoods] = useState<Food[] | null>(null)
 
-  const handleCreateFood = useCallback(async (food: NewFood): Promise<Food> => {
-    const created = await apiCreateFood(food)
-    setFoods((prev) => [...(prev ?? []), created].sort(byFoodName))
+  /* archived：「估一筆」沒勾存進食品庫的列——建立就封存，不進「使用中」清單（今日頁選單不該冒出它）。 */
+  const handleCreateFood = useCallback(async (food: NewFood, opts: { archived?: boolean } = {}): Promise<Food> => {
+    const created = await apiCreateFood(food, opts)
+    if (!created.archived) setFoods((prev) => [...(prev ?? []), created].sort(byFoodName))
     return created
   }, [])
 

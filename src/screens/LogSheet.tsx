@@ -12,11 +12,26 @@ import FoodFormFields from '@/components/FoodFormFields'
 import QtyStepper from '@/components/QtyStepper'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import {
+  estimateMeal,
   listRecentIntake,
   scanLabel,
   type Food,
   type NewIntake,
 } from '@/lib/api'
+import {
+  draftFromKcal,
+  draftFromTier,
+  draftsFromItems,
+  draftsToIntake,
+  draftName,
+  draftToFood,
+  estimateTextOk,
+  estimateTotals,
+  settleKcal,
+  withKcalInput,
+  type EstimateDraft,
+} from '@/lib/estimate'
+import EstimateView, { type EstimateStatus } from './EstimateView'
 import { isPlannable } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
@@ -29,7 +44,7 @@ import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 import type { LogSheetProps } from './types'
 
 
-type View = 'list' | 'food-form'
+type View = 'list' | 'food-form' | 'estimate'
 
 interface FoodRowHandlers {
   picks: Map<number, number>
@@ -155,7 +170,7 @@ function renderGroup(g: FoodGroup, seen: SeenMark | undefined, rows: (f: Food) =
 }
 
 export default function LogSheet(props: LogSheetProps) {
-  const { open, meal: initialMeal, foods, dayData, targets, repeatByMeal, seenByMeal, onClose, onCreateIntake, onCreateFood } = props
+  const { open, meal: initialMeal, foods, dayData, targets, repeatByMeal, seenByMeal, onClose, onCreateIntake, onCreateFood, onCreateEstimateFood } = props
 
   const [meal, setMeal] = useState<MealKey | null>(initialMeal)
   const [view, setView] = useState<View>('list')
@@ -194,6 +209,28 @@ export default function LogSheet(props: LogSheetProps) {
 
   const foodById = (id: number): Food | undefined => suggestSnaps.get(id)?.food ?? foods.find((f) => f.id === id)
 
+  /* 「估一筆」（spec A 2026-11-13 版）：草稿跟著 sheet 走，回清單再進來還在；關掉 sheet 才清。
+     estReqRef：每次送出遞增，晚到的舊回應（已經重送或關掉了）一律丟掉。 */
+  const [estText, setEstText] = useState('')
+  const [estStatus, setEstStatus] = useState<EstimateStatus>('idle')
+  const [estStartedAt, setEstStartedAt] = useState<number | null>(null)
+  const [drafts, setDrafts] = useState<EstimateDraft[]>([])
+  const [revealSeq, setRevealSeq] = useState(0)
+  const estReqRef = useRef(0)
+  const estTitleRef = useRef<HTMLSpanElement | null>(null)
+  /** 這次進估一筆是不是帶了句子（搜尋列帶字進來）：是才把焦點放描述框，回來改草稿不叫出鍵盤。 */
+  const focusTextRef = useRef(false)
+
+  /* 進「估一筆」時點下去的那顆鈕已經卸載，焦點會掉到 body（review N4）：帶了句子就放描述框（下一步就是送出），
+     否則放標題，讓讀屏從頭念、也不會一進來就叫出鍵盤蓋住檔位。 */
+  useEffect(() => {
+    if (view !== 'estimate') return
+    if (focusTextRef.current) document.getElementById('est-text')?.focus()
+    else estTitleRef.current?.focus()
+    // 只在切進來那一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view])
+
   /* 開啟時重置整個 sheet 的本地狀態：每次打開都是一份新的 */
   useEffect(() => {
     if (!open) return
@@ -208,6 +245,11 @@ export default function LogSheet(props: LogSheetProps) {
     setErr(null)
     setFoodForm(BLANK_FOOD_FORM)
     setElsewhereOpen(false)
+    estReqRef.current++
+    setEstText('')
+    setEstStatus('idle')
+    setEstStartedAt(null)
+    setDrafts([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -313,13 +355,49 @@ export default function LogSheet(props: LogSheetProps) {
     setView('food-form')
   }
 
+  /* 有草稿已經建好食物＝上一次加入失敗、等重試：錯誤與「重試」要留著（DESIGN「寫入失敗（記一筆）」）。 */
+  const pendingRetry = drafts.some((d) => d.foodId !== null)
+
   function backToList() {
     setView('list')
-    setErr(null)
+    if (!pendingRetry) setErr(null)
   }
 
+  function openEstimate(prefill: string) {
+    // 估算進行中不換句子：回來的結果屬於原本那句（review N14）
+    if (prefill && estStatus !== 'busy') setEstText(prefill)
+    focusTextRef.current = !!prefill
+    if (estStatus === 'error') setEstStatus('idle')
+    if (!pendingRetry) setErr(null)
+    setView('estimate')
+  }
+
+  async function submitEstimate() {
+    if (!meal || !estimateTextOk(estText) || estStatus === 'busy') return
+    const id = ++estReqRef.current
+    setEstStatus('busy')
+    setEstStartedAt(Date.now())
+    setErr(null)
+    try {
+      const items = await estimateMeal(estText)
+      if (id !== estReqRef.current) return
+      /* 新的估算取代上一次 AI 的草稿（重估同一句不該疊成兩份）；檔位與自己打的那幾列留著。 */
+      setDrafts((prev) => [...prev.filter((d) => d.kcalOnly || d.foodId !== null), ...draftsFromItems(items)])
+      setRevealSeq((n) => n + 1)
+      setEstStatus('idle')
+    } catch {
+      if (id !== estReqRef.current) return
+      setEstStatus('error')
+    }
+  }
+
+  const patchDraft = (key: string, fn: (d: EstimateDraft) => EstimateDraft) => setDrafts((prev) => prev.map((d) => (d.key === key ? fn(d) : d)))
+
+  /* 「加入」：清單勾的食物＋估一筆帶回來的草稿一次寫入（使用者 2026-11-13：估一筆的結果帶回 sheet 打勾，一起加入）。
+     草稿要先建 foods（沒勾存進食品庫就建立即封存）、記下 id，再跟勾的食物一起寫 intake。
+     中途失敗按重試：已經有 id 的草稿不再建一次，不會在食品庫留下重複的列。估算還在跑時不能加入（結果回來會換掉草稿）。 */
   async function submitPicks() {
-    if (picks.size === 0 || busy || !meal) return
+    if ((picks.size === 0 && drafts.length === 0) || busy || !meal || estStatus === 'busy') return
     setBusy(true)
     setErr(null)
     const rows: NewIntake[] = []
@@ -329,7 +407,19 @@ export default function LogSheet(props: LogSheetProps) {
       rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null })
     }
     try {
-      await onCreateIntake(rows)
+      const done: EstimateDraft[] = []
+      for (const d of drafts) {
+        if (d.foodId !== null) {
+          done.push(d)
+          continue
+        }
+        const created = await onCreateEstimateFood(draftToFood(d, meal), d.keep)
+        // 品名跟著定下來：之後換了餐別，已建的食物仍是這個名字，草稿也不能再跟著變（re-review M1）
+        const withId = { ...d, name: created.name, foodId: created.id }
+        done.push(withId)
+        patchDraft(d.key, () => withId)
+      }
+      await onCreateIntake([...rows, ...draftsToIntake(done, meal, dayData.date)])
       /* 成功後 App 會把 open 翻成 false，交給 SpringSheet 播退場 spring；不在這裡手動 setBusy(false)——
          下次開啟時 open 的 reset effect 會處理 */
     } catch (e) {
@@ -367,12 +457,77 @@ export default function LogSheet(props: LogSheetProps) {
   const plannable = isPlannable(dayData.date)
   const eaten = sumIntake(dayData.rows ?? [])
   const totals = pickTotals(picks, foodById)
-  const right = pickBarRight(plannable, eaten.kcal, targets.kcal, totals.kcal)
-  const combined: IntakeTotals = {
-    kcal: eaten.kcal + totals.kcal,
-    protein: eaten.protein + totals.protein,
-    fat: eaten.fat + totals.fat,
-    carb: eaten.carb + totals.carb,
+  const addOn = (t: IntakeTotals): IntakeTotals => ({
+    kcal: eaten.kcal + t.kcal,
+    protein: eaten.protein + t.protein,
+    fat: eaten.fat + t.fat,
+    carb: eaten.carb + t.carb,
+  })
+  const estTotals = estimateTotals(drafts)
+  /* 確認列與逐筆超標預警看的是「勾的＋估一筆帶回來的」合起來 */
+  const allTotals = {
+    n: totals.n + estTotals.n,
+    kcal: totals.kcal + estTotals.kcal,
+    protein: totals.protein + estTotals.protein,
+    fat: totals.fat + estTotals.fat,
+    carb: totals.carb + estTotals.carb,
+  }
+  const combined: IntakeTotals = addOn(allTotals)
+
+  /* 底部確認列。清單的勾選與「估一筆」的草稿共用：小計、剩餘、三大營養素（＋這次）、加入鈕與失敗重試都同一套規則。 */
+  function renderPickBar(t: IntakeTotals & { n: number }, onSubmit: () => void, blocked = false) {
+    const right = pickBarRight(plannable, eaten.kcal, targets.kcal, t.kcal)
+    const all = addOn(t)
+    const fatOver = macroExceeds(all.fat, targets.fat)
+    const carbOver = macroExceeds(all.carb, targets.carb)
+    return (
+      <div className="pick-bar">
+        {err && (
+          <p className="sheet-error" role="alert">
+            存不進去：{err}
+          </p>
+        )}
+        {/* role="group"：generic 的 <div> 禁止用 aria-label 命名（ARIA naming
+            prohibited），子元素又全部 aria-hidden，沒有 role 這條 aria-label
+            很可能整段被螢幕閱讀器忽略（precommit review 抓到，2026-08-01） */}
+        <div role="group" className="pick-line" aria-label={`${t.n} 樣，共 ${Math.round(t.kcal)} 大卡，${right.ariaLabel}`}>
+          <span className="sub" aria-hidden="true">
+            {t.n} 樣 · {Math.round(t.kcal)} 卡
+            {right.deltaText && <span className="over-delta"> {right.deltaText}</span>}
+          </span>
+          {right.remainText && (
+            <span className="remain" aria-hidden="true">
+              {right.remainText}
+            </span>
+          )}
+        </div>
+        {/* 蛋白/脂/碳三個誠實數字，判定規則跟今日頁的三大營養素條同一條（DESIGN.md
+            「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——
+            不是這裡不判定，是蛋白質那格本來就不該判（DESIGN.md v2.10「底部確認列」條）。
+            role="group"：同上，generic <div> 不能靠 aria-label 命名。 */}
+        <div
+          role="group"
+          className="macro-line"
+          aria-label={`蛋白質 ${roundTo1(all.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(t.protein)} 克；脂肪 ${roundTo1(all.fat)} 克，${fatOver ? '已超出，目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(t.fat)} 克；碳水 ${roundTo1(all.carb)} 克，${carbOver ? '已超出，目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(t.carb)} 克`}
+        >
+          <span aria-hidden="true">
+            蛋白 {Math.round(all.protein)}/{Math.round(targets.protein)}
+            <span className="add">(+{Math.round(t.protein)})</span>
+          </span>
+          <span className={fatOver ? 'over' : undefined} aria-hidden="true">
+            脂 {Math.round(all.fat)}/{Math.round(targets.fat)}
+            <span className="add">(+{Math.round(t.fat)})</span>
+          </span>
+          <span className={carbOver ? 'over' : undefined} aria-hidden="true">
+            碳 {Math.round(all.carb)}/{Math.round(targets.carb)}
+            <span className="add">(+{Math.round(t.carb)})</span>
+          </span>
+        </div>
+        <button className="pick-bar-btn" type="button" disabled={busy || blocked} onClick={onSubmit}>
+          {busy ? '加入中…' : err ? '重試' : '加入'}
+        </button>
+      </div>
+    )
   }
 
   /* 軟性排序的判定與理由見 lib/foodPicks.ts：全部食物／搜尋結果依「加上這一筆還吃得下嗎」
@@ -409,6 +564,17 @@ export default function LogSheet(props: LogSheetProps) {
         {hits.length === 0 && <p className="search-empty-msg">找不到「{trimmedQuery}」</p>}
         <ul className="food-list">
           {hits.map((f) => renderFoodRow(f, false, handlers))}
+          {meal && (
+            <li>
+              <button className="est-row" type="button" onClick={() => openEstimate(trimmedQuery)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4z" />
+                  <path d="M13.5 7.5l3 3" />
+                </svg>
+                <span className="txt">估一筆「{trimmedQuery}」</span>
+              </button>
+            </li>
+          )}
           <li>
             <button className="add-food-row" type="button" onClick={() => openFoodForm(trimmedQuery)}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -506,7 +672,7 @@ export default function LogSheet(props: LogSheetProps) {
     )
   }
 
-  const contentAriaLabel = view === 'list' ? (meal ? mealLabel(meal) : '記一筆') : '新增食物'
+  const contentAriaLabel = view === 'list' ? (meal ? mealLabel(meal) : '記一筆') : view === 'estimate' ? `估一筆，${meal ? mealLabel(meal) : ''}` : '新增食物'
 
   /* 辨識中鎖住關閉。只擋關閉鈕沒用——下滑、Escape、點 scrim 都會關，
      而誤關的代價是那張照片白拍。辨識逾時（函式端 45 秒）保證最壞情況不會被關太久。
@@ -567,67 +733,108 @@ export default function LogSheet(props: LogSheetProps) {
             </div>
           </div>
 
-          <div className="food-scroll">
-            {picks.size > 0 && (
+          {/* key 分開：清單與估一筆的捲動區不能被 React 當成同一個 DOM 重用，否則帶回清單時停在估一筆捲到的位置 */}
+          <div className="food-scroll" key="list-scroll">
+            {!trimmedQuery && meal && (
+              <button className="est-entry" type="button" disabled={busy} onClick={() => openEstimate('')}>
+                <span className="est-entry-ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4z" />
+                    <path d="M13.5 7.5l3 3" />
+                  </svg>
+                </span>
+                <span className="est-entry-tx">
+                  <b>估一筆</b>
+                  <small>食品庫沒有的，描述一下或選最接近的一種</small>
+                </span>
+                <svg className="est-entry-chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+            )}
+            {(picks.size > 0 || drafts.length > 0) && (
               <>
                 <div className="sect-lb">已選</div>
-                <ul className="food-list" ref={pickedListRef}>{pickedFoods.map((f) => renderFoodRow(f, true, handlers))}</ul>
+                <ul className="food-list" ref={pickedListRef}>
+                  {pickedFoods.map((f) => renderFoodRow(f, true, handlers))}
+                  {/* 估一筆帶回來的草稿：跟勾的食物排在一起；點了回估一筆改（熱量、品名、刪掉都在那裡） */}
+                  {meal &&
+                    drafts.map((d) => (
+                      <li key={d.key}>
+                        <div className="food-item selected">
+                          <button
+                            className="food-row est-picked"
+                            type="button"
+                            aria-label={`${draftName(d, meal)}，估一筆，${d.kcal} 大卡，點了回估一筆修改`}
+                            disabled={busy}
+                            onClick={() => openEstimate('')}
+                          >
+                            <svg className="chk" viewBox="0 0 22 22" aria-hidden="true">
+                              <circle cx="11" cy="11" r="9" />
+                              <path d="M7 11.5l2.5 2.5L15 8.5" />
+                            </svg>
+                            <div className="nm-wrap" aria-hidden="true">
+                              <span className="nm">{draftName(d, meal)}</span>
+                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : '估一筆'}</span>
+                            </div>
+                            <div className="kc-wrap" aria-hidden="true">
+                              <span className="kc">{d.kcal}</span>
+                            </div>
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
               </>
             )}
             {browseBody}
           </div>
 
-          {picks.size > 0 && (
+          {(picks.size > 0 || drafts.length > 0) && renderPickBar(allTotals, () => void submitPicks(), estStatus === 'busy')}
+        </>
+      ) : view === 'estimate' ? (
+        <>
+          <SheetGrabZone className="sheet-head">
+            <span className="sheet-title" tabIndex={-1} ref={estTitleRef}>估一筆</span>
+            <button className="icon-btn" type="button" aria-label="關閉" disabled={busy} onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </SheetGrabZone>
+          <div className="back-row">
+            <button className="back-btn" type="button" disabled={busy || estStatus === 'busy'} aria-label={`返回${meal ? mealLabel(meal) : ''}清單`} onClick={backToList}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              {meal ? mealLabel(meal) : '返回'}
+            </button>
+          </div>
+          <div className="food-scroll" key="est-scroll">
+            <EstimateView
+              meal={meal ?? 'dinner'}
+              text={estText}
+              onText={setEstText}
+              canSubmit={estimateTextOk(estText)}
+              status={estStatus}
+              startedAt={estStartedAt}
+              onSubmit={() => void submitEstimate()}
+              drafts={drafts}
+              revealSeq={revealSeq}
+              onTier={(k) => setDrafts((prev) => [...prev, draftFromTier(k)])}
+              onOwnKcal={(k) => setDrafts((prev) => [...prev, draftFromKcal(k)])}
+              onKcalInput={(key, raw) => patchDraft(key, (d) => (d.foodId === null ? withKcalInput(d, raw) : d))}
+              onKcalBlur={(key) => patchDraft(key, settleKcal)}
+              onName={(key, v) => patchDraft(key, (d) => (d.foodId === null ? { ...d, name: v } : d))}
+              onDelete={(key) => setDrafts((prev) => prev.filter((d) => d.key !== key || d.foodId !== null))}
+              onToggleKeep={(key) => patchDraft(key, (d) => (d.foodId === null ? { ...d, keep: !d.keep } : d))}
+              locked={busy}
+            />
+          </div>
+          {drafts.length > 0 && (
             <div className="pick-bar">
-              {err && (
-                <p className="sheet-error" role="alert">
-                  存不進去：{err}
-                </p>
-              )}
-              {/* role="group"：generic 的 <div> 禁止用 aria-label 命名（ARIA naming
-                  prohibited），子元素又全部 aria-hidden，沒有 role 這條 aria-label
-                  很可能整段被螢幕閱讀器忽略（precommit review 抓到，2026-08-01） */}
-              <div role="group" className="pick-line" aria-label={`${totals.n} 樣，共 ${Math.round(totals.kcal)} 大卡，${right.ariaLabel}`}>
-                <span className="sub" aria-hidden="true">
-                  {totals.n} 樣 · {Math.round(totals.kcal)} 卡
-                  {right.deltaText && <span className="over-delta"> {right.deltaText}</span>}
-                </span>
-                {right.remainText && (
-                  <span className="remain" aria-hidden="true">
-                    {right.remainText}
-                  </span>
-                )}
-              </div>
-              {/* 蛋白/脂/碳三個誠實數字，判定規則跟今日頁的三大營養素條同一條（DESIGN.md
-                  「三大營養素判定」）：脂肪／碳水各自獨立 >100% 轉破表，蛋白質不足不轉紅——
-                  不是這裡不判定，是蛋白質那格本來就不該判（DESIGN.md v2.10「底部確認列」條）。
-                  role="group"：同上，generic <div> 不能靠 aria-label 命名。 */}
-              {(() => {
-                const fatOver = macroExceeds(combined.fat, targets.fat)
-                const carbOver = macroExceeds(combined.carb, targets.carb)
-                return (
-                  <div
-                    role="group"
-                    className="macro-line"
-                    aria-label={`蛋白質 ${roundTo1(combined.protein)} 克，目標 ${Math.round(targets.protein)} 克，這次加 ${roundTo1(totals.protein)} 克；脂肪 ${roundTo1(combined.fat)} 克，${fatOver ? '已超出，目標' : '目標'} ${Math.round(targets.fat)} 克，這次加 ${roundTo1(totals.fat)} 克；碳水 ${roundTo1(combined.carb)} 克，${carbOver ? '已超出，目標' : '目標'} ${Math.round(targets.carb)} 克，這次加 ${roundTo1(totals.carb)} 克`}
-                  >
-                    <span aria-hidden="true">
-                      蛋白 {Math.round(combined.protein)}/{Math.round(targets.protein)}
-                      <span className="add">(+{Math.round(totals.protein)})</span>
-                    </span>
-                    <span className={fatOver ? 'over' : undefined} aria-hidden="true">
-                      脂 {Math.round(combined.fat)}/{Math.round(targets.fat)}
-                      <span className="add">(+{Math.round(totals.fat)})</span>
-                    </span>
-                    <span className={carbOver ? 'over' : undefined} aria-hidden="true">
-                      碳 {Math.round(combined.carb)}/{Math.round(targets.carb)}
-                      <span className="add">(+{Math.round(totals.carb)})</span>
-                    </span>
-                  </div>
-                )
-              })()}
-              <button className="pick-bar-btn" type="button" disabled={busy} onClick={() => void submitPicks()}>
-                {busy ? '加入中…' : err ? '重試' : '加入'}
+              <button className="pick-bar-btn" type="button" disabled={busy || estStatus === 'busy'} onClick={backToList}>
+                帶回清單（{estTotals.n} 樣 · {Math.round(estTotals.kcal)} 卡）
               </button>
             </div>
           )}

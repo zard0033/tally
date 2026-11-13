@@ -63,6 +63,8 @@
   --sun: #F0B94A; --sun-deep: #A8761A; --sun-noodle: #D99A2B; --sun-pale: #FFF1CF; --moon: #F7E7C4;
   --clay: #C8613A; --clay-deep: #9E4A2A; --crumb: #FBEFD3;
   --plate: #DCE8F2; --plate-deep: #C9D7E5; --snow: #FFFFFF;
+  /* AI 光暈（v2.134）：--sun 的半透明，只給「這是 AI」的光暈與落定閃光用，不是狀態色 */
+  --ai-glow: rgba(240, 185, 74, .18); --ai-glow-strong: rgba(240, 185, 74, .45); --ai-shadow: rgba(168, 118, 26, .7);
   /* 天空上量尺的軌道：--track 對 --sky 只差 1.02:1，要用半透明白才看得到 */
   --sky-track: rgba(255, 255, 255, .7);
 
@@ -1278,15 +1280,167 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 新增食物入口：只要搜尋框有輸入就常駐清單末尾，不是只在零結果時出現 */
 .search-empty-msg { padding: var(--s-4) var(--s-5) var(--s-1); text-align: center;
   color: var(--ink-muted); font-size: var(--t-sm); margin: 0; }
-.add-food-row { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+.add-food-row, .est-row { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
   width: 100%; min-height: 44px; padding: var(--s-2) 0; border: none; background: none;
   color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
   cursor: pointer; -webkit-appearance: none; appearance: none; }
-.add-food-row svg { width: 16px; height: 16px; flex-shrink: 0; }
-.add-food-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.add-food-row { transition: opacity var(--dur-base) var(--ease); }
-.add-food-row:active { opacity: .6; }
-.add-food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.add-food-row svg, .est-row svg { width: 16px; height: 16px; flex-shrink: 0; }
+.add-food-row .txt, .est-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-food-row, .est-row { transition: opacity var(--dur-base) var(--ease); }
+.add-food-row:active, .est-row:active { opacity: .6; }
+.add-food-row:focus-visible, .est-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ═══ 估一筆（spec.md A 節 2026-11-13；DESIGN v2.134。樣張 estimate-entry.html B、ai-flair.html 光暈 A）═══
+   太陽色（--sun／--sun-pale／--sun-deep）在這裡是「這是 AI」的身分，不是狀態色，所以可以跟主藍、破表紅同框。
+   字不用 --sun-deep：它對白卡只有約 3.9:1，小字過不了 4.5；太陽色只給邊框、光暈、圖示與按鈕底。 */
+/* 「估一筆『…』」列：樣式跟「新增『…』到食品庫」共用，但 class 分開——既有測試用 .add-food-row 指「新增」那列 */
+.est-row svg { color: var(--sun-deep); }
+.est-entry { display: flex; align-items: center; gap: var(--s-3); width: calc(100% - 2 * var(--s-5)); min-height: 56px;
+  margin: var(--s-3) var(--s-5) var(--s-1); padding: 0 var(--s-3); border: none; border-radius: var(--r-btn);
+  background: var(--card); box-shadow: var(--shadow-1), 0 0 0 2px var(--sun-pale); text-align: left;
+  font-family: inherit; color: var(--ink); cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: opacity var(--dur-base) var(--ease); }
+.est-entry:active { opacity: .6; }
+.est-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.est-entry-ic { width: 32px; height: 32px; border-radius: 50%; background: var(--sun-pale); color: var(--sun-deep);
+  display: grid; place-items: center; flex-shrink: 0; }
+.est-entry-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.est-entry-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.est-entry-tx b { font-size: var(--t-base); font-weight: 700; }
+.est-entry-tx small { font-size: var(--t-xs); color: var(--ink-muted); }
+.est-entry-chev { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: var(--ink-faint); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.est-body { padding-bottom: var(--s-6); }
+/* 光暈：外層裁切，::before 是一片比框大很多的錐形漸層、只轉 transform；內層蓋住中間、留 2px 讓光從邊緣露出來 */
+.ai-ring { position: relative; margin: var(--s-3) var(--s-5) 0; padding: 2px; border-radius: calc(var(--r-tab) + 2px); overflow: hidden;
+  background: var(--sun-pale); box-shadow: 0 0 0 4px var(--ai-glow); }
+.ai-ring::before { content: ""; position: absolute; left: 50%; top: 50%; width: 900px; height: 900px; margin: -450px 0 0 -450px;
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 170deg, var(--sun-pale) 220deg, var(--sun) 290deg, var(--sun-deep) 318deg, var(--sun) 335deg, transparent 360deg);
+  opacity: 0; transition: opacity var(--dur-mid) var(--ease); pointer-events: none; }
+.ai-ring.busy::before { opacity: 1; animation: ai-orbit 2.4s linear infinite; }
+@keyframes ai-orbit { to { transform: rotate(360deg); } }
+.ai-inner { position: relative; border-radius: var(--r-tab); background: var(--card); }
+.est-text { display: block; width: 100%; min-height: 96px; padding: var(--s-3) var(--s-3) 28px; border: none; border-radius: var(--r-tab); resize: none;
+  background: transparent; font-family: inherit; font-size: var(--t-md); line-height: 1.5; color: var(--ink); }
+.est-text::placeholder { color: var(--ink-muted); }
+.est-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.est-text:disabled { opacity: 1; color: var(--ink); -webkit-text-fill-color: var(--ink); }
+.ai-tag { position: absolute; right: var(--s-3); bottom: var(--s-2); display: inline-flex; align-items: center; gap: var(--s-1);
+  font-size: var(--t-xs); font-weight: 700; color: var(--ink-muted); pointer-events: none; }
+.ai-tag svg { width: 14px; height: 14px; fill: none; stroke: var(--sun-deep); stroke-width: 1.8; stroke-linecap: round; }
+.est-act { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-5) 0;
+  font-size: var(--t-xs); color: var(--ink-muted); }
+.est-go { flex-shrink: 0; min-height: 44px; padding: 0 var(--s-5); border: none; border-radius: var(--r-pill); background: var(--sun);
+  color: var(--ink); font-family: inherit; font-size: var(--t-md); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none;
+  box-shadow: 0 6px 16px -8px var(--ai-shadow); transition: transform var(--dur-fast) var(--ease), opacity var(--dur-base) var(--ease); }
+.est-go:active { transform: translateY(1px); }
+.est-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.est-go:disabled { background: var(--fill); color: var(--ink-muted); box-shadow: none; cursor: default; }
+
+/* 等待插圖：一張畫好的碗被白紙蓋著，白紙往右滑開、鉛筆跟著走——全程只動 transform 與 opacity */
+.est-wait { margin: var(--s-4) var(--s-5) 0; padding: var(--s-4) var(--s-4) var(--s-3); border-radius: var(--r-btn); background: var(--card);
+  box-shadow: var(--shadow-1); display: flex; flex-direction: column; align-items: center; gap: var(--s-1); }
+.est-stage { position: relative; width: 240px; height: 120px; overflow: hidden; }
+.est-rays { position: absolute; left: 172px; top: 2px; width: 56px; height: 56px; z-index: 2; fill: none; stroke: var(--sun); stroke-width: 2.4; stroke-linecap: round;
+  animation: est-spin 9s linear infinite; }
+@keyframes est-spin { to { transform: rotate(360deg); } }
+.est-sun { position: absolute; left: 186px; top: 16px; width: 28px; height: 28px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 0 6px var(--sun-pale); z-index: 2; }
+.est-art { position: absolute; left: 20px; top: 34px; width: 160px; height: 84px; fill: none; stroke-linecap: round; stroke-linejoin: round;
+  animation: est-artfade 2.8s linear infinite; }
+.est-art .chop { stroke: var(--ink-faint); stroke-width: 3.5; }
+.est-art .bowl { fill: var(--plate); stroke: var(--accent); stroke-width: 3.5; }
+.est-art .rim { stroke: var(--accent); stroke-width: 4; }
+.est-art .noodle { stroke: var(--sun); stroke-width: 4; }
+.est-cover { position: absolute; left: 14px; top: 30px; width: 172px; height: 90px; background: var(--card); animation: est-reveal 2.8s var(--ease-sheet) infinite; }
+.est-steam { position: absolute; top: 18px; width: 4px; height: 16px; border-radius: 2px; background: var(--hill-far); opacity: 0; z-index: 2;
+  animation: est-steam 2.8s var(--ease) infinite; }
+.est-steam.s1 { left: 74px; } .est-steam.s2 { left: 98px; animation-delay: .15s; } .est-steam.s3 { left: 122px; animation-delay: .3s; }
+.est-pencil { position: absolute; left: 0; top: 0; width: 28px; height: 28px; z-index: 3; fill: var(--crumb); stroke: var(--clay); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  animation: est-pen 2.8s var(--ease-sheet) infinite; }
+@keyframes est-reveal { 0% { transform: translateX(0); } 60%, 100% { transform: translateX(176px); } }
+@keyframes est-artfade { 0%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes est-pen {
+  0% { transform: translate(10px, 70px); }
+  15% { transform: translate(52px, 60px) rotate(-8deg); }
+  30% { transform: translate(92px, 82px) rotate(6deg); }
+  45% { transform: translate(132px, 64px) rotate(-6deg); }
+  60%, 88% { transform: translate(176px, 52px) rotate(10deg); }
+  100% { transform: translate(10px, 70px); }
+}
+@keyframes est-steam { 0%, 58% { opacity: 0; transform: translateY(6px); } 72% { opacity: .9; transform: translateY(0); } 88%, 100% { opacity: 0; transform: translateY(-6px); } }
+.est-wait-msg { margin: 0; font-size: var(--t-sm); color: var(--ink); }
+.est-wait-sec { margin: 0; font-size: var(--t-xs); color: var(--ink-muted); }
+
+.est-err { margin: var(--s-3) var(--s-5) 0; padding: var(--s-3) var(--s-4); border-radius: var(--r-tab); background: var(--card); box-shadow: var(--shadow-1);
+  font-size: var(--t-sm); color: var(--ink); line-height: 1.45; }
+.est-err small { display: block; font-size: var(--t-xs); color: var(--ink-muted); }
+
+/* 草稿卡：AI 回來的那一批逐列浮上來（每列晚 90ms），熱量從 0 滾到估算值（EstimateView 的 KcalField）、落定時亮一圈太陽色 */
+.est-drafts { list-style: none; margin: var(--s-3) var(--s-5) 0; padding: 0; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1); overflow: hidden; }
+.est-draft { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-2) 0 0 var(--s-4);
+  border-top: 1px solid var(--rule-subtle); }
+.est-draft:first-child { border-top: none; }
+.est-draft.fresh { animation: est-rise var(--dur-sheet) var(--ease-sheet) both; }
+@keyframes est-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* 品名框：平常看起來像字（透明底、無底線），聚焦才出現欄位樣式——一列一個框會讓草稿卡像一張表單 */
+.est-name { min-width: 0; width: 100%; min-height: 44px; padding: 0 var(--s-2); margin-left: calc(-1 * var(--s-2)); border: none; border-radius: var(--r-tab);
+  background: transparent; font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--ink); }
+.est-name::placeholder { color: var(--ink); opacity: 1; }
+.est-name:focus { background: linear-gradient(var(--accent), var(--accent)) no-repeat center bottom / calc(100% - var(--s-3)) 2px, var(--fill); outline: none; }
+.est-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.est-only { display: inline-block; margin-right: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted);
+  font-size: var(--t-xs); font-weight: 600; vertical-align: 1px; }
+.est-kc { position: relative; display: flex; align-items: baseline; gap: 3px; justify-self: end; }
+/* 落定時亮一圈：光圈是固定的 box-shadow，只動 opacity（DESIGN：動效只動 transform／opacity） */
+.est-kc::after { content: ""; position: absolute; left: 0; top: 50%; width: 64px; height: 44px; margin-top: -22px; border-radius: var(--r-tab);
+  box-shadow: 0 0 0 4px var(--ai-glow-strong); opacity: 0; pointer-events: none; }
+.est-kc input { width: 64px; min-height: 44px; padding: 0 var(--s-2); border: none; border-radius: var(--r-tab); text-align: right;
+  font-family: var(--font-num); font-size: var(--t-md); font-weight: 700; color: var(--ink);
+  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - var(--s-3)) 2px, var(--fill); }
+.est-kc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.est-draft.fresh .est-kc::after { animation: est-land var(--dur-sheet) var(--ease-sheet) both; animation-delay: 600ms; }
+@keyframes est-land { 0%, 100% { opacity: 0; } 60% { opacity: 1; } }
+.est-kc span { font-size: var(--t-xs); color: var(--ink-muted); }
+.est-del { width: 44px; height: 44px; border: none; background: none; color: var(--ink-faint); display: grid; place-items: center; cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.est-del:active { opacity: .5; }
+.est-del:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.est-del svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.est-why { grid-column: 1 / 3; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; }
+.est-why .rng { color: var(--ink); font-weight: 600; margin-right: var(--s-2); }
+.est-keep { grid-column: 1 / 3; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer; }
+.est-keep input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+
+.est-or { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-5) var(--s-5) 0; font-size: var(--t-xs); color: var(--ink-muted); }
+.est-or::before, .est-or::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.est-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; }
+.est-tier { min-height: 92px; padding: var(--s-2); border: none; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: inherit; cursor: pointer;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.est-tier:active { opacity: .6; }
+.est-tier:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.est-tier b { font-size: var(--t-md); font-weight: 700; color: var(--ink); }
+.est-tier i { font-style: normal; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.35; text-align: center; }
+.est-tier small { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 2px; }
+.est-own { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; font-size: var(--t-sm); color: var(--ink-muted); }
+.est-own input { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--s-3); border: none; border-radius: var(--r-tab);
+  font-family: inherit; font-size: var(--t-md); color: var(--ink);
+  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--fill); }
+.est-own input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.est-own-add { min-height: 44px; padding: 0 var(--s-3); border: none; background: none; color: var(--accent); font-family: inherit;
+  font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.est-own-add:disabled { color: var(--ink-muted); cursor: default; }
+
+/* 減少動態：無限循環（繞光、鉛筆、太陽、熱氣、白紙）全停成畫好的靜態圖；逐列浮現改 120ms 淡入、不位移 */
+@media (prefers-reduced-motion: reduce) {
+  .ai-ring.busy::before { animation: none; transform: rotate(300deg); }
+  .est-rays, .est-art, .est-cover, .est-steam, .est-pencil { animation: none; }
+  .est-cover { transform: translateX(176px); }
+  .est-pencil { transform: translate(176px, 52px) rotate(10deg); }
+  .est-draft.fresh { animation: est-fade 120ms linear both; animation-delay: 0s !important; }
+  .est-draft.fresh .est-kc::after { animation: none; }
+}
+@keyframes est-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* 底部確認列：小計靠左（會變動、要盯的）、剩餘靠右（固定參考值），不加標籤字 */
 /* 動畫只在元素被插入那一次跑（元素沒卸載就不會重播）。

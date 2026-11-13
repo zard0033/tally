@@ -18,6 +18,7 @@ import type { MealKey } from './meals'
 import type { LabelReading } from './foodForm'
 import type { RepeatSourceRow } from './mealSuggest'
 import { normalizeCategory, type FoodCategory } from './categories'
+import { parseEstimateResponse, type EstimateItem } from './estimate'
 
 /* 明確傳 storageKey：離線開機要自己讀本機 session（session.ts），讀的 key 必須與 supabase-js
    寫的是同一個。值等於它的預設，所以既有登入不受影響。 */
@@ -125,8 +126,11 @@ export async function listArchivedFoods(): Promise<Food[]> {
   return unwrap(await supabase.from('foods').select(FOOD_COLS).eq('archived', true).abortSignal(dbSignal()))
 }
 
-export async function createFood(food: NewFood): Promise<Food> {
-  const rows = unwrap<Food[]>(await supabase.from('foods').insert(food).select(FOOD_COLS).abortSignal(dbSignal()))
+/** archived：「估一筆」沒勾「存進食品庫」的列一建立就封存——不出現在選單，食品庫「已封存」找得回，
+ *  intake 照樣 join 得到品名（spec A「資料」）。其他入口都不帶，維持原本的「使用中」。 */
+export async function createFood(food: NewFood, opts: { archived?: boolean } = {}): Promise<Food> {
+  const payload = opts.archived ? { ...food, archived: true } : food
+  const rows = unwrap<Food[]>(await supabase.from('foods').insert(payload).select(FOOD_COLS).abortSignal(dbSignal()))
   const row = rows[0]
   /* 沒拿到新列就不能往下選取。食物其實已經建立了，講清楚讓呼叫端能引導使用者重開清單找到它 */
   if (!row) throw new Error('食物已建立，但沒拿到回傳資料')
@@ -434,6 +438,23 @@ export async function scanLabel(imageDataUri: string): Promise<LabelReading> {
   })
   if (error || !data) throw new Error('辨識失敗')
   return data
+}
+
+/* 估一筆跟辨識走同一支函式；函式那端 askModel 逾時 45 秒，這裡照辨識那條訂 55 秒（「誰先放棄」：函式先放棄才留得下 log）。 */
+const ESTIMATE_TIMEOUT = SCAN_TIMEOUT
+
+/**
+ * 「估一筆」：把一句描述送給 `read-label` 的估算模式（spec A）。回應是外部資料，逐欄驗過才收
+ * （`parseEstimateResponse`，任一樣不合法整組當失敗）。失敗一律收斂成同一句，理由同 scanLabel。
+ */
+export async function estimateMeal(text: string): Promise<EstimateItem[]> {
+  const { data, error } = await supabase.functions.invoke<unknown>('read-label', {
+    body: { mode: 'estimate', text: text.trim() },
+    signal: AbortSignal.timeout(ESTIMATE_TIMEOUT),
+  })
+  const items = error ? null : parseEstimateResponse(data)
+  if (!items) throw new Error('估算失敗')
+  return items
 }
 
 /* 分類跟辨識走同一支函式、同一把 key；文字模型比讀圖快，但上游同一家在排隊，界照辨識那條訂。 */

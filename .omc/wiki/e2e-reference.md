@@ -42,6 +42,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-13 `feat/one-line-meal` 估一筆（v2.134，未合併、函式未部署）：`--list` 551 條 22 檔。第一次全量 549 條 545 過 4 紅——全是本批造成：「估一筆『…』」列沿用了 `.add-food-row`，既有測試（inline-edit、spring-sheet、vendor-autocomplete×2）用那個 class 點「新增」撞嚴格模式；改成獨立的 `.est-row` 後重跑那幾檔全過。改流程（帶回清單、合併加入）後再跑全量 17.1 分鐘 550 過 1 紅，紅的是偶發清單上的「慢態有出口」。`estimate.spec.ts` 11 條 `--repeat-each=3` 33 過。mutation：不封存、重試不沿用 foodId 都轉紅。vitest 1115 全過；lint 0 error。**通則**：新元件沿用既有 class 拿樣式前，先 grep e2e 有沒有拿那個 class 當選擇器——撞了就是嚴格模式紅，而且分散在好幾個檔。
+
 2026-11-13 push 前全量（v2.133 App 圖示換成樣張 A，`?v=6`→7；動到 `vite.config.ts`（只改註解）＋precache 的圖示資產，屬例外清單，所以 push 前跑）：`--list` 540 條 21 檔，18.3 分鐘，539 過 1 紅。紅的是 `interaction`「慢態有出口」，偶發清單上、本機幾乎必紅、基線一樣，使用者說先不查。這批沒動登入與 session 路徑，判定與本批無關。push 前：`npx vitest run` 1056 全過（31 檔，PowerShell）；`npm run lint` 0 error；build 含在 e2e 裡。
 
 2026-11-11 push 後全量（`c769ce8`，v2.127–v2.129）：541 條 8 份全過、0 偶發。之前三輪全紅都是環境：runner 解析不到 `*.ubuntu.com`（azure 鏡像、官方鏡像都一樣，GitHub 狀態頁沒公告），8 份卡在 apt 裝字型，最多 1 份撐過去；workflow 改成 apt 前把 `/etc/resolv.conf` 換成 1.1.1.1／8.8.8.8 就好了。撐過去那 1 份測出真紅：`interaction:901` 在讀取一次失敗就拋（v2.128）後，開機「載入中…」一閃而過、Linux CI 量不到——本機量得到，**本機綠不代表 CI 綠，動到時序的改動要找「斷言中間態」的測試**。
