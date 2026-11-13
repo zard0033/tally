@@ -45,15 +45,23 @@ async function startServer(): Promise<void> {
   // 照樣回 ok，之後「關掉伺服器」其實殺不到它，離線斷言就變成走網路（綠色但沒驗到）
   if (await isUp()) throw new Error(`${PORT} 已有行程在聽（上一輪殘留的 preview？）請先關掉再跑`)
   const proc = spawn(process.execPath, [VITE, 'preview', '--outDir', servedDir, '--port', String(PORT), '--strictPort'], {
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
   server = proc
+  // preview 自己的輸出留著，起不來時帶進錯誤訊息：2026-11-13 改在容器裡跑後 8 條全紅在「15 秒內沒起來」，原本 stdio 'ignore' 什麼線索都沒有
+  let output = ''
+  proc.stdout!.on('data', (d) => (output += d))
+  proc.stderr!.on('data', (d) => (output += d))
+  const closed = new Promise((r) => proc.once('close', r))
   for (let i = 0; i < 75; i++) {
-    if (proc.exitCode !== null) throw new Error(`preview 提前結束（exit ${proc.exitCode}）`)
+    if (proc.exitCode !== null) {
+      await closed // exit 比最後幾段輸出早到，等 close 才收得齊
+      throw new Error(`preview 提前結束（exit ${proc.exitCode}）：\n${output}`)
+    }
     if (await isUp()) return
     await new Promise((r) => setTimeout(r, 200))
   }
-  throw new Error(`preview ${PORT} 沒有在 15 秒內起來`)
+  throw new Error(`preview ${PORT} 沒有在 15 秒內起來；preview 的輸出：\n${output}`)
 }
 
 /** 等行程真的結束才回來——否則下一條測試的 beforeEach 會撞到還沒釋放的埠、rmSync 會撞到被占用的檔。 */
