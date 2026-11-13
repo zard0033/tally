@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-13 晚）：main 到 v2.134——估一筆（AI 描述＋檔位＋自己打，帶回清單跟勾的一起加入，品名可改、不加估算後綴）＋AI 光暈／等待畫碗／逐樣寫出；read-label 估算模式已部署（未登入 401 已驗，真帳號估算還沒試）。push 前全量 551 條 550 過（紅＝慢態有出口）。
-下一步（最優先）：使用者在手機上用估一筆真的估一次（DeepSeek 真機第一次），看準度、速度、光暈動畫；有問題回來修。減重回饋圈見待辦 0（等秤的三連量＋健身房秤對照）。其餘：真機看 v2.123–v2.134（新圖示要重新加入主畫面）、拍照讀標示鈕的光暈（樣張有畫，還沒做）。
+現況（2026-11-13 晚）：v2.134 估一筆（1afbe31）CI 紅在 training:2936（量得太早，已修），**估一筆還沒部署**，修正推上後 CI 全量待確認。read-label 估算模式已部署（真帳號估算還沒試）。
+進行中：CI e2e 根治（使用者 11-13 選全做）：①e2e 改在 Playwright 官方容器跑＋字型快取，不碰 ubuntu 鏡像 ②harness 加「等動畫結束才動手」helper，換掉動畫中途動手的固定等待 ③burn-in：push 改到的測試在 CI 重複 5 次。數據見 wiki e2e-reference。CI 綠後：使用者真機估一次；減重回饋圈見待辦 0。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

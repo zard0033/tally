@@ -2935,44 +2935,43 @@ test('全部完成：減少動態不逐組錯開，三組同時換色', async ({
 
 test('全部完成：逐組進行中單點一組，換色不被逐組的延遲拖慢', async ({ page }) => {
   await openThreeSets(page)
+  const check = page.locator('.ex .set').nth(2).locator('.tr-check')
+  const undone = await check.evaluate((el) => getComputedStyle(el).backgroundColor)
   await page.locator('.ex').getByRole('button', { name: '全部完成', exact: true }).click()
   await expect(stat(page, 'sets')).toHaveText('3/3') // 資料已落地，逐組的 class 還掛著（約 540ms 內）
   // 在頁內同一個 tick 裝監聽、直接點：Playwright 的 click() 要等 actionability，可能慢過逐組 class 的存活時間（約 540ms），
   // 那樣量到的 0 是空過（mutation 驗證時拿掉 endCascade 照樣綠）。所以同時回報點下去當下 class 還在不在，當作測試自己的前提
-  // 第 3 組的換色要先走完 120ms 的延遲才能點：還在延遲裡時顏色根本沒變，取消完成後目標色等於現在的顏色，
-  // 瀏覽器不會起新的 transition，量不到東西（2026-11-03 查到的高頻紅，那段空窗使用者看不出差別，不是產品問題）。
+  // 第 3 組的顏色要真的離開未完成色才能點：還沒離開時取消完成的目標色等於現在的顏色，瀏覽器不會起新的 transition，量不到東西
+  // （2026-11-03 查到還在 120ms 延遲裡點的高頻紅；2026-11-13 CI 又紅在 transitionstart 剛發、進度近 0、顏色捨入後仍等於未完成色，
+  // 所以改看算出來的顏色，不看事件時機。那段空窗使用者看不出差別，不是產品問題）。
   // 用 MutationObserver 在 done 拿掉的當下讀 getAnimations，不等 transitionrun：事件排到下一幀才發，機器忙時 160ms 的 transition 可能已經結束
-  const { hadClass, delay } = await page
-    .locator('.ex .set')
-    .nth(2)
-    .locator('.tr-check')
-    .evaluate(
-      (el) =>
-        new Promise<{ hadClass: boolean; delay: number }>((resolve) => {
-          const row = el.closest('.set') as HTMLElement
-          const colorTransition = () =>
-            el.getAnimations().find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
-          const clickAndMeasure = () => {
-            const hadClass = row.classList.contains('is-cascade')
-            const timer = setTimeout(() => resolve({ hadClass, delay: -2 }), 1500)
-            new MutationObserver((_, observer) => {
-              if (row.classList.contains('done')) return
-              observer.disconnect()
-              clearTimeout(timer)
-              resolve({ hadClass, delay: Number(colorTransition()?.effect?.getTiming().delay ?? -1) })
-            }).observe(row, { attributes: true, attributeFilter: ['class'] })
-            el.click()
-          }
-          const running = colorTransition()
-          if (running && Number(running.currentTime ?? 0) < Number(running.effect?.getTiming().delay ?? 0)) {
-            el.addEventListener('transitionstart', function on(e) {
-              if ((e as TransitionEvent).propertyName !== 'background-color') return
-              el.removeEventListener('transitionstart', on)
-              clickAndMeasure()
-            })
-          } else clickAndMeasure()
-        }),
-    )
+  const { hadClass, delay } = await check.evaluate(
+    (el, undone) =>
+      new Promise<{ hadClass: boolean; delay: number }>((resolve) => {
+        const row = el.closest('.set') as HTMLElement
+        const colorTransition = () =>
+          el.getAnimations().find((a): a is CSSTransition => a instanceof CSSTransition && a.transitionProperty === 'background-color')
+        const clickAndMeasure = () => {
+          const hadClass = row.classList.contains('is-cascade')
+          const timer = setTimeout(() => resolve({ hadClass, delay: -2 }), 1500)
+          new MutationObserver((_, observer) => {
+            if (row.classList.contains('done')) return
+            observer.disconnect()
+            clearTimeout(timer)
+            resolve({ hadClass, delay: Number(colorTransition()?.effect?.getTiming().delay ?? -1) })
+          }).observe(row, { attributes: true, attributeFilter: ['class'] })
+          el.click()
+        }
+        const giveUpAt = performance.now() + 1000
+        const waitForColorToLeave = () => {
+          if (getComputedStyle(el).backgroundColor !== undone) clickAndMeasure()
+          else if (performance.now() > giveUpAt) resolve({ hadClass: false, delay: -3 }) // 打勾後底色一直沒變：產品端壞了，不是時序
+          else requestAnimationFrame(waitForColorToLeave)
+        }
+        waitForColorToLeave()
+      }),
+    undone,
+  )
   expect(hadClass, '前提：點下去的當下，這一列還掛著逐組的 class（不然這條測試什麼都沒驗）').toBe(true)
   expect(delay, '單點第 3 組取消完成：換色立刻開始（第 3 組在逐組裡是 120ms，不該套到這次單點）').toBe(0)
 })
