@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-13 晚）：v2.134 估一筆（1afbe31）CI 紅在 training:2936（量得太早，已修），**估一筆還沒部署**，修正推上後 CI 全量待確認。read-label 估算模式已部署（真帳號估算還沒試）。
-進行中：CI e2e 根治（使用者 11-13 選全做）：①e2e 改在 Playwright 官方容器跑＋字型快取，不碰 ubuntu 鏡像 ②harness 加「等動畫結束才動手」helper，換掉動畫中途動手的固定等待 ③burn-in：push 改到的測試在 CI 重複 5 次。數據見 wiki e2e-reference。CI 綠後：使用者真機估一次；減重回饋圈見待辦 0。
+現況（2026-11-13 晚）：v2.134 估一筆已部署（d9998bb CI 全綠，修了 training:2936）；read-label 估算模式已部署（真帳號估算還沒試）。
+進行中：CI e2e 根治，分支 ci-e2e-hardening（容器＋字型快取已在 diag 驗過；burn-in；settled()）。證據改了方向：CI 紅的共同底層是 shard 前幾條跑在冷機器上（wiki e2e-reference 11-13），不做 144 處固定等待全面掃除。合併上 main 後看 8 份 shard 第一條耗時，懲罰還在就加每個 worker 先暖機。之後：使用者真機估一次；減重回饋圈見待辦 0。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

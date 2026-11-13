@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-13 CI e2e 根治（分支 `ci-e2e-hardening`）：統計 11-10 改雲端後 26 次 run（8 份×1 worker 之後 20 次）——紅 8 次＝5 次測試時序、2 次 apt 解析不到 ubuntu 鏡像（一條測試都沒跑）、1 次真 bug（interaction:901）；另有 9 次重試才過。**共同底層：shard 的前幾條跑在冷機器上**——每份 shard 第一條的耗時是同一條排在後面時的 2–5 倍（多 5–8 秒）：`meal-exit:7` 排第一 16 次 3.9–13.5s、排後面 2.3–3.1s；`sync-sheet:171` 第一 5–22s、平常 4s；`training:904` 4–13s、平常 2.3s。紅過抖過的 training:3067/3068、904–970 一帶都在 shard 開頭。裸 runner 上 apt 有跑 fontconfig trigger，所以不是字型快取沒建，冷啟動機制**未查明**。改成 Playwright 官方容器後 diag（run 43437585830，左滑 7 條×10）70 過、第一條沒有懲罰（2.2s vs 2.0s），**但 diag 先跑了探針可能已暖機，未證實**；合併後看 8 份 shard 第一條的耗時才算數，懲罰還在就加每個 worker 先暖機。本機用 rAF 燒主執行緒（每幀 25／50／80ms）模擬慢幀，左滑紅重現不出來，那個工具已拿掉。通則：**CI 偶發紅先看它在 shard 裡排第幾**（log 的 `✓ N e2e/…` 的 N），排前面的先懷疑冷啟動。
+
 2026-11-13 `feat/one-line-meal` 估一筆（v2.134，未合併、函式未部署）：`--list` 551 條 22 檔。第一次全量 549 條 545 過 4 紅——全是本批造成：「估一筆『…』」列沿用了 `.add-food-row`，既有測試（inline-edit、spring-sheet、vendor-autocomplete×2）用那個 class 點「新增」撞嚴格模式；改成獨立的 `.est-row` 後重跑那幾檔全過。改流程（帶回清單、合併加入）後再跑全量 17.1 分鐘 550 過 1 紅，紅的是偶發清單上的「慢態有出口」。`estimate.spec.ts` 11 條 `--repeat-each=3` 33 過。mutation：不封存、重試不沿用 foodId 都轉紅。vitest 1115 全過；lint 0 error。**通則**：新元件沿用既有 class 拿樣式前，先 grep e2e 有沒有拿那個 class 當選擇器——撞了就是嚴格模式紅，而且分散在好幾個檔。
 
 2026-11-13 push 前全量（v2.133 App 圖示換成樣張 A，`?v=6`→7；動到 `vite.config.ts`（只改註解）＋precache 的圖示資產，屬例外清單，所以 push 前跑）：`--list` 540 條 21 檔，18.3 分鐘，539 過 1 紅。紅的是 `interaction`「慢態有出口」，偶發清單上、本機幾乎必紅、基線一樣，使用者說先不查。這批沒動登入與 session 路徑，判定與本批無關。push 前：`npx vitest run` 1056 全過（31 檔，PowerShell）；`npm run lint` 0 error；build 含在 e2e 裡。
