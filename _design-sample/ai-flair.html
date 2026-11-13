@@ -146,6 +146,17 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 .pick-line .remain { color: var(--ink-muted); }
 .pick-bar-btn { min-height: 52px; border: none; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent); font-size: var(--t-md); font-weight: 700; }
 
+
+/* ── 光暈 B（2026-11-13 使用者要「再華麗一點，整框換成太陽色漸層」）── */
+.glow-b .ai-ring, .ai-ring.b { padding: 3px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--sun-pale) 0%, var(--sun) 45%, var(--sun-deep) 100%);
+  box-shadow: 0 0 0 5px rgba(240,185,74,.18), 0 10px 26px -10px rgba(168,118,26,.55); }
+.glow-b .ai-ring::before, .ai-ring.b::before {
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 200deg, rgba(255,255,255,.0) 230deg, rgba(255,255,255,.95) 300deg, var(--sun-pale) 320deg, transparent 360deg); }
+.glow-b .ai-inner, .ai-ring.b .ai-inner { border-radius: 13px; background: linear-gradient(160deg, var(--sun-pale) 0%, var(--card) 55%); }
+.glow-b .ai-tag, .ai-ring.b .ai-tag { color: var(--sun-deep); }
+.glow-b .go:not(.ghost) { background: linear-gradient(135deg, var(--sun) 0%, var(--sun-deep) 140%); }
+
 /* 拍照讀標示的按鈕也套同一套：太陽色描邊＋讀取中繞光 */
 .scan { margin: var(--s-3) var(--s-5) 0; }
 .scan .ai-inner { min-height: 52px; display: flex; align-items: center; gap: var(--s-2); justify-content: center; color: var(--ink); font-weight: 700; font-size: var(--t-md); }
@@ -167,6 +178,13 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
   .d-item.in, .pick-bar.in { transition: opacity 120ms linear; transition-delay: 0s !important; }
   .d-item.in .kc-in output { animation: none; }
 }
+
+.cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; padding: 18px 14px; width: 393px; background: var(--paper); border-radius: 22px;
+  box-shadow: 0 18px 40px -18px rgba(20,22,30,.35); }
+.cmp-grid h4 { margin: 0; font-size: 12px; font-weight: 700; color: #34373C; }
+.cmp-grid .ai-ring { margin: 0; }
+.cmp-grid .ai-inner { min-height: 74px; font-size: 14px; padding: 10px; }
+.cmp-grid .ai-ring.busy::before { animation: none; transform: rotate(40deg); }
 .hide { display: none !important; }
 </style>
 </head>
@@ -179,11 +197,14 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
   <symbol id="u-pencil" viewBox="0 0 24 24"><path d="M4 20l4-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5 16l-1 4z" fill="#FBEFD3"/><path d="M13.5 7.5l3 3"/></symbol>
 </svg>
 
-<h1 class="h-title">樣張 — AI 互動華麗化：光暈、等待插圖、逐樣寫出</h1>
+<h1 class="h-title">樣張 — AI 互動華麗化：光暈、等待插圖、逐樣寫出　<span style="font-size:14px;font-weight:700;color:#fff;background:#2E5E93;border-radius:999px;padding:2px 10px;vertical-align:4px">使用者 2026-11-13 選光暈 A</span></h1>
 <p class="h-sub">使用者 2026-11-13：「跟 AI 互動的欄位 fancy 一點，不然很 boring」。三個方向一起做、互相搭配：<b>① AI 專屬光暈</b>——整個 app 只有 AI 的東西帶太陽色光暈，送出後光沿邊框繞；<b>② 等待插圖</b>——5–20 秒的等待變成一張小紙片上鉛筆畫碗、太陽慢轉、碗冒熱氣；<b>③ 結果逐樣寫出</b>——草稿一列一列浮上來、熱量從 0 滾到估算值、落定時亮一下。按「播放」看完整流程（約 9 秒，等待段縮短了；實測 p50 約 7 秒）。色只用既有 token（<code>--sun</code>／<code>--sun-pale</code>／<code>--sun-deep</code>），沒有加新色；也不用紫色漸層和星星火花——那是通用的「AI 很神」，放進灰白紙面會突兀。</p>
 <div class="ctrl">
   <button type="button" id="play">▶ 播放</button>
-  <label><input type="checkbox" id="rm"> 預覽「減少動態」</label>
+  <span style="color:#34373C">光暈：</span>
+  <label><input type="radio" name="glow" value="a" checked> A 淡黃框（原版）</label>
+  <label><input type="radio" name="glow" value="b"> B 整框太陽色漸層</label>
+  <label style="margin-left:12px"><input type="checkbox" id="rm"> 預覽「減少動態」</label>
 </div>
 
 <div class="row" id="root">
@@ -252,6 +273,29 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
     </div>
   </figure>
 
+
+  <figure class="fig">
+    <figcaption>A／B 對照（靜態；估算中的光固定在一個角度，實際會繞）</figcaption>
+    <div class="cmp-grid">
+      <h4>A 淡黃框・平常</h4><h4>B 太陽色漸層・平常</h4>
+      <div class="ai-ring"><div class="ai-inner">夜市螺獅粉、梅子可樂<span class="ai-tag"><svg class="ln"><use href="#u-sun"/></svg>AI 幫你估</span></div></div>
+      <div class="ai-ring b"><div class="ai-inner" style="color:var(--ink)">夜市螺獅粉、梅子可樂<span class="ai-tag"><svg class="ln"><use href="#u-sun"/></svg>AI 幫你估</span></div></div>
+      <h4>A・估算中</h4><h4>B・估算中</h4>
+      <div class="ai-ring busy"><div class="ai-inner" style="color:var(--ink)">夜市螺獅粉、梅子可樂<span class="ai-tag"><svg class="ln"><use href="#u-sun"/></svg>AI 幫你估</span></div></div>
+      <div class="ai-ring b busy"><div class="ai-inner" style="color:var(--ink)">夜市螺獅粉、梅子可樂<span class="ai-tag"><svg class="ln"><use href="#u-sun"/></svg>AI 幫你估</span></div></div>
+      <h4>A・拍標示鈕</h4><h4>B・拍標示鈕</h4>
+      <div class="ai-ring scan" style="margin:0"><div class="ai-inner" style="min-height:48px"><svg class="ln"><use href="#u-cam"/></svg>拍營養標示</div></div>
+      <div class="ai-ring scan b" style="margin:0"><div class="ai-inner" style="min-height:48px"><svg class="ln"><use href="#u-cam"/></svg>拍營養標示</div></div>
+    </div>
+    <div class="notes" style="width:393px">
+      <h3>B 的取捨（2026-11-13 使用者「先 A」，B 留作對照）</h3>
+      <ul>
+        <li><b>更華麗</b>：邊框是淡黃→太陽黃→深金的斜向漸層，框內有一層從淡黃退到白的暖色，外圈光放大；估算中繞的是一道白金色的亮光，像陽光掃過金屬邊。</li>
+        <li><b>代價</b>：跟今日頁天空上的太陽、類型圖示裡的黃色比較搶；整頁唯一「發光」的元素變得更顯眼，也就更像一顆按鈕在喊你。描述框在子畫面裡只有一個，搶一點可以接受。</li>
+        <li><b>對比</b>：框內字壓在 <code>--sun-pale</code> 到白的漸層上，墨藍字最差處約 13:1（對 <code>--sun-pale</code>）；按鈕墨藍字壓在太陽黃上約 8.9:1，往深金那端更高。</li>
+      </ul>
+    </div>
+  </figure>
   <div class="notes">
     <h3>三個方向怎麼搭</h3>
     <ul>
@@ -279,6 +323,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 const $ = (id) => document.getElementById(id)
 const root = document.body
 $('rm').addEventListener('change', (e) => root.classList.toggle('rm', e.target.checked))
+document.querySelectorAll('input[name=glow]').forEach((r) => r.addEventListener('change', () => root.classList.toggle('glow-b', r.value === 'b' && r.checked)))
 const reduced = () => root.classList.contains('rm') || matchMedia('(prefers-reduced-motion: reduce)').matches
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 let running = false
