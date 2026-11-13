@@ -12,7 +12,7 @@
   --paper: #F2F2ED; --card: #FFFFFF; --raised: #E6EAEB; --rule: #DEE2E2; --track: #D5DDE5;
   --ink: #1D2B45; --ink-muted: #56647C; --ink-faint: #7D8898;
   --accent: #2E5E93; --accent-dark: #234A75; --accent-soft: #DCE8F2; --on-accent: #FFFFFF;
-  --rule-field: #6E7B8E; --fill: #E3E7E6;
+  --rule-field: #6E7B8E; --fill: #E3E7E6; --rule-subtle: #E6E9E8;
   --over: #A23E2C; --sky: #CADDED; --ink-sky: #3F5372; --plate: #DCE8F2;
   --font-body: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   --t-xs: 0.72rem; --t-sm: 0.8rem; --t-base: 0.875rem; --t-md: 1rem; --t-lg: 1.25rem;
@@ -60,12 +60,12 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 .scrim { position: absolute; inset: 0; background: rgba(29,43,69,.32); }
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 38px; display: flex; flex-direction: column; overflow: hidden;
   border-radius: 26px 26px 0 0; background: var(--paper); box-shadow: var(--shadow-3); }
-.handle { width: 38px; height: 5px; border-radius: 3px; margin: 8px auto 0; flex-shrink: 0; background: #C3CBD3; }
+.handle { width: 38px; height: 5px; border-radius: 3px; margin: 8px auto 0; flex-shrink: 0; background: var(--track); }
 .sheet-head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-1) var(--s-3) 0 var(--s-5); flex-shrink: 0; }
 .chips { display: flex; gap: var(--s-2); flex: 1; }
 .chip { min-height: 44px; padding: 0 var(--s-4); border-radius: var(--r-pill); display: inline-flex; align-items: center;
-  font-size: var(--t-base); font-weight: 600; color: var(--ink-muted); box-shadow: inset 0 0 0 1px #C4CCD4; border: none; background: none; }
-.chip.on { background: var(--ink); color: #fff; box-shadow: none; }
+  font-size: var(--t-base); font-weight: 600; color: var(--ink-muted); box-shadow: inset 0 0 0 1px var(--track); border: none; background: none; }
+.chip.on { background: var(--ink); color: var(--on-accent); box-shadow: none; }
 .icon-btn { width: 44px; height: 44px; border: none; background: none; display: grid; place-items: center; color: var(--ink-muted); flex-shrink: 0; border-radius: 12px; }
 .icon-btn svg { width: 20px; height: 20px; }
 .search-wrap { padding: var(--s-3) var(--s-5) var(--s-2); flex-shrink: 0; }
@@ -125,7 +125,6 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
   display: inline-flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.15; }
 .tier b { font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
 .tier small { font-size: var(--t-xs); color: var(--ink-muted); }
-.tier.own { box-shadow: inset 0 0 0 1px #C4CCD4; background: none; }
 
 .thinking { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; font-size: var(--t-sm); color: var(--ink-muted); }
 .dots { display: inline-flex; gap: 3px; }
@@ -133,7 +132,6 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .7; } }
-.skel { margin: var(--s-2) var(--s-5) 0; height: 54px; border-radius: var(--r-tab); background: linear-gradient(90deg, var(--raised), #EEF1F1, var(--raised)); }
 
 /* 草稿卡：AI 回來的每一樣 */
 .draft { margin: var(--s-2) var(--s-5) 0; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1); overflow: hidden; }
@@ -141,19 +139,19 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 .draft-head .t { font-size: var(--t-xs); font-weight: 700; color: var(--accent); letter-spacing: var(--track-xs); display: flex; align-items: center; gap: 6px; }
 .draft-head .t svg { width: 14px; height: 14px; }
 .draft-head .sent { font-size: var(--t-xs); color: var(--ink-muted); max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.d-item { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-2) 0 var(--s-2) var(--s-4); border-top: 1px solid var(--rule-subtle, #E6E9E8); }
+.d-item { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-2) 0 var(--s-2) var(--s-4); border-top: 1px solid var(--rule-subtle); }
 .d-item:first-of-type { border-top: none; }
 .d-item .nm { font-size: var(--t-base); font-weight: 600; color: var(--ink); }
 .d-item .nm em { font-style: normal; font-weight: 400; color: var(--ink-muted); font-size: var(--t-xs); margin-left: 4px; }
 .d-item .why { grid-column: 1 / 3; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; margin-top: 2px; }
 .d-item .why .rng { color: var(--ink); font-weight: 600; }
 .kc-in { display: flex; align-items: baseline; gap: 3px; justify-self: end; }
-.kc-in input { width: 64px; min-height: 40px; text-align: right; font-size: var(--t-md); font-weight: 700; color: var(--ink); border: none; border-radius: 10px;
+.kc-in input { width: 64px; min-height: 44px; text-align: right; font-size: var(--t-md); font-weight: 700; color: var(--ink); border: none; border-radius: 10px;
   padding: 0 8px; background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 12px) 2px, var(--fill); }
 .kc-in span { font-size: var(--t-xs); color: var(--ink-muted); }
 .d-del { grid-row: 1; grid-column: 3; width: 44px; height: 44px; border: none; background: none; color: var(--ink-faint); display: grid; place-items: center; }
 .d-del svg { width: 16px; height: 16px; }
-.d-keep { grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; min-height: 36px; font-size: var(--t-xs); color: var(--ink-muted); }
+.d-keep { grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); }
 .d-keep .box { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px var(--rule-field); background: var(--card); }
 .draft-foot { display: flex; justify-content: space-between; align-items: baseline; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--rule); font-size: var(--t-sm); color: var(--ink-muted); }
 .draft-foot b { color: var(--ink); font-size: var(--t-base); }
@@ -203,7 +201,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 .new-row.ai svg { color: var(--accent); }
 .new-row + .new-row { border-top: 1px solid var(--rule); }
 .empty-msg { padding: var(--s-4) var(--s-5) var(--s-2); font-size: var(--t-sm); color: var(--ink-muted); }
-.only-kcal { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
+.only-kcal { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); font-size: var(--t-xs); font-weight: 600; vertical-align: 1px; }
 </style>
 </head>
 <body>
@@ -325,7 +323,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
           </div>
           <div class="pick-bar">
             <div class="pick-line"><span class="sub num">3 樣 · 1000 卡</span><span class="remain num">剩 110</span></div>
-            <div class="macro-line num"><span>蛋白 71/120<span class="add">(+22)</span></span><span>脂 52/63<span class="add">(+38)</span></span><span>碳 228/235<span class="add">(+141)</span></span></div>
+            <div class="macro-line num"><span>蛋白 71/137<span class="add">(+22)</span></span><span>脂 52/65<span class="add">(+38)</span></span><span>碳 150/163<span class="add">(+141)</span></span></div>
             <button class="pick-bar-btn" type="button">加入</button>
           </div>
         </div>
@@ -363,7 +361,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
           </div>
           <div class="pick-bar">
             <div class="pick-line"><span class="sub num">1 樣 · 700 卡</span><span class="remain num">剩 410</span></div>
-            <div class="macro-line num"><span>蛋白 49/120<span class="add">(+0)</span></span><span>脂 14/63<span class="add">(+0)</span></span><span>碳 87/235<span class="add">(+0)</span></span></div>
+            <div class="macro-line num"><span>蛋白 49/137<span class="add">(+0)</span></span><span>脂 14/65<span class="add">(+0)</span></span><span>碳 87/163<span class="add">(+0)</span></span></div>
             <button class="pick-bar-btn" type="button">加入</button>
           </div>
         </div>
@@ -376,7 +374,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
 <!-- ════════ B ════════ -->
 <section class="part" aria-labelledby="pb">
   <h2 id="pb">B　收進清單：清單最上面一列「估一筆」，點進子畫面</h2>
-  <p class="lede">平常頂部跟現在一模一樣。清單最上面多一張「估一筆」卡；點進去是子畫面（返回、標題、描述框、檔位），跟「新增食物」同一種走法。搜尋找不到時，結果裡也多一列「估一筆『搜尋的字』」，句子直接帶進子畫面。</p>
+  <p class="lede">平常頂部跟現在一模一樣。清單最上面多一張「估一筆」卡；點進去是子畫面（返回、標題、描述框、檔位），跟「新增食物」同一種走法。搜尋框有輸入時，結果裡在「新增『…』到食品庫」正上方多一列「估一筆『搜尋的字』」，句子直接帶進子畫面。</p>
   <div class="row">
 
     <figure class="fig">
@@ -465,7 +463,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
           </div>
           <div class="pick-bar">
             <div class="pick-line"><span class="sub num">3 樣 · 1000 卡</span><span class="remain num">剩 110</span></div>
-            <div class="macro-line num"><span>蛋白 71/120<span class="add">(+22)</span></span><span>脂 52/63<span class="add">(+38)</span></span><span>碳 228/235<span class="add">(+141)</span></span></div>
+            <div class="macro-line num"><span>蛋白 71/137<span class="add">(+22)</span></span><span>脂 52/65<span class="add">(+38)</span></span><span>碳 150/163<span class="add">(+141)</span></span></div>
             <button class="pick-bar-btn" type="button">加入</button>
           </div>
         </div>
@@ -473,7 +471,7 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
     </figure>
 
     <figure class="fig">
-      <figcaption>B4　搜尋找不到：結果最上面多一列「估一筆『…』」，點了帶著句子進子畫面</figcaption>
+      <figcaption>B4　搜尋有輸入時：「新增『…』到食品庫」正上方多一列「估一筆『…』」（這裡剛好零結果）</figcaption>
       <div class="device">
         <div class="behind"><div class="date">週五 11/13</div></div><div class="scrim"></div>
         <div class="sheet" role="dialog" aria-label="晚餐">
@@ -521,14 +519,13 @@ svg.ln { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: ro
         <li><b>圖示</b>：用一枝鉛筆畫虛線，說「畫個大概」；不用星星火花——那個符號在講「AI 很厲害」，這裡要講的是「這是估的」。</li>
         <li><b>等待</b>：實測 p50 約 7 秒、p90 約 19 秒；等待中描述框旁顯示三個點，清單照常可以用（A），或停在子畫面（B）。</li>
       </ul>
-      <h3>還要你決定的（spec A 待決 ①–⑤，加一條新的）</h3>
+      <h3>已定案（2026-11-13，詳見 spec.md A 節）</h3>
       <ul>
-        <li>① 多樣拆成多列（建議）還是合成一列。</li>
-        <li>②⑤ 入口放哪：<b>就是這份樣張的 A／B</b>。</li>
-        <li>③ 品名自動加「（估算）」——樣張照建議加。</li>
-        <li>④ 檔位三個數字與名稱；「小份 400」沒有出處。</li>
-        <li><b>新：離線時檔位能不能記？</b>DESIGN「寫入失敗（記一筆）」寫明<b>飲食寫入不做離線佇列</b>，所以完全沒網路時點檔位，按「加入」一樣會失敗、就地顯示重試。檔位真正有用的是「AI 太慢、估不出來、不想打字」。要離線也記得進去，得另外做飲食的離線佇列（推翻那條 YAGNI）——spec A 的 AC 13 寫了「離線進佇列」，跟現行規則衝突，要改其中一邊。</li>
-        <li>B 版的「存進食品庫」勾選（B3 有畫，A3 為了版面先省略）要不要留。</li>
+        <li>入口：<b>B</b>。一樣一列、品名加「（估算）」、草稿每列保留「存進食品庫」勾選。</li>
+        <li>檔位：吃得簡單（飯糰、麵包、蛋餅）約 400／一般正餐（便當、一碗麵）約 700／吃很多（火鍋、夜市、聚餐）約 1000。400 是我定的，沒有出處。</li>
+        <li>離線：照 DESIGN「寫入失敗（記一筆）」，飲食寫入不做離線佇列；沒網路時按「加入」就地顯示重試、草稿不清空。</li>
+        <li>搜尋列：搜尋框有輸入就出現「估一筆『…』」，在「新增『…』到食品庫」正上方。</li>
+        <li>樣張裡的三大營養素目標是示意（用的是 repo 已公開過的數字）。</li>
       </ul>
     </div>
   </div>
