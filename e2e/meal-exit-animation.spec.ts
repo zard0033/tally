@@ -2,14 +2,16 @@
    2026-07-31 修好前的壞法：items.length 一到 0，MealNode 的 done 立刻翻假，
    AnimatePresence 連機會都沒有，.item 直接消失、.todo-row 瞬間出現。 */
 import { test, expect } from '@playwright/test'
-import { grabPoint, leg, openApp, slowDrag } from './harness'
+import { grabPoint, leg, openApp, settled, slowDrag } from './harness'
 
 test('某餐最後一筆刪除——退場動畫要跑完才切成待記錄，不能瞬間跳過去', async ({ page }) => {
   await openApp(page)
   // fixture 裡 breakfast（id 101）本來就是該餐唯一一筆
   const g = await grabPoint(page)
   await slowDrag(page, g, leg(g, { x: g.x - 90, y: g.y }))
-  await page.waitForTimeout(300)
+  // 等滑開的列停住再點紅鈕：CI 上這條常排在 shard 第一條、冷機器，固定等 300ms 時點擊要重試好幾秒才點得到（中位 7 秒，見 wiki e2e-reference）
+  await expect(page.locator('.timeline .item-row').first(), '左滑之後列沒有打開').toHaveClass(/is-open/)
+  await settled(page.locator('.timeline .item-slide').first(), '左滑之後列一直沒停下來')
   await page.locator('.item-delete').first().click()
 
   const breakfastNode = page.locator('.node').first()
