@@ -17,7 +17,11 @@ test.use({ serviceWorkers: 'allow' })
 test.setTimeout(90_000)
 
 const PORT = 5502
-const ORIGIN = `http://localhost:${PORT}`
+/* 寫死 127.0.0.1、preview 也綁 127.0.0.1，不用 localhost：2026-11-13 改在 Playwright 容器裡跑後，preview 印了「Local: http://localhost:5502」
+   但這裡的 fetch 一直連不上（8 條全紅在 15 秒內沒起來）——推測是 localhost 在容器裡同時解析成 ::1 與 127.0.0.1，vite 綁一個、fetch 連另一個（未逐一驗證，改綁固定位址後容器 diag 綠）。
+   loopback 位址在 WebKit 一樣算安全環境，SW 照常註冊。 */
+const HOST = '127.0.0.1'
+const ORIGIN = `http://${HOST}:${PORT}`
 const VITE = path.join('node_modules', 'vite', 'bin', 'vite.js')
 
 /* 同 origin 上別的 App（Gambit）的快取：救援路徑只能清 Tally 自己 scope 的，這個要原封不動活下來。
@@ -44,7 +48,7 @@ async function startServer(): Promise<void> {
   // 先確認埠是空的：殘留的孤兒 preview 會讓 --strictPort 的新行程直接退出，而輪詢卻打到孤兒、
   // 照樣回 ok，之後「關掉伺服器」其實殺不到它，離線斷言就變成走網路（綠色但沒驗到）
   if (await isUp()) throw new Error(`${PORT} 已有行程在聽（上一輪殘留的 preview？）請先關掉再跑`)
-  const proc = spawn(process.execPath, [VITE, 'preview', '--outDir', servedDir, '--port', String(PORT), '--strictPort'], {
+  const proc = spawn(process.execPath, [VITE, 'preview', '--outDir', servedDir, '--host', HOST, '--port', String(PORT), '--strictPort'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   server = proc
