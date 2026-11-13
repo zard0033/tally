@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-14）：main 2f59132 已部署（含估一筆 v2.134）。CI e2e 已改在 Playwright 容器跑（字型快取、不碰 ubuntu 鏡像）＋burn-in（改到的測試×5）＋github reporter 標 flaky；容器首輪 551 條 0 flaky。
-下一步：本機已 commit 的 globalSetup 暖機（f3b4d81 起，未推）推上去後，比對各 shard 第一條耗時（基線見 wiki e2e-reference 11-14）；暖機沒效就再查冷啟動機制。分支 ci-e2e-hardening 已併入 main、可刪（要問）。之後：使用者真機估一次；減重回饋圈見待辦 0。
+現況（2026-11-14）：main 95dc8c7 已部署（含估一筆 v2.134）。CI e2e 根治已收尾：Playwright 容器＋字型快取、burn-in（改到的測試×5）、github reporter 標 flaky、globalSetup 暖機（shard 第一條多半回到熱機速度，數據在 wiki e2e-reference 11-14）。
+下一步：之後只照 CI 摘要頁標出的 flaky 依證據修（settled()／springSettled）；分支 ci-e2e-hardening 已併入 main、刪除待使用者點頭。使用者真機估一次；減重回饋圈見待辦 0。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

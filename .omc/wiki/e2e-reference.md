@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 暖機上線（`95dc8c7`，run 43462942351）：551 條 8 份全過、1 flaky、已部署。暖機每份 2.5–4.5 秒。**各份第一條（無暖機兩輪 → 有暖機）**：meal-exit 5.0/5.3→2.9s（熱機 2.1）、sync-sheet:171 8.2/8.3→5.9s（4.0）、estimate:61 7.9/7.8→4.1s、training:3015 11.6/11.1→6.6s（6.6）、analysis:67 4.6/3.2→2.3s、intake-detail:48 3.5/2.2→1.4s、training:821 3.7/3.4→3.0s（1.5）；quota-warning:9 5.2→6.7s 是唯一沒變快的（只有一個點，未查）。冷啟動成本大多搬進暖機了，**機制仍未查明**（不是字型快取；推測是 WebKit 執行檔與磁碟快取）。flaky 是 `tally.spec:37` 復原條焦點（「刪除後焦點沒接到復原鈕，停在 BODY」），在 shard 第 15 條、不是冷啟動，屬偶發清單 `.undo-bar` 一族。
+
 2026-11-14 容器上 main 第二輪（`2f59132`，run 43456770514）：**551 條 8 份全過、0 flaky，已部署**。SW spec 起不來的原因：preview 其實起來了（印出 `Local: http://localhost:5502`），是測試裡 `fetch('http://localhost:5502')` 連不上——推測 localhost 在容器裡同時解析成 ::1 與 127.0.0.1、vite 綁一個 fetch 連另一個；改成 preview 綁 127.0.0.1、測試也連 127.0.0.1 後 diag 與全量都綠。主 server（5501）也用 localhost 但沒事，因為 Playwright 的 webServer 檢查走 Node `http`、跟 vite 同一套解析。各份第一條（無暖機基線，第二次量）：meal-exit 5.3s、sync-sheet:171 8.3s、training:3015 11.1s、training:821 3.4s、estimate:61 7.8s——跟上一輪一致。下一步：globalSetup 暖機（`e2e/warmup.ts`，失敗只印 `::warning::` 不擋測試）上線後再量同一批。注意 diag 也有 `CI=true`，暖機上線後 diag 重現不了冷啟動。
 
 2026-11-13 容器上 main 第一輪（`cd492e3`，run 43440639196）：7 份全過、0 flaky；字型快取命中；burn-in 選到 meal-exit:7 跑 5 次全過。**shard 5 的 `service-worker.spec` 8 條全紅（兩次都紅）：自己 spawn 的 preview（5502）15 秒內沒起來**，本機 8 條全綠，原因待 diag 查（preview 的輸出原本被 `stdio: 'ignore'` 吞掉，已改成帶進錯誤訊息）。冷啟動懲罰在容器裡還在、約小一半：shard 第一條 meal-exit 5.0s（排後面 2.1s）、sync-sheet:171 8.2s（4.0s）、training:821 3.7s（1.5s）、training:3015 11.6s（6.6s）——diag 那次看不到懲罰是探針先暖過機。
