@@ -1,0 +1,25 @@
+name: CJK font
+description: 在 Playwright 容器裡裝 fonts-noto-cjk；.deb 放 actions/cache，只有沒命中才走 apt
+
+runs:
+  using: composite
+  steps:
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /opt/noto-cjk
+        # 換字型版本或換 Ubuntu 版本時改 key
+        key: fonts-noto-cjk-noble-v1
+    # 2026-11-11 runner 解析不到 *.ubuntu.com 一整晚：失敗隔 30 秒再試，最多三次。
+    # composite 的步驟不能設 timeout-minutes，用 timeout 包住：那晚有一份卡在 apt 25 分鐘才被整個 job 的逾時砍掉
+    - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+      shell: bash
+      run: |
+        mkdir -p /opt/noto-cjk && cd /opt/noto-cjk
+        for i in 1 2 3; do
+          timeout 120 apt-get update && timeout 300 apt-get download fonts-noto-cjk && break
+          [ "$i" = 3 ] && exit 1
+          sleep 30
+        done
+    - shell: bash
+      run: dpkg -i /opt/noto-cjk/*.deb && fc-cache -f > /dev/null && fc-list :lang=zh family | sed -n 1,3p

@@ -224,6 +224,36 @@ export async function springSettled(el: Locator) {
     .toBeLessThan(0.5)
 }
 
+/** 等元素停下來再動手或量：它自己、子孫、祖先都沒有在跑的有限次動畫（CSS transition／animation、WAAPI），
+ *  而且相隔 80ms 的兩次讀數（位置、尺寸、祖先鏈累乘的不透明度）一樣——Motion 這類 JS 每幀寫 style 的動畫 `getAnimations()` 看不到，靠讀數抓。
+ *  取代「`waitForTimeout(N)` 等動畫跑完」：CI 沒有 GPU，WebKit 幀率掉到約 30Hz，本機量出來夠的 N 到 CI 就不夠
+ *  （2026-11-10～13 雲端全量紅 8 次，5 次是這類，見 wiki e2e-reference）。無限循環的動畫（光暈、等待插圖）不算。
+ *  spring 要等「落定在 0」用 springSettled（衝過頭的最高點兩次讀數也可能一樣）。 */
+export async function settled(target: Locator, message = '元素的動畫沒有停下來') {
+  const sample = () =>
+    target.evaluate((el) => {
+      const chain: Element[] = []
+      for (let n: Element | null = el; n; n = n.parentElement) chain.push(n)
+      const running = [...el.getAnimations({ subtree: true }), ...chain.slice(1).flatMap((n) => n.getAnimations())].filter(
+        (a) => (a.pending || a.playState === 'running') && a.effect?.getComputedTiming().iterations !== Infinity,
+      ).length
+      const r = el.getBoundingClientRect()
+      const opacity = chain.reduce((o, n) => o * Number(getComputedStyle(n).opacity), 1)
+      return { running, at: [r.x, r.y, r.width, r.height].map((v) => v.toFixed(1)).join(','), opacity: opacity.toFixed(3) }
+    })
+  await expect
+    .poll(
+      async () => {
+        const a = await sample()
+        await target.page().waitForTimeout(80)
+        const b = await sample()
+        return a.running === 0 && b.running === 0 && a.at === b.at && a.opacity === b.opacity
+      },
+      { message, timeout: 5000 },
+    )
+    .toBe(true)
+}
+
 /** 元素中心點，給 armClickDuringClose 用。 */
 export async function centerOf(locator: Locator) {
   const box = (await locator.boundingBox())!

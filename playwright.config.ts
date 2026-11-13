@@ -44,7 +44,8 @@ export default defineConfig({
      不是單一路徑。預設 30s 在加到 15 條時就撞牆了——調高而不是拆成多個 test，
      因為「一輪走完不中斷」正是這份 harness 的核心紀律。 */
   timeout: 120_000,
-  reporter: [['list']],
+  /* CI 加 github reporter：失敗與「重試才過」（flaky）會標在 run 的摘要頁，不用翻 log 才知道哪條在抖 */
+  reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
     baseURL: E2E_URL,
     ...devices['iPhone 14 Pro'],

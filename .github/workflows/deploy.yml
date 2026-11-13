@@ -40,13 +40,31 @@ jobs:
         with:
           path: dist
 
+  # e2e 用的容器 tag 要跟 @playwright/test 同版（容器內建的瀏覽器版本綁死 Playwright 版本），從 lockfile 讀，升版不用手改
+  pw:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: v
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
   # 全量 e2e 分 8 份同時跑、每份 1 個 worker（本機只開得起 2 個 WebKit，全量要 14 分鐘）；沒全綠就不部署。
   # 救援部署（self_destroy_sw）跳過：那時手機上的 SW 已經壞了，不能讓偶發紅擋住救援。
+  # 跑在 Playwright 官方容器裡（WebKit 與系統依賴已裝好）：2026-11-11 兩輪紅在 apt 解析不到 *.ubuntu.com，一條測試都沒跑；
+  # 容器從 mcr.microsoft.com 拉，不碰 ubuntu 鏡像。中文字型照舊用 fonts-noto-cjk（折行與高度類斷言靠它貼近手機），
+  # .deb 放 actions/cache，只有快取沒命中（第一次或 key 改了）才走 apt。
   e2e:
     if: ${{ !inputs.self_destroy_sw }}
+    needs: pw
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.pw.outputs.version }}-noble
     timeout-minutes: 25
-    # 跑 npm ci 與 playwright install（會執行套件的安裝腳本），不給它頂層的 pages／id-token
+    # 跑 npm ci（會執行套件的安裝腳本），不給它頂層的 pages／id-token
     permissions:
       contents: read
     strategy:
@@ -60,30 +78,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # Linux runner 沒有中文字型，折行與高度類斷言會跟手機差很遠。
-      # 2026-11-11 晚 runner 連三輪解析不到 *.ubuntu.com（azure 鏡像與官方鏡像都一樣，GitHub 狀態頁沒有公告），
-      # 8 份裡最多 1 份撐過去、其餘一條測試都沒跑。改問公共 DNS；下一步 playwright 的 --with-deps 也走 apt，一起受惠。
-      # 失敗隔 30 秒再試，最多三次。2026-11-11 末輪公共 DNS 也沒救到（解析得到之後下載途中又斷），
-      # 有一份卡在這一步 25 分鐘才被整個 job 的逾時砍掉：每步自己限時，壞掉的那份早點紅，`gh run rerun --failed` 重跑就好。
-      - timeout-minutes: 8
-        run: |
-          echo 'nameserver 1.1.1.1' | sudo tee /etc/resolv.conf > /dev/null
-          # 寫進 apt 設定而不是只加在這一步的指令上：下一步 playwright --with-deps 自己叫的 apt 也吃得到
-          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
-          echo 'nameserver 8.8.8.8' | sudo tee -a /etc/resolv.conf > /dev/null
-          getent hosts archive.ubuntu.com || echo '公共 DNS 也解析不到 archive.ubuntu.com'
-          for i in 1 2 3; do
-            sudo apt-get update && sudo apt-get install -y fonts-noto-cjk && break
-            [ "$i" = 3 ] && exit 1
-            sleep 30
-          done
-      - timeout-minutes: 8
-        run: |
-          for i in 1 2 3; do
-            npx playwright install --with-deps webkit && break
-            [ "$i" = 3 ] && exit 1
-            sleep 30
-          done
+      - uses: ./.github/actions/cjk-font
       # GitHub runner 本來就設 CI=true，playwright.config 靠它開重試
       - run: npx playwright test --shard=${{ matrix.shard }}/8
       # 失敗時把截圖與 trace 留下來（config 是 retain-on-failure），本機沒有 Linux 可重現
@@ -94,9 +89,53 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # burn-in：這次 push 改到的 e2e 測試各跑 5 次、不重試（選法見 scripts/e2e-burnin.mjs）。
+  # 本機快、CI 慢，量得太早的新測試本機驗不出來；讓它第一次 push 就紅，不要之後隨機冒出來。
+  burn-in:
+    if: ${{ !inputs.self_destroy_sw && github.event_name == 'push' }}
+    needs: pw
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.pw.outputs.version }}-noble
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # 容器裡 checkout 的目錄擁有者跟執行者不同，git 會拒絕操作
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/cjk-font
+      # before 全零＝新分支第一次 push，沒有可比的基準
+      - env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then echo '沒有前一版可比，跳過'; exit 0; fi
+          # force-push 後 before 那個 commit 不在任何分支上，clone 裡沒有；不跳過的話重跑也一樣紅、只能再推一次
+          git cat-file -e "$BEFORE^{commit}" 2>/dev/null || { echo '::warning::前一版不在 clone 裡（force-push？），跳過 burn-in'; exit 0; }
+          node scripts/e2e-burnin.mjs "$BEFORE"
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-burn-in-failures
+          path: test-results/
+          retention-days: 7
+
   deploy:
-    needs: [build, e2e]
-    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') }}
+    needs: [build, pw, e2e, burn-in]
+    # 「跳過」只在救援時算過關：e2e／burn-in 都 needs pw，pw 一紅它們會被跳過，不擋的話等於一條測試都沒跑就部署。
+    # burn-in 在手動觸發時本來就跳過（只對 push），所以非救援時要另外看 pw 有沒有成功
+    if: >-
+      ${{ !cancelled() && needs.build.result == 'success' && (
+        inputs.self_destroy_sw ||
+        (needs.pw.result == 'success' && needs.e2e.result == 'success' && (needs.burn-in.result == 'success' || needs.burn-in.result == 'skipped'))
+      ) }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
