@@ -386,6 +386,14 @@ export async function seedFetchStub(
               return new Response(null, { status: 204 })
             }
           }
+          /* 量法斷點的開關（v2.138，setWeightBreak）：以 measured_on 定位、落地到 fix.weight，之後重撈讀得到 */
+          if (table === 'weight' && method === 'PATCH') {
+            const on = new URL(u).searchParams.get('measured_on')?.replace(/^eq\./, '') ?? null
+            const hit = (fix.weight as Record<string, unknown>[]).filter((row) => row.measured_on === on)
+            for (const row of hit) Object.assign(row, body as Record<string, unknown>)
+            // setWeightBreak 帶 select 回改到的列，一列都沒有就報錯
+            return json(hit.map((row) => ({ measured_on: row.measured_on })))
+          }
           // 每日目標存完不重撈，但之後的 load（例如存體重）會讀 profile：不落地就讀回舊值
           if (table === 'profile' && method === 'PATCH') {
             Object.assign(fix.profile[0], body as Record<string, unknown>)

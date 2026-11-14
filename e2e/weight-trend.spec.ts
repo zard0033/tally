@@ -160,3 +160,52 @@ test('自訂目標沒有速度：不畫計畫線，那一行只寫實際', async
   await expect(weightCard(page).locator('.trend-pace')).not.toContainText('計畫')
   await expect(planPath(page)).toHaveCount(0)
 })
+
+/* 量法斷點（v2.138，spec「⑤ 量法斷點」AC 3、4）。資料：持平 75，off −20 起整段 77（換電池），off −20 那筆標斷點。 */
+const BREAK_ROWS = [
+  ...[-40, -36, -32, -28, -24].map((off) => ({ weight_kg: 75, measured_on: shiftIso(TODAY, off), body_fat_pct: null, method_break: false })),
+  { weight_kg: 77, measured_on: shiftIso(TODAY, -20), body_fat_pct: null, method_break: true },
+  ...[-16, -12, -8, -4, 0].map((off) => ({ weight_kg: 77, measured_on: shiftIso(TODAY, off), body_fat_pct: null, method_break: false })),
+]
+const breakLine = (page: Page) => weightCard(page).locator('.recharts-reference-line')
+
+test('量法斷點：圖上斷點那天一條細線標「換量法」，明細表那天有小標；這段實際走勢是持平', async ({ page }) => {
+  await openTrend(page, BREAK_ROWS)
+  await expect(breakLine(page)).toHaveCount(1)
+  await expect(weightCard(page)).toContainText('換量法')
+  await expect(page.locator(`tr[data-date="${shiftIso(TODAY, -20)}"] .trend-brk-tag`)).toHaveText('換量法')
+  await expect(weightCard(page).locator('.trend-pace'), '分段斜率：整段平移不算變胖').toContainText('這段實際每月 0.00 kg')
+  await expect(
+    weightCard(page).locator('path.recharts-line-curve[stroke="var(--accent)"]'),
+    '7 日平均要在斷點斷開（兩段各一條），不能連成一段假的斜坡',
+  ).toHaveCount(2)
+})
+
+test('量法斷點：明細表點日期展開開關，改了就存；取消後細線消失', async ({ page }) => {
+  await openTrend(page, BREAK_ROWS.map((r) => ({ ...r, method_break: false })))
+  await expect(breakLine(page)).toHaveCount(0)
+  await expect(weightCard(page).locator('.trend-pace'), '沒標斷點時整段平移看起來在漲').not.toContainText('0.00 kg')
+
+  const day = shiftIso(TODAY, -20)
+  const btn = page.locator(`tr[data-date="${day}"] .trend-row-btn`)
+  await btn.click()
+  await expect(btn).toHaveAttribute('aria-expanded', 'true')
+  const box = page.getByRole('checkbox', { name: /從這天起量法不同/ })
+  await box.check()
+  // stub 在頁面裡攔 fetch（不經過網路），寫入記在 __writes
+  const patches = () =>
+    page.evaluate(() =>
+      (window as unknown as { __writes: { path: string; table: string; method: string; body: unknown }[] }).__writes.filter(
+        (w) => w.table === 'weight' && w.method === 'PATCH',
+      ),
+    )
+  await expect.poll(async () => (await patches()).length, '開關沒有存').toBe(1)
+  const [w] = await patches()
+  expect(decodeURIComponent(w.path)).toContain(`measured_on=eq.${day}`)
+  expect(w.body).toEqual({ method_break: true })
+  await expect(breakLine(page)).toHaveCount(1)
+  await expect(weightCard(page).locator('.trend-pace')).toContainText('這段實際每月 0.00 kg')
+
+  await box.uncheck()
+  await expect(breakLine(page)).toHaveCount(0)
+})

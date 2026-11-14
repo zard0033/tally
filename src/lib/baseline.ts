@@ -32,6 +32,55 @@ export interface WeightPoint {
   /** yyyy-mm-dd */
   date: string
   kg: number
+  /** 量法斷點（v2.138，spec「⑤ 量法斷點」）：換了秤或電池之後的第一筆。斷點前後各自一段，迴歸共用斜率、各段自己的截距 */
+  brk?: boolean
+}
+
+/**
+ * 共用斜率、每段各自截距的迴歸（v2.138）：每段先減掉自己的平均，再合起來算斜率——換電池讓讀數整段平移時，
+ * 平移不會被當成變胖或變瘦。只有一段時就是普通的最小平方法。seg 是段號（由舊到新遞增）。
+ * 回 slope（每單位 x）、sxx、sse 與段數 k；sxx 為 0（每段都只有一點）時 slope 是 NaN。
+ */
+export function segmentedFit(pts: readonly { x: number; y: number; seg: number }[]): { slope: number; sxx: number; sse: number; k: number } {
+  const groups = new Map<number, { x: number; y: number }[]>()
+  for (const p of pts) groups.set(p.seg, [...(groups.get(p.seg) ?? []), p])
+  let sxx = 0
+  let sxy = 0
+  const means: { mx: number; my: number; g: { x: number; y: number }[] }[] = []
+  for (const g of groups.values()) {
+    const mx = g.reduce((s, p) => s + p.x, 0) / g.length
+    const my = g.reduce((s, p) => s + p.y, 0) / g.length
+    for (const p of g) {
+      sxx += (p.x - mx) ** 2
+      sxy += (p.x - mx) * (p.y - my)
+    }
+    means.push({ mx, my, g })
+  }
+  const slope = sxy / sxx
+  let sse = 0
+  for (const { mx, my, g } of means) for (const p of g) sse += (p.y - (my + slope * (p.x - mx))) ** 2
+  return { slope, sxx, sse, k: groups.size }
+}
+
+/**
+ * 一串體重（任意順序）的可用筆數與跨度（v2.138 review）：每多一段就多一個截距要估，等於用掉一筆；
+ * 跨度是**各段自己的跨度加總**——切段之後斜率只靠每段內部的分散，兩小段各量兩三天、中間隔很久，首尾相差照樣過關；
+ * 只看最長一段又太嚴（斷點落在 28 天中間時兩段各 13 天，斷點後兩週都算不出來）。
+ * 沒有斷點時就是筆數與首尾相差的天數，跟原本一樣。
+ */
+export function segmentSpread(ws: readonly { date: string; brk?: boolean }[]): { usable: number; span: number } {
+  const sorted = [...ws].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const segs = segmentIds(sorted)
+  const bySeg = new Map<number, string[]>()
+  sorted.forEach((w, i) => bySeg.set(segs[i], [...(bySeg.get(segs[i]) ?? []), w.date]))
+  const span = [...bySeg.values()].reduce((s, dates) => s + spanDays(dates), 0)
+  return { usable: sorted.length - Math.max(0, bySeg.size - 1), span }
+}
+
+/** 由舊到新排好的日期與斷點旗標 → 每一筆的段號。斷點標在第一筆上不算切段（前面沒有東西可比）。 */
+export function segmentIds(points: readonly { brk?: boolean }[]): number[] {
+  let seg = 0
+  return points.map((p, i) => (p.brk && i > 0 ? ++seg : seg))
 }
 
 /** 窗口長度。spec 寫死 28 天、不開放調整。 */
@@ -185,7 +234,7 @@ export function estimateMaintenance(
      只看「窗尾在不在排除段裡」會早報約三週，排除段一結束還會改口叫人「接回記錄」（v2.137 review）。 */
   const settlingUntil =
     ex.map((r) => ({ r, until: shiftDate(r.end, BASELINE_NEEDS.loggedDays) })).find(({ r, until }) => endDate >= r.from && endDate < until)?.until ?? null
-  const winDates = wts.filter((w) => w.date >= start && w.date <= endDate).map((w) => w.date)
+  const winSpread = segmentSpread(wts.filter((w) => w.date >= start && w.date <= endDate))
 
   const runs = loggedRuns(daily, start, endDate)
   let best: LoggedRun | null = null
@@ -200,8 +249,8 @@ export function estimateMaintenance(
   return {
     status: 'insufficient',
     loggedDays: r?.loggedDays ?? 0,
-    weighIns: enough ? enough.weighIns : winDates.length,
-    weightSpanDays: enough ? enough.weightSpanDays : spanDays(winDates),
+    weighIns: enough ? enough.weighIns : winSpread.usable,
+    weightSpanDays: enough ? enough.weightSpanDays : winSpread.span,
     recentDays,
     settlingUntil,
   }
@@ -236,29 +285,25 @@ function estimateOnSpan(
   for (const d of dailyKcal) if (inWindow(d.date)) byDate.set(d.date, d)
   const logged = [...byDate.values()].filter((d) => d.complete).map((d) => d.kcal)
 
-  const pts = weights
-    .filter((w) => inWindow(w.date))
-    .map((w) => ({ x: daysBetween(startDate, w.date), y: w.kg }))
-  const span = spanDays(weights.filter((w) => inWindow(w.date)).map((w) => w.date))
+  const inSpan = weights.filter((w) => inWindow(w.date)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const segs = segmentIds(inSpan)
+  const pts = inSpan.map((w, i) => ({ x: daysBetween(startDate, w.date), y: w.kg, seg: segs[i] }))
+  const { usable, span } = segmentSpread(inSpan)
 
   if (
     logged.length < BASELINE_NEEDS.loggedDays ||
-    pts.length < BASELINE_NEEDS.weighIns ||
+    usable < BASELINE_NEEDS.weighIns ||
     span < BASELINE_NEEDS.weightSpanDays
   ) {
-    return { status: 'insufficient', loggedDays: logged.length, weighIns: pts.length, weightSpanDays: span }
+    return { status: 'insufficient', loggedDays: logged.length, weighIns: usable, weightSpanDays: span }
   }
 
   const meanIntake = logged.reduce((s, k) => s + k, 0) / logged.length
 
   const n = pts.length
-  const mx = pts.reduce((s, p) => s + p.x, 0) / n
-  const my = pts.reduce((s, p) => s + p.y, 0) / n
-  const sxx = pts.reduce((s, p) => s + (p.x - mx) ** 2, 0)
-  const slope = pts.reduce((s, p) => s + (p.x - mx) * (p.y - my), 0) / sxx // kg/天
-  const intercept = my - slope * mx
-  const sse = pts.reduce((s, p) => s + (p.y - (intercept + slope * p.x)) ** 2, 0)
-  const slopeSe = Math.sqrt(sse / (n - 2) / sxx)
+  const { slope, sxx, sse, k } = segmentedFit(pts) // slope：kg/天
+  // 自由度＝筆數 − 截距數 − 斜率；只有一段時就是原本的 n − 2
+  const slopeSe = Math.sqrt(sse / (n - k - 1) / sxx)
 
   const maintenance = meanIntake - slope * KCAL_PER_KG
   const slopeKgPerWeek = slope * 7

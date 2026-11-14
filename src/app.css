@@ -951,6 +951,18 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-table th, .trend-table td { padding: var(--s-2) var(--s-1); text-align: right; font-weight: 400;
   font-variant-numeric: tabular-nums; }
 .trend-table tbody tr { border-top: 1px solid var(--rule-subtle); }
+/* 量法斷點（v2.138）：明細表的日期是按鈕，點了展開一列放開關；有斷點的那天日期後面一個小標 */
+.trend-table th[scope="row"] { padding: 0; }
+.trend-row-btn { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 44px; padding: 0 var(--s-1);
+  border: none; background: none; font: inherit; color: var(--ink-muted); text-align: left; cursor: pointer; }
+.trend-row-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.trend-brk-tag { font-size: var(--t-xs); color: var(--ink-muted); background: var(--raised); border-radius: var(--r-pill); padding: 1px var(--s-2); }
+.trend-table .trend-row-more { border-top: none; }
+.trend-table .trend-row-more td { text-align: left; padding: 0 var(--s-1) var(--s-2); }
+.trend-brk-err { margin: 0; font-size: var(--t-sm); color: var(--over); }
+/* 勾選列（v2.138）：同估一筆的「存進食品庫」那顆的寫法，命中區 44px */
+.check-row { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-sm); color: var(--ink); cursor: pointer; }
+.check-row input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
 .trend-table thead th { font-size: var(--t-xs); color: var(--ink-muted); }
 .trend-table th:first-child { text-align: left; }
 .trend-table tbody th { color: var(--ink-muted); }

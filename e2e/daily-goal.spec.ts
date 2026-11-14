@@ -1235,3 +1235,55 @@ test('自訂改到一半直接切回自動：新值先存、開關也關，自�
   expect(merged.custom_kcal).toBe(1900)
   expect(merged.use_custom_targets).toBe(false)
 })
+
+/* 量法斷點（v2.138，spec「⑤ 量法斷點」AC 2、6）：近 28 天每天 2000 卡；體重持平但換電池後整段 +1 kg。
+   不標斷點：平移被當成變胖，回推偏低；標了：分段迴歸、回推＝平均攝取。 */
+const breakWeights = (brk: boolean) =>
+  [0, 5, 10, 15, 20, 26].map((i) => ({
+    weight_kg: i <= 10 ? 76 : 75,
+    measured_on: shiftDate(TODAY, -1 - i),
+    body_fat_pct: null,
+    method_break: brk && i === 10,
+  }))
+const breakFix = (brk: boolean) => ({ ...windowFix(2000), weight: breakWeights(brk) }) as unknown as typeof FIX
+
+test('量法斷點：沒標時換電池的整段平移被當成變胖，回推偏低', async ({ page }) => {
+  await openApp(page, {}, breakFix(false))
+  await openGoal(page)
+  await expect(estVal(page, '紀錄回推')).toContainText('卡')
+  await expect(estVal(page, '紀錄回推')).not.toHaveText('2000 卡')
+})
+
+test('量法斷點：標了斷點就分段算，回推回到平均攝取', async ({ page }) => {
+  await openApp(page, {}, breakFix(true))
+  await openGoal(page)
+  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+})
+
+/* 更新身體數據的「換了秤或電池」（v2.138，spec「⑤ 量法斷點」AC 4）：勾了才帶 method_break: true；
+   沒勾**不帶這欄**——帶 false 的話，同一天再記一次會把標好的斷點洗掉（upsert 只更新有帶的欄位）。 */
+const weightPosts = (page: Page) =>
+  page.evaluate(() =>
+    (window as unknown as { __writes: { table: string; method: string; body: unknown }[] }).__writes
+      .filter((w) => w.table === 'weight' && w.method === 'POST')
+      .map((w) => (Array.isArray(w.body) ? w.body[0] : w.body) as Record<string, unknown>),
+  )
+
+test('更新身體數據：勾「換了秤或電池」才帶斷點；沒勾不帶這欄，不洗掉標好的斷點', async ({ page }) => {
+  await openApp(page)
+  await page.locator('.tab[aria-label="設定"]').click()
+  const save = async (kg: string, brk: boolean) => {
+    await page.locator('.entry-row', { hasText: '更新身體數據' }).click()
+    await page.locator('#w-kg').fill(kg)
+    if (brk) await page.getByRole('checkbox', { name: /換了秤或電池/ }).check()
+    await page.locator('#settings-sheet-root .pick-bar-btn').click()
+    await expect(page.locator('#settings-sheet-root')).toHaveCount(0)
+  }
+  await save('75', false)
+  await expect.poll(async () => (await weightPosts(page)).length).toBe(1)
+  expect(await weightPosts(page).then((p) => p[0]), '沒勾卻帶了斷點欄位').not.toHaveProperty('method_break')
+
+  await save('76', true)
+  await expect.poll(async () => (await weightPosts(page)).length).toBe(2)
+  expect((await weightPosts(page))[1].method_break).toBe(true)
+})

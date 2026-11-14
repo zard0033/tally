@@ -40,7 +40,7 @@ export function useMaintenanceEstimate(refreshKey: string, trainingStart: string
         if (cancelled) return
         setData({
           daily: dailyKcalFromRows(rows),
-          weights: weights.map((w) => ({ date: w.measured_on, kg: Number(w.weight_kg) })),
+          weights: weights.map((w) => ({ date: w.measured_on, kg: Number(w.weight_kg), brk: w.method_break === true })),
           today,
         })
       })

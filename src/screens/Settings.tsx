@@ -97,6 +97,7 @@ export default function Settings(props: SettingsProps) {
   const wDate = useRef<HTMLInputElement>(null)
   const wKg = useRef<HTMLInputElement>(null)
   const wFat = useRef<HTMLInputElement>(null)
+  const wBrk = useRef<HTMLInputElement>(null)
 
   useEffect(() => () => { if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current) }, [])
   useEffect(() => { if (sheetOpen && !closing) dialogRef.current?.focus() }, [sheetOpen, closing])
@@ -134,6 +135,7 @@ export default function Settings(props: SettingsProps) {
     const kg = reqNum(wKg)
     const on = wDate.current?.value.trim() ?? ''
     const fatVal = wFat.current?.value.trim() ?? ''
+    const brk = wBrk.current?.checked === true
 
     if (!isValidWeightKg(kg)) return setErr('體重要填數字')
     if (!on) return setErr('量測日要填')
@@ -145,7 +147,8 @@ export default function Settings(props: SettingsProps) {
     setBusy(true)
     setErr(null)
     try {
-      await onSaveWeight({ measured_on: on, weight_kg: kg, body_fat_pct: fat })
+      // 斷點只在勾了才帶：不勾就不動那天原本的標記（帶 false 會洗掉標好的斷點）
+      await onSaveWeight({ measured_on: on, weight_kg: kg, body_fat_pct: fat, ...(brk ? { method_break: true as const } : {}) })
       refreshWeights()
       setWeightSaves((n) => n + 1)
       closeSheet()
@@ -192,6 +195,10 @@ export default function Settings(props: SettingsProps) {
             <input ref={wFat} id="w-fat" type="text" inputMode="decimal" placeholder=" " />
             <label htmlFor="w-fat">體脂 %</label>
           </div>
+          <label className="check-row">
+            <input ref={wBrk} type="checkbox" />
+            換了秤或電池：從這天起量法不同
+          </label>
           <p className="note">同一天再記一次會覆蓋當天那筆。</p>
           <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
         </form>
@@ -242,7 +249,7 @@ export default function Settings(props: SettingsProps) {
           </div>
         }
       >
-        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBack={() => setView('list')} />
+        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={() => { refreshWeights(); setWeightSaves((n) => n + 1) }} onBack={() => setView('list')} />
       </Suspense>
     )
   }

@@ -3,13 +3,14 @@
    浮動 tooltip 只掛在體重圖上、列出三個值；體脂圖的 tooltip 內容是空的，指標在體脂圖上移動時
    同步出現在體重圖的那一個——「一個 tooltip 列全部系列」，不會兩個框疊在一起。
    運算在 src/lib/weightTrend.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。 */
-import { useEffect, useMemo, useState } from 'react'
-import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
 import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
-import { listWeights, type Weight } from '@/lib/api'
+import { listWeights, setWeightBreak, type Weight } from '@/lib/api'
+import { errMsg, friendlyError } from '@/lib/errors'
 import { rateWeeklyToMonthly } from '@/lib/formulas'
 import { localDate, monthDay, tableDate } from '@/lib/dates'
 import { actualKgPerWeek, fmt1, niceDomain, signedKg, TREND_RANGES, trendPoints, withPlan, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
@@ -22,6 +23,8 @@ export interface WeightTrendProps {
   weights: Weight[] | null
   /** 現在設定的每週速度（kg，減重為負）；自訂目標是 null，不畫計畫線（v2.137） */
   plannedKgPerWeek: number | null
+  /** 明細表改了量法斷點：設定頁重撈體重、回推重算（v2.138） */
+  onBreakChange: () => void
   onBack: () => void
 }
 
@@ -42,10 +45,32 @@ function TrendTip({ active, payload }: TooltipContentProps) {
   )
 }
 
-export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: WeightTrendProps) {
+export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, onBack }: WeightTrendProps) {
   const [range, setRange] = useState<TrendRange>('90')
   const [full, setFull] = useState<Weight[] | null>(null)
   const [failed, setFailed] = useState(false)
+  /* 明細表展開的那一列（v2.138：裡面是量法斷點的開關）；一次只開一列 */
+  const [openDate, setOpenDate] = useState<string | null>(null)
+  const [brkBusy, setBrkBusy] = useState(false)
+  const [brkErr, setBrkErr] = useState<string | null>(null)
+
+  /* 改了就存（同每日目標頁的清單列）：先改畫面，失敗就改回來並說原因 */
+  async function toggleBreak(date: string, on: boolean) {
+    if (brkBusy) return
+    const flip = (v: boolean) => (rows: Weight[] | null) => rows && rows.map((w) => (w.measured_on === date ? { ...w, method_break: v } : w))
+    setBrkBusy(true)
+    setBrkErr(null)
+    setFull(flip(on))
+    try {
+      await setWeightBreak(date, on)
+      onBreakChange()
+    } catch (e) {
+      setFull(flip(!on))
+      setBrkErr(`沒有存到：${friendlyError(errMsg(e))}`)
+    } finally {
+      setBrkBusy(false)
+    }
+  }
   const today = useMemo(() => localDate(), [])
 
   /* 自己撈完整歷史；撈不到（離線、伺服器錯誤）就退回設定頁傳進來的那份，圖不空。
@@ -73,6 +98,16 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: Weigh
   const fatPoints = points.filter((p) => p.fat !== null)
   const fatDomain = useMemo(() => niceDomain(fatPoints.map((p) => p.fat as number), 0.5, 1), [fatPoints])
   const last = points[points.length - 1]
+  const breaks = points.filter((p) => p.brk && p.seg > 0)
+  /* 每一段各畫一條線，斷點那裡斷開：連過去的話，換電池造成的跳動會畫成一段真的在漲的斜坡（v2.138） */
+  const segIds = [...new Set(points.map((p) => p.seg))]
+  const lastSeg = segIds[segIds.length - 1]
+  /* 斷點那天一條垂直細線＋小標（v2.138）：讀數在這天整段平移，7 日平均從這天重新起算 */
+  const breakLines = (label: boolean) =>
+    breaks.map((p) => (
+      <ReferenceLine key={p.date} x={p.t} stroke="var(--ink-faint)" strokeWidth={1}
+        label={label ? { value: '換量法', position: 'insideTopLeft', fill: 'var(--ink-muted)', fontSize: 11 } : undefined} />
+    ))
 
   const axis = trendXAxis(dom, ticks)
 
@@ -123,12 +158,16 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: Weigh
               <XAxis {...axis} />
               <YAxis width={36} domain={kgDomain} ticks={yTicks(kgDomain)} tickLine={false} axisLine={false} allowDataOverflow />
               <Tooltip content={TrendTip} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
+              {breakLines(true)}
               {plannedKgPerWeek !== null && (
                 <Line dataKey="plan" name="計畫" stroke="var(--ink-muted)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={false} isAnimationActive={false} />
               )}
               <Line dataKey="kg" name="當次量測" stroke="none" dot={{ r: 3, fill: 'var(--ink-faint)', stroke: 'none' }} activeDot={false} isAnimationActive={false} />
-              <Line dataKey="avg" name="7 日平均" type="monotone" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-                dot={endDot} activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+              {segIds.map((s) => (
+                <Line key={`avg-${s}`} dataKey={(p: PlanPoint) => (p.seg === s ? p.avg : null)} name="7 日平均" type="monotone" stroke="var(--accent)" strokeWidth={2}
+                  strokeLinecap="round" strokeLinejoin="round" dot={s === lastSeg ? endDot : false}
+                  activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+              ))}
             </ComposedChart>
           </ResponsiveContainer>
         </section>
@@ -142,9 +181,13 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: Weigh
                 <XAxis {...axis} />
                 <YAxis width={36} domain={fatDomain} ticks={yTicks(fatDomain)} tickLine={false} axisLine={false} />
                 <Tooltip content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
-                <Line dataKey="fat" name="體脂" connectNulls stroke="var(--ink-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-                  dot={{ r: 4, fill: 'var(--ink-muted)', stroke: 'var(--card)', strokeWidth: 2 }}
-                  activeDot={{ r: 5, fill: 'var(--ink-muted)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+                {breakLines(false)}
+                {segIds.map((s) => (
+                  <Line key={`fat-${s}`} dataKey={(p: PlanPoint) => (p.seg === s ? p.fat : null)} name="體脂" connectNulls stroke="var(--ink-muted)" strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round"
+                    dot={{ r: 4, fill: 'var(--ink-muted)', stroke: 'var(--card)', strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: 'var(--ink-muted)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+                ))}
               </ComposedChart>
             </ResponsiveContainer>
           </section>
@@ -158,11 +201,35 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: Weigh
             <thead><tr><th scope="col">日期</th><th scope="col">體重</th><th scope="col">體脂</th></tr></thead>
             <tbody>
               {[...points].reverse().map((p) => (
-                <tr key={p.date}>
-                  <th scope="row">{tableDate(p.date, today)}</th>
-                  <td>{fmt1(p.kg)} kg</td>
-                  <td>{p.fat === null ? '—' : `${fmt1(p.fat)} %`}</td>
-                </tr>
+                <Fragment key={p.date}>
+                  <tr data-date={p.date}>
+                    <th scope="row">
+                      {/* 點日期展開這一列：量法斷點的開關（v2.138）。日期是按鈕，鍵盤與讀屏都進得去 */}
+                      <button type="button" className="trend-row-btn" aria-expanded={openDate === p.date} aria-controls={`brk-${p.date}`}
+                        onClick={() => { setBrkErr(null); setOpenDate(openDate === p.date ? null : p.date) }}>
+                        {tableDate(p.date, today)}
+                        {/* 斷點標在最早一筆上不切段、沒有作用，小標也不出現（開關照實反映存的值） */}
+                        {p.brk && p.seg > 0 && <span className="trend-brk-tag">換量法</span>}
+                      </button>
+                    </th>
+                    <td>{fmt1(p.kg)} kg</td>
+                    <td>{p.fat === null ? '—' : `${fmt1(p.fat)} %`}</td>
+                  </tr>
+                  {openDate === p.date && (
+                    <tr className="trend-row-more" id={`brk-${p.date}`}>
+                      <td colSpan={3}>
+                        <label className="check-row">
+                          {/* 存檔中不用 disabled：鍵盤聚焦著時被停用，焦點會掉回頁首（v2.138 review）；改用 aria-disabled＋toggleBreak 開頭擋重送 */}
+                          <input type="checkbox" checked={p.brk} disabled={full === null} aria-disabled={brkBusy || undefined}
+                            onChange={(e) => void toggleBreak(p.date, e.target.checked)} />
+                          從這天起量法不同（換了秤或電池）
+                        </label>
+                        {brkErr && <p className="trend-brk-err" role="alert">{brkErr}</p>}
+                        {full === null && <p className="trend-brk-err">連不上伺服器，現在改不了。</p>}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

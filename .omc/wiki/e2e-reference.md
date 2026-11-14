@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 v2.138 量法斷點（本機，push 前）：`--list` 560 條 22 檔。第一輪 smoke 55＋daily-goal／settings／weight-trend／meal-suggest 151 全過；review 修完再跑 smoke 55＋daily-goal／settings／weight-trend 90 全過。mutation：段號全 0（斷點失效）vitest 紅 4、e2e 紅 3；更新身體數據沒勾也帶欄位 → 紅；review 三項（窗口筆數扣斷點、跨度加總、改到 0 列報錯）各有單元測試。vitest 1144 全過。
+
 2026-11-14 v2.137 回推四項＋趨勢頁計畫線（本機，push 前）：smoke 55 過；daily-goal＋settings＋weight-trend＋interaction＋meal-suggest 209 過 1 紅，紅的是偶發清單上的「慢態有出口」（本機幾乎必紅、基線一樣，這批沒動開機與 session），單跑 ×3 全過。中途抓到 19 條 daily-goal 紅：stub 用「select 不含 meal」認回推查詢，查詢多抓 meal 後被送去餐建議的 handler（見 lesson-state-text-to-visual ⑥）。mutation：baseline 四項各拿掉一項都紅、review 三項修正各還原都紅、拿掉計畫線 e2e 紅。vitest 1136 全過。
 
 2026-11-14 v2.136 過場／下拉縫／整頁錯誤太陽（本機，push 前）：smoke 55 條全過；interaction＋meal-suggest＋service-worker＋settings 143 過（含新增「過場」兩條）。新增兩條做過 mutation：拿掉過場淡出動畫→兩條都紅；減少動態選擇器改回去→第二條紅（量到 0.22s）。全量交給 CI。

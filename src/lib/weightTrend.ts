@@ -2,6 +2,7 @@
    不沾 DOM、不碰 recharts——圖怎麼畫是 WeightTrend.tsx 的事，這裡只管數字對不對。 */
 import { dayIndex, monthDay, shiftDate } from './dates'
 import { num } from './formulas'
+import { segmentedFit, segmentIds, segmentSpread } from './baseline'
 
 export type TrendRange = '30' | '90' | 'all'
 
@@ -15,6 +16,8 @@ export interface TrendRow {
   weight_kg: number | string
   measured_on: string
   body_fat_pct: number | string | null
+  /** 量法斷點（v2.138）：舊資料或 stub 沒這欄就當沒有 */
+  method_break?: boolean | null
 }
 
 export interface TrendPoint {
@@ -23,9 +26,13 @@ export interface TrendPoint {
   /** 自 1970-01-01 起算的天數；X 軸用數字軸，缺記錄的日子才會留白而不是被擠在一起 */
   t: number
   kg: number
-  /** 7 日平均 */
+  /** 7 日平均（不跨量法斷點：只平均同一段的量測） */
   avg: number
   fat: number | null
+  /** 這筆是量法斷點（換了之後的第一筆） */
+  brk: boolean
+  /** 段號：斷點切出來的第幾段，由舊到新 */
+  seg: number
 }
 
 /** dayIndex 的反運算。 */
@@ -46,20 +53,25 @@ export function rangeStart(range: TrendRange, today: string): string | null {
  * 體重不是有限數字的列整筆丟掉（不畫比畫錯好）；體脂不是有限數字就當沒填。
  */
 export function trendPoints(rows: TrendRow[], range: TrendRange, today: string): TrendPoint[] {
-  const all = rows
-    .map((r) => ({ date: r.measured_on, t: dayIndex(r.measured_on), kg: num(r.weight_kg), fat: num(r.body_fat_pct) }))
+  const sorted = rows
+    .map((r) => ({ date: r.measured_on, t: dayIndex(r.measured_on), kg: num(r.weight_kg), fat: num(r.body_fat_pct), brk: r.method_break === true }))
     .filter((r) => Number.isFinite(r.kg))
     .sort((a, b) => a.t - b.t)
+  const segs = segmentIds(sorted)
+  const all = sorted.map((r, i) => ({ ...r, seg: segs[i] }))
   const from = rangeStart(range, today)
   return all
     .map((r) => {
-      const win = all.filter((x) => x.t <= r.t && x.t > r.t - 7)
+      // 7 日平均不跨斷點：換電池前後的讀數整段平移，混在一起平均會畫出一段假的斜坡
+      const win = all.filter((x) => x.t <= r.t && x.t > r.t - 7 && x.seg === r.seg)
       return {
         date: r.date,
         t: r.t,
         kg: r.kg,
         avg: win.reduce((s, x) => s + x.kg, 0) / win.length,
         fat: Number.isFinite(r.fat) ? r.fat : null,
+        brk: r.brk,
+        seg: r.seg,
       }
     })
     .filter((p) => from === null || p.date >= from)
@@ -130,16 +142,14 @@ export const PACE_MIN_SPAN_DAYS = 7
  * 這段的實際走勢（kg/週，v2.137「計畫 vs 實際」）：範圍內全部量測的線性迴歸斜率——跟回推同一種算法，
  * 不是頭尾相減（頭尾相減會把單次量測的水分波動全算進去）。不到 2 筆或頭尾不到 PACE_MIN_SPAN_DAYS 天回 null。
  */
-export function actualKgPerWeek(points: readonly { t: number; kg: number }[]): number | null {
+export function actualKgPerWeek(points: readonly { t: number; kg: number; seg?: number }[]): number | null {
   if (points.length < 2) return null
-  const ts = points.map((p) => p.t)
-  if (Math.max(...ts) - Math.min(...ts) < PACE_MIN_SPAN_DAYS) return null
-  const n = points.length
-  const mt = points.reduce((s, p) => s + p.t, 0) / n
-  const mk = points.reduce((s, p) => s + p.kg, 0) / n
-  const stt = points.reduce((s, p) => s + (p.t - mt) ** 2, 0)
-  const slope = points.reduce((s, p) => s + (p.t - mt) * (p.kg - mk), 0) / stt
-  return slope * 7
+  // 跨度看各段自己的跨度加總（同回推，v2.138 review）：斷點兩側各只有一兩天的話，斜率幾乎全是雜訊
+  const { span } = segmentSpread(points.map((p, i) => ({ date: isoOfDay(p.t), brk: i > 0 && (p.seg ?? 0) !== (points[i - 1].seg ?? 0) })))
+  if (span < PACE_MIN_SPAN_DAYS) return null
+  // 跨量法斷點時用分段斜率（同回推，v2.138）；每段都只有一筆時算不出來
+  const { slope } = segmentedFit(points.map((p) => ({ x: p.t, y: p.kg, seg: p.seg ?? 0 })))
+  return Number.isFinite(slope) ? slope * 7 : null
 }
 
 /**

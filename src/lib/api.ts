@@ -338,9 +338,11 @@ export interface Weight {
   weight_kg: number
   measured_on: string
   body_fat_pct: number | null
+  /** 量法斷點（v2.138）：換了秤或電池之後的第一筆 */
+  method_break: boolean
 }
 
-const WEIGHT_COLS = 'weight_kg,measured_on,body_fat_pct'
+const WEIGHT_COLS = 'weight_kg,measured_on,body_fat_pct,method_break'
 
 /** body_fat_pct 一併撈：目標計算（Katch-McArdle）要用最新一筆的體脂率，
  *  沒有就是沒有，呼叫端不再往回找更舊的值（見 formulas.ts computeTargets 註解）。 */
@@ -370,6 +372,8 @@ export interface NewWeight {
   measured_on: string
   weight_kg: number
   body_fat_pct: number | null
+  /** 只在要標斷點時帶 true；不帶就不動既有的標記（upsert 只更新有帶的欄位）——帶 false 會把標好的斷點洗掉 */
+  method_break?: true
 }
 
 /**
@@ -377,6 +381,19 @@ export interface NewWeight {
  * onConflict 不可省：主鍵是 identity id、body 沒帶 id，預設的衝突目標綁在主鍵上永遠不會命中，
  * 接著就會撞上那條 unique 約束報 23505。
  */
+/** 改某一天那筆體重的量法斷點（v2.138，趨勢頁明細表的開關）。RLS 只讓人改自己的列。 */
+export async function setWeightBreak(measuredOn: string, on: boolean): Promise<void> {
+  // 要回改到的列：一列都沒改到（那筆在別台裝置刪了或改了日期）時 update 不會報錯，畫面卻會以為存好了（v2.138 review）
+  const { data, error } = await supabase
+    .from('weight')
+    .update({ method_break: on })
+    .eq('measured_on', measuredOn)
+    .select('measured_on')
+    .abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('找不到那天的體重紀錄')
+}
+
 export async function upsertWeight(weight: NewWeight): Promise<void> {
   const { error } = await supabase
     .from('weight')

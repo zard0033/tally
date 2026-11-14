@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BODY_FAT_MAX, BODY_FAT_MIN, actualKgPerWeek, fmt1, signedKg, withPlan, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
-import { dayIndex } from './dates'
+import { dayIndex, shiftDate } from './dates'
 import { plannedWeeklyKg } from './formulas'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
@@ -206,5 +206,23 @@ describe('plannedWeeklyKg', () => {
   it('自訂目標或速度缺失：沒有計畫可比', () => {
     expect(plannedWeeklyKg(p('cut', 0.29, true))).toBeNull()
     expect(plannedWeeklyKg(p('cut', null))).toBeNull()
+  })
+})
+
+describe('量法斷點（v2.138）', () => {
+  const T = '2026-11-14'
+  const r = (off: number, kg: number, brk = false): TrendRow => ({ weight_kg: kg, measured_on: shiftDate(T, off), body_fat_pct: null, method_break: brk })
+
+  it('7 日平均不跨斷點：斷點那天重新起算', () => {
+    const pts = trendPoints([r(-3, 75), r(-2, 75), r(-1, 77, true), r(0, 77)], '30', T)
+    expect(pts.map((p) => p.avg)).toEqual([75, 75, 77, 77])
+    expect(pts.map((p) => p.brk)).toEqual([false, false, true, false])
+  })
+
+  it('這段實際的走勢用分段斜率：持平但換電池後整段 +2，算出來是 0', () => {
+    const rows = [...[-28, -24, -20, -16].map((o) => r(o, 75)), r(-12, 77, true), ...[-8, -4, 0].map((o) => r(o, 77))]
+    expect(actualKgPerWeek(trendPoints(rows, '30', T))).toBeCloseTo(0, 10)
+    // 不標斷點時同一份資料看起來在漲
+    expect(actualKgPerWeek(trendPoints(rows.map((x) => ({ ...x, method_break: false })), '30', T))).toBeGreaterThan(0.3)
   })
 })

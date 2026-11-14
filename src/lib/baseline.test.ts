@@ -10,6 +10,7 @@ import {
   expectedWeeklyChangeKg,
   insufficientShortfalls,
   maintenanceAdvice,
+  segmentedFit,
   type BaselineResult,
   type DailyKcal,
   type WeightPoint,
@@ -620,3 +621,78 @@ describe('v2.137 review：剛開始訓練與資料不足時說的話', () => {
     }
   })
 })
+
+describe('量法斷點：共用斜率、各段自己的截距（v2.138）', () => {
+  /** 28 天每 3 天一筆、體重持平 75；offset ≤ shiftAt 的那幾筆整段 +2（換電池後讀數平移），brkAt 那筆標斷點 */
+  const shifted = (shiftAt: number, brk: boolean): WeightPoint[] => {
+    const out: WeightPoint[] = []
+    for (let o = 27; o >= 0; o -= 3) out.push({ date: dayAt(o), kg: o <= shiftAt ? 77 : 75, ...(brk && o === shiftAt ? { brk: true } : {}) })
+    return out
+  }
+
+  it('換電池讀數整段 +2：不標斷點會當成在變胖、回推偏低；標了就回到平均攝取', () => {
+    const plain = estimateMaintenance(log(28, 1800), shifted(12, false), END)
+    const marked = estimateMaintenance(log(28, 1800), shifted(12, true), END)
+    expect(plain.status).toBe('ok')
+    expect(marked.status).toBe('ok')
+    if (plain.status === 'ok') expect(plain.maintenance).toBeLessThan(1800 - 300)
+    if (marked.status === 'ok') {
+      expect(marked.maintenance).toBeCloseTo(1800, 0)
+      expect(marked.weighIns).toBe(10)
+    }
+  })
+
+  it('每多一段就多用掉一筆體重：4 筆切成兩段只剩 3 筆可用，資料不足', () => {
+    const w: WeightPoint[] = [
+      { date: dayAt(27), kg: 75 }, { date: dayAt(18), kg: 75 },
+      { date: dayAt(9), kg: 77, brk: true }, { date: dayAt(0), kg: 77 },
+    ]
+    const r = estimateMaintenance(log(28, 1800), w, END)
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') expect(r.weighIns).toBe(3)
+  })
+
+  it('斷點標在這段的第一筆上不算切段（前面沒有東西可比）', () => {
+    const w = weightsAt(75, 0).map((p, i) => (i === 0 ? { ...p, brk: true } : p))
+    const r = estimateMaintenance(log(28, 1800), w, END)
+    expect(r.status).toBe('ok')
+    if (r.status === 'ok') expect(r.weighIns).toBe(w.length)
+  })
+
+  it('segmentedFit：只有一段時就是普通最小平方；兩段平移不影響斜率', () => {
+    const line = [0, 1, 2, 3].map((x) => ({ x, y: 2 * x + 1, seg: 0 }))
+    expect(segmentedFit(line).slope).toBeCloseTo(2, 10)
+    const two = [...line, ...[4, 5, 6, 7].map((x) => ({ x, y: 2 * x + 11, seg: 1 }))]
+    expect(segmentedFit(two).slope).toBeCloseTo(2, 10)
+    expect(segmentedFit(two).k).toBe(2)
+  })
+})
+
+describe('量法斷點 review（v2.138）', () => {
+  const run = (from: number, to: number): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal: 1800, complete: true }))
+
+  it('跨度看各段自己的跨度加總：斷點兩側各量三天（2＋2 天）、中間隔很久，不算跨 14 天', () => {
+    const w: WeightPoint[] = [
+      { date: dayAt(27), kg: 75.0 }, { date: dayAt(26), kg: 75.4 }, { date: dayAt(25), kg: 75.2 },
+      { date: dayAt(2), kg: 76.0, brk: true }, { date: dayAt(1), kg: 76.3 }, { date: dayAt(0), kg: 76.1 },
+    ]
+    const r = estimateMaintenance(log(28, 1800), w, END)
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') expect(insufficientShortfalls(r).map((s) => s.kind)).toContain('weightSpanDays')
+  })
+
+  it('記錄還不夠時報的體重筆數也扣掉斷點佔用的：4 筆切兩段報 3 筆，現在就說缺', () => {
+    const w: WeightPoint[] = [
+      { date: dayAt(27), kg: 75 }, { date: dayAt(20), kg: 75 },
+      { date: dayAt(14), kg: 76, brk: true }, { date: dayAt(0), kg: 76 },
+    ]
+    const r = estimateMaintenance([...run(27, 13)], w, END) // 只有 15 天完整
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') {
+      expect(r.weighIns).toBe(3)
+      expect(insufficientShortfalls(r).map((s) => s.kind)).toContain('weighIns')
+    }
+  })
+})
+
