@@ -1586,13 +1586,11 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 
 /* ═══════════ 表單（新增食物／設定編輯／記體重） ═══════════ */
 
-/* 拍標示自動填：**表單層級的捷徑，不是主要動作**——所以描邊不填色，與底部那顆填色的
-   確認鈕分層（同一張表單上兩顆填色鈕會分不出誰是主角）。放在欄位上方而不是黏在品名旁，
+/* 拍標示自動填：**表單層級的捷徑，不是主要動作**——底部主藍填色的確認鈕才是主角。放在欄位上方而不是黏在品名旁，
    因為它一次填滿整張表單（品名＋熱量＋三大營養素），不屬於任何單一欄位。
    帶文字不只圖示：光一顆相機在表單上方有歧義——拍的是食物本身還是標示？
-   邊框用 `--rule-field` 而不是 `--rule`：它是使用者拿來操作的控件，受 WCAG 1.4.11 的 3:1 管
-   （見「資料輸入控件的邊界」條）。字距用 `--track-xs`，小字要放鬆——**沒有 `--track-sm` 這個
-   token**，寫了會靜默 fallback 成 normal。 */
+   v2.139 起實際長相由下面的 `.scan-ring` 覆寫（包在 AI 光暈裡、白塊墨字）；這裡的描邊樣式只剩沒包光暈時的底。
+   **沒有 `--track-sm` 這個 token**，寫了會靜默 fallback 成 normal。 */
 .scan-btn { width: 100%; min-height: 44px; margin-bottom: var(--s-4);
   display: flex; align-items: center; justify-content: center; gap: var(--s-2);
   border: 1px solid var(--rule-field); border-radius: var(--r-tab);
@@ -1611,6 +1609,19 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    `1.6ch` 容得下兩位數（界是 55 秒，到不了三位）。 */
 .scan-sec { font-variant-numeric: tabular-nums; min-width: 1.6ch; display: inline-block;
   text-align: right; margin: 0 .15em 0 .4em; }
+/* AI 光暈（v2.139，樣張 ai-flair A）：外層 .ai-ring 給光暈與辨識中的繞光，這裡只把按鈕換成光暈裡的那一塊——
+   墨色粗字、相機圖示用太陽深色（太陽色＝AI 的身分，見 DESIGN「太陽色＝AI 的身分」；圖示不負責對比，字仍是 --ink）。
+   框線拿掉：光暈本身就是邊界（--sun-pale 對 --card 只當裝飾，可點的邊界靠 52px 的白塊與光暈一起） */
+/* 權重寫成 .ai-ring.scan-ring：只寫 .scan-ring 時跟 .ai-ring 同權重，靠檔案順序才贏（v2.139 review） */
+.ai-ring.scan-ring { margin: 0 0 var(--s-4); }
+.scan-ring .scan-btn { margin: 0; min-height: 52px; border: none; background: var(--card); color: var(--ink);
+  font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md); }
+.scan-ring .scan-btn svg { width: 20px; height: 20px; color: var(--sun-deep); }
+/* 焦點框畫在光暈裡面：.ai-ring 是 overflow: hidden、只留 2px，原本 offset 2px 的框整個被裁掉、鍵盤聚焦時看不見（v2.139 review，同 .est-text） */
+.scan-ring .scan-btn:focus-visible { outline-offset: 0; }
+/* 錯誤訊息往下讓開光暈外圈的 4px：原本緊貼框邊，紅字壓在淡黃的光暈上 */
+.scan-ring + .scan-error { margin-top: calc(var(--s-4) * -1 + var(--s-2)); }
+.scan-ring .scan-btn:disabled { opacity: 1; color: var(--ink-muted); font-weight: 600; }
 /* 失敗訊息沿用表單既有的錯誤樣式，不另立一套 */
 .scan-error { margin: calc(var(--s-4) * -1) 0 var(--s-4); }
 /* 辨識中把整組欄位鎖住。fieldset 純粹當開關用，樣式全部重置——

@@ -226,9 +226,12 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
               if (f) void handleFile(f)
             }}
           />
+          {/* AI 的視覺身分（v2.134 樣張 ai-flair A，v2.139 補上這顆）：平常一圈淡太陽色光暈，辨識中光沿邊框繞——
+              跟估一筆的描述框同一套 .ai-ring。按鈕本身仍是 .scan-btn（e2e 用它找） */}
+          <div className={scanning ? 'ai-ring scan-ring busy' : 'ai-ring scan-ring'}>
           <button
             type="button"
-            className="scan-btn"
+            className="scan-btn ai-inner"
             onClick={() => fileRef.current?.click()}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -238,6 +241,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
             {/* 秒數用 tabular-nums 等寬字，否則每跳一秒整串字會左右抖（數字寬度不一） */}
             {scanning ? <>辨識中…<span className="scan-sec">{scanSec}</span>秒</> : 'AI 辨識輸入'}
           </button>
+          </div>
           {/* role=status：辨識是非同步的，讀屏使用者不會自己回頭看這一行 */}
           {scanError && <p className="scan-error" role="status">{scanError}</p>}
         </>
