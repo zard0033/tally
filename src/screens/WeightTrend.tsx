@@ -5,6 +5,7 @@
    運算在 src/lib/weightTrend.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。 */
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
+import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
@@ -79,7 +80,11 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   if (source === null || (loading && source.length === 0)) {
     body = <div className="trend-skel" aria-busy="true" aria-label="載入中" />
   } else if (source.length === 0) {
-    body = <p className="trend-empty">{failed ? '連不上伺服器，載不到體重紀錄。連上網路後再開一次。' : '還沒有體重紀錄'}</p>
+    body = failed ? (
+      <p className="trend-empty">連不上伺服器，載不到體重紀錄。連上網路後再開一次。</p>
+    ) : (
+      <EmptyNote art="scale">還沒有體重紀錄</EmptyNote>
+    )
   } else if (points.length === 0) {
     body = <TrendNoRecords onSeeAll={() => setRange('all')} />
   } else {

@@ -14,6 +14,7 @@ import {
   type ShownBaseline,
 } from '@/lib/baseline'
 import { monthDay } from '@/lib/dates'
+import { SkelInline } from '@/components/Skeleton'
 import { FAT_G_PER_KG, KCAL_PER_KG, type Goal } from '@/lib/formulas'
 import type { MaintenanceEstimate } from '@/useMaintenanceEstimate'
 
@@ -192,7 +193,7 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
       />
     )
   } else if (estimate.state === 'loading') {
-    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天吃的與體重變化倒推" value="讀取中…" />
+    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天吃的與體重變化倒推" value={<SkelInline w="3.6em" />} />
   } else if (estimate.state === 'error') {
     recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天吃的與體重變化倒推" value="讀不到紀錄" />
   } else if (cur?.status === 'ok') {
@@ -251,7 +252,7 @@ export function CustomCompare({ estimate, targetKcal }: { estimate: MaintenanceE
         <div className="goal-row">
           <span className="lb">紀錄回推的維持熱量</span>
           <span className="val">
-            {estimate.state === 'loading' ? '讀取中…'
+            {estimate.state === 'loading' ? <SkelInline w="4.5em" />
               : estimate.state === 'error' ? '讀不到紀錄'
               : cur?.status === 'ok' ? `約 ${r(cur.maintenance)} 卡`
               : cur?.status === 'implausible' ? '資料看起來有誤' : '還算不出來'}
@@ -350,7 +351,7 @@ export function CalcDetail(p: CalcDetailProps) {
         </>
       ) : (
         <p className="goal-calc-fine">
-          {p.estimate.state === 'loading' ? '讀取紀錄中…'
+          {p.estimate.state === 'loading' ? <SkelInline w="14em" label="讀取紀錄中" />
             : p.estimate.state === 'error' ? '讀不到紀錄，這段先算不出來。'
             : cur?.status === 'insufficient'
               ? `還算不出來：近 ${WINDOW_DAYS} 天要記滿 ${BASELINE_NEEDS.loggedDays} 天、量 ${BASELINE_NEEDS.weighIns} 筆體重、體重橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上。`

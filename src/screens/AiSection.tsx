@@ -4,11 +4,11 @@
    不做 BYOK 輸入 key：單人 app，key 進資料庫或瀏覽器都只是多一個外洩面。 */
 import { AI_MODELS, formatUsd } from '@/lib/aiModels'
 import type { AiCredits } from '@/lib/api'
+import { SkelInline } from '@/components/Skeleton'
 
 export type CreditsState = { status: 'loading' } | { status: 'ok'; data: AiCredits } | { status: 'err' }
 
-function creditsText(c: CreditsState): string {
-  if (c.status === 'loading') return '讀取中…'
+function creditsText(c: Exclude<CreditsState, { status: 'loading' }>): string {
   if (c.status === 'err') return '讀不到額度'
   const { total_credits, total_usage, usage_monthly } = c.data
   // 兩個浮點數相減可能是 -0.0001，印成 $-0.00；夾到 0
@@ -25,7 +25,9 @@ export default function AiSection({ credits }: { credits: CreditsState }) {
         <div className="entry-row entry-static" data-row="ai-credits">
           <span className="lb-wrap">
             <span className="lb">AI 額度</span>
-            <span className="lb-sub" aria-live="polite">{creditsText(credits)}</span>
+            <span className="lb-sub" aria-live="polite">
+              {credits.status === 'loading' ? <SkelInline w="10em" /> : creditsText(credits)}
+            </span>
           </span>
         </div>
         <div className="entry-row entry-static" data-row="ai-model">

@@ -11,6 +11,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import SkyBand from '@/components/SkyBand'
+import { SkelInline } from '@/components/Skeleton'
 import SubPageTop from '@/components/SubPageTop'
 import { useSkyEdge } from '@/components/useSkyEdge'
 import { getAiCredits, listWeights, type Weight } from '@/lib/api'
@@ -289,7 +290,7 @@ export default function Settings(props: SettingsProps) {
           <button className="entry-row" type="button" data-action="open-exercise-library" disabled={training === null} onClick={() => setView('exercises')}>
             <span className="lb-wrap">
               <span className="lb">動作庫管理</span>
-              <span className="lb-sub">{training === null ? '載入中…' : `${training.db.exercises.filter((e) => e.archived !== true).length} 個動作`}</span>
+              <span className="lb-sub">{training === null ? <SkelInline w="4em" /> : `${training.db.exercises.filter((e) => e.archived !== true).length} 個動作`}</span>
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>

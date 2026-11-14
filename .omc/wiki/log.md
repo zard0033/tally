@@ -189,3 +189,7 @@
 - **Pages:** cleanup-inventory-2026-11-02.md, e2e-reference.md, verified-testing-e2e-mutation.md, lesson-daily-goal-2026-11-04.md, lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md, lesson-field-controls-2026-10-16.md, lesson-flaky-root-cause-2026-11-03.md, lesson-meal-suggest-v2-2026-11-10.md, lesson-rpe-expansion-rpe-push-review-2026-10-28.md, lesson-sync-sheet-review-sheet-2026-10-15.md, open-failures.md, status-facts-edge-function.md
 - **Summary:** Query "B3 B4 視覺 換皮" → 12 results (of 12 total)
 
+## [2026-11-14T03:37:46.486Z] ingest
+- **Pages:** lesson-state-text-to-visual-2026-11-14.md
+- **Summary:** Created new page "lesson-state-text-to-visual 狀態文字換成插圖／骨架的兩條通則（2026-11-14）"
+

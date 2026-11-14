@@ -8,6 +8,7 @@ import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from '
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import DateStrip from '@/components/DateStrip'
+import { Skel, SkelBlock } from '@/components/Skeleton'
 import { useSkyEdge } from '@/components/useSkyEdge'
 import { DeleteIcon } from '@/components/DeleteIcon'
 import { iconStack, leadCategory } from '@/lib/categories'
@@ -251,7 +252,12 @@ export default function Today(props: TodayProps) {
 
         <div className="meals">
           {rows === null ? (
-            <p className="muted">載入中…</p>
+            /* 四列餐別骨架，列高同 .todo-row（44px）。讀屏與 e2e 讀隱藏的「載入中…」 */
+            <SkelBlock>
+              {['3em', '3em', '2.2em', '3em'].map((w, i) => (
+                <div key={i} className="skel-row"><Skel w={w} h="16px" /><Skel w="2.6em" /></div>
+              ))}
+            </SkelBlock>
           ) : (
             renderTimeline(rows, currentDate, {
               active,

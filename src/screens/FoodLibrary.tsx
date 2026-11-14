@@ -12,7 +12,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
 import CategoryIcon from '@/components/CategoryIcon'
+import EmptyNote from '@/components/EmptyNote'
 import FoodFormFields from '@/components/FoodFormFields'
+import { Skel, SkelBlock } from '@/components/Skeleton'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
 import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
@@ -261,9 +263,20 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
       <div className="settings" style={{ paddingTop: 'var(--s-2)', paddingBottom: 96 }}>
         {groups === null ? (
-          <p className="muted">載入中…</p>
+          /* 一張店家卡、五列，列高同真的食物列（品名＋類型膠囊） */
+          <SkelBlock className="lib-group">
+            <div className="lib-group-title"><Skel w="4em" h="10px" /></div>
+            {['45%', '60%', '38%', '52%', '44%'].map((w, i) => (
+              <div key={i} className="lib-row skel-row lib-skel-row">
+                <span className="lib-skel-txt"><Skel w={w} /><Skel w="5em" h="20px" /></span>
+                <Skel w="2.4em" />
+              </div>
+            ))}
+          </SkelBlock>
+        ) : groups.length === 0 && !query.trim() && tab === 'active' ? (
+          <EmptyNote art="bowl">食品庫還是空的</EmptyNote>
         ) : groups.length === 0 ? (
-          <p className="muted">{query.trim() ? `找不到「${query.trim()}」` : tab === 'active' ? '食品庫還是空的' : '沒有封存的食物'}</p>
+          <p className="muted">{query.trim() ? `找不到「${query.trim()}」` : '沒有封存的食物'}</p>
         ) : (
           groups.map((g) => (
             <div className="lib-group" key={g.vendor}>

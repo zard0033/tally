@@ -12,7 +12,9 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import DateStrip from '@/components/DateStrip'
+import EmptyNote from '@/components/EmptyNote'
 import RoutineRow from '@/components/RoutineRow'
+import { Skel, SkelBlock } from '@/components/Skeleton'
 import SkyBand from '@/components/SkyBand'
 import SubPageTop from '@/components/SubPageTop'
 import { useSkyEdge } from '@/components/useSkyEdge'
@@ -114,24 +116,6 @@ function EmptyDayArt() {
       <g transform="translate(132 70)">
         <rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" fill="var(--hill-near)" />
         <circle cx="0" cy="0" r="7" fill="var(--tree)" />
-      </g>
-    </svg>
-  )
-}
-
-/** 一本筆記本夾著書籤、旁邊一支鉛筆（48×48，放在 --plate 圓盤裡） */
-function NotebookArt() {
-  return (
-    <svg className="art" viewBox="0 0 48 48">
-      <rect x="11" y="8.5" width="25" height="31" rx="4" fill="var(--accent)" />
-      <rect x="11" y="8.5" width="5.2" height="31" rx="2.6" fill="var(--ink)" opacity=".3" />
-      <rect x="20" y="16" width="12" height="2.6" rx="1.3" fill="var(--snow)" />
-      <rect x="20" y="21.6" width="12" height="2.6" rx="1.3" fill="var(--snow)" />
-      <rect x="20" y="27.2" width="7.4" height="2.6" rx="1.3" fill="var(--snow)" />
-      <path d="M29.4 8.5h5.2v11.6l-2.6-2.2-2.6 2.2z" fill="var(--clay)" />
-      <g transform="rotate(28 37 31)">
-        <rect x="34.4" y="22" width="5.2" height="14" rx="1.6" fill="var(--sun)" />
-        <path d="M34.4 36h5.2l-2.6 4.6z" fill="var(--sun-deep)" />
       </g>
     </svg>
   )
@@ -296,7 +280,14 @@ export default function Training({
 
       <div className="tr-scroll">
         {view === null ? (
-          <p className="muted">載入中…</p>
+          <SkelBlock className="tr-skel">
+            {[0, 1].map((i) => (
+              <div key={i} className="tr-card">
+                <div className="skel-row tr-skel-row"><Skel round h="40px" /><Skel w="40%" /><Skel w="3em" /></div>
+                <div className="skel-row tr-skel-row"><Skel round h="40px" /><Skel w="55%" /><Skel w="3em" /></div>
+              </div>
+            ))}
+          </SkelBlock>
         ) : cards.length === 0 ? (
           <div className="tr-empty-day">
             <EmptyDayArt />
@@ -339,12 +330,7 @@ export default function Training({
               </button>
             </div>
             {routines.active.length === 0 ? (
-              <div className="tr-empty-row">
-                <span className="tr-empty-ico" aria-hidden="true">
-                  <NotebookArt />
-                </span>
-                <p className="muted">還沒有課表。建好之後，開始訓練時一點就帶入動作。</p>
-              </div>
+              <EmptyNote art="notebook">還沒有課表。建好之後，開始訓練時一點就帶入動作。</EmptyNote>
             ) : (
               <div className="tr-card" data-section="routines">
                 {routines.active.map((c) => (

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { move } from '@dnd-kit/helpers'
+import EmptyNote from '@/components/EmptyNote'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Flip from '@/components/Flip'
 import GymVisualCredit from '@/components/GymVisualCredit'
@@ -368,7 +369,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
       )}
 
       <div className={`tr-scroll${sorting ? ' is-sorting' : ''}`}>
-        {exercises.length === 0 && <p className="muted">還沒有動作，按下面的「加動作」開始</p>}
+        {exercises.length === 0 && <EmptyNote art="dumbbell">還沒有動作，按下面的「加動作」開始</EmptyNote>}
         <DragDropProvider
           plugins={(defaults) => [...defaults, sortableAccessibility]}
           modifiers={[rubberBandToElement(() => listRef.current)]}

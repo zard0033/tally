@@ -5,6 +5,7 @@
    整頁接管畫面（同動作庫、訓練中），進出時 Training 通知 App 收起底部列。 */
 import { useEffect, useMemo, useState } from 'react'
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
+import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl, { type SegItem } from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
@@ -180,7 +181,7 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
         {tab === 'recovery' ? (
           <RecoveryList db={db} />
         ) : list.length === 0 ? (
-          <p className="trend-empty">還沒有可估算的紀錄。打勾完成的組（10 下以內、重量大於 0）才會列在這裡。</p>
+          <EmptyNote art="bars">還沒有可估算的紀錄。打勾完成的組（10 下以內、重量大於 0）才會列在這裡。</EmptyNote>
         ) : (
           <>
             <div className="tr-card" data-section="progress-list">

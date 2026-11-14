@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 v2.135 登入頁／開機／骨架（本機，push 前）：`e2e:affected --dry` 印 FULL → `e2e:smoke` 55 條全過（兩輪）；另跑受影響的 spec：interaction＋food-library＋analysis＋weight-trend＋service-worker 134 過 2 紅（開機慢態按鈕還在找 `.notice .action-btn`，漏改定位器，修後綠）、meal-suggest＋training＋estimate 217 過 2 紅（meal-suggest:676、:910：今日分頁整頁錯誤的「重試」移到底部後被「復原」膠囊蓋住，真 bug，地面多讓一個膠囊高度後綠）；修完重跑 interaction＋SW 70 過、那兩條 2 過。全量交給 CI。
+
 2026-11-14 暖機上線（`95dc8c7`，run 43462942351）：551 條 8 份全過、1 flaky、已部署。暖機每份 2.5–4.5 秒。**各份第一條（無暖機兩輪 → 有暖機）**：meal-exit 5.0/5.3→2.9s（熱機 2.1）、sync-sheet:171 8.2/8.3→5.9s（4.0）、estimate:61 7.9/7.8→4.1s、training:3015 11.6/11.1→6.6s（6.6）、analysis:67 4.6/3.2→2.3s、intake-detail:48 3.5/2.2→1.4s、training:821 3.7/3.4→3.0s（1.5）；quota-warning:9 5.2→6.7s 是唯一沒變快的（只有一個點，未查）。冷啟動成本大多搬進暖機了，**機制仍未查明**（不是字型快取；推測是 WebKit 執行檔與磁碟快取）。flaky 是 `tally.spec:37` 復原條焦點（「刪除後焦點沒接到復原鈕，停在 BODY」），在 shard 第 15 條、不是冷啟動，屬偶發清單 `.undo-bar` 一族。
 
 2026-11-14 容器上 main 第二輪（`2f59132`，run 43456770514）：**551 條 8 份全過、0 flaky，已部署**。SW spec 起不來的原因：preview 其實起來了（印出 `Local: http://localhost:5502`），是測試裡 `fetch('http://localhost:5502')` 連不上——推測 localhost 在容器裡同時解析成 ::1 與 127.0.0.1、vite 綁一個 fetch 連另一個；改成 preview 綁 127.0.0.1、測試也連 127.0.0.1 後 diag 與全量都綠。主 server（5501）也用 localhost 但沒事，因為 Playwright 的 webServer 檢查走 Node `http`、跟 vite 同一套解析。各份第一條（無暖機基線，第二次量）：meal-exit 5.3s、sync-sheet:171 8.3s、training:3015 11.1s、training:821 3.4s、estimate:61 7.8s——跟上一輪一致。下一步：globalSetup 暖機（`e2e/warmup.ts`，失敗只印 `::warning::` 不擋測試）上線後再量同一批。注意 diag 也有 `CI=true`，暖機上線後 diag 重現不了冷啟動。

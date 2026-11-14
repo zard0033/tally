@@ -41,6 +41,7 @@ import { errMsg, friendlyError } from '@/lib/errors'
 import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
 import { defaultMeal, type MealKey } from '@/lib/meals'
 import { parseStoredSession } from '@/lib/session'
+import Gate from '@/components/Gate'
 import Login from '@/screens/Login'
 import Today from '@/screens/Today'
 import LogSheet from '@/screens/LogSheet'
@@ -1066,17 +1067,23 @@ export default function App() {
             onRetry={training.retry}
           />
         ) : notice ? (
-          <div className="notice">
-            <p className="headline">{notice.headline}</p>
-            {notice.detail && <p>{notice.detail}</p>}
-            <button className="action-btn" type="button" onClick={notice.onAction}>
-              {notice.actionLabel}
-            </button>
-          </div>
+          /* 整頁錯誤與開機、登入同一幅畫（v2.135）；.notice 是給 e2e 與其他地方認「整頁換成錯誤」的 */
+          <Gate motion="still" shifted className="notice">
+            <div className="gate-foot" role="alert">
+              <div className="gate-msg">
+                <p className="headline">{notice.headline}</p>
+                {notice.detail && <p>{notice.detail}</p>}
+              </div>
+              <button className="action-btn" type="button" onClick={notice.onAction}>
+                {notice.actionLabel}
+              </button>
+            </div>
+          </Gate>
         ) : !ready ? (
-          <div className="notice">
-            <p className="muted">載入中…</p>
-          </div>
+          /* 開機之後、資料還沒到：接著開機畫面的同一幅畫，石頭繼續輪流亮 */
+          <Gate motion="loading">
+            <p className="sr-only gate-status" role="status">載入中…</p>
+          </Gate>
         ) : tab === 'today' ? (
           <Today
             dayData={{ date: currentDate, rows: rowsWithCategories }}

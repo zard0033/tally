@@ -218,8 +218,8 @@ test('日期快取 2 — 命中快取時畫面不出現「載入中…」（Muta
        .muted，而常駐掛著的記一筆 sheet 也有一個「載入中…」的 .muted——範圍不收緊的話，
        這條斷言有假通過（或假失敗）的風險，而它自己不會告訴你（verifier 指出）。 */
     const check = () => {
-      const el = document.querySelector('.timeline .muted')
-      if (el?.textContent?.includes('載入中')) w.__sawLoading = true
+      // v2.135 起載入中是骨架（aria-busy），「載入中…」只剩讀屏用的隱藏字
+      if (document.querySelector('.timeline [aria-busy="true"]')) w.__sawLoading = true
     }
     const mo = new MutationObserver(check)
     mo.observe(document.body, { childList: true, subtree: true, characterData: true })
@@ -776,9 +776,9 @@ async function bootOffline(page: Page, authMode: AuthMode, settle = false) {
   await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   // 先等 App 掛載：計時器在掛載後才註冊，時鐘若先跳走，它就從跳完的那刻才開始算
-  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  await expect(page.locator('.gate-status')).toHaveText('載入中…')
   await page.clock.runFor(FAST_BOOT_MS + 500)
-  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  await expect(page.locator('.gate .headline')).toHaveText('讀不到你的資料')
   if (settle) {
     await page.clock.runFor(30_000)
     // 背景請求放棄之後，離線提示不可以被較不精準的訊息蓋掉：還是那段診斷、還是「重新載入」鈕
@@ -801,16 +801,18 @@ test('後端連不上（本機有 session）：2 秒內進外殼並亮離線提�
   await page.clock.install()
   await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down' })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.notice .muted'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
 
   /* 快速路徑的下界：門檻若被改成 0，只驗「2.5 秒後進了外殼」抓不到，所以先量 1 秒時還在開機畫面。
      餘裕留 1 秒不是 0.5：page.clock 裝了之後時間仍會自然流動（實測 1.5 秒的真實等待漂移約
      1.5 秒），workers: 2 的負載下斷言晚到幾百毫秒是常態。 */
   await page.clock.runFor(FAST_BOOT_MS - 1000)
-  await expect(page.locator('.notice .muted'), '不到 2 秒就進外殼了').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), '不到 2 秒就進外殼了').toHaveText('載入中…')
+  // 開機畫面與 App 內等資料長得一樣（同一幅畫、同一句隱藏的「載入中…」），要另外確認還沒進外殼
+  check((await page.locator('#view-app').count()) === 0, '不到 2 秒就進外殼了')
   await page.clock.runFor(1500)
 
-  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  await expect(page.locator('.gate .headline')).toHaveText('讀不到你的資料')
   // 兩種原因都要講（離線與專案被閒置暫停從這裡看起來一樣），網路排前面——v2.48 寫「Resume」是兩次真事故換來的
   await expect(page.locator('.notice'), '離線提示沒先講確認網路').toContainText('先確認 Wi-Fi')
   await expect(page.locator('.notice'), '專案被閒置暫停的診斷提示不見了（v2.48）').toContainText('Resume')
@@ -827,20 +829,20 @@ test('後端連不上（本機有 session）：2 秒內進外殼並亮離線提�
 
   // 鈕真的會重載：點了之後回到開機第一眼
   await page.click('.notice .action-btn')
-  await expect(page.locator('.notice .muted'), '按「重新載入」後沒有回到開機畫面').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), '按「重新載入」後沒有回到開機畫面').toHaveText('載入中…')
 })
 
 test('後端連上了卻永不回應（本機有 session）：同樣 2 秒進外殼，不會卡在慢態', async ({ page }) => {
   await bootOffline(page, 'hang')
   // fetch 永不 reject，getSession 永不 settle——靠本機 session 進來，之後一直停在離線提示、不跳登入頁
   await page.clock.runFor(120_000)
-  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  await expect(page.locator('.gate .headline')).toHaveText('讀不到你的資料')
   check((await page.locator('#view-login').count()) === 0, '永不回應被當成沒登入，落到了登入頁')
   await expect(page.locator('.notice'), '慢態文案不該出現（有本機 session 時走不到）').not.toContainText('比平常慢')
   await must(page, '.notice .action-btn', '重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
 
   await page.click('.notice .action-btn')
-  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  await expect(page.locator('.gate-status')).toHaveText('載入中…')
 })
 
 test('離線提示亮著、背景請求還在飛時後端恢復：自己接手，不必重新載入', async ({ page }) => {
@@ -894,7 +896,7 @@ test('離線提示亮著時收到 online 事件：自動重新載入；沒有離
     window.dispatchEvent(new Event('online'))
   })
   // 重載後 window 是全新的，標記會消失，且畫面回到開機第一眼
-  await expect(page.locator('.notice .muted'), 'online 事件後沒有重新載入').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), 'online 事件後沒有重新載入').toHaveText('載入中…')
   expect(await mark(), '頁面沒有真的重載（標記還在）').toBeUndefined()
 })
 
@@ -904,14 +906,14 @@ test('token 有效但資料請求連不上：亮「重試」提示；網路回�
   await seedFetchStub(page, FIX, TODAY, USER_ID, { dataDown: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   // 不斷言開機的「載入中…」：v2.128 起讀取一次失敗就拋，那個中間態一閃而過，CI 上量不到（2026-11-11 CI 紅過）。
-  // 但要等 App 掛上（.notice 從開機到失敗都在）再快轉：掛上之前快轉的時間，失敗那段根本還沒開始算
-  await expect(page.locator('.notice')).toBeVisible()
+  // 但要等 App 掛上（#view-app）再快轉：掛上之前快轉的時間，失敗那段根本還沒開始算
+  await expect(page.locator('#view-app')).toHaveCount(1)
   // v2.128 起關掉 postgrest-js 的退避重試，一次失敗就拋；仍分段快轉，留著不怕之後有人又開了重試
   // （一口氣跳的話，退避的續行要等這次 tick 結束才跑，下一段計時器還沒排進去；waitRecovered 同理）
-  for (let i = 0; i < 30 && (await page.locator('.notice .headline').count()) === 0; i++) {
+  for (let i = 0; i < 30 && (await page.locator('.gate .headline').count()) === 0; i++) {
     await page.clock.runFor(1000)
   }
-  await expect(page.locator('.notice .headline')).toHaveText('讀不到你的資料')
+  await expect(page.locator('.gate .headline')).toHaveText('讀不到你的資料')
   await expect(page.locator('.notice .action-btn'), '這條不是離線優先路徑，按鈕應是「重試」').toHaveText('重試')
   await expect(page.locator('.notice'), '不該出現離線優先那段診斷').not.toContainText('Resume')
 
@@ -983,17 +985,17 @@ test('本機 session 格式認不得、後端連不上：退回原開機流程�
   await page.clock.install()
   await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'down', unparseableSession: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.notice .muted'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), '開機第一眼應是「載入中…」').toHaveText('載入中…')
 
   // 看門狗的下界：門檻若被改成 0.5 秒，只驗「5.5 秒後有換字」抓不到，所以先量 4 秒時還沒換
   await page.clock.runFor(4000)
-  await expect(page.locator('.notice .muted'), '不到 5 秒就換字了').toHaveText('載入中…')
+  await expect(page.locator('.gate-status'), '不到 5 秒就換字了').toHaveText('載入中…')
   await page.clock.runFor(1500)
-  await expect(page.locator('.notice .muted'), '等過 5 秒畫面仍是「載入中…」').toContainText('比平常慢')
-  await must(page, '.notice .action-btn', '慢態的重新載入鈕')
+  await expect(page.locator('.gate-status'), '等過 5 秒畫面仍是「載入中…」').toContainText('比平常慢')
+  await must(page, '.gate .action-btn', '慢態的重新載入鈕')
 
   await page.clock.runFor(30_000)
-  await expect(page.locator('.notice .headline')).toHaveText('連不上後端')
+  await expect(page.locator('.gate .headline')).toHaveText('連不上後端')
   check((await page.locator('#view-login').count()) === 0, '連不上後端被當成沒登入，落到了登入頁')
   check(await authKeyPresent(page), '連不上後端時 session 被清掉了，重新載入也救不回來')
 })
@@ -1002,13 +1004,13 @@ test('本機 session 格式認不得、後端連上了卻永不回應：慢態�
   await page.clock.install()
   await seedFetchStub(page, FIX, TODAY, USER_ID, { authMode: 'hang', unparseableSession: true })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('.notice .muted')).toHaveText('載入中…')
+  await expect(page.locator('.gate-status')).toHaveText('載入中…')
   await page.clock.runFor(120_000)
 
   // 這個形態下 getSession 永遠不 settle，bootStatus 到不了 unreachable——畫面停在慢態
-  await expect(page.locator('.notice .muted')).toContainText('比平常慢')
-  check((await page.locator('.notice .headline').count()) === 0, '永不回應的情境不該出現「連不上後端」headline')
-  await must(page, '.notice .action-btn', '慢態的重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
+  await expect(page.locator('.gate-status')).toContainText('比平常慢')
+  check((await page.locator('.gate .headline').count()) === 0, '永不回應的情境不該出現「連不上後端」headline')
+  await must(page, '.gate .action-btn', '慢態的重新載入鈕（standalone PWA 沒有網址列，沒有這顆就只能強制關閉）')
 })
 
 /* 全站精緻度 B1a：飲食頁底部列脫離版面流、浮在時間軸上，霧化帶蓋在它底下。三個會靜默壞掉的地方：
@@ -1226,7 +1228,7 @@ test('刪除送不出去時人已在別天：按重試回到正在看的那天�
   await page.evaluate(() => {
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'DELETE' }
   })
-  await expect(page.locator('.notice .headline'), '5 秒後 DELETE 失敗應該報錯').toHaveText('刪不掉這一筆', { timeout: 8000 })
+  await expect(page.locator('.gate .headline'), '5 秒後 DELETE 失敗應該報錯').toHaveText('刪不掉這一筆', { timeout: 8000 })
 
   await page.locator('.notice .action-btn').click()
   await waitCount(page, '.notice', 0, '按重試後仍卡在錯誤畫面')

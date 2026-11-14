@@ -631,28 +631,77 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 .tab-indicator { position: absolute; inset: 0; z-index: 0; border-radius: var(--r-pill);
   background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 
-/* ═══════════ 登入頁（v2.0：極簡化，Meta splash 式，見 DESIGN.md P2） ═══════════ */
+/* ═══════════ 登入頁、開機畫面、整頁錯誤：同一幅畫（v2.135，components/Gate.tsx） ═══════════ */
 /* 不放 Google 彩色 logo——fill-based 圖示與「全部 inline SVG / stroke 1.6 / fill:none」相斥。
-   骨架：mark＋問句置中在 flex:1 的中段，CTA 沉到底部拇指區（同「CTA 固定在拇指區」原則）。 */
-.login { flex: 1; display: flex; flex-direction: column;
-  padding: var(--s-6) var(--s-5) calc(32px + env(safe-area-inset-bottom)); text-align: center; }
-.login .mid { flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: var(--s-4); }
-/* mark：48px 幾何 T（方向 3，見 App icon 規則），無背景方塊，直接是主藍圖形 */
-.login .mark rect { fill: var(--accent); }
-.login .hero-q { font-size: var(--t-lg); font-weight: 500; color: var(--ink);
-  letter-spacing: var(--track-lg); margin: 0; }
-.login .action-btn { max-width: 320px; margin: 0 auto; width: 100%; }
-.login .err { color: var(--over); font-size: var(--t-sm); margin: var(--s-4) 0 0; }
+   畫鋪滿整塊、底對齊（xMidYMax slice：比 393×745 高的手機從天空頂端裁）；按鈕與字坐在紙色地面上（拇指區）。 */
+.gate { flex: 1; position: relative; min-height: 0; overflow: hidden; background: var(--sky); }
+.gate-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gate-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; flex-direction: column;
+  align-items: center; gap: var(--s-3); padding: 0 var(--s-5) calc(32px + env(safe-area-inset-bottom)); text-align: center; }
+.gate-foot .action-btn { max-width: 320px; }
+.gate-foot .err { color: var(--over); font-size: var(--t-sm); margin: 0; }
+.gate-msg { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); }
+.gate-msg p { margin: 0; color: var(--ink-muted); font-size: var(--t-base); max-width: 32ch; line-height: 1.5; }
+.gate-msg .headline { color: var(--ink); font-weight: 700; font-size: var(--t-md); letter-spacing: var(--track-md); }
+/* 有字要說（慢、連不上、登入失敗、整頁錯誤）：整幅往上挪，把地面讓給字 */
+.gate-shift { transition: transform var(--dur-sheet) var(--ease-sheet); }
+.gate.is-shifted .gate-shift { transform: translateY(-104px); }
+/* App 內：今日分頁的底部列浮在畫上，而錯誤當下「復原」膠囊（.undo-bar，44px）可能還浮在底部列上方——
+   地面要讓出底部列＋膠囊，不然「重試」被膠囊蓋住點不到（meal-suggest e2e 抓到）。路徑畫到 y=1000，上挪 236 也蓋得住 */
+.main.has-floating-bar .gate-foot { padding-bottom: calc(var(--bar-h) + var(--s-2) + 44px + var(--s-3)); }
+.main.has-floating-bar .gate.is-shifted .gate-shift { transform: translateY(-236px); }
+.main:not(.has-floating-bar):has(.undo-bar) .gate-foot { padding-bottom: calc(var(--s-2) + 44px + var(--s-3)); }
 
-/* ═══════════ 狀態畫面（載入／錯誤／降級） ═══════════ */
-/* 主數字在資料到位前顯示破折號，不顯示 0 或目標值——「三秒瞄一眼」剛好會看到假數字 */
-.notice { flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: var(--s-4); padding: var(--s-6) var(--s-5); text-align: center; }
-.notice p { margin: 0; color: var(--ink-muted); max-width: 34ch; line-height: 1.5; }
-.notice .headline { color: var(--ink); font-weight: 700; font-size: var(--t-md);
-  letter-spacing: var(--track-md); }
-.notice .action-btn { max-width: 260px; }
+.gate-dots { fill: none; stroke: var(--ink-faint); stroke-opacity: .7; stroke-width: 2; stroke-dasharray: 1 7; stroke-linecap: round; }
+.gate-stone { fill: var(--paper); stroke: var(--ink-faint); stroke-width: 1.6; transform-box: fill-box; transform-origin: center; }
+
+/* 開場（只在登入頁）：山由遠到近浮上→日出→小徑畫上去→石頭依序亮→旗子立起→按鈕浮上，約 2.1 秒。
+   之後只剩雲飄、旗飄（不搶按鈕）。只動 transform／opacity——例外：石頭亮起與載入中的脈動動的是 fill／stroke（4 個小圓，
+   顏色過渡不在 AC 10 範圍；DESIGN v2.135 記為例外）。 */
+@keyframes gate-rise { from { transform: translateY(var(--from)); } }
+@keyframes gate-sun { from { transform: translateY(190px); } }
+@keyframes gate-glow { from { transform: scale(.55); opacity: 0; } }
+@keyframes gate-fade { from { opacity: 0; } }
+@keyframes gate-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes gate-lit { from { opacity: 0; transform: scale(.4); } 45% { opacity: 1; transform: scale(1.35); } to { fill: var(--accent); stroke: var(--accent); } }
+@keyframes gate-up { from { transform: scaleY(0); } }
+@keyframes gate-wave { 50% { transform: skewY(-7deg) scaleX(.9); } }
+@keyframes gate-drift { from { transform: translateX(-10px); } to { transform: translateX(14px); } }
+/* 淡入前 visibility: hidden：看不見的按鈕不該點得到、也不該被讀屏聚焦到 */
+@keyframes gate-cta { from { opacity: 0; transform: translateY(14px); visibility: hidden; } }
+@keyframes gate-pulse { 30%, 55% { fill: var(--accent); stroke: var(--accent); } }
+.gate-drift { animation: gate-drift 16s ease-in-out infinite alternate; }
+.gate-drift.is-rev { animation-direction: alternate-reverse; }
+.gate-glow, .gate-pole, .gate-flag { transform-box: fill-box; }
+.gate-glow { transform-origin: center; }
+.gate-pole { transform-origin: bottom; }
+.gate-flag { transform-origin: left center; animation: gate-wave 2.6s ease-in-out 2s infinite; }
+.gate.is-intro .gate-hill { animation: gate-rise 760ms cubic-bezier(.2, .8, .2, 1) both; }
+.gate.is-intro .gate-hill.is-far { --from: 36px; }
+.gate.is-intro .gate-hill.is-mid { --from: 56px; animation-delay: 70ms; }
+.gate.is-intro .gate-hill.is-ground { --from: 84px; animation-delay: 140ms; }
+.gate.is-intro .gate-sun { animation: gate-sun 1150ms cubic-bezier(.16, .84, .3, 1) 180ms both; }
+.gate.is-intro .gate-glow { animation: gate-glow 900ms ease-out 700ms both; }
+.gate.is-intro .gate-cloud { animation: gate-fade 600ms ease-out 300ms both; }
+.gate.is-intro .gate-reveal { animation: gate-draw 760ms var(--ease) 820ms both; }
+.gate.is-intro .gate-stone { animation: gate-lit 420ms cubic-bezier(.3, 1.4, .5, 1) calc(900ms + var(--i) * 160ms) both; }
+.gate.is-intro .gate-pole { animation: gate-up 320ms cubic-bezier(.3, 1.3, .5, 1) 1480ms both; }
+.gate.is-intro .gate-flag { animation: gate-up 280ms ease-out 1700ms both, gate-wave 2.6s ease-in-out 2s infinite; }
+.gate.is-intro .gate-foot { animation: gate-cta 520ms cubic-bezier(.2, .8, .2, 1) 1600ms both; }
+/* 帶著錯誤訊息進來（登入失敗、session 過期）：字與按鈕不等開場 */
+.gate.is-intro.is-shifted .gate-foot { animation: none; }
+/* 載入中：沒有字，石頭由近到遠輪流亮。整幅延遲 300ms 才淡入——開機通常不到 300ms，快的時候只看到天空色 */
+.gate.is-loading .gate-shift { animation: gate-fade 240ms ease-out 300ms both; }
+.gate.is-loading.is-instant .gate-shift { animation: none; }
+.gate.is-loading .gate-stone { animation: gate-pulse 1600ms ease-in-out calc(var(--i) * 200ms) infinite; }
+
+/* ═══════════ 空狀態列（v2.132 訓練頁「還沒有課表」起，v2.135 推到食品庫、體重趨勢、訓練中、訓練分析） ═══════════ */
+/* 56px --plate 圓盤裡一個故事書圖示，字在右邊。圖示是裝飾，字說過一次。只給「第一次使用、還沒有東西」；
+   搜尋找不到、「這段期間沒有紀錄」這類篩選結果維持純文字——配圖會把暫時的結果講得像大事。 */
+.empty-note { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0 0; }
+.empty-note p { flex: 1; min-width: 0; margin: 0; color: var(--ink-muted); line-height: 1.5; text-wrap: balance; }
+.empty-ico { flex-shrink: 0; width: 56px; height: 56px; border-radius: var(--r-pill); overflow: hidden; background: var(--plate); }
+.empty-ico .art { width: 100%; height: 100%; }
 
 /* ═══════════ 設定頁 ═══════════ */
 /* 第一版只交付「看得到目標怎麼算出來的」＋登出。編輯留待設定頁走完設計流程 */
@@ -885,6 +934,15 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-link:active { opacity: .6; }
 .trend-skel { height: 260px; border-radius: var(--r-tab); background: var(--raised);
   animation: skeleton-breathe 1.1s ease-in-out infinite; }
+/* 區塊載入中的骨架（v2.135）：照真實列的高度畫，載完不跳版面。延遲 300ms 才出現——快的時候什麼都不閃。
+   讀屏讀骨架外層的隱藏字「載入中…」。「讀到空」是空狀態（圖示＋字），跟骨架長得不一樣，兩者分得開（DESIGN「載入態」）。 */
+@keyframes skel-in { from { visibility: hidden; } }
+.skel { display: block; width: var(--w, 100%); height: var(--h, 14px); border-radius: var(--r-pill); background: var(--raised);
+  animation: skel-in 1ms 300ms both, skeleton-breathe 1.1s ease-in-out 300ms infinite; }
+.skel.is-round { width: var(--h); border-radius: 50%; flex-shrink: 0; }
+.skel.is-inline { display: inline-block; vertical-align: middle; height: .9em; width: var(--w, 4em); }
+.skel-row { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; }
+.skel-row > .skel:last-child:not(:first-child) { margin-left: auto; }
 
 /* ═══════════ 食品庫管理：店家分組卡片 ═══════════ */
 .tabrow { display: flex; gap: var(--s-2); padding: 0 var(--s-3) var(--s-3); flex-shrink: 0; }
@@ -893,6 +951,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .lib-group-title { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--t-xs);
   font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
 .lib-row { border-top: 1px solid var(--rule-subtle); }
+.lib-skel-row { min-height: 68px; padding: 0 var(--s-3); }
+.lib-skel-txt { flex: 1; display: flex; flex-direction: column; gap: var(--s-2); }
 .lib-group-title + ul .lib-row:first-child { border-top: none; }
 .lib-row-main { display: flex; align-items: center; gap: var(--s-1); min-height: 52px; padding: 0 var(--s-3); }
 .lib-row-main .nm-wrap { flex: 1; min-width: 0; }
@@ -1658,6 +1718,12 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
      「這裡還沒有值」的資訊），只是不要動。 */
   .form-lock[disabled] .field-float:has(input:placeholder-shown)::after { animation: none; opacity: .8; }
   .trend-skel { animation: none; }
+  .skel { animation: skel-in 1ms 300ms both; }
+  /* 登入／開機那幅畫：位移、縮放、循環全關，畫停在終點；按鈕 ≤120ms 淡入（spec AC 10）。
+     石頭的脈動也是循環，一起關（載入中靠讀屏的隱藏字與畫面本身）。 */
+  .gate *, .gate-shift { animation: none !important; transition: none !important; }
+  .gate.is-intro .gate-stone { fill: var(--accent); stroke: var(--accent); }
+  .gate.is-intro .gate-foot { animation: gate-fade 120ms ease-out both !important; }
   /* 權重要對齊那條帶 :not() 的動畫規則，少一段就輸給它、等於沒寫 */
   .form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: none; }
 }
@@ -1670,15 +1736,14 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 空狀態小插圖（v2.132，樣張方向 B）：這天沒有訓練＝一張小景置中、字在下面；還沒有課表＝圓盤裡一本筆記本、字在右邊 */
 .tr-empty-day { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 var(--s-1); }
 .tr-empty-day .art { border-radius: var(--r-btn); }
-.tr-scroll .tr-empty-day .muted, .tr-scroll .tr-empty-row .muted { margin: 0; }
-.tr-empty-row { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0 0; }
-.tr-empty-row .muted { flex: 1; min-width: 0; text-wrap: balance; }
-.tr-empty-ico { flex-shrink: 0; width: 56px; height: 56px; border-radius: var(--r-pill); overflow: hidden; background: var(--plate); }
-.tr-empty-ico .art { width: 100%; height: 100%; }
+.tr-scroll .tr-empty-day .muted { margin: 0; }
 .tr-sec { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs);
   margin: var(--s-4) 0 var(--s-2); }
 .tr-sec:first-child { margin-top: var(--s-2); }
 .tr-card { background: var(--card); box-shadow: var(--shadow-1); border-radius: var(--r-tab); overflow: clip; }
+/* 訓練頁載入中的骨架：兩張卡、每張兩列，列高同 .tr-row */
+.tr-skel { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-2); }
+.tr-skel-row { min-height: 56px; padding: 0 var(--s-4); }
 .tr-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: 0 var(--s-4);
   border: none; border-top: 1px solid var(--rule-subtle); background: none; text-align: left;
   font-family: inherit; color: inherit; }
