@@ -196,14 +196,15 @@ export interface IntakeRow {
 export async function listIntakeKcal(
   from: string,
   to: string,
-): Promise<{ eaten_on: string; qty: number; kcal: number }[]> {
+): Promise<{ eaten_on: string; qty: number; kcal: number; meal: string }[]> {
   const PAGE = 1000
   const MAX_PAGES = 20 // 兩萬列還沒抓完就是哪裡錯了，寧可失敗也不回一份殘缺的
-  const out: { eaten_on: string; qty: number; kcal: number }[] = []
+  const out: { eaten_on: string; qty: number; kcal: number; meal: string }[] = []
   for (let page = 0; page < MAX_PAGES; page++) {
     const rows = unwrap(await supabase
       .from('intake')
-      .select<'eaten_on,qty,kcal', { eaten_on: string; qty: number; kcal: number }>('eaten_on,qty,kcal')
+      // meal：回推要知道哪幾天午、晚餐都有記（記完整的定義，v2.137）
+      .select<'eaten_on,qty,kcal,meal', { eaten_on: string; qty: number; kcal: number; meal: string }>('eaten_on,qty,kcal,meal')
       .gte('eaten_on', from)
       .lte('eaten_on', to)
       .order('eaten_on', { ascending: true })

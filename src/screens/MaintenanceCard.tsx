@@ -7,6 +7,8 @@
 import type { ReactNode } from 'react'
 import {
   BASELINE_NEEDS,
+  RECENT_DAYS,
+  SETTLE_DAYS,
   WINDOW_DAYS,
   expectedWeeklyChangeKg,
   insufficientShortfalls,
@@ -108,7 +110,7 @@ export function ConfirmCard({ result, beforeKcal, afterKcal, inUseTdee, usingMea
         {diff !== 0 && `紀錄回推比${usingMeasured ? '現在用的' : '公式推導'}${diff < 0 ? '少' : '多'} ${Math.abs(diff)} 卡。`}
         {`照現在的目標吃，${weeklyText(expectedWeeklyChangeKg(result.maintenance, beforeKcal))}`}
         {plannedKgPerWeek !== null && `；你設定的是${weeklyText(plannedKgPerWeek)}`}
-        {`。依據近 ${WINDOW_DAYS} 天：記錄 ${result.loggedDays} 天、體重 ${result.weighIns} 筆。漏記的餐會讓這個數字偏低。`}
+        {`。${basisText(result)}漏記的餐會讓這個數字偏低。`}
         {result.weighIns < FEW_WEIGHINS && `體重只有 ${result.weighIns} 筆，誤差可能到幾百卡。`}
       </p>
       {bmr !== null && afterKcal < bmr && <p className="goal-confirm-warn">比基礎代謝 {r(bmr)} 卡低，確定再改。</p>}
@@ -126,6 +128,7 @@ function readiness(res: Extract<BaselineResult, { status: 'insufficient' }>): nu
     res.loggedDays / BASELINE_NEEDS.loggedDays,
     res.weighIns / BASELINE_NEEDS.weighIns,
     res.weightSpanDays / BASELINE_NEEDS.weightSpanDays,
+    res.recentDays / BASELINE_NEEDS.recentDays,
   )
   return Math.min(1, ratio)
 }
@@ -193,9 +196,9 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
       />
     )
   } else if (estimate.state === 'loading') {
-    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天吃的與體重變化倒推" value={<SkelInline w="3.6em" />} />
+    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天裡連續完整的記錄倒推" value={<SkelInline w="3.6em" />} />
   } else if (estimate.state === 'error') {
-    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天吃的與體重變化倒推" value="讀不到紀錄" />
+    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天裡連續完整的記錄倒推" value="讀不到紀錄" />
   } else if (cur?.status === 'ok') {
     recordRow = (
       <EstRow
@@ -212,7 +215,7 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
       <EstRow
         on={false}
         label="紀錄回推"
-        sub="用近 28 天吃的與體重變化倒推"
+        sub="用近 28 天裡連續完整的記錄倒推"
         value={cur?.status === 'implausible' ? '資料看起來有誤' : '還算不出來'}
       />
     )
@@ -327,7 +330,7 @@ export function CalcDetail(p: CalcDetailProps) {
       {ln(<>維持熱量 ＝ BMR <b>{p.bmr !== null ? r(p.bmr) : '—'}</b> × 活動係數 <b>{p.activityFactor}</b> ＝ <span className="res">{p.formulaTdee !== null ? `${r(p.formulaTdee)} 卡` : '—'}</span></>)}
 
       <h3>① 紀錄回推{p.usingMeasured && <InUseTag />}</h3>
-      {ln(<>維持熱量 ＝ 近 {WINDOW_DAYS} 天平均每天吃的 − 體重每天的變化 × 7700</>)}
+      {ln(<>維持熱量 ＝ 一連串完整記錄裡平均每天吃的 − 體重每天的變化 × 7700</>)}
       {p.usingMeasured && p.measuredTdee !== null && <p className="goal-calc-fine">使用中的是按「改用」那天存下的 {r(p.measuredTdee)} 卡，不會自己變。</p>}
       {cur?.status === 'ok' ? (
         <>
@@ -339,7 +342,7 @@ export function CalcDetail(p: CalcDetailProps) {
           <p className="goal-calc-fine">
             {`體重走勢是 ${cur.weighIns} 筆體重畫出的趨勢線，不是頭尾兩筆相減。`}
             {r(cur.low) !== r(cur.high) && `估計範圍約 ${r(cur.low)}–${r(cur.high)} 卡（約六成把握）。`}
-            {`依據近 ${WINDOW_DAYS} 天：記錄 ${cur.loggedDays} 天、體重 ${cur.weighIns} 筆。漏記的餐會讓它偏低；改變運動習慣後約要 3–4 週才跟上。`}
+            {`${basisText(cur)}漏記的餐會讓它偏低；改變運動習慣後約要 3–4 週才跟上。`}
             {cur.weighIns < FEW_WEIGHINS && `體重只有 ${cur.weighIns} 筆，誤差可能到幾百卡，多量幾次會更準。`}
           </p>
           {p.inUseTdee !== null && (
@@ -354,7 +357,7 @@ export function CalcDetail(p: CalcDetailProps) {
           {p.estimate.state === 'loading' ? <SkelInline w="14em" label="讀取紀錄中" />
             : p.estimate.state === 'error' ? '讀不到紀錄，這段先算不出來。'
             : cur?.status === 'insufficient'
-              ? `還算不出來：近 ${WINDOW_DAYS} 天要記滿 ${BASELINE_NEEDS.loggedDays} 天、量 ${BASELINE_NEEDS.weighIns} 筆體重、體重橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上。`
+              ? `還算不出來：近 ${WINDOW_DAYS} 天裡要有一連串（中間最多空 2 天）完整記錄 ${BASELINE_NEEDS.loggedDays} 天，完整＝午、晚餐都有記；量 ${BASELINE_NEEDS.weighIns} 筆體重、橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上；最近 ${RECENT_DAYS} 天至少 ${BASELINE_NEEDS.recentDays} 天完整。開始訓練後頭 ${SETTLE_DAYS} 天不算。`
               : '近 28 天的資料看起來有誤，這段先不算（上面那一列有說要查什麼）。'}
         </p>
       )}
@@ -380,12 +383,22 @@ export function CalcDetail(p: CalcDetailProps) {
   )
 }
 
+/** 「依據哪一段」：用的是一連串完整記錄，不是整個 28 天，所以寫出起訖日期（v2.137）。 */
+function basisText(res: Extract<BaselineResult, { status: 'ok' }>): string {
+  return `依據 ${monthDay(res.from)}–${monthDay(res.end)} 這串記錄：完整 ${res.loggedDays} 天（午、晚餐都有記）、體重 ${res.weighIns} 筆。`
+}
+
 function staleText(shown: ShownBaseline, current: BaselineResult): string {
   const { loggedDays, weighIns } = shown.result
-  const base = `依據 ${monthDay(shown.from)}–${monthDay(shown.end)}（記錄最多的一連串，不是近 ${WINDOW_DAYS} 天）：記錄 ${loggedDays} 天、體重 ${weighIns} 筆。這段只當參考，不能改用。`
+  const base = `依據 ${monthDay(shown.from)}–${monthDay(shown.end)}（完整記錄最多的一連串，不是近 ${WINDOW_DAYS} 天）：完整 ${loggedDays} 天、體重 ${weighIns} 筆。這段只當參考，不能改用。`
   /* 要補的是什麼要看最新窗口：天天有記只是體重太少時，寫「接回記錄」就是錯的（review）。 */
-  const missingLogs = current.status === 'insufficient' && current.loggedDays < BASELINE_NEEDS.loggedDays
-  const caveat = missingLogs ? '接回記錄後，這裡會自己更新到近 28 天。' : '多量幾次體重後，這裡會自己更新到近 28 天。'
+  if (current.status === 'insufficient' && current.settlingUntil !== null) {
+    return `${base}開始訓練後頭 ${SETTLE_DAYS} 天的體重多半是水分，不算；之後每天記完整，最快 ${monthDay(current.settlingUntil)} 之後這裡會自己更新。`
+  }
+  const missingLogs =
+    current.status === 'insufficient' &&
+    (current.loggedDays < BASELINE_NEEDS.loggedDays || current.recentDays < BASELINE_NEEDS.recentDays)
+  const caveat = missingLogs ? '接回記錄（午、晚餐都記）後，這裡會自己更新到近 28 天。' : '多量幾次體重後，這裡會自己更新到近 28 天。'
   return `${base}${caveat}`
 }
 
@@ -404,9 +417,11 @@ function implausibleText(res: Extract<BaselineResult, { status: 'implausible' }>
 function lackShort(res: Extract<BaselineResult, { status: 'insufficient' }>): string {
   return insufficientShortfalls(res).map((s) => {
     switch (s.kind) {
-      case 'loggedDays': return `記錄還差 ${s.need - s.have} 天`
+      case 'settling': return `剛開始訓練，最快 ${monthDay(s.until)} 之後`
+      case 'loggedDays': return `完整記錄還差 ${s.need - s.have} 天`
       case 'weighIns': return `體重還差 ${s.need - s.have} 筆`
       case 'weightSpanDays': return `體重要橫跨 ${s.need} 天以上`
+      case 'recentDays': return `最近 ${RECENT_DAYS} 天完整記錄還差 ${s.need - s.have} 天`
     }
   }).join('、')
 }

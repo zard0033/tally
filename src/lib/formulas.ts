@@ -266,3 +266,12 @@ export function formatOverAria(over: OverDelta): string {
   return parts.join('，')
 }
 
+/** 計畫每週體重變化（kg，v2.137 體重趨勢頁的計畫線）：減重為負、增肌為正、維持 0。
+ *  自訂目標（數字是自己填的，沒有速度可言）或速度缺失回 null。 */
+export function plannedWeeklyKg(profile: Pick<Profile, 'goal' | 'rate_kg_per_week' | 'use_custom_targets'>): number | null {
+  if (profile.use_custom_targets) return null
+  if (profile.goal === 'maintain') return 0
+  const rate = num(profile.rate_kg_per_week)
+  if (!Number.isFinite(rate)) return null
+  return profile.goal === 'cut' ? -rate : rate
+}

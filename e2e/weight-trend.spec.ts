@@ -139,3 +139,24 @@ test('趨勢頁自己的請求失敗、但設定頁已經有資料：退回那�
   await expect(tableRows(page)).toHaveCount(inRange(90))
   await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('連不上伺服器')
 })
+
+/* 計畫 vs 實際（v2.137，spec「減重回饋圈 review」④）。FIX 的目標是減重每週 0.5 kg＝每月 2.17 kg。 */
+const weightCard = (page: Page) => page.locator('section[aria-label="體重"]')
+const planPath = (page: Page) => weightCard(page).locator('path[stroke-dasharray="4 4"]')
+
+test('計畫 vs 實際：一行寫出每月計畫與這段實際，圖上有一條虛線計畫線', async ({ page }) => {
+  await openTrend(page)
+  await expect(weightCard(page).locator('.trend-pace')).toContainText('計畫每月 −2.17 kg')
+  await expect(weightCard(page).locator('.trend-pace')).toContainText('這段實際每月')
+  await expect(weightCard(page).locator('.trend-legend')).toContainText('計畫')
+  await expect(planPath(page), '計畫線沒畫出來').toHaveCount(1)
+})
+
+test('自訂目標沒有速度：不畫計畫線，那一行只寫實際', async ({ page }) => {
+  await openApp(page, {}, { ...FIX, weight: toRows(READINGS), profile: [{ ...FIX.profile[0], use_custom_targets: true, custom_kcal: 2000, custom_protein_g: 150, custom_fat_g: 60, custom_carb_g: 200 }] })
+  await page.locator('.tab[aria-label="設定"]').click()
+  await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
+  await expect(weightCard(page).locator('.trend-pace')).toContainText('這段實際每月')
+  await expect(weightCard(page).locator('.trend-pace')).not.toContainText('計畫')
+  await expect(planPath(page)).toHaveCount(0)
+})

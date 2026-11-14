@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_FAT_MAX, BODY_FAT_MIN, fmt1, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { BODY_FAT_MAX, BODY_FAT_MIN, actualKgPerWeek, fmt1, signedKg, withPlan, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
 import { dayIndex } from './dates'
+import { plannedWeeklyKg } from './formulas'
 
 const row = (measured_on: string, weight_kg: number | string, body_fat_pct: number | string | null = null): TrendRow =>
   ({ weight_kg, measured_on, body_fat_pct })
@@ -159,5 +160,51 @@ describe('記體重的門檻', () => {
     expect(isValidBodyFatPct(2.9)).toBe(false)
     expect(isValidBodyFatPct(70.1)).toBe(false)
     expect(isValidBodyFatPct(Number.NaN)).toBe(false)
+  })
+})
+
+describe('計畫 vs 實際（v2.137）', () => {
+  const at = (t: number, kg: number) => ({ t, kg, avg: kg })
+
+  it('實際走勢是迴歸斜率：每天 −0.05 kg 的直線 → 每週 −0.35', () => {
+    const pts = Array.from({ length: 10 }, (_, i) => at(100 + i * 2, 75 - 0.05 * i * 2))
+    expect(actualKgPerWeek(pts)).toBeCloseTo(-0.35, 5)
+  })
+  it('不是頭尾相減：最後一筆是水分跳高，斜率只被拉一點', () => {
+    const pts = [...Array.from({ length: 8 }, (_, i) => at(100 + i * 3, 75)), at(124, 76)]
+    const a = actualKgPerWeek(pts) as number
+    expect(a).toBeGreaterThan(0)
+    expect(a).toBeLessThan((76 - 75) / (24 / 7)) // 頭尾相減會是 +0.29
+  })
+  it('不到 2 筆、或頭尾不到 7 天：算不出來', () => {
+    expect(actualKgPerWeek([at(100, 75)])).toBeNull()
+    expect(actualKgPerWeek([at(100, 75), at(106, 74)])).toBeNull()
+    expect(actualKgPerWeek([at(100, 75), at(107, 74)])).not.toBeNull()
+  })
+  it('計畫線從第一點的 7 日平均起，照每週速度走', () => {
+    const pts = withPlan([{ t: 100, avg: 80 }, { t: 107, avg: 79.9 }, { t: 114, avg: 80.2 }], -0.3)
+    expect(pts.map((p) => p.plan)).toEqual([80, 79.7, 79.4].map((v) => expect.closeTo(v, 10)))
+  })
+  it('自訂目標（沒有速度）不畫計畫線', () => {
+    expect(withPlan([{ t: 100, avg: 80 }], null)[0].plan).toBeNull()
+  })
+  it('正負號用減號、兩位小數；捨入到 0 寫 0.00', () => {
+    expect(signedKg(-0.29)).toBe('−0.29')
+    expect(signedKg(0.123)).toBe('+0.12')
+    expect(signedKg(-0.004)).toBe('0.00')
+  })
+})
+
+describe('plannedWeeklyKg', () => {
+  const p = (goal: 'cut' | 'bulk' | 'maintain', rate: number | string | null, custom = false) =>
+    ({ goal, rate_kg_per_week: rate, use_custom_targets: custom })
+  it('減重為負、增肌為正、維持 0', () => {
+    expect(plannedWeeklyKg(p('cut', 0.29))).toBe(-0.29)
+    expect(plannedWeeklyKg(p('bulk', '0.25'))).toBe(0.25)
+    expect(plannedWeeklyKg(p('maintain', null))).toBe(0)
+  })
+  it('自訂目標或速度缺失：沒有計畫可比', () => {
+    expect(plannedWeeklyKg(p('cut', 0.29, true))).toBeNull()
+    expect(plannedWeeklyKg(p('cut', null))).toBeNull()
   })
 })

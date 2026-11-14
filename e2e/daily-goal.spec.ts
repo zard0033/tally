@@ -317,11 +317,17 @@ test('切自動／自訂時捲動位置回頂：自訂第一格不會被捲走',
 
 /** 近 28 天每天吃 kcalPerDay、體重全程持平 75 kg（6 筆橫跨 26 天）⇒ 回推＝kcalPerDay。
  *  體重陣列最新在前：stub 對 getLatestWeight 與 listWeights 回同一份，rows[0] 就是「最新」。 */
+/** 一天的完整記錄：午、晚餐各一列平分（v2.137 起回推只算午、晚餐都有記的日子） */
+const fullDay = (eaten_on: string, kcal: number) => [
+  { eaten_on, qty: 1, kcal: kcal / 2, meal: 'lunch' },
+  { eaten_on, qty: 1, kcal: kcal / 2, meal: 'dinner' },
+]
+
 function windowFix(kcalPerDay: number, weighInDays = [0, 5, 10, 15, 20, 26]): typeof FIX {
   const kcalWindow = [
-    ...Array.from({ length: 28 }, (_, i) => ({ eaten_on: shiftDate(TODAY, -1 - i), qty: 1, kcal: kcalPerDay })),
+    ...Array.from({ length: 28 }, (_, i) => fullDay(shiftDate(TODAY, -1 - i), kcalPerDay)).flat(),
     // 今天還沒記完，不進窗口：stub 不看 filter 會把這列一起回，守住的是「窗尾是昨天」
-    { eaten_on: TODAY, qty: 1, kcal: 9999 },
+    ...fullDay(TODAY, 9999),
   ]
   const weight = weighInDays.map((i) => ({
     weight_kg: 75,
@@ -369,7 +375,7 @@ test('有新數字：確認卡列出前後目標、原因與依據；不按什�
   const weekly = (Math.abs(before - 2000) * 7) / 7700
   await expect(confirm(page)).toContainText(`照現在的目標吃，每週約瘦 ${weekly.toFixed(2)} kg`)
   await expect(confirm(page)).toContainText('你設定的是每週約瘦 0.50 kg')
-  await expect(confirm(page)).toContainText('依據近 28 天：記錄 28 天、體重 6 筆')
+  await expect(confirm(page)).toContainText(`依據 ${monthDay(shiftDate(TODAY, -28))}–${monthDay(shiftDate(TODAY, -1))} 這串記錄：完整 28 天（午、晚餐都有記）、體重 6 筆`)
   await expect(confirm(page)).toContainText('漏記的餐會讓這個數字偏低')
   await expect(confirm(page), '體重少於 8 筆要加註誤差').toContainText('體重只有 6 筆，誤差可能到幾百卡')
   // 1450 低於 BMR（約 1684）
@@ -388,7 +394,7 @@ test('有新數字：確認卡列出前後目標、原因與依據；不按什�
     }
     return (window as unknown as { __allFetches: string[] }).__allFetches
       .map((u) => decodeURIComponent(u))
-      .filter((u) => u.includes('/rest/v1/intake') && /select=[^&]*eaten_on/.test(u) && !/select=[^&]*meal/.test(u))
+      .filter((u) => u.includes('/rest/v1/intake') && /select=eaten_on,qty,kcal,meal(&|$)/.test(u))
       .sort((a, b) => span(b) - span(a))[0]
   })
   expect(req, '沒有送出區間查詢').toBeTruthy()
@@ -699,7 +705,7 @@ test('體重全程持平：範圍收斂成一點就不顯示那一列', async ({
   await openGoal(page)
   await page.locator('.goal-how summary').click()
   await expect(page.locator('.goal-calc')).not.toContainText('估計範圍')
-  await expect(page.locator('.goal-how')).toContainText('依據近 28 天：記錄 28 天、體重 6 筆')
+  await expect(page.locator('.goal-how')).toContainText(`依據 ${monthDay(shiftDate(TODAY, -28))}–${monthDay(shiftDate(TODAY, -1))} 這串記錄：完整 28 天（午、晚餐都有記）、體重 6 筆`)
 })
 
 test('一筆體重打錯（57.5 之於 75.5）：說資料有誤，不給離譜的數字，也不問', async ({ page }) => {
@@ -731,11 +737,7 @@ test('飲食記錄打錯（體重走勢正常）：叫人去查飲食記錄，�
 
 test('近 28 天沒記、更早有完整一段：只當參考、明寫起訖日期，不能改用', async ({ page }) => {
   // 記錄只有「距昨天 30–57 天前」那 28 天，其後完全沒記；體重全程 75 持平（6 筆橫跨 27 天）
-  const kcalWindow = Array.from({ length: 28 }, (_, i) => ({
-    eaten_on: shiftDate(TODAY, -1 - (30 + i)),
-    qty: 1,
-    kcal: 1800,
-  }))
+  const kcalWindow = Array.from({ length: 28 }, (_, i) => fullDay(shiftDate(TODAY, -1 - (30 + i)), 1800)).flat()
   const weight = [30, 35, 40, 45, 50, 57].map((o) => ({
     weight_kg: 75,
     measured_on: shiftDate(TODAY, -1 - o),
@@ -754,7 +756,7 @@ test('近 28 天沒記、更早有完整一段：只當參考、明寫起訖日�
   await expect(card(page)).toContainText('不能改用')
   // 同時說最新窗口缺什麼，使用者才知道怎麼讓它跟上現在
   await expect(card(page)).toContainText('記錄還差 21 天')
-  await expect(card(page)).toContainText('接回記錄後')
+  await expect(card(page)).toContainText('接回記錄（午、晚餐都記）後')
   await expect(confirm(page), '舊的一段不能改用').toHaveCount(0)
   await expect(est(page, '紀錄回推'), '舊的一段不能點那一列改用').not.toHaveJSProperty('tagName', 'BUTTON')
   await expect(estVal(page, '紀錄回推')).toHaveText('還算不出來')
@@ -762,7 +764,7 @@ test('近 28 天沒記、更早有完整一段：只當參考、明寫起訖日�
 
 test('天天有記只是體重太少：說「多量幾次體重」，不說「接回記錄」', async ({ page }) => {
   // 連續 60 天都有記；近 28 天只有 1 筆體重（不足 4 筆），但整串有 5 筆、橫跨 50 天 ⇒ 回溯到整串
-  const kcalWindow = Array.from({ length: 60 }, (_, i) => ({ eaten_on: shiftDate(TODAY, -1 - i), qty: 1, kcal: 1800 }))
+  const kcalWindow = Array.from({ length: 60 }, (_, i) => fullDay(shiftDate(TODAY, -1 - i), 1800)).flat()
   const weight = [5, 40, 45, 50, 55].map((o) => ({
     weight_kg: 75,
     measured_on: shiftDate(TODAY, -1 - o),
@@ -782,6 +784,7 @@ test('intake 超過一頁（2520 列）要翻頁抓完，不能只拿第一頁',
     eaten_on: shiftDate(TODAY, -1 - Math.floor(n / 90)),
     qty: 1,
     kcal: 20,
+    meal: n % 2 === 0 ? 'lunch' : 'dinner', // 列數不變（翻頁測的是 2520 列），每天照樣午、晚都有
   }))
   const weight = [0, 5, 10, 15, 20, 26].map((i) => ({
     weight_kg: 75,

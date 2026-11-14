@@ -122,7 +122,7 @@ export async function seedFetchStub(
         /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
         __kcalFail: boolean
         /* 區間查詢要回的列，蓋掉 fix.kcalWindow：測試中途換帳號用。 */
-        __kcalWindow: { eaten_on: string; qty: number; kcal: number }[] | null
+        __kcalWindow: { eaten_on: string; qty: number; kcal: number; meal: string }[] | null
         /* 有值時區間查詢等它 resolve 才回，用來造「查詢在飛」。要回哪一份在等之前就決定了（查詢送出當下的帳號）。 */
         __kcalHold: Promise<void> | null
         /* 設 true＝餐建議的回看查詢回 500（見 StubOptions.repeatFail）。 */
@@ -455,11 +455,12 @@ export async function seedFetchStub(
           return json([...trainStore[table].values()].slice(offset, offset + limit))
         }
         if (table === 'intake') {
-          /* 實測維持熱量卡的區間查詢：認的是「select 欄位含 eaten_on 且不含 meal」，不認欄位順序
-             （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。
+          /* 實測維持熱量卡的區間查詢：認的是「select 欄位剛好是 eaten_on、qty、kcal、meal 這四個」，不認欄位順序
+             （順序一換就會悄悄 fall through 到 history，卡片測試會為錯的原因紅）。v2.137 起它也要 meal（記完整＝午、晚餐都有記），
+             所以不能再用「不含 meal」跟餐建議的回看查詢分開——那支還有 id、name、foods(...) 等欄位。
              stub 不看 filter，回整份 kcalWindow；測試要驗 filter 就讀 window.__allFetches。 */
           const selectCols = (/select=([^&]*)/.exec(decodeURIComponent(path))?.[1] ?? '').split(',')
-          if (selectCols.includes('eaten_on') && !selectCols.includes('meal')) {
+          if ([...selectCols].sort().join(',') === 'eaten_on,kcal,meal,qty') {
             if (w.__kcalFail) return json({ message: '模擬的讀取失敗' }, 500)
             // 認 offset／limit（分頁）：listIntakeKcal 會一頁頁翻到空頁才停，stub 若每頁都回整份就停不下來
             const qs = new URL(u).searchParams

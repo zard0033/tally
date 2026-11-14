@@ -8,8 +8,13 @@
    全部算進去。區間是斜率 ±1 個標準誤差換算過來的，**不是信賴區間的嚴格宣稱**，只是讓
    使用者看到「這個數字大約有多不確定」。
 
-   口徑就是記錄口徑：漏記的油與飲料會讓結果偏低。但上限本來就是套在「記下來的熱量」上，
-   只要記錄習慣一致，這把尺就是對的。
+   口徑就是記錄口徑：漏記的油與飲料會讓結果偏低。
+   **2026-11-14 修四項**（spec.md「減重回饋圈 review」，使用者同日核可）：這個人漏記的正好是外食、聚餐這些吃得多的，
+   原本的假設讓結果系統性偏低——
+   ① 一天「完整」＝午餐、晚餐都有記（原本是合計 ≥ 1000 卡：只記早午餐也過）；
+   ② 最新 28 天也只用其中「完整記錄最多的一連串」，跟回溯段同一套（原本整窗平均，整天沒記的週末不在平均裡、卻照樣推高斜率）；
+   ③ 最近 7 天完整不到 4 天就暫停、不出新數字（畫面改顯示回溯到的舊段）；
+   ④ 開始訓練後頭 28 天的飲食與體重都不用（那幾週的體重變化多半是水和肝醣，7700 卡／kg 不成立）。
    lib 內禁止碰 window／document。 */
 import { dayIndex, shiftDate } from './dates'
 import { KCAL_PER_KG } from './formulas'
@@ -19,6 +24,8 @@ export interface DailyKcal {
   date: string
   /** 當天合計（單份快照 kcal × qty 加總） */
   kcal: number
+  /** 這天記完整了沒：午餐、晚餐都有記。不完整的日子不進平均、不算有記天數。 */
+  complete: boolean
 }
 
 export interface WeightPoint {
@@ -30,11 +37,14 @@ export interface WeightPoint {
 /** 窗口長度。spec 寫死 28 天、不開放調整。 */
 export const WINDOW_DAYS = 28
 
-/** 單日合計低於這個數視為「沒記完」：不進平均、不算有記天數。 */
-const MIN_DAY_KCAL = 1000
+/** 資料夠不夠的門檻，改數字要連 spec.md 一起改。recentDays：最近 RECENT_DAYS 天裡至少幾天完整，不到就暫停（MacroFactor 的做法）。 */
+export const BASELINE_NEEDS = { loggedDays: 21, weighIns: 4, weightSpanDays: 14, recentDays: 4 } as const
 
-/** 資料夠不夠的三道門檻，改數字要連 spec.md 一起改。 */
-export const BASELINE_NEEDS = { loggedDays: 21, weighIns: 4, weightSpanDays: 14 } as const
+/** 「最近一週」的長度（含窗尾）。 */
+export const RECENT_DAYS = 7
+
+/** 開始訓練後這麼多天（含第一天）的資料不用。Heymsfield 2012：減重頭幾週每 kg 的熱量遠低於 7700；訓練開始時的水分、肝醣同理。 */
+export const SETTLE_DAYS = 28
 
 /* 生理上不可能的結果不給數字（review M1）：一筆打錯的體重（57.5 打成 75.5 的反向、多打一個 0）
    放在窗口兩端或後段，會讓斜率變成每週好幾公斤，算出「−2160 卡」「5760 卡」這種結果，而卡片是要當
@@ -48,11 +58,15 @@ const PLAUSIBLE_MAINTENANCE = { min: 800, max: 5000 } as const
 export type BaselineResult =
   | {
       status: 'insufficient'
-      /** 窗口內「有記」的天數（合計 ≥ MIN_DAY_KCAL） */
+      /** 用的那一連串裡完整的天數（窗口裡沒有任何完整的日子時為 0） */
       loggedDays: number
       weighIns: number
-      /** 窗口內最早與最晚體重相差幾天；不足 2 筆為 0 */
+      /** 那一段裡最早與最晚體重相差幾天；不足 2 筆為 0 */
       weightSpanDays: number
+      /** 最近 RECENT_DAYS 天裡完整的天數；不到 BASELINE_NEEDS.recentDays 就暫停 */
+      recentDays: number
+      /** 開始訓練後的排除段還擋著：最快這天之後算得出來（排除段最後一天＋loggedDays 天，之後每天都記完整的話）；否則 null */
+      settlingUntil: string | null
     }
   | {
       /** 算得出來但不可能是真的（見 MAX_PLAUSIBLE_KG_PER_WEEK 那段）——帶著數字是為了讓畫面說得出原因 */
@@ -76,6 +90,10 @@ export type BaselineResult =
       slopeKgPerWeek: number
       loggedDays: number
       weighIns: number
+      weightSpanDays: number
+      /** 實際用的那一段（第一個到最後一個完整的日子，含） */
+      from: string
+      end: string
     }
 
 /**
@@ -84,12 +102,33 @@ export type BaselineResult =
  * 不做窗口過濾——那是 estimateMaintenance 的事，界只在一處。
  */
 export function dailyKcalFromRows(
-  rows: readonly { eaten_on: string; qty: number | string; kcal: number | string }[],
+  rows: readonly { eaten_on: string; qty: number | string; kcal: number | string; meal: string }[],
 ): DailyKcal[] {
-  const byDate = new Map<string, number>()
-  for (const r of rows) byDate.set(r.eaten_on, (byDate.get(r.eaten_on) ?? 0) + Number(r.kcal) * Number(r.qty))
-  return [...byDate].map(([date, kcal]) => ({ date, kcal }))
+  const byDate = new Map<string, { kcal: number; meals: Set<string> }>()
+  for (const r of rows) {
+    const d = byDate.get(r.eaten_on) ?? { kcal: 0, meals: new Set<string>() }
+    d.kcal += Number(r.kcal) * Number(r.qty)
+    d.meals.add(r.meal)
+    byDate.set(r.eaten_on, d)
+  }
+  return [...byDate].map(([date, d]) => ({ date, kcal: d.kcal, complete: d.meals.has('lunch') && d.meals.has('dinner') }))
 }
+
+/** 估計時的額外條件。trainingStart：第一筆訓練的日期；之後 SETTLE_DAYS 天的飲食與體重都不用。 */
+export interface BaselineOptions {
+  trainingStart?: string | null
+}
+
+interface DateRange {
+  from: string
+  end: string
+}
+
+function excludedRanges(opts: BaselineOptions): DateRange[] {
+  return opts.trainingStart ? [{ from: opts.trainingStart, end: shiftDate(opts.trainingStart, SETTLE_DAYS - 1) }] : []
+}
+
+const inRanges = (date: string, ranges: readonly DateRange[]) => ranges.some((r) => date >= r.from && date <= r.end)
 
 /** 最新窗口不夠用時，最多往回找幾天（窗尾往回滑動的天數）。spec AC 11。 */
 export const LOOKBACK_DAYS = 90
@@ -121,38 +160,86 @@ function daysBetween(from: string, to: string): number {
 }
 
 /**
- * endDate 是窗尾（含）——呼叫端傳「昨天」，今天還沒記完不算。
+ * 最新窗口的估計。endDate 是窗尾（含）——呼叫端傳「昨天」，今天還沒記完不算。
  * 窗口外的資料（含 endDate 之後）完全不參與。
+ *
+ * 只用窗口裡「完整記錄最多的一連串」（同分取較近的），不是整窗：整天沒記的日子多半是吃得多的外食、聚餐，
+ * 不在平均裡卻照樣推高體重斜率（修 ②）。最近 RECENT_DAYS 天完整不到 recentDays 就暫停（修 ③），
+ * 開始訓練後 SETTLE_DAYS 天的資料不用（修 ④）。
  */
 export function estimateMaintenance(
   dailyKcal: readonly DailyKcal[],
   weights: readonly WeightPoint[],
   endDate: string,
+  opts: BaselineOptions = {},
 ): BaselineResult {
-  return estimateOnSpan(dailyKcal, weights, windowStart(endDate), endDate)
+  const start = windowStart(endDate)
+  const ex = excludedRanges(opts)
+  const daily = dailyKcal.filter((d) => !inRanges(d.date, ex))
+  const wts = weights.filter((w) => !inRanges(w.date, ex))
+  /* 最近一週用**沒排除的**記錄數：排除是因為那幾週的體重不可信，不是人沒記——用排除後的數，天天記的人會被說
+     「最近 7 天完整記錄還差 N 天」（v2.137 review）。 */
+  const recentFrom = shiftDate(endDate, -(RECENT_DAYS - 1))
+  const recentDays = new Set(dailyKcal.filter((d) => d.complete && d.date >= recentFrom && d.date <= endDate).map((d) => d.date)).size
+  /* 剛開始訓練：最快哪一天算得出來＝排除段最後一天再過 loggedDays 天（之後每天都記完整，才湊得出一串）。
+     只看「窗尾在不在排除段裡」會早報約三週，排除段一結束還會改口叫人「接回記錄」（v2.137 review）。 */
+  const settlingUntil =
+    ex.map((r) => ({ r, until: shiftDate(r.end, BASELINE_NEEDS.loggedDays) })).find(({ r, until }) => endDate >= r.from && endDate < until)?.until ?? null
+  const winDates = wts.filter((w) => w.date >= start && w.date <= endDate).map((w) => w.date)
+
+  const runs = loggedRuns(daily, start, endDate)
+  let best: LoggedRun | null = null
+  // runs 由舊到新；同分時換成後者＝取較近的
+  for (const run of runs) if (best === null || run.loggedDays >= best.loggedDays) best = run
+  const r = best === null ? null : estimateOnSpan(daily, wts, best.from, best.end)
+  if (r !== null && r.status === 'ok' && recentDays >= BASELINE_NEEDS.recentDays) return r
+  if (r !== null && r.status === 'implausible') return r
+  /* 算不出來時，體重筆數與跨度報哪一份：那一串的記錄已經夠了，缺的就是那一串裡的體重；記錄都還不夠時報整個窗口的——
+     否則體重量在另一串裡的人會被說「體重還差 4 筆」（v2.137 review）。 */
+  const enough = r !== null && r.loggedDays >= BASELINE_NEEDS.loggedDays ? r : null
+  return {
+    status: 'insufficient',
+    loggedDays: r?.loggedDays ?? 0,
+    weighIns: enough ? enough.weighIns : winDates.length,
+    weightSpanDays: enough ? enough.weightSpanDays : spanDays(winDates),
+    recentDays,
+    settlingUntil,
+  }
 }
+
+/** 一串日期裡最早與最晚相差幾天；不足 2 個為 0 */
+function spanDays(dates: readonly string[]): number {
+  if (dates.length < 2) return 0
+  const xs = dates.map(dayIndex)
+  return Math.max(...xs) - Math.min(...xs)
+}
+
+type SpanResult =
+  | Exclude<BaselineResult, { status: 'insufficient' }>
+  | Omit<Extract<BaselineResult, { status: 'insufficient' }>, 'recentDays' | 'settlingUntil'>
 
 /**
  * 任意一段 [startDate, endDate]（含）的估計。最新窗口是固定 28 天；回溯時用的是「一連串記錄」
  * 的整段，長度不一——所以把算法與窗口長度拆開。範圍外的攝取與體重完全不參與。
  */
+
 function estimateOnSpan(
   dailyKcal: readonly DailyKcal[],
   weights: readonly WeightPoint[],
   startDate: string,
   endDate: string,
-): BaselineResult {
+): SpanResult {
   const inWindow = (date: string) => date >= startDate && date <= endDate
 
   // 同一天若重複，後者覆蓋前者；呼叫端本來就該給每日合計，這裡不替它加總第二次
-  const byDate = new Map<string, number>()
-  for (const d of dailyKcal) if (inWindow(d.date)) byDate.set(d.date, d.kcal)
-  const logged = [...byDate.values()].filter((k) => k >= MIN_DAY_KCAL)
+  const byDate = new Map<string, DailyKcal>()
+  for (const d of dailyKcal) if (inWindow(d.date)) byDate.set(d.date, d)
+  const logged = [...byDate.values()].filter((d) => d.complete).map((d) => d.kcal)
 
   const pts = weights
     .filter((w) => inWindow(w.date))
     .map((w) => ({ x: daysBetween(startDate, w.date), y: w.kg }))
-  const span = pts.length >= 2 ? Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x)) : 0
+  const span = spanDays(weights.filter((w) => inWindow(w.date)).map((w) => w.date))
 
   if (
     logged.length < BASELINE_NEEDS.loggedDays ||
@@ -194,6 +281,9 @@ function estimateOnSpan(
     slopeKgPerWeek,
     loggedDays: logged.length,
     weighIns: n,
+    weightSpanDays: span,
+    from: startDate,
+    end: endDate,
   }
 }
 
@@ -241,9 +331,9 @@ interface LoggedRun {
   loggedDays: number
 }
 
-/** 把有記的日子（單日合計 ≥ MIN_DAY_KCAL）串成「連串記錄」，漏記不超過 MAX_RUN_GAP_DAYS 天視為同一串。 */
+/** 把完整的日子串成「連串記錄」，漏記不超過 MAX_RUN_GAP_DAYS 天視為同一串。 */
 function loggedRuns(dailyKcal: readonly DailyKcal[], from: string, end: string): LoggedRun[] {
-  const days = [...new Set(dailyKcal.filter((d) => d.date >= from && d.date <= end && d.kcal >= MIN_DAY_KCAL).map((d) => d.date))].sort()
+  const days = [...new Set(dailyKcal.filter((d) => d.date >= from && d.date <= end && d.complete).map((d) => d.date))].sort()
   const runs: LoggedRun[] = []
   let cur: LoggedRun | null = null
   for (const day of days) {
@@ -282,20 +372,25 @@ export function baselineWithFallback(
   dailyKcal: readonly DailyKcal[],
   weights: readonly WeightPoint[],
   today: string,
+  opts: BaselineOptions = {},
 ): { current: BaselineResult; shown: ShownBaseline | null } {
   const win = baselineWindow(today)
-  const current = estimateMaintenance(dailyKcal, weights, win.end)
-  if (current.status === 'ok') return { current, shown: { result: current, ...win, stale: false } }
+  const current = estimateMaintenance(dailyKcal, weights, win.end, opts)
+  if (current.status === 'ok') return { current, shown: { result: current, from: current.from, end: current.end, stale: false } }
   if (current.status === 'implausible') return { current, shown: null }
 
+  // 回溯（含最新窗口暫停時「沿用舊值」）：開始訓練後的那段一樣不用
+  const ex = excludedRanges(opts)
+  const daily = dailyKcal.filter((d) => !inRanges(d.date, ex))
+  const wts = weights.filter((w) => !inRanges(w.date, ex))
   const { from: horizon } = baselineFetchRange(today)
-  const runs = loggedRuns(dailyKcal, horizon, win.end)
+  const runs = loggedRuns(daily, horizon, win.end)
   let best: ShownBaseline | null = null
   // 由近到遠走，只在「嚴格更多」時才換，所以同分自然留下較近的
   for (let i = runs.length - 1; i >= 0; i--) {
     const run = runs[i]
     if (run.loggedDays < BASELINE_NEEDS.loggedDays) continue
-    const r = estimateOnSpan(dailyKcal, weights, run.from, run.end)
+    const r = estimateOnSpan(daily, wts, run.from, run.end)
     if (r.status !== 'ok') continue
     if (best === null || r.loggedDays > best.result.loggedDays) {
       best = { result: r, from: run.from, end: run.end, stale: true }
@@ -306,16 +401,20 @@ export function baselineWithFallback(
 
 /** 資料不足時缺哪一項。畫面依 kind 各自組文案（長版／短版），判定只在 insufficientShortfalls 寫一次。 */
 export type BaselineShortfall =
+  | { kind: 'settling'; until: string }
   | { kind: 'loggedDays'; have: number; need: number }
   | { kind: 'weighIns'; have: number; need: number }
   | { kind: 'weightSpanDays'; have: number; need: number }
+  | { kind: 'recentDays'; have: number; need: number }
 
-/** 缺的項目，順序固定：記錄天數、體重筆數、體重跨度。**跨度只在筆數夠了才算缺**——筆數不夠時
+/** 缺的項目，順序固定：剛開始訓練、記錄天數、體重筆數、體重跨度、最近一週。**跨度只在筆數夠了才算缺**——筆數不夠時
  *  跨度必然也不夠（不足 2 筆算 0），兩句並列只是把同一件事講兩遍。 */
 export function insufficientShortfalls(r: Extract<BaselineResult, { status: 'insufficient' }>): BaselineShortfall[] {
   const out: BaselineShortfall[] = []
+  if (r.settlingUntil !== null) out.push({ kind: 'settling', until: r.settlingUntil })
   if (r.loggedDays < BASELINE_NEEDS.loggedDays) out.push({ kind: 'loggedDays', have: r.loggedDays, need: BASELINE_NEEDS.loggedDays })
   if (r.weighIns < BASELINE_NEEDS.weighIns) out.push({ kind: 'weighIns', have: r.weighIns, need: BASELINE_NEEDS.weighIns })
   else if (r.weightSpanDays < BASELINE_NEEDS.weightSpanDays) out.push({ kind: 'weightSpanDays', have: r.weightSpanDays, need: BASELINE_NEEDS.weightSpanDays })
+  if (r.recentDays < BASELINE_NEEDS.recentDays) out.push({ kind: 'recentDays', have: r.recentDays, need: BASELINE_NEEDS.recentDays })
   return out
 }

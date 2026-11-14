@@ -8,7 +8,7 @@
 
    這張 sheet 的容器 id 是 settings-sheet-root，退場動畫直接用 inline style 套
    sheet-out／scrim-out 這組 keyframes。 */
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import SkyBand from '@/components/SkyBand'
 import { SkelInline } from '@/components/Skeleton'
@@ -16,8 +16,9 @@ import SubPageTop from '@/components/SubPageTop'
 import { useSkyEdge } from '@/components/useSkyEdge'
 import { getAiCredits, listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
+import { trainingDates } from '@/lib/training'
 import { errMsg, friendlyError } from '@/lib/errors'
-import { num } from '@/lib/formulas'
+import { num, plannedWeeklyKg } from '@/lib/formulas'
 import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparklinePoints } from '@/lib/weightTrend'
 import AiSection, { type CreditsState } from './AiSection'
 import DailyGoal from './DailyGoal'
@@ -68,7 +69,12 @@ export default function Settings(props: SettingsProps) {
   }, [])
   // 補登舊日期的體重不會改變「最新一筆」，所以存完體重要另外觸發重算
   const [weightSaves, setWeightSaves] = useState(0)
-  const estimate = useMaintenanceEstimate(`${weightSaves}|${latestWeight.measured_on}|${latestWeight.weight_kg}`)
+  /* 回推不用開始訓練後頭 28 天的資料（v2.137）。訓練資料還沒讀到是 undefined，回推跟著等 */
+  const trainingStart = useMemo(
+    () => (training === null ? undefined : ([...trainingDates(training.db)].sort()[0] ?? null)),
+    [training],
+  )
+  const estimate = useMaintenanceEstimate(`${weightSaves}|${latestWeight.measured_on}|${latestWeight.weight_kg}`, trainingStart)
 
   /* 離開這個元件（切回今日頁分頁）時要還原 navbar，不能只靠 view 變化——cleanup
    * 保證無論怎麼離開都會補一次 onSubViewChange(false)，把 navbar 還原。 */
@@ -236,7 +242,7 @@ export default function Settings(props: SettingsProps) {
           </div>
         }
       >
-        <WeightTrend weights={weights} onBack={() => setView('list')} />
+        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBack={() => setView('list')} />
       </Suspense>
     )
   }

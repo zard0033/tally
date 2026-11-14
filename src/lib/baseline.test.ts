@@ -22,7 +22,7 @@ const END = '2026-10-11'
 const dayAt = (i: number) => shiftDate(END, -i) // i=0 是窗尾，i=27 是窗首
 
 const log = (days: number, kcal: number): DailyKcal[] =>
-  Array.from({ length: days }, (_, i) => ({ date: dayAt(i), kcal }))
+  Array.from({ length: days }, (_, i) => ({ date: dayAt(i), kcal, complete: true }))
 
 /** 窗首到窗尾每 everyDays 天一筆，體重以 slopePerWeek（kg/週）線性變化 */
 const weightsAt = (start: number, slopePerWeek: number, everyDays = 3, noise: number[] = []): WeightPoint[] => {
@@ -92,30 +92,31 @@ describe('estimateMaintenance — 資料不足就不給數字', () => {
   })
 
   it('門檻值就是 spec 寫的那三個數（改門檻要連 spec 一起改）', () => {
-    expect(BASELINE_NEEDS).toEqual({ loggedDays: 21, weighIns: 4, weightSpanDays: 14 })
+    expect(BASELINE_NEEDS).toEqual({ loggedDays: 21, weighIns: 4, weightSpanDays: 14, recentDays: 4 })
   })
 })
 
 describe('estimateMaintenance — 什麼算「有記」、什麼在窗口外', () => {
-  it('單日合計 < 1000 卡視為沒記完：不進平均，也不算有記天數', () => {
-    const logs = [...log(21, 1800), ...Array.from({ length: 7 }, (_, i) => ({ date: dayAt(21 + i), kcal: 500 }))]
+  it('午、晚餐沒記齊的日子不完整：不進平均，也不算有記天數（就算合計很高）', () => {
+    // 21 天完整（1800）緊接 7 天不完整（只記早午餐，合計 1500）——後者若被算進去，平均會被拉低
+    const logs = [...log(21, 1800), ...Array.from({ length: 7 }, (_, i) => ({ date: dayAt(21 + i), kcal: 1500, complete: false }))]
     const r = estimateMaintenance(logs, weightsAt(75, 0), END)
     expect(r.status).toBe('ok')
     if (r.status === 'ok') {
       expect(r.loggedDays).toBe(21)
-      expect(r.maintenance).toBeCloseTo(1800, 0) // 500 的那 7 天若被算進去會拉到 1500
+      expect(r.maintenance).toBeCloseTo(1800, 0)
     }
   })
 
-  it('剛好 1000 卡算有記（邊界在「< 1000」）', () => {
-    const r = estimateMaintenance(log(28, 1000), weightsAt(75, 0), END)
+  it('完整只看午、晚餐有沒有記，不看合計多少（舊的「合計 ≥ 1000」拿掉了）', () => {
+    const r = estimateMaintenance(log(28, 900), weightsAt(75, 0), END)
     expect(r.status).toBe('ok')
   })
 
   it('窗口之外（今天、窗首前一天）的攝取與體重完全不影響結果', () => {
     const base = estimateMaintenance(log(28, 1800), weightsAt(75, 0), END)
     const polluted = estimateMaintenance(
-      [...log(28, 1800), { date: shiftDate(END, 1), kcal: 5000 }, { date: dayAt(28), kcal: 5000 }],
+      [...log(28, 1800), { date: shiftDate(END, 1), kcal: 5000, complete: true }, { date: dayAt(28), kcal: 5000, complete: true }],
       [...weightsAt(75, 0), { date: shiftDate(END, 1), kg: 99 }, { date: dayAt(28), kg: 50 }],
       END,
     )
@@ -138,18 +139,27 @@ describe('expectedWeeklyChangeKg', () => {
 })
 
 describe('dailyKcalFromRows', () => {
-  it('同一天多筆：單份 kcal × qty 加總', () => {
+  it('同一天多筆：單份 kcal × qty 加總；午、晚餐都有記才算完整', () => {
     const rows = [
-      { eaten_on: '2026-10-10', qty: 1, kcal: 500 },
-      { eaten_on: '2026-10-10', qty: 2, kcal: 150 },
+      { eaten_on: '2026-10-10', qty: 1, kcal: 500, meal: 'lunch' },
+      { eaten_on: '2026-10-10', qty: 2, kcal: 150, meal: 'dinner' },
     ]
-    expect(dailyKcalFromRows(rows)).toEqual([{ date: '2026-10-10', kcal: 800 }])
+    expect(dailyKcalFromRows(rows)).toEqual([{ date: '2026-10-10', kcal: 800, complete: true }])
+  })
+
+  it('只記早餐、午餐、點心（沒有晚餐）不完整', () => {
+    const rows = [
+      { eaten_on: '2026-10-10', qty: 1, kcal: 500, meal: 'breakfast' },
+      { eaten_on: '2026-10-10', qty: 1, kcal: 900, meal: 'lunch' },
+      { eaten_on: '2026-10-10', qty: 1, kcal: 300, meal: 'snack' },
+    ]
+    expect(dailyKcalFromRows(rows)[0].complete).toBe(false)
   })
 
   it('不同天分開；qty 可以是小數', () => {
     const rows = [
-      { eaten_on: '2026-10-10', qty: 0.5, kcal: 400 },
-      { eaten_on: '2026-10-11', qty: 1, kcal: 300 },
+      { eaten_on: '2026-10-10', qty: 0.5, kcal: 400, meal: 'lunch' },
+      { eaten_on: '2026-10-11', qty: 1, kcal: 300, meal: 'lunch' },
     ]
     const got = dailyKcalFromRows(rows)
     expect(got).toHaveLength(2)
@@ -158,8 +168,8 @@ describe('dailyKcalFromRows', () => {
   })
 
   it('數字欄位以字串回來也要算（numeric 欄位在 PostgREST 可能是字串）', () => {
-    expect(dailyKcalFromRows([{ eaten_on: '2026-10-10', qty: '1.5', kcal: '200' }])).toEqual([
-      { date: '2026-10-10', kcal: 300 },
+    expect(dailyKcalFromRows([{ eaten_on: '2026-10-10', qty: '1.5', kcal: '200', meal: 'dinner' }])).toEqual([
+      { date: '2026-10-10', kcal: 300, complete: false },
     ])
   })
 
@@ -254,7 +264,7 @@ describe('baselineWindow', () => {
 describe('baselineWithFallback', () => {
   const TODAY = shiftDate(END, 1)
   const logOffsets = (from: number, to: number, kcal = 1800): DailyKcal[] =>
-    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal }))
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal, complete: true }))
   const weighEvery = (from: number, to: number, step = 3, kg = 75): WeightPoint[] => {
     const out: WeightPoint[] = []
     for (let o = from; o >= to; o -= step) out.push({ date: dayAt(o), kg })
@@ -359,7 +369,7 @@ describe('baselineWithFallback', () => {
 describe('baselineWithFallback — 一連串記錄的界線', () => {
   const TODAY = shiftDate(END, 1)
   const logOffsets = (from: number, to: number, kcal = 1800): DailyKcal[] =>
-    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal }))
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal, complete: true }))
   const weighEvery = (from: number, to: number, step = 3, kg = 75): WeightPoint[] => {
     const out: WeightPoint[] = []
     for (let o = from; o >= to; o -= step) out.push({ date: dayAt(o), kg })
@@ -406,8 +416,8 @@ describe('baselineFetchRange', () => {
 })
 
 describe('insufficientShortfalls', () => {
-  const insufficient = (loggedDays: number, weighIns: number, weightSpanDays: number) =>
-    ({ status: 'insufficient', loggedDays, weighIns, weightSpanDays }) as const
+  const insufficient = (loggedDays: number, weighIns: number, weightSpanDays: number, recentDays = 7, settlingUntil: string | null = null) =>
+    ({ status: 'insufficient', loggedDays, weighIns, weightSpanDays, recentDays, settlingUntil }) as const
 
   it('記錄天數與體重筆數都不夠 → 兩項，順序固定；跨度不再補一句', () => {
     expect(insufficientShortfalls(insufficient(18, 2, 0))).toEqual([
@@ -422,13 +432,23 @@ describe('insufficientShortfalls', () => {
     expect(insufficientShortfalls(insufficient(25, 3, 20))).toEqual([{ kind: 'weighIns', have: 3, need: 4 }])
   })
   it('邊界值剛好達標 → 沒有缺項', () => {
-    expect(insufficientShortfalls(insufficient(21, 4, 14))).toEqual([])
+    expect(insufficientShortfalls(insufficient(21, 4, 14, 4))).toEqual([])
+  })
+  it('最近 7 天完整不到 4 天 → 缺「最近一週」，排在最後', () => {
+    expect(insufficientShortfalls(insufficient(24, 6, 20, 3))).toEqual([{ kind: 'recentDays', have: 3, need: 4 }])
+  })
+  it('剛開始訓練 → 排在最前面，其他缺項照列', () => {
+    expect(insufficientShortfalls(insufficient(10, 4, 20, 7, '2026-11-08'))).toEqual([
+      { kind: 'settling', until: '2026-11-08' },
+      { kind: 'loggedDays', have: 10, need: 21 },
+    ])
   })
 })
 
 describe('maintenanceAdvice（每日目標頁該不該問）', () => {
   const ok: BaselineResult = {
     status: 'ok', maintenance: 2000, low: 1900, high: 2100, meanIntake: 2000, slopeKgPerWeek: 0, loggedDays: 24, weighIns: 6,
+    weightSpanDays: 20, from: dayAt(23), end: END,
   }
   it('現用值落在範圍內不問，邊界算在內', () => {
     expect(maintenanceAdvice(ok, 2000).kind).toBe('same')
@@ -444,19 +464,159 @@ describe('maintenanceAdvice（每日目標頁該不該問）', () => {
     expect(maintenanceAdvice(flat, 2000).kind).toBe('same')
   })
   it('記錄不夠回 lacking，不可能的結果回 suspect', () => {
-    const lacking: BaselineResult = { status: 'insufficient', loggedDays: 20, weighIns: 3, weightSpanDays: 14 }
+    const lacking: BaselineResult = { status: 'insufficient', loggedDays: 20, weighIns: 3, weightSpanDays: 14, recentDays: 7, settlingUntil: null }
     const suspect: BaselineResult = { status: 'implausible', maintenance: 5760, slopeKgPerWeek: -4, reason: 'slope' }
     expect(maintenanceAdvice(lacking, 2000)).toEqual({ kind: 'lacking', result: lacking })
     expect(maintenanceAdvice(suspect, 2000)).toEqual({ kind: 'suspect', result: suspect })
   })
   it('回溯到舊的一段照樣顯示，但最新窗口不夠就是 lacking，不會變成可以改用', () => {
     // 窗尾往前第 30～80 天天天記、體重持平；最新 28 天完全沒記
-    const old: DailyKcal[] = Array.from({ length: 50 }, (_, i) => ({ date: dayAt(30 + i), kcal: 1800 }))
+    const old: DailyKcal[] = Array.from({ length: 50 }, (_, i) => ({ date: dayAt(30 + i), kcal: 1800, complete: true }))
     const oldWeights: WeightPoint[] = Array.from({ length: 8 }, (_, i) => ({ date: dayAt(30 + i * 7), kg: 75 }))
     const today = shiftDate(END, 1)
     const { current, shown } = baselineWithFallback(old, oldWeights, today)
     expect(shown?.stale).toBe(true)
     expect(shown?.result.status).toBe('ok')
     expect(maintenanceAdvice(current, 2000).kind).toBe('lacking')
+  })
+})
+
+/* 2026-11-14 修四項（spec.md「減重回饋圈 review」）。②③④ 的案例：最新窗口不再整窗平均、最近一週要夠、開始訓練後頭 28 天不用。 */
+describe('最新窗口只用完整記錄最多的一連串（修 ②）', () => {
+  const TODAY = shiftDate(END, 1)
+  const run = (from: number, to: number, kcal = 1800): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal, complete: true }))
+
+  it('整天沒記的三天把窗口切開：只用後面那串，前面那串的體重不參與', () => {
+    // 完整：27..25、21..0（中間 24..22 整天沒記）。前面那段體重 77，後面持平 75——整窗迴歸會算出在掉、維持熱量偏高
+    const logs = [...run(27, 25), ...run(21, 0)]
+    const weights: WeightPoint[] = [{ date: dayAt(27), kg: 77 }, { date: dayAt(25), kg: 77 }]
+    for (let o = 21; o >= 0; o -= 3) weights.push({ date: dayAt(o), kg: 75 })
+    const r = estimateMaintenance(logs, weights, END)
+    expect(r.status).toBe('ok')
+    if (r.status === 'ok') {
+      expect(r.from).toBe(dayAt(21))
+      expect(r.end).toBe(END)
+      expect(r.loggedDays).toBe(22)
+      expect(r.maintenance).toBeCloseTo(1800, 0)
+    }
+    expect(baselineWithFallback(logs, weights, TODAY).shown?.from).toBe(dayAt(21))
+  })
+
+  it('窗口裡最長的一串不到 21 天：資料不足，記錄天數報的是那一串的', () => {
+    const logs = [...run(27, 14), ...run(10, 0)] // 14 天＋11 天，中間空 3 天
+    const r = estimateMaintenance(logs, weightsAt(75, 0), END)
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') expect(r.loggedDays).toBe(14)
+  })
+})
+
+describe('最近一週完整不到 4 天就暫停（修 ③）', () => {
+  const TODAY = shiftDate(END, 1)
+  const run = (from: number, to: number): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal: 1800, complete: true }))
+
+  it('最近 7 天只有 3 天完整：不出新數字；畫面沿用那一段、標舊', () => {
+    const r = baselineWithFallback(run(27, 4), weightsAt(75, 0), TODAY)
+    expect(r.current.status).toBe('insufficient')
+    if (r.current.status === 'insufficient') {
+      expect(r.current.recentDays).toBe(3)
+      expect(r.current.loggedDays).toBe(24)
+      expect(insufficientShortfalls(r.current)).toEqual([{ kind: 'recentDays', have: 3, need: 4 }])
+    }
+    expect(r.shown?.stale).toBe(true)
+    expect(r.shown?.end).toBe(dayAt(4))
+    expect(maintenanceAdvice(r.current, 2000).kind).toBe('lacking')
+  })
+
+  it('剛好 4 天完整就照算', () => {
+    const r = estimateMaintenance(run(27, 3), weightsAt(75, 0), END)
+    expect(r.status).toBe('ok')
+  })
+})
+
+describe('開始訓練後頭 28 天不用（修 ④）', () => {
+  const TODAY = shiftDate(END, 1)
+  const run = (from: number, to: number): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal: 1800, complete: true }))
+  const weighEvery = (from: number, to: number, kg: (o: number) => number): WeightPoint[] => {
+    const out: WeightPoint[] = []
+    for (let o = from; o >= to; o -= 3) out.push({ date: dayAt(o), kg: kg(o) })
+    return out
+  }
+
+  it('窗尾還在頭 28 天裡：最新窗口說「剛開始訓練」；回溯到訓練前那段，訓練後體重跳起來的水分不影響', () => {
+    const start = dayAt(20)
+    // 訓練前持平 75；開始訓練後兩週內漲 1.5 kg（水分、肝醣）
+    const weights = weighEvery(62, 0, (o) => (o > 20 ? 75 : 75 + Math.min(1.5, (20 - o) * 0.1)))
+    const r = baselineWithFallback(run(60, 0), weights, TODAY, { trainingStart: start })
+    expect(r.current.status).toBe('insufficient')
+    if (r.current.status === 'insufficient') {
+      // 最快算得出來的那天＝排除段最後一天（start＋27）再過 21 天
+      expect(r.current.settlingUntil).toBe(shiftDate(start, 27 + 21))
+      expect(insufficientShortfalls(r.current)[0]).toEqual({ kind: 'settling', until: shiftDate(start, 27 + 21) })
+    }
+    expect(r.shown?.stale).toBe(true)
+    expect(r.shown?.from).toBe(dayAt(60))
+    expect(r.shown?.end).toBe(dayAt(21))
+    expect(r.shown?.result.maintenance).toBeCloseTo(1800, 0)
+  })
+
+  it('不給開始訓練的日期：照舊整段都用（訓練後的上漲把維持熱量拉低）', () => {
+    const weights = weighEvery(62, 0, (o) => (o > 20 ? 75 : 75 + Math.min(1.5, (20 - o) * 0.1)))
+    const r = baselineWithFallback(run(60, 0), weights, TODAY)
+    expect(r.current.status).toBe('ok')
+    if (r.current.status === 'ok') expect(r.current.maintenance).toBeLessThan(1800)
+  })
+
+  it('開始訓練已經超過 28 天：排除的那段在窗口外，最新窗口照算', () => {
+    const r = estimateMaintenance(run(27, 0), weightsAt(75, 0), END, { trainingStart: dayAt(60) })
+    expect(r.status).toBe('ok')
+  })
+})
+
+describe('v2.137 review：剛開始訓練與資料不足時說的話', () => {
+  const run = (from: number, to: number): DailyKcal[] =>
+    Array.from({ length: from - to + 1 }, (_, i) => ({ date: dayAt(from - i), kcal: 1800, complete: true }))
+  const every3 = (from: number, to: number): WeightPoint[] => {
+    const out: WeightPoint[] = []
+    for (let o = from; o >= to; o -= 3) out.push({ date: dayAt(o), kg: 75 })
+    return out
+  }
+
+  it('天天記、10 天前開始訓練（訓練前那串只有 17 天）：只說剛開始訓練，不說「最近 7 天還差」', () => {
+    const r = estimateMaintenance(run(60, 0), every3(60, 0), END, { trainingStart: dayAt(10) })
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') {
+      expect(r.recentDays).toBe(7)
+      const kinds = insufficientShortfalls(r).map((s) => s.kind)
+      expect(kinds[0]).toBe('settling')
+      expect(kinds).not.toContain('recentDays')
+    }
+  })
+
+  it('最快哪天算得出來是真的：排除段結束後再 21 天整串湊滿就算，差一天就還在等', () => {
+    // 開始訓練在 dayAt(48)：排除 48..21，20..0 正好 21 天 ⇒ 算得出來
+    expect(estimateMaintenance(run(60, 0), every3(60, 0), END, { trainingStart: dayAt(48) }).status).toBe('ok')
+    // 晚一天開始：只湊得出 20 天 ⇒ 還在等，而且說的是「剛開始訓練」，不是叫人接回記錄
+    const r = estimateMaintenance(run(60, 0), every3(60, 0), END, { trainingStart: dayAt(47) })
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') {
+      expect(r.settlingUntil).toBe(shiftDate(END, 1))
+      expect(insufficientShortfalls(r)[0].kind).toBe('settling')
+    }
+  })
+
+  it('記錄還不夠時，體重筆數報整個窗口的：體重量在另一串裡的人不會被說「體重還差」', () => {
+    // A：27..13（15 天）、空 3 天、B：9..0（10 天）；體重 8 筆全在 B
+    const logs = [...run(27, 13), ...run(9, 0)]
+    const weights: WeightPoint[] = Array.from({ length: 8 }, (_, i) => ({ date: dayAt(i), kg: 75 }))
+    const r = estimateMaintenance(logs, weights, END)
+    expect(r.status).toBe('insufficient')
+    if (r.status === 'insufficient') {
+      expect(r.loggedDays).toBe(15)
+      expect(r.weighIns).toBe(8)
+      expect(insufficientShortfalls(r).map((s) => s.kind)).not.toContain('weighIns')
+    }
   })
 })

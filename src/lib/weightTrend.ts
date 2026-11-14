@@ -122,3 +122,37 @@ export const isValidWeightKg = (kg: number): boolean => Number.isFinite(kg) && k
 
 /** 體脂率要是 BODY_FAT_MIN–BODY_FAT_MAX 之間的有限數字（留空由呼叫端處理，不在這裡判）。 */
 export const isValidBodyFatPct = (fat: number): boolean => Number.isFinite(fat) && fat >= BODY_FAT_MIN && fat <= BODY_FAT_MAX
+
+/** 實際走勢最少要跨幾天：一週以內的斜率幾乎全是水分與量測時間的差。 */
+export const PACE_MIN_SPAN_DAYS = 7
+
+/**
+ * 這段的實際走勢（kg/週，v2.137「計畫 vs 實際」）：範圍內全部量測的線性迴歸斜率——跟回推同一種算法，
+ * 不是頭尾相減（頭尾相減會把單次量測的水分波動全算進去）。不到 2 筆或頭尾不到 PACE_MIN_SPAN_DAYS 天回 null。
+ */
+export function actualKgPerWeek(points: readonly { t: number; kg: number }[]): number | null {
+  if (points.length < 2) return null
+  const ts = points.map((p) => p.t)
+  if (Math.max(...ts) - Math.min(...ts) < PACE_MIN_SPAN_DAYS) return null
+  const n = points.length
+  const mt = points.reduce((s, p) => s + p.t, 0) / n
+  const mk = points.reduce((s, p) => s + p.kg, 0) / n
+  const stt = points.reduce((s, p) => s + (p.t - mt) ** 2, 0)
+  const slope = points.reduce((s, p) => s + (p.t - mt) * (p.kg - mk), 0) / stt
+  return slope * 7
+}
+
+/**
+ * 計畫線：從範圍內第一點的 7 日平均起，照 perWeek 的速度走（現在設定的速度；之前改過速度的話，舊的那段不照舊速度畫）。
+ * 每一點多一個 plan 值給圖畫線；perWeek 是 null（自訂目標）就不畫。
+ */
+export function withPlan<T extends { t: number; avg: number }>(points: readonly T[], perWeek: number | null): (T & { plan: number | null })[] {
+  const first = points[0]
+  return points.map((p) => ({ ...p, plan: perWeek === null || first === undefined ? null : first.avg + (perWeek / 7) * (p.t - first.t) }))
+}
+
+/** 每週變化的寫法：帶正負號（減號用 −）、兩位小數。 */
+export function signedKg(n: number): string {
+  const v = Math.round(n * 100) / 100
+  return v === 0 ? '0.00' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`
+}

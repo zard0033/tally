@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 v2.137 回推四項＋趨勢頁計畫線（本機，push 前）：smoke 55 過；daily-goal＋settings＋weight-trend＋interaction＋meal-suggest 209 過 1 紅，紅的是偶發清單上的「慢態有出口」（本機幾乎必紅、基線一樣，這批沒動開機與 session），單跑 ×3 全過。中途抓到 19 條 daily-goal 紅：stub 用「select 不含 meal」認回推查詢，查詢多抓 meal 後被送去餐建議的 handler（見 lesson-state-text-to-visual ⑥）。mutation：baseline 四項各拿掉一項都紅、review 三項修正各還原都紅、拿掉計畫線 e2e 紅。vitest 1136 全過。
+
 2026-11-14 v2.136 過場／下拉縫／整頁錯誤太陽（本機，push 前）：smoke 55 條全過；interaction＋meal-suggest＋service-worker＋settings 143 過（含新增「過場」兩條）。新增兩條做過 mutation：拿掉過場淡出動畫→兩條都紅；減少動態選擇器改回去→第二條紅（量到 0.22s）。全量交給 CI。
 
 2026-11-14 v2.135 登入頁／開機／骨架（本機，push 前）：`e2e:affected --dry` 印 FULL → `e2e:smoke` 55 條全過（兩輪）；另跑受影響的 spec：interaction＋food-library＋analysis＋weight-trend＋service-worker 134 過 2 紅（開機慢態按鈕還在找 `.notice .action-btn`，漏改定位器，修後綠）、meal-suggest＋training＋estimate 217 過 2 紅（meal-suggest:676、:910：今日分頁整頁錯誤的「重試」移到底部後被「復原」膠囊蓋住，真 bug，地面多讓一個膠囊高度後綠）；修完重跑 interaction＋SW 70 過、那兩條 2 過。全量交給 CI。

@@ -706,7 +706,7 @@ test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明�
 
 test('v2.53 小點：刪光今天的品項後，晚到的月份查詢不會把今天的小點加回去', async ({ page }) => {
   // stub 不看 filter：任何月份的查詢都會回這份窗口（含今天），等於「伺服器那邊今天還有紀錄」
-  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: TODAY, qty: 1, kcal: 100 }] })
+  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: TODAY, qty: 1, kcal: 100, meal: 'lunch' }] })
   const n = await page.locator('.timeline .item').count()
   check(n > 0, '前提不成立：今天要有品項才能刪光')
   for (let i = 0; i < n; i++) {
@@ -742,7 +742,7 @@ test('v2.53 往未來滑夾到明天，不是整個丟掉；夾完還在同一�
 })
 
 test('v2.53 小點：有紀錄的日子（今天來自已載入的品項、其他天來自月份查詢）', async ({ page }) => {
-  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: YDAY, qty: 1, kcal: 100 }] })
+  await openApp(page, {}, { ...FIX, kcalWindow: [{ eaten_on: YDAY, qty: 1, kcal: 100, meal: 'lunch' }] })
   await page.locator('.datectl-title').click()
   await expect(page.locator(`.datectl-month [data-date="${TODAY}"]`), '今天有品項，該有小點').toHaveClass(/is-marked/)
   const tomorrowCell = page.locator(`.datectl-month [data-date="${TOMORROW}"]`)
@@ -1342,7 +1342,7 @@ test('減少動態：開著再多拉、放手 → 直接回到開啟位置', asy
    這個分頁 SIGNED_IN，整個 App 不重載）之後，上一個帳號的小點不能留著，抓過的月份也要能重抓。
    兩個帳號回不同日期才驗得到結果：只數查詢次數的話，拿掉「清小點」照樣綠。 */
 const dayCell = (page: Page, iso: string) => page.locator(`.datectl > :not([data-leaving]) [data-date="${iso}"]`)
-const kcalRow = (iso: string) => ({ eaten_on: iso, qty: 1, kcal: 100 })
+const kcalRow = (iso: string) => ({ eaten_on: iso, qty: 1, kcal: 100, meal: 'lunch' })
 
 const signOutFromSettings = async (page: Page) => {
   await page.locator('.tab[aria-label="設定"]').click()

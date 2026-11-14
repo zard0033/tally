@@ -10,8 +10,9 @@ import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
 import { listWeights, type Weight } from '@/lib/api'
+import { rateWeeklyToMonthly } from '@/lib/formulas'
 import { localDate, monthDay, tableDate } from '@/lib/dates'
-import { fmt1, niceDomain, TREND_RANGES, trendPoints, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
+import { actualKgPerWeek, fmt1, niceDomain, signedKg, TREND_RANGES, trendPoints, withPlan, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
 import { trendXAxis } from '@/components/trendAxis'
 
 /** 「全部」要撈完整歷史：listWeights 預設只給 90 筆。1000 是 Supabase 單次回應上限。 */
@@ -19,12 +20,16 @@ const FULL_HISTORY = 1000
 
 export interface WeightTrendProps {
   weights: Weight[] | null
+  /** 現在設定的每週速度（kg，減重為負）；自訂目標是 null，不畫計畫線（v2.137） */
+  plannedKgPerWeek: number | null
   onBack: () => void
 }
 
+type PlanPoint = TrendPoint & { plan: number | null }
+
 /** 浮動讀數：值在前（粗）、名稱在後（淡）；體脂沒填寫「—」。 */
 function TrendTip({ active, payload }: TooltipContentProps) {
-  const p = payload?.[0]?.payload as TrendPoint | undefined
+  const p = payload?.[0]?.payload as PlanPoint | undefined
   if (!active || !p) return null
   return (
     <div className="trend-tip" role="status">
@@ -32,11 +37,12 @@ function TrendTip({ active, payload }: TooltipContentProps) {
       <div className="trend-tip-row"><b>{fmt1(p.kg)} kg</b><span>當次量測</span></div>
       <div className="trend-tip-row"><b>{fmt1(p.avg)} kg</b><span>7 日平均</span></div>
       <div className="trend-tip-row"><b>{p.fat === null ? '—' : `${fmt1(p.fat)} %`}</b><span>體脂</span></div>
+      {p.plan !== null && <div className="trend-tip-row"><b>{fmt1(p.plan)} kg</b><span>照計畫</span></div>}
     </div>
   )
 }
 
-export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
+export default function WeightTrend({ weights, plannedKgPerWeek, onBack }: WeightTrendProps) {
   const [range, setRange] = useState<TrendRange>('90')
   const [full, setFull] = useState<Weight[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -54,9 +60,15 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
   const source = full ?? weights
   // 自己的請求還沒回來、手上又沒有資料可畫：不下結論，先骨架（否則真空帳號與離線都會先閃一下「還沒有體重紀錄」）
   const loading = full === null && !failed
-  const points = useMemo(() => (source ? trendPoints(source, range, today) : []), [source, range, today])
+  /* 計畫線（v2.137，spec「減重回饋圈 review」④，使用者 2026-11-14 選只放趨勢頁）：從這段第一點的 7 日平均起照現在的速度走 */
+  const points = useMemo(
+    () => withPlan(source ? trendPoints(source, range, today) : [], plannedKgPerWeek),
+    [source, range, today, plannedKgPerWeek],
+  )
+  const actual = useMemo(() => actualKgPerWeek(points), [points])
   const dom = useMemo(() => xDomain(points, range, today), [points, range, today])
   const ticks = useMemo(() => (dom ? xTicks(dom[0], dom[1]) : []), [dom])
+  /* 軸只照量到的值定，計畫線超出就在圖框切掉（allowDataOverflow）：範圍長時計畫線會掉十幾公斤，照它撐軸會把真正的資料壓成一條細帶（v2.137 review） */
   const kgDomain = useMemo(() => niceDomain(points.flatMap((p) => [p.kg, p.avg]), 0.3, 1), [points])
   const fatPoints = points.filter((p) => p.fat !== null)
   const fatDomain = useMemo(() => niceDomain(fatPoints.map((p) => p.fat as number), 0.5, 1), [fatPoints])
@@ -96,14 +108,24 @@ export default function WeightTrend({ weights, onBack }: WeightTrendProps) {
             <ul className="trend-legend">
               <li><i className="k-dot" aria-hidden="true" />每次量測</li>
               <li><i className="k-line" aria-hidden="true" />7 日平均</li>
+              {plannedKgPerWeek !== null && <li><i className="k-plan" aria-hidden="true" />計畫</li>}
             </ul>
           </div>
+          {/* 計畫 vs 實際：一句話說落差，數字在圖上也看得到（線），這行是給不看圖的讀法 */}
+          <p className="trend-pace">
+            {/* 用每月：每日目標頁選速度是 kg/月，寫每週的話是一個使用者沒選過的數字（v2.137 review） */}
+            {plannedKgPerWeek !== null && `計畫每月 ${signedKg(rateWeeklyToMonthly(plannedKgPerWeek))} kg・`}
+            {actual === null ? '這段量測太少，算不出走勢' : `這段實際每月 ${signedKg(rateWeeklyToMonthly(actual))} kg`}
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <ComposedChart data={points} syncId="weight-trend" margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--rule-subtle)" />
               <XAxis {...axis} />
-              <YAxis width={36} domain={kgDomain} ticks={yTicks(kgDomain)} tickLine={false} axisLine={false} />
+              <YAxis width={36} domain={kgDomain} ticks={yTicks(kgDomain)} tickLine={false} axisLine={false} allowDataOverflow />
               <Tooltip content={TrendTip} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
+              {plannedKgPerWeek !== null && (
+                <Line dataKey="plan" name="計畫" stroke="var(--ink-muted)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={false} isAnimationActive={false} />
+              )}
               <Line dataKey="kg" name="當次量測" stroke="none" dot={{ r: 3, fill: 'var(--ink-faint)', stroke: 'none' }} activeDot={false} isAnimationActive={false} />
               <Line dataKey="avg" name="7 日平均" type="monotone" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
                 dot={endDot} activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />

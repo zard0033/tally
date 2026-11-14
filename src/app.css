@@ -929,6 +929,9 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-legend li { display: flex; align-items: center; gap: var(--s-1); }
 .trend-legend .k-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
 .trend-legend .k-line { width: 14px; height: 2px; border-radius: 1px; background: var(--accent); }
+/* 計畫線（v2.137）：虛線＝「預定的」，跟實線的 7 日平均（量到的）分開；--ink-muted 對卡片 5.98 */
+.trend-legend .k-plan { width: 14px; height: 0; border-top: 1.5px dashed var(--ink-muted); }
+.trend-pace { margin: 0 0 var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
 .trend-card .recharts-cartesian-axis-tick-value { font-size: var(--t-xs); fill: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .trend-card .recharts-wrapper:focus, .trend-card .recharts-surface:focus { outline: none; }
