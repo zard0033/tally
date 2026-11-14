@@ -159,6 +159,10 @@ button { -webkit-user-select: none; user-select: none; }
   padding-bottom: calc(48 / 393 * 100%);
   --ink-muted: var(--ink-sky); --ink-faint: var(--rule-field); }
 .sky > .topbar, .sky > .gauge { position: relative; z-index: 1; }
+/* 往下拉過頭（iOS 的橡皮筋）時，捲動區頂端被拉開的那一段原本露出底下的紙色，夾在天空色的狀態列與天空之間（v2.136 真機回報）。
+   天空往上接一段一整屏高的天空色：在內容上緣之外，不增加可捲範圍，拉開時跟著內容一起下來、把縫補上。設定頁的橫幅同理。 */
+.sky::before, .sky-band::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh;
+  background: var(--sky); pointer-events: none; }
 /* 天空頂端少留一點：週列已經佔掉 60 多 px，省下來的高度留給時間軸（晚上那一餐的建議要在第一屏看得到） */
 .sky > .topbar { padding-top: var(--s-2); }
 .scene { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
@@ -650,6 +654,9 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
    地面要讓出底部列＋膠囊，不然「重試」被膠囊蓋住點不到（meal-suggest e2e 抓到）。路徑畫到 y=1000，上挪 236 也蓋得住 */
 .main.has-floating-bar .gate-foot { padding-bottom: calc(var(--bar-h) + var(--s-2) + 44px + var(--s-3)); }
 .main.has-floating-bar .gate.is-shifted .gate-shift { transform: translateY(-236px); }
+/* 上挪 236 時太陽跟著頂到狀態列色條、光暈被切出一條平邊（v2.136 真機回報）：太陽這層反向補 90，落到遠山後面 */
+.gate-sky { transform: translateY(var(--sky-y, 0px)); transition: transform var(--dur-sheet) var(--ease-sheet); }
+.main.has-floating-bar .gate.is-shifted .gate-sky { --sky-y: 90px; }
 .main:not(.has-floating-bar):has(.undo-bar) .gate-foot { padding-bottom: calc(var(--s-2) + 44px + var(--s-3)); }
 
 .gate-dots { fill: none; stroke: var(--ink-faint); stroke-opacity: .7; stroke-width: 2; stroke-dasharray: 1 7; stroke-linecap: round; }
@@ -694,6 +701,22 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 .gate.is-loading .gate-shift { animation: gate-fade 240ms ease-out 300ms both; }
 .gate.is-loading.is-instant .gate-shift { animation: none; }
 .gate.is-loading .gate-stone { animation: gate-pulse 1600ms ease-in-out calc(var(--i) * 200ms) infinite; }
+/* 過場（v2.136，使用者回報 PWA 登入後換到今日頁「沒有 transit 過去的感覺」）：資料一到，今日頁掛上，這幅畫疊在最上層，
+   鏡頭往上抬——地上的東西整塊往下掉出畫面（越掉越快），天空裡的太陽、雲只下移一點（遠的東西動得少）；地面掉完只剩天空，
+   再淡掉露出今日頁。今日頁頂端也是天空，所以淡出時上半部是天空接天空、沒有疊影（第一版「往旗子推近」中段放大的太陽疊在字上，改掉）。
+   太陽和雲在地面掉落時就淡掉，整塊淡出時畫面上只剩純天空。z 3 蓋過霧化帶與復原膠囊，浮起的底部列（同為 z 3、排在後面）
+   仍在它上面——跟等資料時一樣看得到底部列。不擋點擊。只在今日頁播（規則在 App.tsx）。從整頁錯誤來的帶 is-shifted，從同一個位置起播。畫還沒出現過（開機很快、只看過天空色）就只淡掉天空色。 */
+@keyframes gate-exit { to { opacity: 0; } }
+@keyframes gate-drop { to { transform: translateY(var(--to)); } }
+/* 相對於原本的位置往下：整頁錯誤之後的過場，太陽那層本來就補了 --sky-y */
+@keyframes gate-drop-fade { to { transform: translateY(calc(var(--sky-y, 0px) + 70px)); opacity: 0; } }
+.gate.is-exit { position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  animation: gate-exit 240ms ease-in 400ms both; }
+.gate.is-exit .gate-land { --to: 820px; animation: gate-drop 480ms cubic-bezier(.5, 0, .75, 0) both; }
+/* 太陽和雲在整塊淡出之前就先淡掉：留到最後的話，淡出時會疊在今日頁的字上（第二版實測） */
+.gate.is-exit .gate-sky, .gate.is-exit .gate-cloud { animation: gate-drop-fade 360ms cubic-bezier(.4, 0, .6, 1) both; }
+.gate.is-exit.is-bare { animation-duration: 220ms; animation-delay: 0ms; }
+.gate.is-exit.is-bare .gate-shift { visibility: hidden; }
 
 /* ═══════════ 空狀態列（v2.132 訓練頁「還沒有課表」起，v2.135 推到食品庫、體重趨勢、訓練中、訓練分析） ═══════════ */
 /* 56px --plate 圓盤裡一個故事書圖示，字在右邊。圖示是裝飾，字說過一次。只給「第一次使用、還沒有東西」；
@@ -1724,6 +1747,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   .gate *, .gate-shift { animation: none !important; transition: none !important; }
   .gate.is-intro .gate-stone { fill: var(--accent); stroke: var(--accent); }
   .gate.is-intro .gate-foot { animation: gate-fade 120ms ease-out both !important; }
+  .gate.is-exit, .gate.is-exit.is-bare { animation-duration: 120ms; animation-delay: 0ms; }
   /* 權重要對齊那條帶 :not() 的動畫規則，少一段就輸給它、等於沒寫 */
   .form-lock.scan-filled .field-float input:not([id$="vendor"]) { animation: none; }
 }

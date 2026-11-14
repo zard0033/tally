@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-14 v2.136 過場／下拉縫／整頁錯誤太陽（本機，push 前）：smoke 55 條全過；interaction＋meal-suggest＋service-worker＋settings 143 過（含新增「過場」兩條）。新增兩條做過 mutation：拿掉過場淡出動畫→兩條都紅；減少動態選擇器改回去→第二條紅（量到 0.22s）。全量交給 CI。
+
 2026-11-14 v2.135 登入頁／開機／骨架（本機，push 前）：`e2e:affected --dry` 印 FULL → `e2e:smoke` 55 條全過（兩輪）；另跑受影響的 spec：interaction＋food-library＋analysis＋weight-trend＋service-worker 134 過 2 紅（開機慢態按鈕還在找 `.notice .action-btn`，漏改定位器，修後綠）、meal-suggest＋training＋estimate 217 過 2 紅（meal-suggest:676、:910：今日分頁整頁錯誤的「重試」移到底部後被「復原」膠囊蓋住，真 bug，地面多讓一個膠囊高度後綠）；修完重跑 interaction＋SW 70 過、那兩條 2 過。全量交給 CI。
 
 2026-11-14 暖機上線（`95dc8c7`，run 43462942351）：551 條 8 份全過、1 flaky、已部署。暖機每份 2.5–4.5 秒。**各份第一條（無暖機兩輪 → 有暖機）**：meal-exit 5.0/5.3→2.9s（熱機 2.1）、sync-sheet:171 8.2/8.3→5.9s（4.0）、estimate:61 7.9/7.8→4.1s、training:3015 11.6/11.1→6.6s（6.6）、analysis:67 4.6/3.2→2.3s、intake-detail:48 3.5/2.2→1.4s、training:821 3.7/3.4→3.0s（1.5）；quota-warning:9 5.2→6.7s 是唯一沒變快的（只有一個點，未查）。冷啟動成本大多搬進暖機了，**機制仍未查明**（不是字型快取；推測是 WebKit 執行檔與磁碟快取）。flaky 是 `tally.spec:37` 復原條焦點（「刪除後焦點沒接到復原鈕，停在 BODY」），在 shard 第 15 條、不是冷啟動，屬偶發清單 `.undo-bar` 一族。

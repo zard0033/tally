@@ -6,6 +6,8 @@
    - intro：登入頁的開場（山浮上→日出→小徑畫上去→石頭依序亮→旗子立起→按鈕浮上，約 2.1 秒），之後只剩雲飄、旗飄
    - loading：石頭由近到遠輪流亮；整幅延遲 300ms 才淡入——開機通常不到 300ms，快的時候只看到天空色，接著登入頁的開場從天空開始
    - still：沒有開場、石頭不閃（連不上、整頁錯誤）；雲飄、旗飄三種都有
+   - exit：資料到了、今日頁剛掛上時蓋在最上層的過場（v2.136）：鏡頭往上抬——地上的東西整塊往下掉出畫面、天空裡的太陽和雲
+     只微微下移，地面掉完只剩天空，再淡掉露出底下同樣是天空開頭的今日頁（上半部天空接天空，淡出時沒有疊影）。畫在這一頁還沒出現過（開機不到 300ms，只看過天空色）就只把天空色淡掉，不多加戲。播完叫 onDone 卸載。
    shifted：有字要說時整幅往上挪，把地面讓給字（山與地面的路徑畫到 y=1000，上挪 236 也不露出底下的天空色）。 */
 import type { CSSProperties, ReactNode } from 'react'
 import { useId, useRef, useState } from 'react'
@@ -68,6 +70,8 @@ function GateArt({ night }: { night: boolean }) {
         </mask>
       </defs>
       <g className="gate-shift">
+        {/* gate-sky：今日分頁整頁錯誤上挪 236 時太陽會頂到狀態列色條、光暈被切平，這一層反向補回一段（落到遠山後面） */}
+        <g className="gate-sky">
         <g className="gate-sun">
           <circle className="gate-glow" cx="290" cy="300" r="92" fill={`url(#${glow})`} />
           {night ? (
@@ -75,6 +79,7 @@ function GateArt({ night }: { night: boolean }) {
           ) : (
             <circle cx="290" cy="300" r="44" fill="var(--sun)" />
           )}
+        </g>
         </g>
         <g className="gate-cloud">
           <g className="gate-drift">
@@ -87,6 +92,8 @@ function GateArt({ night }: { night: boolean }) {
             <Cloud x={306} y={150} w={62} />
           </g>
         </g>
+        {/* gate-land：地上的東西（山、小徑、石頭、旗子）。過場時整塊往下掉出畫面，只剩天空（v2.136） */}
+        <g className="gate-land">
         <g className="gate-hill is-far">
           <path d="M0 470C70 440 150 432 214 446S330 410 393 430V1000H0z" fill="var(--hill-far)" />
           <Tree x={118} y={432} />
@@ -110,32 +117,46 @@ function GateArt({ night }: { night: boolean }) {
           <rect className="gate-pole" x="-1.6" y="-30" width="3.2" height="30" rx="1.6" fill="var(--ink)" />
           <path className="gate-flag" d="M1.6-29.4 15-24.4 1.6-19.4z" fill="var(--clay)" />
         </g>
+        </g>
       </g>
     </svg>
   )
 }
 
 interface GateProps {
-  motion: 'intro' | 'loading' | 'still'
+  motion: 'intro' | 'loading' | 'still' | 'exit'
   shifted?: boolean
   /** 加在外層的 class（App 內的整頁錯誤沿用 `.notice`） */
   className?: string
   /** 地面上的東西（按鈕、字）；載入中只放讀屏用的隱藏字 */
   children?: ReactNode
+  /** exit 播完（整塊淡出結束）時叫，讓 App 把它卸掉 */
+  onDone?: () => void
 }
 
-export default function Gate({ motion, shifted, className, children }: GateProps) {
+export default function Gate({ motion, shifted, className, children, onDone }: GateProps) {
   const { ref } = useSkyEdge()
+  /* exit 疊在今日頁上、比今日頁晚卸載：不掛狀態列色條的 ref，否則卸載時會把今日頁剛染好的天空色洗回紙色 */
+  const edgeRef = motion === 'exit' ? undefined : ref
   /* 太陽或月亮照打開那一刻的時間（同今日頁的白天 5:30–18:45）；不跟著走，這頁停留不會久 */
   const [night] = useState(() => skyAt(minutesOf(new Date())).kind === 'moon')
   const instant = useRef(shownOnce).current
-  const cls = ['gate', `is-${motion}`, shifted && 'is-shifted', instant && 'is-instant', className].filter(Boolean).join(' ')
+  const bare = motion === 'exit' && !instant
+  const cls = ['gate', `is-${motion}`, shifted && 'is-shifted', instant && 'is-instant', bare && 'is-bare', className]
+    .filter(Boolean)
+    .join(' ')
   return (
     <div
       className={cls}
-      ref={ref}
+      ref={edgeRef}
+      aria-hidden={motion === 'exit' || undefined}
+      onAnimationEnd={(e) => {
+        if (e.target === e.currentTarget && e.animationName === 'gate-exit') onDone?.()
+      }}
       /* 畫開始出現就記：載入中要等延遲 300ms 後的淡入「開始」才算（雲與旗的常駐動畫一掛上就開始，不能算） */
       onAnimationStart={(e) => {
+        // exit 不算：開機很快的那種過場根本沒畫出畫，記了之後下一次載入（登出再登入）會跳過 300ms 延遲、整幅直接跳出來
+        if (motion === 'exit') return
         if (motion !== 'loading' || e.animationName === 'gate-fade') shownOnce = true
       }}
     >

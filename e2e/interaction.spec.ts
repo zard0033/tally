@@ -1086,6 +1086,39 @@ test('踏腳石可以點：點哪一塊就開哪一餐的記錄（v2.125）', as
   }
 })
 
+/* 過場（v2.136）：今日頁從那幅畫換成內容時疊一層 .gate.is-exit 播完就卸掉。它不擋點擊（pointer-events: none），
+   所以要是哪天動畫被關掉、animationend 不來，整頁會永遠蓋著一層天空色、但所有點擊測試照樣綠——這兩條就是守這個。 */
+test('過場：資料到了疊一層畫，播完一定收掉（畫出現過才播完整版）', async ({ page }) => {
+  // 資料晚 1.5 秒到：等資料的那幅畫過了 300ms 延遲會真的出現，過場才是完整版（不是只淡天空色）
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { intakeDelayMs: 1500 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  const exit = page.locator('.gate.is-exit')
+  await expect(exit, '資料到了沒有過場').toHaveCount(1, { timeout: 10_000 })
+  check((await page.locator('.gate.is-exit.is-bare').count()) === 0, '畫出現過，過場卻只淡天空色')
+  await expect(exit, '過場播完沒有收掉，整頁會一直蓋著一層').toHaveCount(0, { timeout: 2000 })
+})
+
+test('過場：減少動態時只淡 120ms，也一定收掉', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  // 120ms 太短，expect 的輪詢抓不到：在頁面裡掛 MutationObserver，過場一掛上就記下動畫時長、卸掉時記一筆
+  await page.addInitScript(() => {
+    const w = window as unknown as { __exit: { dur: string | null; gone: boolean } }
+    w.__exit = { dur: null, gone: false }
+    new MutationObserver(() => {
+      const el = document.querySelector('.gate.is-exit')
+      if (el && w.__exit.dur === null) w.__exit.dur = getComputedStyle(el).animationDuration
+      if (!el && w.__exit.dur !== null) w.__exit.gone = true
+    }).observe(document, { childList: true, subtree: true })
+  })
+  await seedFetchStub(page, FIX, TODAY, USER_ID, { intakeDelayMs: 800 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  const state = () => page.evaluate(() => (window as unknown as { __exit: { dur: string | null; gone: boolean } }).__exit)
+  await expect.poll(async () => (await state()).dur, { message: '資料到了沒有過場', timeout: 10_000 }).not.toBeNull()
+  const { dur } = await state()
+  check(dur === '0.12s', `減少動態時過場淡出應是 120ms，實際 ${dur}`)
+  await expect.poll(async () => (await state()).gone, { message: '過場播完沒有收掉', timeout: 1000 }).toBe(true)
+})
+
 test('狀態列色條：天空頂著時染天空色，捲走、進子頁面就回紙色（Safari 26 從這條取狀態列顏色）', async ({ page }) => {
   await openApp(page)
   const state = () =>

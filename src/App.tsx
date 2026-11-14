@@ -157,6 +157,11 @@ export default function App() {
    *  存在會讓人以為還在設定頁根層——Settings 進出次級頁時回報，這裡據此隱藏底部列。 */
   const [settingsSubView, setSettingsSubView] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  /* 過場（v2.136）：主區上一次畫的是哪種畫面（開機／等資料＝loading、整頁錯誤＝notice、內容＝null）與當時的分頁；
+     從畫換成內容的那一次疊一層 exit，exit 記著是從哪種畫面來的（整頁錯誤是上移過的，過場要從同一個位置起播）。
+     初值 loading：#view-app 掛上之前一定是開機畫面 */
+  const [gatePrev, setGatePrev] = useState<{ kind: 'loading' | 'notice' | null; tab: Tab }>({ kind: 'loading', tab: 'today' })
+  const [gateExit, setGateExit] = useState<'loading' | 'notice' | null>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetMeal, setSheetMeal] = useState<MealKey | null>(null)
@@ -980,6 +985,7 @@ export default function App() {
         setRows(null)
         setFoods(null)
         setNotice(null)
+        setGateExit(null)
         setSheetOpen(false)
         setTab('today')
         resetMonthMarks()
@@ -1043,6 +1049,13 @@ export default function App() {
   if (!session) return <Login error={loginError} />
 
   const ready = profile !== null && targets !== null && weight !== null && foods !== null
+  const gateKind = tab === 'training' ? null : notice !== null ? 'notice' : !ready ? 'loading' : null
+  if (gateKind !== gatePrev.kind || tab !== gatePrev.tab) {
+    /* 只在今日頁、而且沒換分頁的那一次播：換分頁本身就是換畫面（錯誤畫面還在時切到訓練頁不算「資料到了」）；
+       設定頁頂端是 96px 矮橫幅、下面是紙，天空接不起來，淡出會是一片天空色蓋在字上 */
+    if (gatePrev.kind !== null && gateKind === null && tab === gatePrev.tab && tab === 'today') setGateExit(gatePrev.kind)
+    setGatePrev({ kind: gateKind, tab })
+  }
   // 全站精緻度 B1a：飲食分頁的底部列浮在內容上、內容經過時霧化；訓練與設定等各自批次再接
   const barShown = !settingsSubView && !trainingFullPage
   const floatingBar = barShown && tab === 'today'
@@ -1181,6 +1194,9 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+        {/* 從畫換成內容的那一次：畫疊在今日頁上（浮起的底部列仍在它上面）播「鏡頭往上抬」——地面掉出畫面、只剩天空再淡掉（v2.136）。
+            不擋點擊、讀屏看不到 */}
+        {gateExit && <Gate motion="exit" shifted={gateExit === 'notice'} onDone={() => setGateExit(null)} />}
       </main>
 
       {/* 底部列（v2.3）：分頁 pill 靠左、56px 圓形主 CTA 靠右，同列取代 v2.2 的上下兩段

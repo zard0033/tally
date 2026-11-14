@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-14）：v2.135 登入頁重新設計（整頁一幅畫＋日出上山開場）＋開機／整頁錯誤共用同一幅畫＋全站載入中換骨架、空狀態列；已 push，CI 全量待確認（gh run watch）。
-下一步：真機看登入開場（登出一次）、開機載入；之後只照 CI 摘要頁標出的 flaky 依證據修；分支 ci-e2e-hardening 刪除待使用者點頭。減重回饋圈見待辦 0。
+現況（2026-11-14）：v2.135 登入頁＋開機／整頁錯誤同一幅畫＋骨架、空狀態列（821e962 已部署）。v2.136：今日頁從畫換成內容時的「鏡頭往上抬」過場、下拉不再露紙色縫、整頁錯誤的太陽不被狀態列切平。
+下一步：真機驗 v2.136 三件（登出再登入看過場、今日頁頂端往下拉、iOS 橡皮筋是否補上）；之後照 CI 摘要頁的 flaky 依證據修；分支 ci-e2e-hardening 刪除待使用者點頭。減重回饋圈見待辦 0。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
