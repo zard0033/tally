@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-15 v2.141 時間軸＋「加進來」、v2.142 簡單記粗估三大（本機，push 前）：`--list` 565 條 22 檔。meal-suggest＋estimate＋interaction＋inline-edit＋meal-exit-animation 159 過 2 紅、重跑同樣 2 紅——interaction「踏腳石」與 meal-suggest「舊 GET 在 POST 之後」斷言從 sheet 加入後會進「載入中…」，這批刻意改成原地重撈（loadDay 會讓時間軸重掛、動畫跑不了），改成斷言不進載入態後 2 過；smoke 55 過；vitest 1160 過。新增 e2e 3 條（加進來 ×2、粗估列在 AI 估算後保留）。「加進來」第一版偵測恆假：新列是跟外層 `ul` 一起插進來的，`addedNodes` 只看最外層節點抓不到，要連子孫 `querySelectorAll`。mutation：initial 改 false、sheet 路徑 flashAdded 排到重撈後（都紅在 fadeIn）、改回 loadDay（紅在 pop）。**通則**：MutationObserver 找新掛上的元素，要搜 addedNodes 的子孫，不只看節點本身。
+
 2026-11-15 v2.140 CI（run 43702330220）紅在 shard 3：interaction「v2.53 週列左右滑切週」——**每到星期日必紅、不是偶發**：測試假設從今天往下一週滑一定被擋下，但星期日的明天是下週一，app 照設計夾到明天（旁邊那條驗的就是這個）。改成星期日從明天起手。這批（重量建議）沒動週列，部署被這條擋住。**通則**：斷言「不動」的日期測試，要先想今天是星期幾／月底時會不會剛好越界。
 
 2026-11-15 v2.140 重量建議用上 RPE（本機，push 前）：`e2e:affected` 247 過；review 修完 weight-suggest 8 過、smoke 55 過；vitest 1155 過。mutation 九項（RPE ≤7 加重、RPE 9 維持、降一格、取最後一組、熱身排除、改回兩次、同訓練兩筆不合併、降級看全部組、維持不寫重量）各自都紅。

@@ -21,6 +21,7 @@ import {
 import {
   draftFromKcal,
   draftFromTier,
+  isManualDraft,
   draftsFromItems,
   draftsToIntake,
   draftName,
@@ -382,7 +383,7 @@ export default function LogSheet(props: LogSheetProps) {
       const items = await estimateMeal(estText)
       if (id !== estReqRef.current) return
       /* 新的估算取代上一次 AI 的草稿（重估同一句不該疊成兩份）；檔位與自己打的那幾列留著。 */
-      setDrafts((prev) => [...prev.filter((d) => d.kcalOnly || d.foodId !== null), ...draftsFromItems(items)])
+      setDrafts((prev) => [...prev.filter((d) => isManualDraft(d) || d.foodId !== null), ...draftsFromItems(items)])
       setRevealSeq((n) => n + 1)
       setEstStatus('idle')
     } catch {
@@ -775,7 +776,7 @@ export default function LogSheet(props: LogSheetProps) {
                             </svg>
                             <div className="nm-wrap" aria-hidden="true">
                               <span className="nm">{draftName(d, meal)}</span>
-                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : '估一筆'}</span>
+                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・三大粗估' : '估一筆'}</span>
                             </div>
                             <div className="kc-wrap" aria-hidden="true">
                               <span className="kc">{d.kcal}</span>
@@ -821,8 +822,8 @@ export default function LogSheet(props: LogSheetProps) {
               onSubmit={() => void submitEstimate()}
               drafts={drafts}
               revealSeq={revealSeq}
-              onTier={(k) => setDrafts((prev) => [...prev, draftFromTier(k)])}
-              onOwnKcal={(k) => setDrafts((prev) => [...prev, draftFromKcal(k)])}
+              onTier={(k) => setDrafts((prev) => [...prev, draftFromTier(k, meal ? (props.macroRatios[meal] ?? null) : null)])}
+              onOwnKcal={(k) => setDrafts((prev) => [...prev, draftFromKcal(k, meal ? (props.macroRatios[meal] ?? null) : null)])}
               onKcalInput={(key, raw) => patchDraft(key, (d) => (d.foodId === null ? withKcalInput(d, raw) : d))}
               onKcalBlur={(key) => patchDraft(key, settleKcal)}
               onName={(key, v) => patchDraft(key, (d) => (d.foodId === null ? { ...d, name: v } : d))}

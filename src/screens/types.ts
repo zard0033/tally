@@ -10,6 +10,7 @@ import type { FoodCategory } from '@/lib/categories'
 import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
+import type { MacroRatio } from '@/lib/estimate'
 import type { RepeatByMeal, RepeatSuggestion, SeenByMeal } from '@/lib/mealSuggest'
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
@@ -71,6 +72,9 @@ export interface LogSheetProps {
   targets: Targets
   /** 跟今日頁同一份建議，建議段從這裡取。 */
   repeatByMeal: RepeatByMeal
+  /** 每一餐自己的三大營養素比例（近 28 天，餐建議那份回看算的；v2.142）。估一筆的檔位與自己打的熱量用它粗估三大；
+   *  那一餐紀錄太少是 null，回看還沒載到時整份是空物件——都退回只估熱量。 */
+  macroRatios: Partial<Record<MealKey, MacroRatio | null>>
   /** 「全部食物」類型組標的吃過提示；只有午餐、晚餐有。 */
   seenByMeal: SeenByMeal
   onClose: () => void

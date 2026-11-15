@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>今日頁餐別區：三個方向＋「加進來」動效</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框 ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 1240px; line-height: 1.6; }
+  .row { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .colhead { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .colhead h2 { margin: 0; font-size: var(--t-md); font-weight: 800; }
+  .colhead h2 small { font-weight: 600; color: var(--ink-muted); font-size: var(--t-sm); margin-left: 6px; }
+  .colhead ul { margin: 0; padding-left: 1.2em; font-size: var(--t-xs); line-height: 1.65; color: var(--ink-muted); }
+  .colhead ul b { color: var(--ink); font-weight: 700; }
+  .frame-label { font-size: var(--t-sm); font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .replay { font: inherit; font-size: var(--t-xs); font-weight: 700; color: var(--accent); background: var(--card);
+    border: 1px solid var(--rule); border-radius: var(--r-pill); padding: 2px 10px; cursor: pointer; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px; position: relative; background: var(--paper); box-shadow: var(--shadow-2); }
+
+  /* 頂部：只畫營養素那條帶，讓人知道餐別區從哪裡開始（天空與插圖不變，這裡省略） */
+  .top { padding: var(--s-4) var(--s-5) var(--s-3); border-bottom: 1px solid var(--rule); }
+  .top .stub { height: 210px; border-radius: var(--r-tab); background: var(--sky); opacity: .55; display: grid; place-items: center;
+    color: var(--ink-sky); font-size: var(--t-sm); }
+  .macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); margin-top: var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); }
+  .macros b { display: block; height: 8px; border-radius: 4px; background: var(--track); margin: 4px 0; position: relative; overflow: hidden; }
+  .macros b i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; }
+  .scroll { padding: var(--s-3) var(--s-4) 120px; }
+
+  .ci { width: 24px; height: 24px; border-radius: 50%; background: var(--plate); flex-shrink: 0; position: relative; }
+  .ci::after { content: ""; position: absolute; left: 5px; right: 5px; bottom: 7px; height: 2px; border-radius: 1px; background: var(--plate-deep); }
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  .kc { color: var(--ink-muted); font-size: var(--t-sm); }
+
+  /* ═════════ A：每餐一張卡 ═════════ */
+  .a .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); margin-bottom: var(--s-3); overflow: hidden; position: relative; }
+  .a .head { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; padding: 0 var(--s-4); }
+  .a .head .nm { font-size: var(--t-md); font-weight: 700; }
+  .a .head .sum { margin-left: auto; font-weight: 700; font-size: var(--t-md); }
+  .a .head .none { margin-left: auto; font-size: var(--t-sm); color: var(--ink-faint); }
+  .a .item { display: flex; align-items: center; min-height: 40px; padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle); font-size: var(--t-base); }
+  .a .item .kc { margin-left: auto; }
+  .a .sgx { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-2) 0 var(--s-4); border-top: 1px solid var(--rule-subtle);
+    color: var(--ink-muted); font-size: var(--t-sm); }
+  .a .sgx .tag { font-size: var(--t-xs); font-weight: 600; color: var(--accent); }
+  .a .sgx .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .add { flex-shrink: 0; min-height: 36px; padding: 0 var(--s-3); border-radius: var(--r-pill); border: 1px solid var(--accent); background: transparent;
+    color: var(--accent); font: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer; }
+
+  /* ═════════ B：時間軸 ═════════ */
+  .b .meal { position: relative; padding: 0 0 var(--s-4) 36px; }
+  .b .meal::before { content: ""; position: absolute; left: 11px; top: 26px; bottom: -2px; width: 2px; background: var(--rule); }
+  .b .meal:last-child::before { display: none; }
+  .b .node { position: absolute; left: 3px; top: 14px; width: 18px; height: 18px; border-radius: 50%; box-sizing: border-box;
+    border: 2px solid var(--ink-faint); background: var(--paper); display: grid; place-items: center; }
+  .b .node.on { border-color: var(--accent); background: var(--accent); }
+  .b .node.on::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  .b .head { display: flex; align-items: center; gap: var(--s-2); min-height: 46px; }
+  .b .head .nm { font-size: var(--t-md); font-weight: 700; }
+  .b .head .sum { margin-left: auto; font-weight: 700; }
+  .b .item { display: flex; align-items: center; min-height: 36px; font-size: var(--t-base); }
+  .b .item .kc { margin-left: auto; }
+  .b .sgx { display: flex; align-items: center; gap: var(--s-2); min-height: 40px; color: var(--ink-muted); font-size: var(--t-sm); }
+  .b .sgx .tag { font-size: var(--t-xs); font-weight: 600; color: var(--accent); }
+  .b .sgx .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b .sgx .add { min-height: 32px; }
+
+  /* ═════════ C：已記／還沒記分區 ═════════ */
+  .c .sect { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); margin: var(--s-2) var(--s-1) var(--s-2); }
+  .c .group { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); margin-bottom: var(--s-3); overflow: hidden; }
+  .c .head { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-4); }
+  .c .head .nm { font-size: var(--t-md); font-weight: 700; }
+  .c .head .sum { margin-left: auto; font-weight: 700; }
+  .c .item { display: flex; align-items: center; min-height: 40px; padding: 0 var(--s-4); border-top: 1px solid var(--rule-subtle); font-size: var(--t-base); }
+  .c .item .kc { margin-left: auto; }
+  .c .todo { border-radius: var(--r-tab); border: 1px dashed var(--ink-faint); background: transparent; overflow: hidden; }
+  .c .todo .t { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; padding: 0 var(--s-2) 0 var(--s-4); }
+  .c .todo .t + .t { border-top: 1px dashed var(--rule); }
+  .c .todo .nm { font-weight: 700; width: 2.6em; flex-shrink: 0; }
+  .c .todo .txt { flex: 1; min-width: 0; color: var(--ink-muted); font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c .todo .tag { color: var(--accent); font-weight: 600; font-size: var(--t-xs); margin-right: 4px; }
+
+  /* ═════════ 「加進來」動效（三個方向共用的步驟，各自落點不同） ═════════
+     1. 「加入」鈕縮成一個勾（160ms）
+     2. 建議那一行的字由淡轉深、標籤淡出，一筆筆往下展開成品項（每筆間隔 70ms、彈簧落定）
+     3. 小計從 0 滾到總數（Nunito 等寬數字，480ms），卡片／節點閃一下 --accent-soft（只動 opacity）
+     減少動態：全部變成 120ms 淡入，數字直接到位。 */
+  @keyframes pop-check { 0% { transform: scale(1); } 40% { transform: scale(.6); } 100% { transform: scale(1); } }
+  @keyframes item-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  @keyframes flash { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
+  @keyframes node-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  @keyframes collapse { from { opacity: 1; } to { opacity: 0; } }
+  .item.in { animation: item-in 380ms cubic-bezier(.2, .9, .3, 1.15) both; }
+  .flash { position: absolute; inset: 0; background: var(--accent-soft); pointer-events: none; animation: flash 700ms ease-out both; }
+  .add.done { animation: pop-check 220ms ease-out both; border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+  .b .node.pop { animation: node-pop 420ms cubic-bezier(.3, 1.4, .5, 1) both; }
+  .gone { animation: collapse 200ms ease-out both; }
+</style>
+</head>
+<body>
+
+<h1 class="harness-title">今日頁餐別區：三個方向＋「加進來」動效（使用者 2026-11-15）</h1>
+<p class="harness-sub">
+  情境照使用者說的：午餐、點心記了，早餐、晚餐沒記而且有建議（上次／常吃）。現在的問題：同一區四種長相（沒記的餐名、虛線建議框、已記的餐名＋小計、品項列），間距不一，最搶眼的是「還沒記的建議」的填色加入鈕。
+  三個方向都把建議降成安靜的一行、「加入」改成描邊鈕，主角留給記下來的東西。每支手機的「加入」可以按，看「加進來」：鈕縮成勾 → 建議那行展開成品項（一筆筆落下）→ 小計從 0 滾上去、卡片閃一下。上面的天空與插圖不變，這裡只畫一塊色帶示意。
+</p>
+
+<div class="row">
+  <div class="colhead">
+    <h2>A　每餐一張卡<small>四餐同一個殼</small></h2>
+    <ul>
+      <li><b>井然的來源：</b>每餐都是同一張白卡、同一條標題列（餐名＋類型圖示＋右邊小計或「還沒記」），間距只有一種（卡與卡 12px）。</li>
+      <li><b>建議：</b>在沒記的那張卡裡，標題下一行淡字＋描邊「加入」，不再有虛線框凸出邊界。</li>
+      <li><b>代價：</b>四張卡比現在的清單多佔約 40px 高；第一屏看得到的餐少一點。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>B　時間軸<small>一條細線串起四餐</small></h2>
+    <ul>
+      <li><b>井然的來源：</b>左邊一條細線、四個節點（記了＝實心打勾、沒記＝空心），跟插圖的踏腳石同一套說法；四餐對齊同一條線，不用卡片。</li>
+      <li><b>建議：</b>沒記的那餐，節點旁邊一行淡字＋描邊「加入」。</li>
+      <li><b>代價：</b>v2.122 拿掉了時間軸的圓點與虛實線（改由插圖說哪幾餐記了），這裡等於把它請回來、跟插圖說兩次。最省高度。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>C　已記／還沒記分區<small>兩種東西不混在一起</small></h2>
+    <ul>
+      <li><b>井然的來源：</b>記了的餐照時間排在上面（白卡）；沒記的收進底下一張虛線卡「還沒記」，每餐一列＋建議＋加入。兩種長相各自成區。</li>
+      <li><b>加進來：</b>那一列從「還沒記」收掉，那一餐出現在上面它該在的時間位置。</li>
+      <li><b>代價：</b>畫面上的順序不再是早→午→晚→點心（早餐在午餐下面），要靠插圖與餐名對時間。</li>
+    </ul>
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <div class="frame-label">A · 每餐一張卡 <button class="replay" data-reset="a">重來</button></div>
+    <div class="device"><div class="a" id="a"></div></div>
+  </div>
+  <div>
+    <div class="frame-label">B · 時間軸 <button class="replay" data-reset="b">重來</button></div>
+    <div class="device"><div class="b" id="b"></div></div>
+  </div>
+  <div>
+    <div class="frame-label">C · 已記／還沒記分區 <button class="replay" data-reset="c">重來</button></div>
+    <div class="device"><div class="c" id="c"></div></div>
+  </div>
+</div>
+
+<script>
+const MEALS = [
+  { key: 'b', nm: '早餐', items: [], sg: { tag: '上次', txt: '乳清（1匙）×2・無糖豆漿', kc: 330, items: [['乳清（1匙）×2', 240], ['無糖豆漿', 90]] } },
+  { key: 'l', nm: '午餐', items: [['雞胸餐盒 ×2', 840]] },
+  { key: 'd', nm: '晚餐', items: [], sg: { tag: '常吃', txt: '雞胸餐盒', kc: 380, items: [['雞胸餐盒', 380]] } },
+  { key: 's', nm: '點心', items: [['香蕉', 105]] },
+]
+const topBand = `<div class="top"><div class="stub">天空、還能吃、量尺、踏腳石（不變）</div>
+  <div class="macros"><div>蛋白質<b><i style="width:66%"></i></b><span class="num">91.3</span>/137</div><div>脂肪<b><i style="width:38%;background:var(--ink)"></i></b><span class="num">24.4</span>/65</div><div>碳水<b><i style="width:53%;background:var(--ink)"></i></b><span class="num">87.0</span>/163</div></div></div>`
+const sum = (it) => it.reduce((s, x) => s + x[1], 0)
+const itemsHtml = (it, cls = '') => it.map(([n, k]) => `<div class="item ${cls}"><span>${n}</span><span class="kc num">${k}</span></div>`).join('')
+
+function renderA() {
+  return topBand + '<div class="scroll">' + MEALS.map((m) => `<div class="card" data-m="${m.key}">
+    <div class="head"><span class="nm">${m.nm}</span>${m.items.length ? '<span class="ci"></span>' : ''}
+      ${m.items.length ? `<span class="sum num">${sum(m.items)}</span>` : '<span class="none">還沒記</span>'}</div>
+    ${m.items.length ? itemsHtml(m.items) : `<div class="sgx"><span class="tag">${m.sg.tag}</span><span class="txt">${m.sg.txt}</span><span class="num">${m.sg.kc}</span><button class="add">加入</button></div>`}
+  </div>`).join('') + '</div>'
+}
+function renderB() {
+  return topBand + '<div class="scroll">' + MEALS.map((m) => `<div class="meal" data-m="${m.key}">
+    <span class="node ${m.items.length ? 'on' : ''}"></span>
+    <div class="head"><span class="nm">${m.nm}</span>${m.items.length ? `<span class="ci"></span><span class="sum num">${sum(m.items)}</span>` : ''}</div>
+    ${m.items.length ? itemsHtml(m.items) : `<div class="sgx"><span class="tag">${m.sg.tag}</span><span class="txt">${m.sg.txt}</span><span class="num">${m.sg.kc}</span><button class="add">加入</button></div>`}
+  </div>`).join('') + '</div>'
+}
+function renderC() {
+  const done = MEALS.filter((m) => m.items.length)
+  const todo = MEALS.filter((m) => !m.items.length)
+  return topBand + `<div class="scroll"><div class="sect">已記</div><div class="done-list">` + done.map(groupC).join('') + `</div>
+    ${todo.length ? `<div class="sect">還沒記</div><div class="todo">` + todo.map((m) => `<div class="t" data-m="${m.key}"><span class="nm">${m.nm}</span>
+      <span class="txt"><span class="tag">${m.sg.tag}</span>${m.sg.txt}</span><span class="kc num">${m.sg.kc}</span><button class="add">加入</button></div>`).join('') + '</div>' : ''}</div>`
+}
+const groupC = (m, cls = '') => `<div class="group" data-m="${m.key}" style="position:relative"><div class="head"><span class="nm">${m.nm}</span><span class="ci"></span><span class="sum num">${sum(m.items)}</span></div>${itemsHtml(m.items, cls)}</div>`
+
+function countUp(el, to) {
+  const t0 = performance.now()
+  const tick = (t) => { const p = Math.min(1, (t - t0) / 480); el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(tick) }
+  requestAnimationFrame(tick)
+}
+
+function wire(root, dir) {
+  root.querySelectorAll('.add').forEach((btn) => btn.addEventListener('click', () => {
+    const host = btn.closest('[data-m]')
+    const m = MEALS.find((x) => x.key === host.dataset.m)
+    btn.classList.add('done'); btn.textContent = '✓'
+    setTimeout(() => {
+      if (dir === 'c') {
+        host.classList.add('gone')
+        setTimeout(() => {
+          host.remove()
+          const todo = root.querySelector('.todo')
+          if (todo && !todo.querySelector('.t')) { todo.previousElementSibling.remove(); todo.remove() }
+          const list = root.querySelector('.done-list')
+          const order = MEALS.map((x) => x.key)
+          const g = document.createElement('div')
+          g.innerHTML = groupC({ ...m, items: m.sg.items }, 'in')
+          const node = g.firstElementChild
+          const after = [...list.children].find((c) => order.indexOf(c.dataset.m) > order.indexOf(m.key))
+          list.insertBefore(node, after ?? null)
+          node.querySelectorAll('.item.in').forEach((it, i) => (it.style.animationDelay = `${i * 70}ms`))
+          node.insertAdjacentHTML('beforeend', '<span class="flash"></span>')
+          countUp(node.querySelector('.sum'), m.sg.kc)
+        }, 200)
+        return
+      }
+      const sg = host.querySelector('.sgx')
+      sg.insertAdjacentHTML('afterend', itemsHtml(m.sg.items, 'in'))
+      sg.remove()
+      host.querySelectorAll('.item.in').forEach((it, i) => (it.style.animationDelay = `${i * 70}ms`))
+      const head = host.querySelector('.head')
+      head.querySelector('.none')?.remove()
+      if (!head.querySelector('.ci')) head.querySelector('.nm').insertAdjacentHTML('afterend', '<span class="ci"></span>')
+      head.insertAdjacentHTML('beforeend', '<span class="sum num">0</span>')
+      countUp(head.querySelector('.sum'), m.sg.kc)
+      if (dir === 'a') host.insertAdjacentHTML('beforeend', '<span class="flash"></span>')
+      if (dir === 'b') { const n = host.querySelector('.node'); n.classList.add('on', 'pop') }
+    }, 220)
+  }))
+}
+const R = { a: renderA, b: renderB, c: renderC }
+function mount(k) { const el = document.getElementById(k); el.innerHTML = R[k](); wire(el, k) }
+;['a', 'b', 'c'].forEach(mount)
+document.querySelectorAll('.replay').forEach((b) => b.addEventListener('click', () => mount(b.dataset.reset)))
+</script>
+</body>
+</html>

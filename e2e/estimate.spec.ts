@@ -2,8 +2,8 @@
    流程（使用者 2026-11-13）：估一筆的草稿「帶回清單」放進已選打勾，跟清單勾的食物一起按「加入」。
    read-label 的估算模式由 stub 的 __estimate 控制（預設 null＝502）；寫入看 __writes。各條都自己 openApp、不共用狀態。 */
 import { test, expect, type Page } from '@playwright/test'
-import { openApp } from './harness'
-import { TODAY } from './fixtures'
+import { openApp, shiftIso } from './harness'
+import { FIX, TODAY } from './fixtures'
 
 test.describe.configure({ mode: 'parallel' })
 
@@ -202,6 +202,38 @@ test('檔位：點「一般正餐」產生只估熱量的一列，不呼叫 AI�
   await bringBackAndAdd(page)
   await expect(page.locator('.sheet')).toHaveCount(0)
   expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 0, fat: 0, carb: 0, archived: true }])
+})
+
+/* v2.142：晚餐近三天都吃雞胸餐盒（380 卡、蛋白質 42、脂肪 9、碳水 28）→ 晚餐比例 P 168/380、F 81/380、C 112/380。
+   一般正餐 700 → 蛋白質 700×168/380/4＝77.4、脂肪 700×81/380/9＝16.6、碳水 700×112/380/4＝51.6（手算，四捨五入到一位） */
+test('檔位：這一餐有歷史就照比例粗估三大，標「粗估」，寫入的營養素不是 0', async ({ page }) => {
+  const f = FIX.foods.find((x) => x.id === 12)!
+  const row = (id: number, off: number) => ({ id, eaten_on: shiftIso(TODAY, off), meal: 'dinner', food_id: 12, qty: 1, kcal: f.kcal, protein: f.protein,
+    fat: f.fat, carb: f.carb, name: null, created_at: `${shiftIso(TODAY, off)}T11:00:00.000Z`, foods: { name: f.name, vendor: f.vendor, archived: false } })
+  await openApp(page, {}, { ...FIX, repeatWindow: [row(901, -1), row(902, -2), row(903, -3)] } as unknown as typeof FIX)
+  await openEstimate(page)
+  await page.locator('.est-tier', { hasText: '一般正餐' }).click()
+  const d = page.locator('.est-draft')
+  await expect(d.locator('.est-only')).toHaveText('粗估')
+  await expect(d).toContainText('三大營養素照你平常這一餐的比例')
+  await bringBackAndAdd(page)
+  await expect(page.locator('.sheet')).toHaveCount(0)
+  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 77.4, fat: 16.6, carb: 51.6, archived: true }])
+})
+
+test('粗估的檔位列在 AI 估算回來後還在（不被當成上一批 AI 的列換掉；v2.142 review）', async ({ page }) => {
+  const f = FIX.foods.find((x) => x.id === 12)!
+  const row = (id: number, off: number) => ({ id, eaten_on: shiftIso(TODAY, off), meal: 'dinner', food_id: 12, qty: 1, kcal: f.kcal, protein: f.protein,
+    fat: f.fat, carb: f.carb, name: null, created_at: `${shiftIso(TODAY, off)}T11:00:00.000Z`, foods: { name: f.name, vendor: f.vendor, archived: false } })
+  await openApp(page, {}, { ...FIX, repeatWindow: [row(901, -1), row(902, -2), row(903, -3)] } as unknown as typeof FIX)
+  await setEstimate(page, { mode: 'ok', body: { items: ITEMS } })
+  await openEstimate(page)
+  await page.locator('.est-tier', { hasText: '一般正餐' }).click()
+  await expect(page.locator('.est-draft .est-only')).toHaveText(['粗估'])
+  await page.locator('textarea[aria-label="描述吃了什麼"]').fill('夜市螺獅粉、梅子可樂、一份地瓜球')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-draft'), '檔位那一列被 AI 的結果換掉了').toHaveCount(1 + ITEMS.length)
+  await expect(page.locator('.est-draft .est-only')).toHaveText(['粗估'])
 })
 
 test('自己打數字：加一列只估熱量的草稿，品名預設＝餐別；加入後封存、營養素 0', async ({ page }) => {

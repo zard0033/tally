@@ -4,7 +4,7 @@
    動效只動 transform／opacity；減少動態時無限循環全停、逐樣出現改 ≤120ms 淡入、數字直接到位（CSS ＋ useReducedMotion）。 */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { defaultDraftName, draftName, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
+import { defaultDraftName, draftName, isManualDraft, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
 import type { MealKey } from '@/lib/meals'
 
 export type EstimateStatus = 'idle' | 'busy' | 'error'
@@ -89,7 +89,7 @@ export default function EstimateView(p: Props) {
   const [said, setSaid] = useState('')
   if (seenSeq !== p.revealSeq) {
     setSeenSeq(p.revealSeq)
-    const fresh = p.drafts.filter((d) => !d.kcalOnly && d.foodId === null)
+    const fresh = p.drafts.filter((d) => !isManualDraft(d) && d.foodId === null)
     setFreshKeys(new Set(fresh.map((d) => d.key)))
     setSaid(`估好了，${fresh.length} 樣`)
   }
@@ -212,6 +212,11 @@ export default function EstimateView(p: Props) {
                 {d.kcalOnly && (
                   <span className="est-why">
                     <span className="est-only">只估了熱量</span>蛋白質、脂肪、碳水記 0，營養素條會偏低
+                  </span>
+                )}
+                {d.macrosGuessed && (
+                  <span className="est-why">
+                    <span className="est-only">粗估</span>三大營養素照你平常這一餐的比例
                   </span>
                 )}
                 <label className="est-keep">

@@ -45,8 +45,10 @@ export interface EstimateDraft {
   low: number | null
   high: number | null
   assumption: string | null
-  /** 檔位或自己打的：三大營養素是 0，畫面要標「只估了熱量」。 */
+  /** 檔位或自己打的、而且那一餐歷史太少算不出比例：三大營養素是 0，畫面要標「只估了熱量」。 */
   kcalOnly: boolean
+  /** 檔位或自己打的、三大營養素照這一餐自己的歷史比例粗估（v2.142）：畫面標「粗估」。AI 的列是 false。 */
+  macrosGuessed: boolean
   /** 「存進食品庫」：勾了不封存，下次可以直接選。 */
   keep: boolean
   /** 已經建好的 foods.id。寫 intake 失敗按重試時，有 id 的就不再建一次；有 id 之後這一列就鎖住（改了也對不上已建的食物）。 */
@@ -80,6 +82,7 @@ export function draftsFromItems(items: readonly EstimateItem[]): EstimateDraft[]
       high: Math.round(it.kcal_high),
       assumption: it.assumption?.trim() || null,
       kcalOnly: false,
+      macrosGuessed: false,
       keep: false,
       foodId: null,
       origin: { kcal, protein, fat, carb },
@@ -87,36 +90,79 @@ export function draftsFromItems(items: readonly EstimateItem[]): EstimateDraft[]
   })
 }
 
-/** 只有熱量的一列（檔位、自己打的數字）：品名預設空＝「餐別＋tag」（寫入時才決定是哪一餐），可以改。 */
-function kcalOnlyDraft(kcal: number, tag: string): EstimateDraft {
+/** 三大營養素各佔熱量的比例（0–1，蛋白質與碳水 4 卡／g、脂肪 9 卡／g）。 */
+export interface MacroRatio {
+  protein: number
+  fat: number
+  carb: number
+}
+
+/** 算比例至少要這一餐有幾天的紀錄：太少的話一兩餐的特例就決定了比例。3 是設計決定，沒有出處。 */
+export const RATIO_MIN_DAYS = 3
+
+/**
+ * 這一餐自己的三大營養素比例（v2.142，使用者 2026-11-15：檔位與自己打的熱量，三大照「那一餐自己的歷史比例」粗估）。
+ * rows＝近期的 intake（餐建議那份 28 天的回看，快照值、要乘 qty）。這一餐記不到 RATIO_MIN_DAYS 天、或總熱量是 0 → null（維持只估熱量）。
+ * **已知偏差**：會用檔位的多半是外食、聚餐，蛋白質通常比平常記的少——照平常比例，蛋白質大概估高（使用者知情）。
+ */
+export function mealMacroRatio(
+  rows: readonly { eaten_on: string; meal: string; qty: number | string; kcal: number | string; protein: number | string; fat: number | string; carb: number | string }[],
+  meal: MealKey,
+): MacroRatio | null {
+  const mine = rows.filter((r) => r.meal === meal)
+  if (new Set(mine.map((r) => r.eaten_on)).size < RATIO_MIN_DAYS) return null
+  let kcal = 0, p = 0, f = 0, c = 0
+  for (const r of mine) {
+    const q = Number(r.qty)
+    kcal += Number(r.kcal) * q
+    p += Number(r.protein) * q
+    f += Number(r.fat) * q
+    c += Number(r.carb) * q
+  }
+  if (!(kcal > 0) || ![p, f, c].every(Number.isFinite)) return null
+  return { protein: (p * 4) / kcal, fat: (f * 9) / kcal, carb: (c * 4) / kcal }
+}
+
+/** 只有熱量的一列（檔位、自己打的數字）：品名預設空＝「餐別＋tag」（寫入時才決定是哪一餐），可以改。
+ *  有比例就照比例粗估三大營養素（標粗估），沒有就記 0（標只估了熱量）。 */
+function kcalOnlyDraft(kcal: number, tag: string, ratioIn: MacroRatio | null): EstimateDraft {
   const k = Math.round(kcal)
+  // 0 卡沒有東西可以照比例分，之後改熱量也換算不出來（origin 是 0）——當成只估熱量，不標粗估（v2.142 review）
+  const ratio = k > 0 ? ratioIn : null
+  const protein = ratio ? round1((k * ratio.protein) / 4) : 0
+  const fat = ratio ? round1((k * ratio.fat) / 9) : 0
+  const carb = ratio ? round1((k * ratio.carb) / 4) : 0
   return {
     key: nextKey(),
     name: '',
     tag,
     kcal: k,
     kcalDraft: String(k),
-    protein: 0,
-    fat: 0,
-    carb: 0,
+    protein,
+    fat,
+    carb,
     low: null,
     high: null,
     assumption: null,
-    kcalOnly: true,
+    kcalOnly: ratio === null,
+    macrosGuessed: ratio !== null,
     keep: false,
     foodId: null,
-    origin: { kcal: k, protein: 0, fat: 0, carb: 0 },
+    origin: { kcal: k, protein, fat, carb },
   }
 }
 
-export function draftFromTier(tier: TierKey): EstimateDraft {
+/** 檔位或自己打的（不是 AI 估的）：AI 重估時保留、不算進「估好了 N 樣」。只看 kcalOnly 不夠——粗估的列 kcalOnly 是 false（v2.142 review）。 */
+export const isManualDraft = (d: Pick<EstimateDraft, 'kcalOnly' | 'macrosGuessed'>): boolean => d.kcalOnly || d.macrosGuessed
+
+export function draftFromTier(tier: TierKey, ratio: MacroRatio | null = null): EstimateDraft {
   const t = TIERS.find((x) => x.key === tier)
   if (!t) throw new Error(`unknown tier: ${tier}`)
-  return kcalOnlyDraft(t.kcal, `（${t.label}）`)
+  return kcalOnlyDraft(t.kcal, `（${t.label}）`, ratio)
 }
 
-export function draftFromKcal(kcal: number): EstimateDraft {
-  return kcalOnlyDraft(kcal, '')
+export function draftFromKcal(kcal: number, ratio: MacroRatio | null = null): EstimateDraft {
+  return kcalOnlyDraft(kcal, '', ratio)
 }
 
 /** 熱量框的字：空字串、非數字、負數、超過資料庫上界都不收（回 null）。小數照收、四捨五入到整數。 */

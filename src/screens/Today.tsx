@@ -3,7 +3,7 @@
    左滑刪除自 v2.1 改用 motion drag 手刻（取代 react-swipeable-list——那個套件拖曳中
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
@@ -588,29 +588,46 @@ function MealNode({
   const hasItems = items.length > 0
   const [prevHasItems, setPrevHasItems] = useState(hasItems)
   const [lingering, setLingering] = useState(false)
+  /* 這一餐剛從「沒記」變成「記了」（同一天裡，換日期會重掛、不算）：節點彈一下（v2.141「加進來」） */
+  const [justDone, setJustDone] = useState(false)
   if (hasItems !== prevHasItems) {
     setPrevHasItems(hasItems)
     if (prevHasItems && !hasItems) setLingering(true)
+    if (!prevHasItems && hasItems) setJustDone(true)
   }
   const done = hasItems || lingering
+  const kcal = useCountUp(Math.round(sumIntake(items).kcal))
+  /* 剛加入的那幾筆依序落下（間隔 70ms）；只看 justAdded，載入、換日期、編輯都不會動 */
+  const addedOrder = items.filter((r) => h.justAddedIds.has(r.id)).map((r) => r.id)
   const suggestion = h.repeatByMeal[meal.key]
   const repeatKey = `${date}|${meal.key}`
 
   return (
-    /* v2.122：左邊的時間軸圓點與虛實線拿掉了——哪幾餐記了改由插圖的踏腳石說，這裡只留餐別本身。 */
-    <div className="node">
+    /* v2.141：時間軸請回來（使用者 2026-11-15 選樣張 B）：左邊一條細線串四餐、每餐一個節點（記了＝實心打勾、沒記＝空心）。
+       v2.122 曾把它拿掉、改由插圖的踏腳石說哪幾餐記了；使用者知道兩者重複，選它是為了四餐對齊同一條線、讀起來井然。
+       節點是裝飾（aria-hidden）：記了的餐標題列有小計，讀屏靠有沒有數字分辨（同 v2.122 之前，不是這次新增的落差）。 */
+    <div className={`node${done ? ' is-done' : ''}`}>
+      <span className={`node-dot${justDone ? ' just-done' : ''}`} aria-hidden="true" onAnimationEnd={() => setJustDone(false)}>
+        {done && (
+          <svg viewBox="0 0 18 18">
+            <path d="M5 9.2l2.6 2.6 5.4-5.6" />
+          </svg>
+        )}
+      </span>
       <div className={`node-body${done ? '' : ' is-todo'}`}>
         {done ? (
           <>
             <button className="node-head" type="button" onClick={() => h.onOpenSheet(meal.key)}>
               <span className="node-name">{meal.label}</span>
               <CategoryStack categories={iconStack(items.map((r) => r.foods?.category))} />
-              <span className="node-kcal">{Math.round(sumIntake(items).kcal)}</span>
+              <span className="node-kcal">{kcal}</span>
             </button>
             <ul className="items">
               {/* 刪除那一列淡出、其餘用 layout 的 FLIP 滑上來——兩者都只動 transform／
                   opacity，沒有動 height（DESIGN.md「不動 layout 屬性」）。 */}
-              <AnimatePresence initial={false} onExitComplete={() => setLingering(false)}>
+              {/* 不寫 initial={false}：它會擋掉所有子項的 initial，剛加入的品項落不下來（v2.141 review）。
+                  每一列自己決定：只有 justAdded 的列有 initial，載入、換日期、重撈都停著不動 */}
+              <AnimatePresence onExitComplete={() => setLingering(false)}>
                 {items.map((r) => {
                   /* intake 自己的品名快照優先於 foods 的：改過名的那筆從此與食品庫脫鉤，
                      食品庫日後改品名不回頭改寫它（與 kcal/protein/fat/carb 同一套語意）。 */
@@ -622,8 +639,14 @@ function MealNode({
                       data-row={r.id}
                       key={r.id}
                       layout
+                      initial={addedOrder.includes(r.id) && !reduceMotion() ? { opacity: 0, y: -8 } : false}
+                      animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -32 }}
-                      transition={reduceMotion() ? { duration: 0 } : { duration: sec(DUR.mid), ease: EASE }}
+                      transition={
+                        reduceMotion()
+                          ? { duration: 0 }
+                          : { duration: sec(DUR.mid), ease: EASE, delay: Math.max(0, addedOrder.indexOf(r.id)) * 0.07 }
+                      }
                     >
                       <SwipeRow
                         row={r}
@@ -674,6 +697,33 @@ function MealNode({
       </div>
     </div>
   )
+}
+
+/** 小計「滾上去」（v2.141「加進來」）：數字變大時從舊值滾到新值（480ms、先快後慢）；變小（刪除）、第一次、減少動態都直接到位。
+ *  數字用 Nunito 等寬（.node-kcal），滾動時寬度不跳。 */
+function useCountUp(target: number): number {
+  const [shown, setShown] = useState(target)
+  /* 起點是畫面上正在顯示的數字，不是上一次的目標：滾到一半目標又變大（連按份量），從上一個目標起跳會先跳一下（review） */
+  const showing = useRef(target)
+  useEffect(() => {
+    const start = showing.current
+    if (target <= start || reduceMotion()) {
+      showing.current = target
+      setShown(target)
+      return
+    }
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / 480)
+      showing.current = Math.round(start + (target - start) * (1 - (1 - p) ** 3))
+      setShown(showing.current)
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target])
+  return shown
 }
 
 const SOURCE_LABEL: Record<SuggestSource, string> = { gap: '建議', frequent: '常吃', last: '上次' }

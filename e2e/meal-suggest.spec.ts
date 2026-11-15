@@ -568,13 +568,13 @@ test('舊 GET 在 POST 之後才落地：丟棄，品項不消失、卡片不復
   await waitWriteSent(page, 'POST')
   await setWriteDelay(page, 0)
 
-  // 這段時間從 sheet 記一筆午餐：它的 loadDay 就是那支舊 GET，快照裡沒有早餐
+  // 這段時間從 sheet 記一筆午餐：它的重撈就是那支舊 GET，快照裡沒有早餐（v2.141 起是原地重撈，不進載入態）
   await page.evaluate((d) => (window as unknown as StubWindow).__holdIntake.add(d), MON)
   await openMealSheet(page, '午餐')
   await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).click()
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect.poll(() => page.evaluate(() => (window as unknown as StubWindow).__heldIntake.length), '舊 GET 要停住').toBe(1)
-  await expect(page.locator('.timeline'), '舊 GET 停住時畫面在載入中').toContainText('載入中…')
+  await expect(page.locator('.timeline'), '舊 GET 停住時沿用上一份，不換成載入中').not.toContainText('載入中…')
   expect(await serverIds(page, MON), '舊 GET 的快照要早於早餐的 POST 落地，否則這段沒驗到').toHaveLength(1)
 
   // POST 落地，refreshDay 接手（__holdIntake 已用掉，它不會被停住）
@@ -1602,3 +1602,55 @@ test('寫入成功後重撈碰到一次斷線：照舊重試撐過去，不亮�
   await expect(items(page)).toHaveCount(3, { timeout: 8000 })
   await expect(page.locator('.notice')).toHaveCount(0)
 })
+
+/* 「加進來」動效（v2.141）真的有跑：一鍵加入與從 sheet 加入兩條路。review 抓到從 sheet 加入會整頁重載、時間軸重掛，
+   三個動畫都沒機會發生；AnimatePresence initial={false} 也擋掉品項落下。在頁內記：節點有沒有掛上 just-done、
+   剛加入的列掛上時是不是從透明開始、小計有沒有出現介於新舊之間的數字（滾上去，不是直接跳到）。 */
+async function watchArrival(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __arr: { pop: boolean; fadeIn: boolean; kcal: string[] } }
+    w.__arr = { pop: false, fadeIn: false, kcal: [] }
+    new MutationObserver((recs) => {
+      for (const r of recs) {
+        if (r.type === 'attributes' && (r.target as Element).classList?.contains('just-done')) w.__arr.pop = true
+        for (const n of r.addedNodes) {
+          // 新的品項常是跟外層清單一起插進來的（空的那餐變成記了）：連同子孫一起找
+          const lis = n instanceof HTMLElement ? [...(n.matches('li.item') ? [n] : []), ...n.querySelectorAll<HTMLElement>('li.item')] : []
+          if (lis.some((li) => Number(getComputedStyle(li).opacity) < 1)) w.__arr.fadeIn = true
+          if (n instanceof HTMLElement && n.querySelector?.('.node-dot.just-done')) w.__arr.pop = true
+        }
+        const k = (r.target instanceof Text ? r.target.parentElement : (r.target as Element))?.closest?.('.node-kcal')
+        if (k) w.__arr.kcal.push(k.textContent ?? '')
+      }
+    }).observe(document.querySelector('.timeline')!, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'], characterData: true })
+  })
+}
+const arrival = (page: Page) => page.evaluate(() => (window as unknown as { __arr: { pop: boolean; fadeIn: boolean; kcal: string[] } }).__arr)
+
+test('加進來（一鍵加入）：節點彈一下、品項從透明落下、小計滾上去', async ({ page }) => {
+  await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
+  await expect(addOf(page, '早餐')).toBeVisible()
+  await watchArrival(page)
+  await addOf(page, '早餐').click()
+  await expect(nodeOf(page, '早餐').locator('.node-kcal')).toHaveText('330')
+  const a = await arrival(page)
+  expect(a.pop, '節點沒有彈').toBe(true)
+  expect(a.fadeIn, '剛加入的品項沒有從透明開始').toBe(true)
+  expect(a.kcal.some((t) => Number(t) > 0 && Number(t) < 330), `小計沒有滾，直接跳到：${a.kcal.join(',')}`).toBe(true)
+})
+
+test('加進來（從記一筆 sheet 加入）：一樣三個都有，時間軸不整個重掛', async ({ page }) => {
+  await openAppAt(page, MON, { intakePersist: true }, fixWith([]))
+  await page.click('button.cta')
+  await expect(sheetOf(page)).toBeVisible()
+  await sheetOf(page).locator('.chip', { hasText: '晚餐' }).click()
+  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).click()
+  await watchArrival(page)
+  await sheetOf(page).locator('.pick-bar-btn').click()
+  await expect(nodeOf(page, '晚餐').locator('.node-kcal')).toHaveText('130')
+  const a = await arrival(page)
+  expect(a.pop, '節點沒有彈').toBe(true)
+  expect(a.fadeIn, '剛加入的品項沒有從透明開始').toBe(true)
+  expect(a.kcal.some((t) => Number(t) > 0 && Number(t) < 130), `小計沒有滾，直接跳到：${a.kcal.join(',')}`).toBe(true)
+})
+

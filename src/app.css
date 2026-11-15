@@ -294,18 +294,29 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .timeline { flex: 1; overflow-y: auto; padding: 0 0 var(--s-2); scrollbar-width: none; }
 .meals { padding: var(--s-3) var(--s-5) 0; }
 .timeline::-webkit-scrollbar { display: none; }
+/* 時間軸（v2.141，樣張 `_design-sample/today-meals.html` B）：左邊 2px 細線串四餐，每餐一個 18px 節點對齊標題列中線。
+   記了＝主藍實心＋白勾，沒記＝空心（--ink-faint 框、紙色底）。線畫在每一餐自己身上、往下延伸到下一個節點的頂端；最後一餐不畫。
+   四餐一律同一種間距（--s-4），不再分「記了」「沒記」兩種——兩種間距正是之前看起來亂的原因之一。 */
+.node { position: relative; padding-left: 30px; }
+.node::before { content: ""; position: absolute; left: 8px; top: 31px; bottom: -13px; width: 2px; border-radius: 1px; background: var(--rule); }
+.node:last-child::before { display: none; }
+.node-dot { position: absolute; left: 0; top: 13px; z-index: 1; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--ink-faint); background: var(--paper); display: grid; place-items: center; }
+.node.is-done .node-dot { border-color: var(--accent); background: var(--accent); }
+.node-dot svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* 加進來：剛從沒記變成記了，節點彈一下（只動 transform；減少動態關掉） */
+@keyframes node-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.node-dot.just-done { animation: node-pop 420ms cubic-bezier(.3, 1.4, .5, 1) both; }
 .node-body { min-width: 0; padding-bottom: var(--s-4); }
-/* 待記錄行自帶 44px 觸控高度，不必再補滿間距 */
-.node-body.is-todo { padding-bottom: var(--s-2); }
 .node:last-child .node-body { padding-bottom: 0; }
 .timeline .muted { color: var(--ink-muted); margin: 0; }
 
 /* 餐別標題列同時是「追加這一餐」的入口，所以是原生 button */
 /* min-height 44：它是「追加這一餐」的入口，且緊貼下方同樣 44px 的品項列，
    原本只有約 27px，單手大拇指很容易按成隔壁那條 */
+/* v2.141：標題列底下的分隔線拿掉——節點與細線已經把四餐分開，記了的餐多一條線、沒記的沒有，是另一個「兩種長相」 */
 .node-head { display: flex; align-items: center; gap: var(--s-2);
-  width: 100%; min-height: 44px; padding: 0 0 var(--s-2); border: none;
-  border-bottom: 1px solid var(--rule);
+  width: 100%; min-height: 44px; padding: 0; border: none;
   background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer;
   -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 @media (hover: hover) { .node-head:hover { opacity: .68; } }
@@ -479,18 +490,17 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .todo-row .chev { width: 14px; height: 14px; color: var(--ink-muted); }
 
 /* ── 餐建議（待記錄那一列底下的一行） ── */
-/* v2.123：建議是一格「虛線空位」——還沒記的那餐留一個位置，記了之後同一個位置換成實際的品項，從虛變實。
-   v2.122 的白卡把暫時的提示畫成整頁最搶眼的東西、記完卡片一收版面就縮，使用者看不懂（2026-11-11）。
-   框往左右各推出 --s-2、內距補回同樣的量：裡面的圖示與字仍對齊餐名，品項那段不因為多了框而變窄。
-   高度仍是 44（border-box），「有建議比沒建議高 48px」的版面契約不變（e2e 鎖住）。 */
-.sg { --sg-bw: 1.5px; position: relative; margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
-  margin-inline: calc(var(--s-2) * -1); padding: 0 calc(var(--s-2) - var(--sg-bw)); border: var(--sg-bw) dashed var(--ink-faint);
+/* v2.141：建議降成時間軸上安靜的一行——虛線框拿掉（它凸出左右邊界、又是區裡唯一的框，使用者 2026-11-15 說混在一起很亂），
+   「加入」從主藍填色改描邊：主角留給記下來的東西，還沒記的建議不該是整區最搶眼的東西。
+   高度仍是 44，「有建議比沒建議高 48px」的版面契約不變（e2e 鎖住）。
+   （v2.123 的「虛線空位」與 v2.122 的白卡都已作廢，理由見 DESIGN v2.123、v2.141。） */
+.sg { --sg-bw: 0px; position: relative; margin-top: var(--s-1); min-height: 44px; display: flex; align-items: center; gap: var(--s-2);
   border-radius: var(--r-tab); }
 /* 「換一個」之後整列淡藍（--accent-soft）閃一下，同「剛加入」的 flash（純透明度，減少動態不關） */
 .sg-flash { position: absolute; inset: 0; border-radius: calc(var(--r-tab) - var(--sg-bw)); background: var(--accent-soft); opacity: 0;
   pointer-events: none; animation: flash 700ms var(--ease) forwards; }
 .sg-src { flex-shrink: 0; font-size: var(--t-xs); font-weight: 600; letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.sg-items { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-items { flex: 1; min-width: 0; font-size: var(--t-sm); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-kc { flex-shrink: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-xs); color: var(--ink-muted); }
 /* 依缺口挑、顯示的那一組超過熱量上限：熱量那格換成「超 N 卡」。不只靠顏色，「超」字本身就是訊號 */
 .sg-kc.is-over { color: var(--over); font-weight: 600; font-family: var(--font-body); }
@@ -504,8 +514,10 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .sg-swap:active { opacity: .5; }
 .sg-swap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sg-swap[aria-disabled="true"] { opacity: .6; cursor: default; }
+/* 描邊用內陰影不用 border：border 會把 36px 撐成 39、命中區的 ::before 也跟著差 1.5px（e2e 鎖住 36／44，v2.141 跑測抓到） */
 .sg-add { position: relative; flex-shrink: 0; min-height: 36px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill);
-  background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: transparent; color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
   cursor: pointer; -webkit-appearance: none; appearance: none; }
 /* 視覺 36px，命中區補到 44px（觸控區一律 ≥44）。上下各補的量就是 (44-36)/2 */
 .sg-add::before { content: ""; position: absolute; inset: -4px 0; }
@@ -1767,6 +1779,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
      「這裡還沒有值」的資訊），只是不要動。 */
   .form-lock[disabled] .field-float:has(input:placeholder-shown)::after { animation: none; opacity: .8; }
   .trend-skel { animation: none; }
+  .node-dot.just-done { animation: none; }
   .skel { animation: skel-in 1ms 300ms both; }
   /* 登入／開機那幅畫：位移、縮放、循環全關，畫停在終點；按鈕 ≤120ms 淡入（spec AC 10）。
      石頭的脈動也是循環，一起關（載入中靠讀屏的隱藏字與畫面本身）。 */

@@ -39,7 +39,8 @@ import { computeTargets, num, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
-import { defaultMeal, type MealKey } from '@/lib/meals'
+import { defaultMeal, MEALS, type MealKey } from '@/lib/meals'
+import { mealMacroRatio } from '@/lib/estimate'
 import { parseStoredSession } from '@/lib/session'
 import Gate from '@/components/Gate'
 import Login from '@/screens/Login'
@@ -473,6 +474,11 @@ export default function App() {
       ),
     [repeatHistory, currentDate, rowsWithCategories, gapCtx, categoryOverrides],
   )
+  /* 估一筆的檔位／自己打的熱量用：每一餐自己的三大營養素比例（v2.142）。回看還沒載到是空物件 */
+  const macroRatios = useMemo(
+    () => (repeatHistory ? Object.fromEntries(MEALS.map((m) => [m.key, mealMacroRatio(repeatHistory, m.key)])) : {}),
+    [repeatHistory],
+  )
   /* sheet 類型組標的「吃過」提示：跟避開重複看同一份（蓋過類型的）資料，提示的才是建議避開的那些。 */
   const sheetSeen = useMemo(() => {
     const history = repeatHistory && withCategories(repeatHistory, categoryOverrides)
@@ -744,22 +750,6 @@ export default function App() {
   /* 寫入失敗（記一筆／新增食物／設定編輯／記體重）刻意不接在這裡吞掉——
    * 讓錯誤 reject 到呼叫的 screen 自己接住，就地顯示「存不進去：」＋不清空已選＋
    * 按鈕變重試（跟上面 deleteIntake 的全域 Notice 不同）。 */
-  const handleCreateIntake = useCallback(
-    async (newRows: NewIntake[]) => {
-      // 先結清待刪：底下的 loadDay() 會整包換掉 rows，undo 的快照就過期了
-      if (pendingDelete.current) await commitDelete()
-      settleRepeat()
-      const created = await apiCreateIntake(newRows)
-      // 要排在 loadDay 之前：它的 GET 是寫入後才發的，不算舊資料
-      bumpDayGen(currentDate)
-      invalidateRepeat(currentDate)
-      setSheetOpen(false)
-      await loadDay(currentDate, true)
-      flashAdded(created.map((r) => r.id))
-    },
-    [loadDay, commitDelete, settleRepeat, invalidateRepeat, flashAdded, bumpDayGen, currentDate],
-  )
-
   /* 重撈某一天但不進載入態。不可共用 loadDay：它無條件 setRows(null)，今日頁會閃載入中，途中切到別天還會卡住
      （那支在 await 之後發現日期不符就 return，沒人把 rows 放回來）。
      失敗要把快取刪掉：否則切回來會看到寫入前的 rows 和還在的建議卡，再按一次就重複寫入。 */
@@ -781,6 +771,24 @@ export default function App() {
 
   /* 今日頁一鍵加入。date 是點擊當下定的（途中可能切日）。進行中與失敗都記在 App，Today 只管畫：
      鎖著時直接忽略，不回傳別餐的結果、也不顯示錯誤（鈕本來就是鎖住的樣子）。 */
+  const handleCreateIntake = useCallback(
+    async (newRows: NewIntake[]) => {
+      // 先結清待刪：底下的重撈會整包換掉 rows，undo 的快照就過期了
+      if (pendingDelete.current) await commitDelete()
+      settleRepeat()
+      const created = await apiCreateIntake(newRows)
+      // 要排在重撈之前：它的 GET 是寫入後才發的，不算舊資料
+      bumpDayGen(currentDate)
+      invalidateRepeat(currentDate)
+      setSheetOpen(false)
+      /* v2.141：「剛加入」要在新的列掛上**之前**就標好，品項落下、節點彈一下、小計滾上去才有機會跑；
+         而且不走 loadDay——它先 setRows(null)，時間軸整個換成骨架再重掛，三個動畫都不會發生（review 抓到） */
+      flashAdded(created.map((r) => r.id))
+      await refreshDay(currentDate, true)
+    },
+    [refreshDay, commitDelete, settleRepeat, invalidateRepeat, flashAdded, bumpDayGen, currentDate],
+  )
+
   const handleAddRepeat = useCallback(
     async (date: string, s: RepeatSuggestion) => {
       if (repeatLockRef.current !== null) return
@@ -796,8 +804,9 @@ export default function App() {
         const postedAt = Date.now()
         const ids = created.map((r) => r.id)
         invalidateRepeat(date)
-        await refreshDay(date, true)
+        // 先標「剛加入」再重撈：列掛上的那一刻就要知道它是剛加入的（v2.141 落下動畫）
         flashAdded(ids)
+        await refreshDay(date, true)
         // await 期間可能刪了別筆（提示條是那筆的，不能搶）或切走分頁（提示條定位是照今日頁算的）
         if (pendingDelete.current || tabRef.current !== 'today') return
         pendingRepeat.current = { ids, date }
@@ -1258,6 +1267,7 @@ export default function App() {
           dayData={{ date: currentDate, rows }}
           targets={targets}
           repeatByMeal={sheetRepeatByMeal}
+          macroRatios={macroRatios}
           seenByMeal={sheetSeen}
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}

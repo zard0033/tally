@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  mealMacroRatio,
   draftFromKcal,
   draftFromTier,
   draftName,
@@ -139,3 +140,39 @@ describe('parseEstimateResponse：回應是外部資料', () => {
     ['其中一樣壞掉整組丟掉', { items: [item(), item({ protein_g: Number.POSITIVE_INFINITY })] }],
   ])('%s ⇒ null', (_, data) => expect(parseEstimateResponse(data)).toBeNull())
 })
+
+describe('檔位與自己打的熱量照這一餐的歷史比例粗估三大（v2.142）', () => {
+  /* 晚餐每筆 500 卡：蛋白質 25 g（100 卡＝20%）、脂肪 20 g（180 卡＝36%）、碳水 55 g（220 卡＝44%） */
+  const row = (eaten_on: string, meal: string, qty = 1) => ({ eaten_on, meal, qty, kcal: 500, protein: 25, fat: 20, carb: 55 })
+  const dinners = [row('2026-11-10', 'dinner'), row('2026-11-11', 'dinner', 2), row('2026-11-12', 'dinner')]
+
+  it('比例＝這一餐的三大熱量佔比（乘 qty 加總）；別餐的紀錄不算', () => {
+    const r = mealMacroRatio([...dinners, { eaten_on: '2026-11-12', meal: 'lunch', qty: 1, kcal: 500, protein: 60, fat: 5, carb: 10 }], 'dinner')
+    expect(r?.protein).toBeCloseTo(0.2, 10)
+    expect(r?.fat).toBeCloseTo(0.36, 10)
+    expect(r?.carb).toBeCloseTo(0.44, 10)
+  })
+
+  it('這一餐記不到 3 天、或總熱量 0 → null（退回只估熱量）', () => {
+    expect(mealMacroRatio(dinners.slice(0, 2), 'dinner')).toBeNull()
+    expect(mealMacroRatio([row('2026-11-10', 'dinner'), row('2026-11-10', 'dinner'), row('2026-11-10', 'dinner')], 'dinner')).toBeNull()
+    expect(mealMacroRatio(dinners.map((d) => ({ ...d, kcal: 0 })), 'dinner')).toBeNull()
+  })
+
+  it('檔位 700 照比例：蛋白質 35、脂肪 28、碳水 77，標粗估不標只估熱量', () => {
+    const d = draftFromTier('normal', { protein: 0.2, fat: 0.36, carb: 0.44 })
+    expect(d).toMatchObject({ kcal: 700, protein: 35, fat: 28, carb: 77, kcalOnly: false, macrosGuessed: true })
+    expect(d.origin).toEqual({ kcal: 700, protein: 35, fat: 28, carb: 77 })
+  })
+
+  it('自己打 500 卡照比例：25／20／55；改成 250 卡三大跟著減半', () => {
+    const d = draftFromKcal(500, { protein: 0.2, fat: 0.36, carb: 0.44 })
+    expect(d).toMatchObject({ protein: 25, fat: 20, carb: 55, macrosGuessed: true })
+    expect(withKcalInput(d, '250')).toMatchObject({ kcal: 250, protein: 12.5, fat: 10, carb: 27.5 })
+  })
+
+  it('沒有比例：照舊三大記 0、標只估了熱量', () => {
+    expect(draftFromTier('light', null)).toMatchObject({ kcal: 400, protein: 0, kcalOnly: true, macrosGuessed: false })
+  })
+})
+
