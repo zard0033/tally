@@ -675,6 +675,12 @@ test('日期元件換月：格子往對應方向滑一下（下個月從右、�
 
 test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明天則不動', async ({ page }) => {
   await openApp(page)
+  /* 起手日要讓「往下一週」一定被擋下：平日從今天起手，+7 夾到明天仍在同一週 → 不動。
+     **星期日不行**——明天是下週一，夾到明天就換週了（那是下一條測試驗的行為），這條會每到星期日就紅
+     （2026-11-15 CI 紅過）。星期日改從明天起手：+7 夾回明天自己，照樣被擋下 */
+  const monday = (iso: string) => shiftIso(iso, -((new Date(`${iso}T00:00:00`).getDay() + 6) % 7))
+  const start = monday(TODAY) !== monday(TOMORROW) ? TOMORROW : TODAY
+  if (start !== TODAY) await gotoDate(page, start)
   const box = await page.locator('.datectl-week').boundingBox()
   check(box, '找不到週列')
   const y = box.y + box.height / 2
@@ -683,7 +689,7 @@ test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明�
 
   await slowDrag(page, right, leg(right, left, 8)) // 往左滑＝下一週：今天 +7 超過明天，不該動
   await page.waitForTimeout(300)
-  check((await currentIso(page)) === TODAY, '往左滑（下一週）超過明天的界，日期不該動')
+  check((await currentIso(page)) === start, '往左滑（下一週）超過明天的界，日期不該動')
   /* 被擋下的滑動不可以留下「待搬焦點」的殘影：DateStrip 的 target > max 守衛在 App 的 goToDate 之外
      是第二道，拿掉它日期照樣不動（mutation 實測：只靠日期斷言抓不到），但 refocus 旗標會停在
      'day'，下一次展開月曆時焦點被搶到選中的那格，離開標題。 */
@@ -701,7 +707,7 @@ test('v2.53 週列左右滑切週：往右滑回前一週；往左滑超過明�
   await expect(page.locator('.datectl > .datectl-panel')).toHaveCount(1)
 
   await slowDrag(page, left, leg(left, right, 8)) // 往右滑＝前一週
-  await expect.poll(() => currentIso(page), '往右滑應回到前一週同一個星期').toBe(shiftIso(TODAY, -7))
+  await expect.poll(() => currentIso(page), '往右滑應回到前一週同一個星期').toBe(shiftIso(start, -7))
 })
 
 test('v2.53 小點：刪光今天的品項後，晚到的月份查詢不會把今天的小點加回去', async ({ page }) => {
