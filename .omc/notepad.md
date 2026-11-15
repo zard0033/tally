@@ -4,7 +4,7 @@
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
 現況（2026-11-15）：v2.143 每日目標省心（每週小改自動、大改才問、設定圖示小點）＋v2.144（估一筆不思考＋JSON 已部署 read-label、sheet 關閉焦點回開啟者、有氧摘要不拆段、15 個動作改名含 DB）push 後 CI 全量待確認。
-下一步：看 CI；使用者真機再估「北澤壽喜燒一人份」；最快 11/29 第一次算得出回推（會問）。待辦 10 剩「用歷史推估 journey」要使用者定義。
+下一步：看 CI；使用者真機再估「北澤壽喜燒一人份」；最快 11/29 第一次算得出回推（會問）。待辦 1～10 清完。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -50,7 +50,7 @@
 7. **一句話記一餐**（2026-11-13：v2.134 已上線，read-label 已部署、main 已合併）：使用者實作後改了兩件——估一筆底部改「帶回清單」，草稿進已選跟清單勾的一起加入；品名可改、AI 不加「（估算）」（推翻待決 ③）。檔位「吃得簡單／一般正餐／吃很多」（400 是我定的）。離線照 DESIGN 不做飲食佇列（使用者沒特別回）。~~拍照讀標示鈕的光暈還沒做~~（v2.139 已做）。**待驗**：真帳號估一次（使用者選「部署後直接合併」，沒先在本機測）。DeepSeek 重測明細在 D:\Temp\tally-estimate\（只在桌機）。
 8. ~~抽看 AI 分類結果~~（2026-11-15：110 樣全分好，使用者核可改 4 樣並標手動）。
 9. ~~`suggestWeight` 用上 RPE~~（v2.140）。
-10. 較遠：每日目標 UX（哪裡卡還沒問）、用歷史推估 journey、~~「加進來」動效~~（v2.141）、量 openApp 各段耗時；背景縮小已結論不需要（v2.61）。
+10. 較遠：~~每日目標 UX~~（v2.143 省心）、~~用歷史推估 journey~~（2026-11-15 結案：10/13 提的三步，對帳卡、升格成目標依據、每週自動調都做完了；剩的回測改成觀察項，見下）、~~「加進來」動效~~（v2.141）、量 openApp 各段耗時；背景縮小已結論不需要（v2.61）。
 - ~~待刪~~：使用者 2026-11-12 同意，`archivo-*.woff2` 已刪（`_design-sample/visual-directions.html`（2026-11-13 已刪，要看從 git 撿） 因此退回系統字）；`rest-chime.wav`／`build-rest-chime.mjs` 早在 v2.121 就刪了。
 
 **已知問題（未修）**
@@ -115,3 +115,4 @@
 [裁決 2026-11-15] 今日頁餐別區選 B「時間軸」（樣張 `_design-sample/today-meals.html`）：左邊細線＋四個節點（記了實心打勾、沒記空心），沒記的餐一行淡字建議＋描邊「加入」；「加進來」＝鈕縮成勾→建議展開成品項（間隔 70ms 落下）→小計從 0 滾上去、節點彈一下。使用者沒選我推薦的 A；B 等於請回 v2.122 拿掉的時間軸，跟插圖踏腳石重複，使用者知情。
 [追加 2026-11-15] 每日目標「省心」：使用者選「小改自動、大改才問」，要求邏輯有依據。spec.md「每日目標省心」已起草、★待核可（含 DDL measured_tdee_prev）。研究出處：MacroFactor 週檢查與步伐 https://help.macrofactorapp.com/en/articles/247-introduction-to-check-ins-and-coaching-modules 、https://help.macrofactorapp.com/en/articles/222-how-does-macrofactor-make-adjustments-for-a-weight-gain-or-weight-loss-goal （500 卡隱含變化只調 200–300；拒絕固定門檻）；Carbon https://www.joincarbon.com/how-it-works （週檢查、記不夠不動、有下限）；Hall 2008 https://pmc.ncbi.nlm.nih.gov/articles/PMC2376744/ （體脂 <25 kg 時 7700 偏高）；Cheuvront 2004 晨起體重 0.51±0.20 kg（二手）。逐日重跑結果：6/15～11/15 只有 20 天算得出、8/21→22 跳 −344。
 [裁決 2026-11-15] 使用者逐條回覆：①不會連量三次→秤的對照結案（11-13 已標量法斷點，回推與趨勢不跨過它比）②估一筆逾時→改不思考＋JSON 模式（read-label 已部署，待使用者真機再估一次「北澤壽喜燒一人份」）③設定頁不放重置離線快取 ④134 個動作名稱交給我定→改 15 個（程式＋資料庫，使用者同意）⑤健走摘要段內不斷行 ⑥排序收合動畫維持現狀（我建議）⑦Gym visual OK、結案 ⑧其餘能動的就動。npm audit 全是開發工具（shadcn CLI／vite dev／vitest／workbox），要升大版本，不動、結案。
+[觀察 2026-11-15] 回推的回測（journey 第 3 步，使用者同意改觀察項）：11/29 起開始有回推值，累積約兩個月（兩段各 28 天）後做第一次——拿一段當未知、用回推值預測體重變化、跟實際比；偏差大就回頭調「移一半」與 1 SE／2 SE 門檻。現在做不了：6/15～11/15 只有 20 天算得出回推值。
