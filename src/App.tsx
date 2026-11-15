@@ -35,7 +35,7 @@ import {
 } from '@/lib/api'
 import { withCategories, type FoodCategory } from '@/lib/categories'
 import { DUR, EASE, sec } from '@/lib/durations'
-import { computeTargets, num, type Targets } from '@/lib/formulas'
+import { computeTargets, num, numOrNull, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
@@ -57,6 +57,8 @@ import { useFoodCategories } from '@/useFoodCategories'
 import { useViewportInsets } from '@/useViewportInsets'
 import { useFoods } from '@/useFoods'
 import { useTraining } from '@/useTraining'
+import { adviceContext, adviceOf, useMaintenanceEstimate, type MaintenanceEstimate } from '@/useMaintenanceEstimate'
+import { trainingDates } from '@/lib/training'
 
 interface Notice {
   headline: string
@@ -130,6 +132,8 @@ export default function App() {
   /* 使用者按了登出。SIGNED_OUT 事件不分主動被動，靠這個旗標分流（AC 13）：主動不顯示
      「登入已過期」；被動時離線佇列要保留、主動才清（lib/queue.ts 的 signOutPlan／clear，接線見 signOutNow）。 */
   const userSignOutRef = useRef(false)
+  /** 這次開 App 已經送過每週自動調整（spec「每日目標省心」）：不管成敗都不重送，失敗就等下次開 App。 */
+  const autoAdjustedRef = useRef(false)
 
   const [currentDate, setCurrentDate] = useState<string>(() => localDate())
   const [profile, setProfile] = useState<ProfileRow | null>(null)
@@ -897,9 +901,46 @@ export default function App() {
       if (!profile) throw new Error('身體參數還沒載入')
       await apiUpsertWeight({ ...w, user_id: profile.user_id })
       await load(currentDate) // 體重變了，目標要重算
+      setWeightSaves((n) => n + 1) // 補登舊日期不會改變「最新一筆」，回推要另外重算
     },
     [profile, load, currentDate],
   )
+
+  /* 回推估算（spec「每日目標省心」）：身體參數與當天資料到了才開始抓，不拖慢今日頁第一次載入；今日頁不吃它，不會多一次載入態。 */
+  const [weightSaves, setWeightSaves] = useState(0)
+  /* 回推不用開始訓練後頭 28 天的資料（v2.137）。訓練資料還沒讀到是 undefined，回推跟著等 */
+  /* 只認伺服器那份（review HIGH）：本機快取可能是空的或缺第一次訓練，會讓「開始訓練頭 28 天不用」被跳過，
+     等伺服器那份到了才補上——那時自動調整可能已經寫進去了。跟 autoSeedOps 同一條規則。 */
+  const trainingStart = useMemo(
+    () => (training.view?.source !== 'server' ? undefined : ([...trainingDates(training.view.db)].sort()[0] ?? null)),
+    [training.view],
+  )
+  /* iOS 主畫面 PWA 會常駐好幾天：回前景時換日了或上次讀不到，就重抓（review MEDIUM） */
+  const [resumes, setResumes] = useState(0)
+  const estimateRef = useRef<MaintenanceEstimate>({ state: 'loading' })
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      const e = estimateRef.current
+      if (e.state === 'error' || (e.state === 'done' && e.today !== localDate())) setResumes((n) => n + 1)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+  const estimate = useMaintenanceEstimate(
+    session && profile && weight ? session.user.id : null,
+    `${weightSaves}|${weight?.measured_on}|${weight?.weight_kg}|${resumes}`,
+    trainingStart,
+  )
+  estimateRef.current = estimate
+  const advice = profile ? adviceOf(estimate, adviceContext(profile, targets)) : null
+  /* 差得不多就自己往回推值移一半：一次開 App 只送一次，失敗不打擾（不是使用者按的，錯誤沒地方說），下次開 App 會再判斷一次 */
+  useEffect(() => {
+    // 重抓中（例如剛存完體重）手上是舊的估算，目標卻已照新體重重算：等新的回來再判斷（review LOW）
+    if (advice?.kind !== 'auto' || autoAdjustedRef.current || !profile || estimate.state !== 'done' || estimate.refreshing) return
+    autoAdjustedRef.current = true
+    handleSaveProfile({ measured_tdee: advice.next, measured_tdee_on: localDate(), measured_tdee_prev: numOrNull(profile.measured_tdee) }).catch(() => undefined)
+  }, [advice, profile, handleSaveProfile, estimate])
 
   /** 真正登出。clearQueue＝使用者在確認對話框選了「仍要登出」：連未上傳的記錄一起清掉。
    *  沒確認過（佇列本來就是空的）走 settleOnSignOut：空的才清本機底，有東西絕不默默丟。 */
@@ -1004,6 +1045,7 @@ export default function App() {
         setRepeatLock(null)
         setRepeatErr(null)
         setGoalSaveLost(null)
+        autoAdjustedRef.current = false
         undoingIdsRef.current.clear()
         cacheRef.current.clear() // 換帳號後別讓上一個帳號的快取資料在切日期時冒出來
         prefetchingRef.current.clear()
@@ -1131,6 +1173,8 @@ export default function App() {
             profile={profile}
             targets={targets}
             latestWeight={weight}
+            estimate={estimate}
+            onWeightsChanged={() => setWeightSaves((n) => n + 1)}
             foods={foods}
             onSaveProfile={handleSaveProfile}
             onSaveLost={handleSaveLost}
@@ -1218,7 +1262,7 @@ export default function App() {
       {floatingBar && <div className="fog" aria-hidden="true" />}
       {barShown && (
       <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
-        <TabBar tab={tab} onChange={setTab} />
+        <TabBar tab={tab} onChange={setTab} settingsDot={advice?.kind === 'ask'} />
         {/* !notice 不可少：ready 只看 profile/targets/weight/foods，初次載入成功之後才發生的失敗
             （loadDay 掛掉、刪除送不出去）不會讓 ready 轉 false。CTA 搬出 Today 之前是跟著
             Today 一起被錯誤畫面換掉的，搬到底部列之後就沒人管它了——會在「讀不到這天的

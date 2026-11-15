@@ -74,6 +74,15 @@ test('Escape 關閉：spring 收掉後節點才卸載', async ({ page }) => {
   await expect(sheet(page)).toHaveCount(0)
 })
 
+/* 沒指定 finalFocus 的 sheet：關掉後焦點回到開啟它的那顆按鈕，不掉到 body（Safari 點按鈕不給焦點，Base UI 的預設還不回去；2026-11-15） */
+test('關閉後焦點回到開啟它的按鈕', async ({ page }) => {
+  await openStartSheet(page)
+  await settled(sheet(page))
+  await page.keyboard.press('Escape')
+  await expect(sheet(page)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '開始訓練' })).toBeFocused()
+})
+
 test('點 scrim 關閉', async ({ page }) => {
   await openStartSheet(page)
   await settled(sheet(page))

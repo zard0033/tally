@@ -266,6 +266,8 @@ describe('read-label 辨識', () => {
     // v2.129：跟分類一樣走主模型＋備援（預設 deepseek 先、qwen 備援），model 與 models 一起送語意不明，只送陣列
     expect(sent.models).toEqual(['deepseek/deepseek-v4.1-flash', 'qwen/qwen3.7-flash'])
     expect(sent).not.toHaveProperty('model')
+    // 只有估一筆關掉思考：讀標示沒重測過，照舊
+    expect(sent).not.toHaveProperty('reasoning')
     expect(sent.messages[0].content[0].text).toContain('一律讀「每份」那欄')
     expect(sent.messages[0].content[1].image_url.url).toBe(IMAGE)
 
@@ -731,6 +733,9 @@ describe('read-label 估算模式', () => {
     // 純文字模式走整串 AI_MODELS（同分類），不是讀圖那串
     expect(sent.models).toEqual([...AI_MODELS])
     expect(sent).not.toHaveProperty('model')
+    // 不思考＋JSON 模式（深度思考會逾時，見 ESTIMATE_REQUEST）
+    expect(sent.reasoning).toEqual({ effort: 'none' })
+    expect(sent.response_format).toEqual({ type: 'json_object' })
     const parts = sent.messages[0].content
     expect(parts).toHaveLength(1)
     expect(parts[0]).toEqual({ type: 'text', text: ESTIMATE_PROMPT + SENTENCE })

@@ -3,7 +3,8 @@
 
    維持熱量有兩種算法並排：公式推導（BMR × 活動係數）與紀錄回推（近 28 天吃的與體重走勢）。
    圓點標使用中的那個；沒在用的那一列整列可點：紀錄回推先展開確認框、按了才生效（漏記會讓它偏低，
-   一次可能差幾百卡），公式推導直接改回。回溯到舊的一段只當參考，要明寫起訖日期。 */
+   一次可能差幾百卡），公式推導直接改回。回溯到舊的一段只當參考，要明寫起訖日期。
+   v2.143（spec「每日目標省心」）：差得不多時 App 每週自己往回推值移一半，這裡多一行「M/D 依紀錄調整 −80 卡　還原」。 */
 import type { ReactNode } from 'react'
 import {
   BASELINE_NEEDS,
@@ -88,6 +89,8 @@ export interface ConfirmCardProps {
   afterKcal: number
   /** 現在用的維持熱量與它的來源：差多少要跟它比。 */
   inUseTdee: number
+  /** 按「改用」實際寫入的維持熱量：一律只往回推值移一半。 */
+  nextTdee: number
   usingMeasured: boolean
   bmr: number | null
   plannedKgPerWeek: number | null
@@ -96,7 +99,7 @@ export interface ConfirmCardProps {
 }
 
 /** 改用前的確認：就地展開在「紀錄回推」下面，寫改用後每日目標從多少變多少；不按什麼都不變。 */
-export function ConfirmCard({ result, beforeKcal, afterKcal, inUseTdee, usingMeasured, bmr, plannedKgPerWeek, onAdopt, onDismiss }: ConfirmCardProps) {
+export function ConfirmCard({ result, beforeKcal, afterKcal, inUseTdee, nextTdee, usingMeasured, bmr, plannedKgPerWeek, onAdopt, onDismiss }: ConfirmCardProps) {
   const diff = r(result.maintenance) - r(inUseTdee)
   return (
     <section className="goal-confirm" aria-label="改用紀錄回推">
@@ -108,6 +111,7 @@ export function ConfirmCard({ result, beforeKcal, afterKcal, inUseTdee, usingMea
       </p>
       <p className="goal-confirm-why">
         {diff !== 0 && `紀錄回推比${usingMeasured ? '現在用的' : '公式推導'}${diff < 0 ? '少' : '多'} ${Math.abs(diff)} 卡。`}
+        {r(nextTdee) !== r(result.maintenance) && `改用後先移一半，維持熱量用 ${r(nextTdee)} 卡，下週再看。`}
         {`照現在的目標吃，${weeklyText(expectedWeeklyChangeKg(result.maintenance, beforeKcal))}`}
         {plannedKgPerWeek !== null && `；你設定的是${weeklyText(plannedKgPerWeek)}`}
         {`。${basisText(result)}漏記的餐會讓這個數字偏低。`}
@@ -161,12 +165,34 @@ export interface MaintenanceSectionProps {
   /** 按過「改用」存下的那個數字與日期。 */
   measuredTdee: number | null
   measuredOn: string | null
+  /** 上次變動前的值（measured_tdee_prev）；有值才顯示「還原」那一行。 */
+  prevTdee: number | null
+  /** 已改用、最新回推差得多到要人判斷（advice 'ask'）：確認框收起時給一列可以再打開。 */
+  askNewer: boolean
   /** 活動係數那一列（只影響公式推導，掛在它下面；改用紀錄回推時不給）。 */
   activityRow: ReactNode
   /** 確認框（要顯示時才給）。 */
   confirm: ReactNode
   onOpenConfirm: () => void
   onRevert: () => void
+  onRestore: () => void
+}
+
+/** 「M/D 依紀錄調整 −80 卡　還原」：上次變動（自動、改用或改回公式）可以一按還原，不用確認；下一次變動前都在。 */
+function RestoreLine(p: Pick<MaintenanceSectionProps, 'measuredTdee' | 'measuredOn' | 'prevTdee' | 'onRestore'>) {
+  if (p.prevTdee === null) return null
+  const when = p.measuredOn ? `${monthDay(p.measuredOn)} ` : ''
+  const diff = p.measuredTdee !== null ? r(p.measuredTdee) - r(p.prevTdee) : null
+  return (
+    <div className="goal-undo">
+      <span>
+        {diff !== null
+          ? `${when}依紀錄調整 ${diff < 0 ? signed(diff) : `＋${diff}`} 卡`
+          : `${when}改回公式（原本 ${r(p.prevTdee)} 卡）`}
+      </span>
+      <button type="button" className="goal-undo-btn" aria-label={`還原成 ${r(p.prevTdee)} 卡`} onClick={p.onRestore}>還原</button>
+    </div>
+  )
 }
 
 /** ① 維持熱量（TDEE）：兩種算法並排。 */
@@ -186,12 +212,12 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
 
   let recordRow: ReactNode
   if (p.usingMeasured) {
-    // 使用中的是按「改用」那天存下的數字，不會自己變；最新回推不一樣時，下面另給一列可以更新
+    // 使用中的是存下的數字，只在每週檢查時變；最新回推差很多時，下面另給一列可以更新
     recordRow = (
       <EstRow
         on
         label="紀錄回推"
-        sub={p.measuredOn ? `${monthDay(p.measuredOn)} 確認的數字` : '確認過的數字'}
+        sub={p.measuredOn ? `${monthDay(p.measuredOn)} 更新的數字` : '確認過的數字'}
         value={p.measuredTdee !== null ? `${r(p.measuredTdee)} 卡` : '—'}
       />
     )
@@ -221,10 +247,6 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
     )
   }
 
-  /* 已改用、最新回推又算出不一樣的數字：給一列可以更新（同樣先確認）。範圍內就不打擾。 */
-  const newer = p.usingMeasured && cur?.status === 'ok' && p.inUseTdee !== null &&
-    (r(p.inUseTdee) < r(cur.low) || r(p.inUseTdee) > r(cur.high))
-
   return (
     <div className="goal-sec" data-card="maintenance">
       <div className="goal-sec-h"><span>① 維持熱量（TDEE）</span><span className="out">{p.inUseTdee !== null ? `${r(p.inUseTdee)} 卡` : '—'}</span></div>
@@ -232,7 +254,9 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
         {formulaRow}
         {!p.usingMeasured && p.activityRow}
         {recordRow}
-        {newer && !p.confirm && cur?.status === 'ok' && (
+        <RestoreLine measuredTdee={p.measuredTdee} measuredOn={p.measuredOn} prevTdee={p.prevTdee} onRestore={p.onRestore} />
+        {/* 已改用、最新回推差得多到要人判斷：確認框收起時給一列可以再打開 */}
+        {p.askNewer && !p.confirm && cur?.status === 'ok' && (
           <button type="button" className="goal-pick as-btn" onClick={p.onOpenConfirm}>
             <span className="lb">最新紀錄回推約 {r(cur.maintenance)} 卡，要更新嗎</span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
@@ -331,7 +355,7 @@ export function CalcDetail(p: CalcDetailProps) {
 
       <h3>① 紀錄回推{p.usingMeasured && <InUseTag />}</h3>
       {ln(<>維持熱量 ＝ 一連串完整記錄裡平均每天吃的 − 體重每天的變化 × 7700</>)}
-      {p.usingMeasured && p.measuredTdee !== null && <p className="goal-calc-fine">使用中的是按「改用」那天存下的 {r(p.measuredTdee)} 卡，不會自己變。</p>}
+      {p.usingMeasured && p.measuredTdee !== null && <p className="goal-calc-fine">使用中的是存下的 {r(p.measuredTdee)} 卡。每週看一次最新回推：差一點不動，差一些自己往它移一半，差很多或調完會低於基礎代謝就先問你。</p>}
       {cur?.status === 'ok' ? (
         <>
           {ln(<>

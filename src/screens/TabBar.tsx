@@ -53,7 +53,9 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
    cubic-bezier(0.4,0,0.2,1)；reduced-motion 直接把 duration 降到 0，
    不是另外接 CSS transition-duration（indicator 的位移是 JS 端的
    motion tween，CSS 那條規則對它沒有作用）。 */
-export default function TabBar({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {
+/* settingsDot（v2.143）：回推出差很多的維持熱量、要人判斷時，設定圖示右上角一個小點——使用者很少進每日目標頁，
+   只放在那頁的確認卡可能永遠沒人看到。點是裝飾，讀屏從 aria-label 聽到。 */
+export default function TabBar({ tab, onChange, settingsDot = false }: { tab: Tab; onChange: (tab: Tab) => void; settingsDot?: boolean }) {
   return (
     <nav className="tabbar" aria-label="主要導覽">
       {TABS.map((t) => (
@@ -62,7 +64,7 @@ export default function TabBar({ tab, onChange }: { tab: Tab; onChange: (tab: Ta
           className="tab"
           type="button"
           aria-current={tab === t.id ? 'page' : undefined}
-          aria-label={t.label}
+          aria-label={t.id === 'settings' && settingsDot ? `${t.label}，有新的維持熱量` : t.label}
           onClick={() => onChange(t.id)}
         >
           {tab === t.id && (
@@ -74,6 +76,7 @@ export default function TabBar({ tab, onChange }: { tab: Tab; onChange: (tab: Ta
             />
           )}
           {t.icon}
+          {t.id === 'settings' && settingsDot && <span className="tab-dot" aria-hidden="true" />}
         </button>
       ))}
     </nav>

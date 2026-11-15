@@ -11,6 +11,7 @@ import {
   insufficientShortfalls,
   maintenanceAdvice,
   segmentedFit,
+  type AdviceContext,
   type BaselineResult,
   type DailyKcal,
   type WeightPoint,
@@ -446,39 +447,113 @@ describe('insufficientShortfalls', () => {
   })
 })
 
-describe('maintenanceAdvice（每日目標頁該不該問）', () => {
-  const ok: BaselineResult = {
-    status: 'ok', maintenance: 2000, low: 1900, high: 2100, meanIntake: 2000, slopeKgPerWeek: 0, loggedDays: 24, weighIns: 6,
-    weightSpanDays: 20, from: dayAt(23), end: END,
-  }
-  it('現用值落在範圍內不問，邊界算在內', () => {
-    expect(maintenanceAdvice(ok, 2000).kind).toBe('same')
-    expect(maintenanceAdvice(ok, 1900).kind).toBe('same')
-    expect(maintenanceAdvice(ok, 2100).kind).toBe('same')
+/* 每日目標省心（spec.md「每日目標省心：小改自動、大改才問」）。預期值全部手算：
+   體重每週一筆（窗尾、往前 7／14／21 天）⇒ Σ(x − x̄)² ＝ 2 × (10.5² ＋ 3.5²) ＝ 245，
+   理論 1 SE ＝ 0.4 × 7700 ÷ √245 ＝ 196.77 → 比較時捨入成 197（spec 表「每週 1 次 ±197」）。體重持平 ⇒ 殘差 0、維持熱量＝平均攝取。 */
+const TODAY_ADV = shiftDate(END, 1)
+const weekly = (kgs: readonly number[] = [75, 75, 75, 75]): WeightPoint[] => [21, 14, 7, 0].map((i, n) => ({ date: dayAt(i), kg: kgs[n] }))
+const okAt = (kcal: number, ws = weekly()) => {
+  const r = estimateMaintenance(log(28, kcal), ws, END)
+  if (r.status !== 'ok') throw new Error(`前提不成立：${r.status}`)
+  return r
+}
+/** 已改用回推、沒變動過、BMR 遠低於目標：只剩三段判斷在作用 */
+const ctx = (inUseTdee: number, over: Partial<AdviceContext> = {}): AdviceContext => ({
+  inUseTdee, usingFormula: false, changedOn: null, today: TODAY_ADV, bmr: 1000, targetOffset: -500, ...over,
+})
+
+describe('有效標準誤差＝max(殘差, 理論)', () => {
+  it('體重持平：殘差是 0，取理論值 0.4 × 7700 ÷ √245', () => {
+    const r = okAt(2000)
+    expect(r.low).toBe(r.high)
+    expect(r.se).toBeCloseTo(3080 / Math.sqrt(245), 6)
+    expect(r.se).toBeCloseTo(196.77, 2)
   })
-  it('現用值超出範圍才問，兩邊都算', () => {
-    expect(maintenanceAdvice(ok, 1899).kind).toBe('new')
-    expect(maintenanceAdvice(ok, 2101).kind).toBe('new')
+  it('每天一筆（28 筆）：Σ(x − x̄)² ＝ 28 × (28² − 1) ÷ 12 ＝ 1827，1 SE ≈ 72（spec 表「每天 ±72」）', () => {
+    const daily: WeightPoint[] = Array.from({ length: 28 }, (_, i) => ({ date: dayAt(i), kg: 75 }))
+    expect(okAt(2000, daily).se).toBeCloseTo(3080 / Math.sqrt(1827), 6)
+    expect(okAt(2000, daily).se).toBeCloseTo(72.06, 2)
   })
-  it('體重沒雜訊時範圍收斂成一點：改用存的是捨入後的整數，不會馬上又問', () => {
-    const flat = { ...ok, maintenance: 1999.6, low: 1999.6, high: 1999.6 } as BaselineResult
-    expect(maintenanceAdvice(flat, 2000).kind).toBe('same')
+  it('體重上下抖：殘差比理論大就取殘差', () => {
+    // 75、76.5、73.5、75：斜率 −10.5 ÷ 245 kg/天，SSE 4.05，殘差 SE ＝ √(4.05 ÷ 2 ÷ 245) × 7700 ＝ 700.04 > 196.77
+    const r = okAt(2000, weekly([75, 76.5, 73.5, 75]))
+    expect(r.maintenance).toBeCloseTo(2330, 6)
+    expect(r.se).toBeCloseTo(700.04, 2)
+    expect(r.se).toBeCloseTo(r.high - r.maintenance, 6)
   })
-  it('記錄不夠回 lacking，不可能的結果回 suspect', () => {
+})
+
+describe('maintenanceAdvice：三段（1 SE 內不動、2 SE 內自動移一半、超過才問）', () => {
+  const r = okAt(2000) // 維持熱量 2000、SE 197
+  it('|d| 剛好等於 1 SE 不動，兩邊都是', () => {
+    expect(maintenanceAdvice(r, ctx(2197))).toMatchObject({ kind: 'same', next: 2099 }) // round(2197 − 98.5)
+    expect(maintenanceAdvice(r, ctx(1803)).kind).toBe('same')
+  })
+  it('超過 1 SE 一卡就自動，寫入的是往回推值移一半', () => {
+    expect(maintenanceAdvice(r, ctx(2198))).toMatchObject({ kind: 'auto', next: 2099 }) // 2198 − 198 ÷ 2
+    expect(maintenanceAdvice(r, ctx(1802))).toMatchObject({ kind: 'auto', next: 1901 })
+  })
+  it('|d| 剛好等於 2 SE 還是自動', () => {
+    expect(maintenanceAdvice(r, ctx(2394))).toMatchObject({ kind: 'auto', next: 2197 }) // d ＝ −394
+    expect(maintenanceAdvice(r, ctx(1606))).toMatchObject({ kind: 'auto', next: 1803 })
+  })
+  it('超過 2 SE 才問；問的時候按改用也是移一半', () => {
+    expect(maintenanceAdvice(r, ctx(2395))).toMatchObject({ kind: 'ask', next: 2198 }) // round(2395 − 197.5)
+    expect(maintenanceAdvice(r, ctx(1605))).toMatchObject({ kind: 'ask', next: 1803 }) // round(1605 ＋ 197.5)
+  })
+  it('比捨入後的整數：回推 1999.6 對現用 2000 是 d ＝ 0', () => {
+    const r2 = { ...r, maintenance: 1999.6 }
+    expect(maintenanceAdvice(r2, ctx(2000))).toMatchObject({ kind: 'same', next: 2000 })
+  })
+  it('SE 取殘差時門檻跟著變寬：差 600 卡仍在 1 SE（700）內，不動', () => {
+    const noisy = okAt(2000, weekly([75, 76.5, 73.5, 75])) // 維持熱量 2330、SE 700
+    expect(maintenanceAdvice(noisy, ctx(1730)).kind).toBe('same')
+    expect(maintenanceAdvice(noisy, ctx(1629)).kind).toBe('auto') // d ＝ 701
+  })
+})
+
+describe('maintenanceAdvice：第一次從公式換過去、低於 BMR、冷卻', () => {
+  const r = okAt(2000)
+  it('用公式時差距超過 1 SE 一律問（就算落在自動的區間）', () => {
+    expect(maintenanceAdvice(r, ctx(2198, { usingFormula: true }))).toMatchObject({ kind: 'ask', next: 2099 })
+    expect(maintenanceAdvice(r, ctx(2300, { usingFormula: true })).kind).toBe('ask')
+  })
+  it('用公式時差距在 1 SE 內也不問', () => {
+    expect(maintenanceAdvice(r, ctx(2197, { usingFormula: true })).kind).toBe('same')
+  })
+  it('自動後目標會低於 BMR 改成問：2300 → 2150，目標 2150 − 500 ＝ 1650', () => {
+    expect(maintenanceAdvice(r, ctx(2300, { bmr: 1650 }))).toMatchObject({ kind: 'auto', next: 2150 })
+    expect(maintenanceAdvice(r, ctx(2300, { bmr: 1651 }))).toMatchObject({ kind: 'ask', next: 2150 })
+    expect(maintenanceAdvice(r, ctx(2300, { bmr: null })).kind).toBe('auto')
+  })
+  it('往上調不問 BMR：1700 → 1850，目標 1850 − 500 ＝ 1350 雖然還低於 BMR 1600，但是往安全的方向（review）', () => {
+    expect(maintenanceAdvice(r, ctx(1700, { bmr: 1600 }))).toMatchObject({ kind: 'auto', next: 1850 })
+  })
+  it('移一半的值夾在 800–5000（資料庫 check 的範圍）：公式 9000 → 一半是 5500，寫 5000', () => {
+    expect(maintenanceAdvice(r, ctx(9000, { usingFormula: true }))).toMatchObject({ kind: 'ask', next: 5000 })
+  })
+  it('七天內不會調第二次、也不問；第七天起照常', () => {
+    expect(maintenanceAdvice(r, ctx(2300, { changedOn: shiftDate(TODAY_ADV, -6) })).kind).toBe('same')
+    expect(maintenanceAdvice(r, ctx(2300, { changedOn: shiftDate(TODAY_ADV, -7) })).kind).toBe('auto')
+    // 差很多、或剛改回公式，七天內一樣不問
+    expect(maintenanceAdvice(r, ctx(2500, { changedOn: TODAY_ADV })).kind).toBe('same')
+    expect(maintenanceAdvice(r, ctx(2500, { usingFormula: true, changedOn: shiftDate(TODAY_ADV, -3) })).kind).toBe('same')
+  })
+  it('記錄不夠回 lacking、不可能的結果回 suspect，冷卻與否都一樣（不動也不問）', () => {
     const lacking: BaselineResult = { status: 'insufficient', loggedDays: 20, weighIns: 3, weightSpanDays: 14, recentDays: 7, settlingUntil: null }
     const suspect: BaselineResult = { status: 'implausible', maintenance: 5760, slopeKgPerWeek: -4, reason: 'slope' }
-    expect(maintenanceAdvice(lacking, 2000)).toEqual({ kind: 'lacking', result: lacking })
-    expect(maintenanceAdvice(suspect, 2000)).toEqual({ kind: 'suspect', result: suspect })
+    expect(maintenanceAdvice(lacking, ctx(2000))).toEqual({ kind: 'lacking', result: lacking })
+    expect(maintenanceAdvice(suspect, ctx(2000))).toEqual({ kind: 'suspect', result: suspect })
+    expect(maintenanceAdvice(lacking, ctx(2000, { changedOn: TODAY_ADV })).kind).toBe('lacking')
   })
   it('回溯到舊的一段照樣顯示，但最新窗口不夠就是 lacking，不會變成可以改用', () => {
     // 窗尾往前第 30～80 天天天記、體重持平；最新 28 天完全沒記
     const old: DailyKcal[] = Array.from({ length: 50 }, (_, i) => ({ date: dayAt(30 + i), kcal: 1800, complete: true }))
     const oldWeights: WeightPoint[] = Array.from({ length: 8 }, (_, i) => ({ date: dayAt(30 + i * 7), kg: 75 }))
-    const today = shiftDate(END, 1)
-    const { current, shown } = baselineWithFallback(old, oldWeights, today)
+    const { current, shown } = baselineWithFallback(old, oldWeights, TODAY_ADV)
     expect(shown?.stale).toBe(true)
     expect(shown?.result.status).toBe('ok')
-    expect(maintenanceAdvice(current, 2000).kind).toBe('lacking')
+    expect(maintenanceAdvice(current, ctx(2000)).kind).toBe('lacking')
   })
 })
 
@@ -527,7 +602,7 @@ describe('最近一週完整不到 4 天就暫停（修 ③）', () => {
     }
     expect(r.shown?.stale).toBe(true)
     expect(r.shown?.end).toBe(dayAt(4))
-    expect(maintenanceAdvice(r.current, 2000).kind).toBe('lacking')
+    expect(maintenanceAdvice(r.current, ctx(2000)).kind).toBe('lacking')
   })
 
   it('剛好 4 天完整就照算', () => {

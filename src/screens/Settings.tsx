@@ -8,7 +8,7 @@
 
    這張 sheet 的容器 id 是 settings-sheet-root，退場動畫直接用 inline style 套
    sheet-out／scrim-out 這組 keyframes。 */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import GymVisualCredit from '@/components/GymVisualCredit'
 import SkyBand from '@/components/SkyBand'
 import { SkelInline } from '@/components/Skeleton'
@@ -16,7 +16,6 @@ import SubPageTop from '@/components/SubPageTop'
 import { useSkyEdge } from '@/components/useSkyEdge'
 import { getAiCredits, listWeights, type Weight } from '@/lib/api'
 import { localDate } from '@/lib/dates'
-import { trainingDates } from '@/lib/training'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { num, plannedWeeklyKg } from '@/lib/formulas'
 import { BODY_FAT_MAX, BODY_FAT_MIN, isValidBodyFatPct, isValidWeightKg, sparklinePoints } from '@/lib/weightTrend'
@@ -24,7 +23,7 @@ import AiSection, { type CreditsState } from './AiSection'
 import DailyGoal from './DailyGoal'
 import ExerciseLibrary from './ExerciseLibrary'
 import FoodLibrary from './FoodLibrary'
-import { adviceOf, useMaintenanceEstimate } from '@/useMaintenanceEstimate'
+import { adviceContext, adviceOf } from '@/useMaintenanceEstimate'
 import type { SettingsProps } from './types'
 
 const WeightTrend = lazy(() => import('./WeightTrend')) // recharts 不進主 bundle
@@ -47,7 +46,7 @@ function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
 
 export default function Settings(props: SettingsProps) {
   const {
-    profile, targets, latestWeight, foods,
+    profile, targets, latestWeight, foods, estimate, onWeightsChanged,
     onSaveProfile, onSaveLost, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSetFoodCategory, onSignOut,
     training, onTrainingWrite, onSubViewChange,
   } = props
@@ -67,14 +66,6 @@ export default function Settings(props: SettingsProps) {
       alive = false
     }
   }, [])
-  // 補登舊日期的體重不會改變「最新一筆」，所以存完體重要另外觸發重算
-  const [weightSaves, setWeightSaves] = useState(0)
-  /* 回推不用開始訓練後頭 28 天的資料（v2.137）。訓練資料還沒讀到是 undefined，回推跟著等 */
-  const trainingStart = useMemo(
-    () => (training === null ? undefined : ([...trainingDates(training.db)].sort()[0] ?? null)),
-    [training],
-  )
-  const estimate = useMaintenanceEstimate(`${weightSaves}|${latestWeight.measured_on}|${latestWeight.weight_kg}`, trainingStart)
 
   /* 離開這個元件（切回今日頁分頁）時要還原 navbar，不能只靠 view 變化——cleanup
    * 保證無論怎麼離開都會補一次 onSubViewChange(false)，把 navbar 還原。 */
@@ -150,7 +141,6 @@ export default function Settings(props: SettingsProps) {
       // 斷點只在勾了才帶：不勾就不動那天原本的標記（帶 false 會洗掉標好的斷點）
       await onSaveWeight({ measured_on: on, weight_kg: kg, body_fat_pct: fat, ...(brk ? { method_break: true as const } : {}) })
       refreshWeights()
-      setWeightSaves((n) => n + 1)
       closeSheet()
     } catch (e) {
       setBusy(false)
@@ -249,7 +239,7 @@ export default function Settings(props: SettingsProps) {
           </div>
         }
       >
-        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={() => { refreshWeights(); setWeightSaves((n) => n + 1) }} onBack={() => setView('list')} />
+        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={() => { refreshWeights(); onWeightsChanged() }} onBack={() => setView('list')} />
       </Suspense>
     )
   }
@@ -273,7 +263,7 @@ export default function Settings(props: SettingsProps) {
               <span className="lb-sub">
                 {Math.round(targets.kcal)} 卡・蛋白 {Math.round(targets.protein)}g・脂 {Math.round(targets.fat)}g・碳水 {Math.round(targets.carb)}g
               </span>
-              {adviceOf(estimate, targets.tdee)?.kind === 'new' && <span className="lb-sub lb-new">紀錄回推出新的維持熱量</span>}
+              {adviceOf(estimate, adviceContext(profile, targets))?.kind === 'ask' && <span className="lb-sub lb-new">紀錄回推出新的維持熱量</span>}
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>

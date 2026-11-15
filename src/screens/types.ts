@@ -14,6 +14,7 @@ import type { MacroRatio } from '@/lib/estimate'
 import type { RepeatByMeal, RepeatSuggestion, SeenByMeal } from '@/lib/mealSuggest'
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
+import type { MaintenanceEstimate } from '@/useMaintenanceEstimate'
 
 /**
  * 目前檢視日期的 intake 快照。
@@ -95,6 +96,10 @@ export interface SettingsProps {
   profile: ProfileRow
   targets: Targets
   latestWeight: Weight
+  /** 回推估算（App 層開 App 就算，v2.143）：設定頁入口與每日目標頁讀同一份。 */
+  estimate: MaintenanceEstimate
+  /** 體重有變但最新一筆沒變（標了量法斷點）：叫 App 重算回推。存體重那條 App 自己會重算。 */
+  onWeightsChanged: () => void
   /** 使用中的食品庫（已排除封存），與 LogSheet 共用同一份 App state——食品庫管理頁的
    *  「使用中」分頁直接拿這份，不必自己重撈一次。 */
   foods: Food[]

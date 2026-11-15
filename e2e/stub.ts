@@ -37,6 +37,9 @@ export interface StubOptions {
   dataDown?: boolean
   /** 餐建議的回看查詢回 500。要從開機就失敗才需要這個選項；測試中途改 `window.__repeatFail` 模擬恢復。 */
   repeatFail?: boolean
+  /** 回推估算的區間查詢（eaten_on,kcal,meal,qty 四欄）回 500。v2.143 起開 App 就查，要從開機就失敗才需要這個選項；
+   *  測試中途改 `window.__kcalFail` 只影響之後的查詢（例如存體重後重算）。月份小點走同一形狀，一起失敗。 */
+  kcalFail?: boolean
   /** intake 寫入真的落地（預設不落地）：由 fix.intake／intakeYday／repeatWindow 起頭，POST 與 DELETE 改得到
    *  之後的 GET，驗「寫入後重撈」「復原」「切走切回不復活」用。PATCH 不落地。 */
   intakePersist?: boolean
@@ -64,7 +67,7 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, intakePersist, holdIntake, classify }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, kcalFail, intakePersist, holdIntake, classify }) => {
       const stored: Record<string, unknown> = {
         access_token: 'stub-token',
         refresh_token: 'stub-refresh',
@@ -149,7 +152,7 @@ export async function seedFetchStub(
       w.__releaseIntake = () => w.__heldIntake.splice(0).forEach((release) => release())
       w.__failIntake = new Set()
       w.__dropIntake = new Set()
-      w.__kcalFail = false
+      w.__kcalFail = kcalFail
       w.__kcalWindow = null
       w.__kcalHold = null
       w.__writes = []
@@ -522,6 +525,7 @@ export async function seedFetchStub(
       unparseableSession: opts.unparseableSession ?? false,
       dataDown: opts.dataDown ?? false,
       repeatFail: opts.repeatFail ?? false,
+      kcalFail: opts.kcalFail ?? false,
       intakePersist: opts.intakePersist ?? false,
       holdIntake: opts.holdIntake ?? [],
       classify: opts.classify ?? { mode: 'fail' },

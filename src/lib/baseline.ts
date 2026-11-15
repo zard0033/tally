@@ -1,5 +1,5 @@
 /* 實測維持熱量（spec.md「實測維持熱量」節）：用「近 28 天吃了多少」加上「體重怎麼變」
-   反推這個人實際每天燒多少，拿來對帳 computeTargets 的公式上限。純對帳、不改任何目標。
+   反推這個人實際每天燒多少，拿來對帳 computeTargets 的公式上限；v2.143 起每週一次，差得不多就自動往它移一半（maintenanceAdvice）。
 
      維持熱量 ＝ 平均攝取 − 體重斜率(kg/天) × 7700
 
@@ -102,6 +102,10 @@ export const SETTLE_DAYS = 28
    的地方，這個方法本身抓不到。界取得寬：每週 1.5 kg 對一個 75 kg 的人已是極端，維持熱量
    800–5000 涵蓋所有真實的人。 */
 const MAX_PLAUSIBLE_KG_PER_WEEK = 1.5
+
+/** 每天體重的隨機波動 σ（kg），算理論標準誤差用。Cheuvront 2004 晨起 0.51±0.20 kg；本 spec 2026-10-12 的 Monte Carlo 用 0.4。
+ *  筆數少時殘差估本身不可靠（4 筆時自由度只剩 2，同一段資料隔天就從 ±141 變 ±78），所以取兩者較大。 */
+export const WEIGHT_SD_KG = 0.4
 const PLAUSIBLE_MAINTENANCE = { min: 800, max: 5000 } as const
 
 export type BaselineResult =
@@ -131,9 +135,11 @@ export type BaselineResult =
       status: 'ok'
       /** 實測維持熱量（卡/天） */
       maintenance: number
-      /** ±1 標準誤差 */
+      /** ±1 標準誤差（殘差估） */
       low: number
       high: number
+      /** 判斷要不要調整用的 1 個標準誤差（卡/天）：殘差估與理論估取大（spec「每日目標省心」） */
+      se: number
       meanIntake: number
       /** 體重斜率，kg/週（負＝在掉） */
       slopeKgPerWeek: number
@@ -317,11 +323,14 @@ function estimateOnSpan(
   }
 
   const half = slopeSe * KCAL_PER_KG
+  // 假設每天的波動互相獨立；實際會連續幾天偏高或偏低，真實誤差更大
+  const theorySe = (WEIGHT_SD_KG / Math.sqrt(sxx)) * KCAL_PER_KG
   return {
     status: 'ok',
     maintenance,
     low: maintenance - half,
     high: maintenance + half,
+    se: Math.max(half, theorySe),
     meanIntake,
     slopeKgPerWeek,
     loggedDays: logged.length,
@@ -340,21 +349,52 @@ export function expectedWeeklyChangeKg(maintenance: number, targetKcal: number):
   return ((targetKcal - maintenance) * 7) / KCAL_PER_KG
 }
 
-/** 每日目標頁該怎麼跟使用者說（spec.md「每日目標改版」）：lacking＝最新窗口記錄不夠；same＝現用值在估計範圍內，
- *  不打擾；new＝有新數字等確認；suspect＝算出來不可能是真的。**只吃最新窗口**：回溯到的舊一段不反映現在，不能改用。
- *  「範圍內就不問」是設計決定（範圍是 ±1 個標準誤差），不是研究給的界線。 */
+/** 距上次變動（measured_tdee_on）不到這麼多天就不自動也不問。MacroFactor、Carbon 都是每週 check-in 一次。 */
+export const ADJUST_COOLDOWN_DAYS = 7
+
+export interface AdviceContext {
+  /** 目標實際用的維持熱量 */
+  inUseTdee: number
+  /** 用的是公式（measured_tdee 是 null）：第一次換成回推一律問 */
+  usingFormula: boolean
+  /** 上次變動日（measured_tdee_on）；沒變過是 null */
+  changedOn: string | null
+  today: string
+  bmr: number | null
+  /** 每日目標 − 維持熱量（減重是負的）：維持熱量換成 next 之後，目標＝next ＋ 這個 */
+  targetOffset: number
+}
+
+/** 每日目標該怎麼處理最新回推（spec.md「每日目標省心：小改自動、大改才問」）：lacking＝最新窗口記錄不夠；
+ *  suspect＝算出來不可能是真的；same＝不動；auto＝自動往回推值移一半；ask＝差太多或第一次從公式換過去，要人判斷。
+ *  **只吃最新窗口**：回溯到的舊一段不反映現在，不能改用。next＝這次要寫入的值（一律只移一半，三種都帶：
+ *  按「改用」、自己點紀錄回推那一列寫的也是它）。1 SE、2 SE 是統計慣例、移一半取自 MacroFactor 範例的中間值，
+ *  三個都是可調的設計決定，不是研究給的界線。 */
 export type MaintenanceAdvice =
   | { kind: 'lacking'; result: Extract<BaselineResult, { status: 'insufficient' }> }
   | { kind: 'suspect'; result: Extract<BaselineResult, { status: 'implausible' }> }
-  | { kind: 'same' | 'new'; result: Extract<BaselineResult, { status: 'ok' }> }
+  | { kind: 'same' | 'auto' | 'ask'; result: Extract<BaselineResult, { status: 'ok' }>; next: number }
 
-export function maintenanceAdvice(current: BaselineResult, inUseTdee: number): MaintenanceAdvice {
+export function maintenanceAdvice(current: BaselineResult, ctx: AdviceContext): MaintenanceAdvice {
   if (current.status === 'insufficient') return { kind: 'lacking', result: current }
   if (current.status === 'implausible') return { kind: 'suspect', result: current }
-  // 比捨入後的整數：改用時存的是整數，體重沒雜訊時範圍收斂成一點，不捨入的話按完「改用」卡片會馬上又跳出來
-  const inUse = Math.round(inUseTdee)
-  const inRange = inUse >= Math.round(current.low) && inUse <= Math.round(current.high)
-  return { kind: inRange ? 'same' : 'new', result: current }
+  // 比捨入後的整數：存的是整數，不捨入的話差距剛好等於 1 SE 這種邊界永遠碰不到，按完也可能馬上又被判成要動
+  const inUse = Math.round(ctx.inUseTdee)
+  const d = Math.round(current.maintenance) - inUse
+  const se = Math.round(current.se)
+  // 夾在資料庫 check 的範圍內：公式值離譜時移一半也可能出界，存檔會被擋（review LOW）
+  const next = Math.min(PLAUSIBLE_MAINTENANCE.max, Math.max(PLAUSIBLE_MAINTENANCE.min, Math.round(inUse + d / 2)))
+  const kind = (k: 'same' | 'auto' | 'ask') => ({ kind: k, result: current, next })
+  // 還原完、改回公式完也算變動：不擋的話下次開 App 又被調回去
+  if (ctx.changedOn !== null && daysBetween(ctx.changedOn, ctx.today) < ADJUST_COOLDOWN_DAYS) return kind('same')
+  if (Math.abs(d) <= se) return kind('same')
+  // 換算法不是小調：公式和回推可能差幾百卡
+  if (ctx.usingFormula) return kind('ask')
+  // 差這麼多，比較可能是漏記、秤或身體真的變了
+  if (Math.abs(d) > 2 * se) return kind('ask')
+  // 只擋往下調：目標本來就低於 BMR 時，往上調是往安全的方向，不用問（review MEDIUM）
+  if (d < 0 && ctx.bmr !== null && next + ctx.targetOffset < ctx.bmr) return kind('ask')
+  return kind('auto')
 }
 
 /** 畫面真正要顯示的那一段：可能是最新窗口，也可能是回溯找到的一連串記錄。 */

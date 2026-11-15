@@ -1069,10 +1069,10 @@ describe('checkCardio', () => {
 
 describe('有氧的顯示', () => {
   it('cardioSummary 只列有填的欄位；預估熱量不稱「消耗」', () => {
-    expect(cardioSummary(cardio('c', 'x', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }))).toBe('30 分 · 5.5 km/h · 坡度 8%')
-    expect(cardioSummary(cardio('c', 'x', { kind: 'boxing', minutes: 36, est_kcal: 1210 }))).toBe('36 分 · 預估 1,210 kcal')
-    expect(cardioSummary(cardio('c', 'x', { minutes: '30.0' }))).toBe('30 分')
-    expect(cardioSummary(cardio('c', 'x', { incline_pct: 0 })), '坡度 0 是有填').toBe('30 分 · 坡度 0%')
+    expect(cardioSummary(cardio('c', 'x', { minutes: 30, speed_kmh: 5.5, incline_pct: 8 }))).toBe('30\u00a0分 · 5.5\u00a0km/h · 坡度\u00a08%')
+    expect(cardioSummary(cardio('c', 'x', { kind: 'boxing', minutes: 36, est_kcal: 1210 }))).toBe('36\u00a0分 · 預估\u00a01,210\u00a0kcal')
+    expect(cardioSummary(cardio('c', 'x', { minutes: '30.0' }))).toBe('30\u00a0分')
+    expect(cardioSummary(cardio('c', 'x', { incline_pct: 0 })), '坡度 0 是有填').toBe('30\u00a0分 · 坡度\u00a00%')
   })
 })
 
@@ -1742,8 +1742,8 @@ describe('有氧卡的編輯（AC 4）', () => {
   })
 
   it('cardioSummary 對有氧卡同樣適用；還沒填分鐘回空字串（畫面顯示「點一下填寫」，不寫成「0 分」）', () => {
-    expect(cardioSummary(card('c1', 'w', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: '8.0' }))).toBe('30 分 · 5.5 km/h · 坡度 8%')
-    expect(cardioSummary(card('c2', 'w', 'box', { minutes: 36, est_kcal: 121 }))).toBe('36 分 · 預估 121 kcal')
+    expect(cardioSummary(card('c1', 'w', 'walk', { minutes: '30.0', speed_kmh: '5.5', incline_pct: '8.0' }))).toBe('30\u00a0分 · 5.5\u00a0km/h · 坡度\u00a08%')
+    expect(cardioSummary(card('c2', 'w', 'box', { minutes: 36, est_kcal: 121 }))).toBe('36\u00a0分 · 預估\u00a0121\u00a0kcal')
     expect(cardioSummary(card('c3', 'w', 'walk'))).toBe('')
     expect(cardioSummary(card('c4', 'w', 'walk', { speed_kmh: 5.5 })), '只有速度沒有分鐘＝還沒記').toBe('')
   })
@@ -1813,7 +1813,7 @@ describe('有氧卡不影響其他功能（AC 6）', () => {
   it('workoutsOn：有氧卡算一個動作，但組數、訓練量是 0；只有有氧的訓練時長照起訖', () => {
     expect(workoutsOn(d, '2026-10-14', now)).toEqual([
       { id: 'w', startedAt: '2026-10-14T01:00:00.000Z', endedAt: '2026-10-14T01:36:00.000Z', inProgress: false, exerciseCount: 2, volume: 1440, doneSets: 2, totalSets: 2, minutes: 36, soloCardio: null },
-      { id: 'wc', startedAt: '2026-10-14T09:00:00.000Z', endedAt: '2026-10-14T09:30:00.000Z', inProgress: false, exerciseCount: 1, volume: 0, doneSets: 0, totalSets: 0, minutes: 30, soloCardio: { name: '跑步機坡度健走', summary: '20 分' } },
+      { id: 'wc', startedAt: '2026-10-14T09:00:00.000Z', endedAt: '2026-10-14T09:30:00.000Z', inProgress: false, exerciseCount: 1, volume: 0, doneSets: 0, totalSets: 0, minutes: 30, soloCardio: { name: '跑步機坡度健走', summary: '20\u00a0分' } },
     ])
   })
 
@@ -1884,7 +1884,7 @@ describe('workoutsOn：只有一張有氧卡的訓練（AC 9：已完成列表�
   const solo = Object.fromEntries(workoutsOn(d, '2026-10-15', now).map((c) => [c.id, c.soloCardio]))
 
   it('只有一張有氧卡：動作名稱＋有氧摘要；還沒填分鐘的摘要是空字串', () => {
-    expect(solo['walk-only']).toEqual({ name: '跑步機坡度健走', summary: '30 分 · 5.5 km/h · 坡度 8%' })
+    expect(solo['walk-only']).toEqual({ name: '跑步機坡度健走', summary: '30\u00a0分 · 5.5\u00a0km/h · 坡度\u00a08%' })
     expect(solo['box-empty']).toEqual({ name: '有氧拳擊', summary: '' })
   })
 

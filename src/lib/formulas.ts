@@ -28,8 +28,10 @@ export interface Profile {
   custom_carb_g: number | string | null
   /** 使用者確認過的回推維持熱量；null／沒有＝用公式。 */
   measured_tdee?: number | string | null
-  /** 確認那天（yyyy-mm-dd），只給畫面寫依據用。 */
+  /** 上次變動那天（yyyy-mm-dd）：自動調整、改用、還原、改回公式都蓋成當天，7 天內不再自動也不問。 */
   measured_tdee_on?: string | null
+  /** 上次變動前的 measured_tdee（「還原」用）；null＝沒得還原。 */
+  measured_tdee_prev?: number | string | null
 }
 
 export interface Targets {

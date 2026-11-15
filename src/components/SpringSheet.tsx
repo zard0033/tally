@@ -61,6 +61,27 @@ export function SheetGrabZone({ className, children }: { className?: string; chi
 
 const screenH = () => window.innerHeight
 
+/* 最後一次按下的可聚焦元素。Safari 點按鈕不會讓按鈕取得焦點，Base UI 預設的「關閉後還焦點給開啟前的元素」因此落空、
+   掉到 body（notepad 已知問題）；沒指定 finalFocus 的 sheet 用它當開啟者。用 capture 才拿得到被 stopPropagation 的點擊。 */
+const FOCUSABLE = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+let lastPressed: { el: HTMLElement; at: number } | null = null
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      const hit = e.target instanceof Element ? e.target.closest(FOCUSABLE) : null
+      lastPressed = hit instanceof HTMLElement ? { el: hit, at: performance.now() } : null
+    },
+    true,
+  )
+}
+/** 開啟那一刻的開啟者：有實際焦點（鍵盤）就用它，否則用剛按下的那顆。程式自己開的 sheet 不能撿到很久以前按的東西，只認 1 秒內 */
+function currentOpener(): HTMLElement | null {
+  const active = document.activeElement
+  if (active instanceof HTMLElement && active !== document.body) return active
+  return lastPressed && performance.now() - lastPressed.at < 1000 ? lastPressed.el : null
+}
+
 export default function SpringSheet({ open, onClose, label, title, screen, fit = false, initialFocus, finalFocus, locked = false, popupRef: outerRef, children }: SpringSheetProps) {
   const reduced = useReducedMotion()
   const [present, setPresent] = useState(open)
@@ -68,10 +89,17 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
   const [session, setSession] = useState(0)
   const [wasOpen, setWasOpen] = useState(open)
   const [closeGuard, setCloseGuard] = useState(false)
+  const [opener, setOpener] = useState<HTMLElement | null>(null)
+  const popupRef = useRef<HTMLDivElement | null>(null)
   if (open !== wasOpen) {
     setWasOpen(open)
     setCloseGuard(!open)
-    if (open) setSession((n) => n + 1)
+    if (open) {
+      setSession((n) => n + 1)
+      // 收合中又重開：焦點還在舊 popup 裡（節點還沒卸載），那不是開啟者
+      const o = currentOpener()
+      setOpener(o && popupRef.current?.contains(o) ? null : o)
+    }
   }
   useEffect(() => {
     if (!closeGuard) return
@@ -80,7 +108,6 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
   }, [closeGuard])
   // 起點放在畫面下方：第一次畫出來就在外面，不會在 0 的位置閃一幀
   const y = useMotionValue(screenH())
-  const popupRef = useRef<HTMLDivElement | null>(null)
   // scrim 跟著 sheet 自己的高度淡出（貼合內容的 sheet 只有幾百 px，拿螢幕高度算會在關閉尾端跳一格）
   const heightRef = useRef(0)
   const backdrop = useTransform(y, (v) => 1 - Math.min(1, Math.max(0, v / (heightRef.current || screenH() * 0.6))))
@@ -193,14 +220,14 @@ export default function SpringSheet({ open, onClose, label, title, screen, fit =
           aria-label={title ? undefined : label}
           data-screen={screen}
           initialFocus={initialFocus}
-          finalFocus={
-            finalFocus &&
-            (() => {
-              // 收合中使用者已經點去別處（例如搜尋框）就不搶回來：傳 ref 的話 Base UI 不看這件事，一律還焦點
-              const active = document.activeElement
-              return !active || active === document.body || popupRef.current?.contains(active) ? finalFocus.current : false
-            })
-          }
+          finalFocus={() => {
+            // 收合中使用者已經點去別處（例如搜尋框）就不搶回來：傳 ref 的話 Base UI 不看這件事，一律還焦點
+            const active = document.activeElement
+            if (active && active !== document.body && !popupRef.current?.contains(active)) return false
+            const target = finalFocus ? finalFocus.current : opener
+            // 開啟者已經不在畫面上（例如按了就消失的加入鈕）：交回 Base UI 的預設
+            return target?.isConnected ? target : true
+          }}
           render={
             <motion.div
               style={{ y, pointerEvents: open ? undefined : 'none' }}

@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-15）：v2.136～v2.140 已部署；v2.141 今日頁時間軸＋「加進來」動效、v2.142 簡單記照那一餐比例粗估三大，push 後 CI 全量待確認。待辦 1～9 清完、待辦 10 的「加進來」已做。
-下一步：看 CI；真機看時間軸與加進來的手感。待辦 10 其餘兩項（每日目標 UX、用歷史推估 journey）要使用者給方向。秤三連量／健身房對照仍未回。
+現況（2026-11-15）：v2.143 每日目標省心（每週小改自動、大改才問、設定圖示小點）＋v2.144（估一筆不思考＋JSON 已部署 read-label、sheet 關閉焦點回開啟者、有氧摘要不拆段、15 個動作改名含 DB）push 後 CI 全量待確認。
+下一步：看 CI；使用者真機再估「北澤壽喜燒一人份」；最快 11/29 第一次算得出回推（會問）。待辦 10 剩「用歷史推估 journey」要使用者定義。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -113,3 +113,5 @@
 [裁決 2026-11-15] 估一筆的檔位／自己打熱量：三大營養素照「那一餐自己的歷史比例」填（實作用 App 已載入的近 28 天回看，比例跟 90 天差 1–2 個百分點，見 DESIGN v2.142）、標粗估（使用者選；我已說明外食蛋白質可能估高）。實測比例：早 35/28/38、午 20/35/41、晚 22/34/45、點心 12/18/50（點心有只記熱量的，加總 80%）。
 [追加 2026-11-15] 使用者：今日頁餐別區很亂（記了的是清單、沒記的是虛線建議框，混在一起難讀），要精緻、井然有序。與待辦 10「加進來」動效一起出 2–3 方向樣張。
 [裁決 2026-11-15] 今日頁餐別區選 B「時間軸」（樣張 `_design-sample/today-meals.html`）：左邊細線＋四個節點（記了實心打勾、沒記空心），沒記的餐一行淡字建議＋描邊「加入」；「加進來」＝鈕縮成勾→建議展開成品項（間隔 70ms 落下）→小計從 0 滾上去、節點彈一下。使用者沒選我推薦的 A；B 等於請回 v2.122 拿掉的時間軸，跟插圖踏腳石重複，使用者知情。
+[追加 2026-11-15] 每日目標「省心」：使用者選「小改自動、大改才問」，要求邏輯有依據。spec.md「每日目標省心」已起草、★待核可（含 DDL measured_tdee_prev）。研究出處：MacroFactor 週檢查與步伐 https://help.macrofactorapp.com/en/articles/247-introduction-to-check-ins-and-coaching-modules 、https://help.macrofactorapp.com/en/articles/222-how-does-macrofactor-make-adjustments-for-a-weight-gain-or-weight-loss-goal （500 卡隱含變化只調 200–300；拒絕固定門檻）；Carbon https://www.joincarbon.com/how-it-works （週檢查、記不夠不動、有下限）；Hall 2008 https://pmc.ncbi.nlm.nih.gov/articles/PMC2376744/ （體脂 <25 kg 時 7700 偏高）；Cheuvront 2004 晨起體重 0.51±0.20 kg（二手）。逐日重跑結果：6/15～11/15 只有 20 天算得出、8/21→22 跳 −344。
+[裁決 2026-11-15] 使用者逐條回覆：①不會連量三次→秤的對照結案（11-13 已標量法斷點，回推與趨勢不跨過它比）②估一筆逾時→改不思考＋JSON 模式（read-label 已部署，待使用者真機再估一次「北澤壽喜燒一人份」）③設定頁不放重置離線快取 ④134 個動作名稱交給我定→改 15 個（程式＋資料庫，使用者同意）⑤健走摘要段內不斷行 ⑥排序收合動畫維持現狀（我建議）⑦Gym visual OK、結案 ⑧其餘能動的就動。npm audit 全是開發工具（shadcn CLI／vite dev／vitest／workbox），要升大版本，不動、結案。

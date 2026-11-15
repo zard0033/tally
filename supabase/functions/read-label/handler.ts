@@ -275,6 +275,13 @@ export const ESTIMATE_PROMPT = `你是台灣的營養估算助手。使用者會
    用 `.length` 會讓同樣 300 個字因為字不同而時收時不收。前端輸入框若用 `maxLength`（UTF-16 單位）只會比這裡嚴，
    不會出現前端放行、這裡擋下的句子。 */
 const MAX_SENTENCE = 300
+
+/* 估一筆不讓模型「思考」、要它一定回合法 JSON（2026-11-15，使用者選）。DeepSeek 預設 effort high：真機一次想了
+   3238 token、19 秒，下一次超過 45 秒逾時（OpenRouter 的備援只吃錯誤，逾時不換）。同一份題庫 102 次實測：
+   預設 p90 12.5／最慢 22 秒；effort none p90 1.2 秒但 2 次 JSON 寫壞；none＋json_object p90 3.9／最慢 9.9 秒、0 失敗。
+   準度大致相當（單品誤差差距在兩次重跑的雜訊內），只有多品總熱量誤差 6%→14%（門檻 20%）。明細在 spec A 節。 */
+/* json_object 模式在部分供應商要求提示詞裡出現「JSON」這個字（ESTIMATE_PROMPT 規則 5 有）——改提示詞時別拿掉 */
+export const ESTIMATE_REQUEST = { reasoning: { effort: 'none' }, response_format: { type: 'json_object' } } as const
 /** 一句最多拆幾樣（AC 4，設計決定）：300 字寫不出 20 樣，只是不收無界陣列。 */
 const MAX_ITEMS = 20
 /** 假設那一行的上限。提示詞的例子約 30 字；只顯示在草稿、不存，200 是寬鬆的界，擋的是模型失控吐長文。 */
@@ -353,7 +360,7 @@ async function estimate(text: unknown, openrouterKey: string, cors: Record<strin
     return json({ error: BAD_REQUEST }, 400, cors)
   }
   const t0 = Date.now()
-  const reply = await askModel([{ type: 'text', text: ESTIMATE_PROMPT + sentence }], openrouterKey, AI_MODELS)
+  const reply = await askModel([{ type: 'text', text: ESTIMATE_PROMPT + sentence }], openrouterKey, AI_MODELS, ESTIMATE_REQUEST)
   if (!reply) return json({ error: READ_FAILED }, 502, cors)
   const result = parseEstimate(reply.content)
   if (!result) {
@@ -436,6 +443,7 @@ async function askModel(
   content: unknown[],
   openrouterKey: string,
   models: readonly string[],
+  extra: Readonly<Record<string, unknown>> = {},
 ): Promise<{ content: string; model: string | undefined; usage: Usage } | null> {
   try {
     const upstream = await fetch(OPENROUTER_URL, {
@@ -454,6 +462,7 @@ async function askModel(
            開關），關掉之後它本來就不會把請求路由給會訓練的 provider。
            **動那個設定要立刻拍一張、分類一次**：qwen 那家被擋掉就只剩備援。 */
         messages: [{ role: 'user', content }],
+        ...extra,
       }),
       /* 逾時不是重試：只是不讓一個掛住的上游把這支函式一起拖住。
          **這個數字必須比前端的 `SCAN_TIMEOUT`（55 秒）小，而且要小得夠多**（前端的計時含上傳，

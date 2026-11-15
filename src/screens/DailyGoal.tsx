@@ -4,7 +4,8 @@
    → ② 減重多少 → ③ 怎麼分，段尾寫這段算出來的數字；「怎麼算的」把每一段代入自己的數字。
    每項一列，點整列叫出系統滾輪，改了就存。**只送改動的那個欄位**：沒碰過的欄位根本不會寫，
    所以選單為了顯示取的近似值不可能蓋掉資料庫的真實值。
-   維持熱量只有一個在用：確認過的回推值，沒有就是公式。回推值要按「改用」才生效。 */
+   維持熱量只有一個在用：存下的回推值，沒有就是公式。第一次從公式換過去、或差很多時要按「改用」才生效；
+   差得不多時 App 每週自己往回推值移一半（v2.143，spec「每日目標省心」），每次變動都可以一按還原。 */
 import { useEffect, useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
 import {
@@ -25,7 +26,7 @@ import { checkBodyBasics, checkCustomTargets } from '@/lib/goalForm'
 import { localDate } from '@/lib/dates'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
-import { adviceOf, type MaintenanceEstimate } from '@/useMaintenanceEstimate'
+import { adviceContext, adviceOf, type MaintenanceEstimate } from '@/useMaintenanceEstimate'
 import MaintenanceSection, { CalcDetail, ConfirmCard, CustomCompare } from './MaintenanceCard'
 
 /** 衛福部標準活動量表的五段係數＋說詞，跟 formulas.ts 的 ACTIVITY_FACTOR_PRESETS 一一對應。 */
@@ -271,15 +272,16 @@ export default function DailyGoal(props: DailyGoalProps) {
   const usingMeasured = numOrNull(effective.measured_tdee) !== null
 
   const inUseTdee = isCustom ? null : (preview?.tdee ?? null)
-  const advice = adviceOf(estimate, inUseTdee)
-  /* 最新 28 天算得出來就能改用：差很多時自己展開確認框（advice 'new'），範圍內不打擾，但點那一列照樣可以改用。 */
-  const current = estimate.state === 'done' && estimate.current.status === 'ok' ? estimate.current : null
-  const adopted = current ? Math.round(current.maintenance) : null
+  const advice = adviceOf(estimate, adviceContext(effective, isCustom ? null : preview))
+  /* 最新 28 天算得出來就能改用：要人判斷時自己展開確認框（advice 'ask'），其餘不打擾，但點那一列照樣可以改用。
+     改用一律只移一半（advice.next），跟自動調整同一個步伐。 */
+  const current = advice !== null && advice.result.status === 'ok' ? advice.result : null
+  const adopted = advice !== null && 'next' in advice ? advice.next : null
   const afterKcal = adopted !== null
     ? computeTargets({ ...effective, use_custom_targets: false, birth_year: reqNum(basics.birthYear), height_cm: reqNum(basics.height), measured_tdee: adopted }, weightKg, bodyFatPct).kcal
     : null
   const confirmShown = !isCustom && current !== null && preview !== null && afterKcal !== null &&
-    ((advice?.kind === 'new' && !dismissed) || picked)
+    ((advice?.kind === 'ask' && !dismissed) || picked)
 
   /* 判斷一律看 effective（含還沒回來的改動），看 profile 會在請求途中做出錯的決定。 */
   function pickMode(key: 'auto' | 'custom') {
@@ -373,16 +375,23 @@ export default function DailyGoal(props: DailyGoalProps) {
   const deltaWord = goal === 'cut' ? '減重' : '增肌'
   const deltaSign = goal === 'cut' ? '−' : '＋'
 
+  /* 每種變動都蓋今天的日期（7 天內不再自動也不問，不然還原完下次開 App 又被調回去）、記下變動前的值給「還原」。 */
+  const measuredNow = numOrNull(effective.measured_tdee)
   function adopt() {
     if (adopted === null) return
     setPicked(false)
     setDismissed(false)
-    save({ measured_tdee: adopted, measured_tdee_on: localDate() })
+    save({ measured_tdee: adopted, measured_tdee_on: localDate(), measured_tdee_prev: measuredNow })
   }
   function revert() {
     setPicked(false)
     setDismissed(true)
-    save({ measured_tdee: null, measured_tdee_on: null })
+    save({ measured_tdee: null, measured_tdee_on: localDate(), measured_tdee_prev: measuredNow })
+  }
+  function restore() {
+    setPicked(false)
+    setDismissed(true)
+    save({ measured_tdee: numOrNull(effective.measured_tdee_prev), measured_tdee_prev: null, measured_tdee_on: localDate() })
   }
 
   const activityRow = (
@@ -470,17 +479,21 @@ export default function DailyGoal(props: DailyGoalProps) {
               bmr={finiteOrNull(preview?.bmr)}
               activityFactor={activity.selected}
               usingMeasured={usingMeasured}
-              measuredTdee={numOrNull(effective.measured_tdee)}
+              measuredTdee={measuredNow}
               measuredOn={measuredOn ?? null}
+              prevTdee={numOrNull(effective.measured_tdee_prev)}
+              askNewer={usingMeasured && advice?.kind === 'ask'}
               activityRow={activityRow}
               onOpenConfirm={() => { setPicked(true); setDismissed(false) }}
               onRevert={revert}
-              confirm={confirmShown && current && preview && afterKcal !== null && inUseTdee !== null ? (
+              onRestore={restore}
+              confirm={confirmShown && current && preview && afterKcal !== null && adopted !== null && inUseTdee !== null ? (
                 <ConfirmCard
                   result={current}
                   beforeKcal={preview.kcal}
                   afterKcal={afterKcal}
                   inUseTdee={inUseTdee}
+                  nextTdee={adopted}
                   usingMeasured={usingMeasured}
                   bmr={finiteOrNull(preview.bmr)}
                   plannedKgPerWeek={plannedKgPerWeek}

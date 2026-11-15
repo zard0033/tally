@@ -1222,10 +1222,12 @@ const draftNum = (v: unknown): string => (v === null || v === undefined || v ===
 export function cardioSummary(row: Row): string {
   const has = (v: unknown) => v !== null && v !== undefined && v !== ''
   if (!cardioRecorded(row)) return ''
-  const parts = [`${Number(row.minutes)} 分`]
-  if (has(row.speed_kmh)) parts.push(`${Number(row.speed_kmh)} km/h`)
-  if (has(row.incline_pct)) parts.push(`坡度 ${Number(row.incline_pct)}%`)
-  if (has(row.est_kcal)) parts.push(`預估 ${Number(row.est_kcal).toLocaleString('en-US')} kcal`)
+  /* 段內用不斷行空白（\u00a0）：393 寬時「坡度」與「8%」曾被拆到兩行（使用者 2026-11-15 定案黏住）；段與段之間照常可換行 */
+  const nb = '\u00a0'
+  const parts = [`${Number(row.minutes)}${nb}分`]
+  if (has(row.speed_kmh)) parts.push(`${Number(row.speed_kmh)}${nb}km/h`)
+  if (has(row.incline_pct)) parts.push(`坡度${nb}${Number(row.incline_pct)}%`)
+  if (has(row.est_kcal)) parts.push(`預估${nb}${Number(row.est_kcal).toLocaleString('en-US')}${nb}kcal`)
   return parts.join(' · ')
 }
 

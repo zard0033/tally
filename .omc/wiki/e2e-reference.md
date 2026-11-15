@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-15 v2.143 每日目標省心＋v2.144（估一筆關掉思考、sheet 焦點、有氧摘要、動作改名）（本機，push 前）：`--list` 571 條 22 檔。executor 跑 daily-goal 71、smoke 55、settings-nav＋tally.spec＋weight-trend＋meal-suggest 88、interaction 64 全過；我這邊 spring-sheet＋training＋food-library＋sync-sheet＋inline-edit 248 過、smoke 55 過；review 修正後 daily-goal＋spring-sheet＋settings-nav＋weight-trend 122 過 1 紅（我的修正擋掉了用公式時數字一樣的改用，修法錯、不是測試錯，改回後 daily-goal 71 過）、smoke 55 過。vitest 1172 過。mutation：焦點修正第一個 mutant 讓 opener 變成沒用到的變數、tsc 先擋，不算數，改成 `opener && null` 才紅在 inactive；review LOW「差 0 卡還能改用」補的 e2e 在 mutation 下沒紅，查出那一列在用回推時本來就不是按鈕——情境不存在，防護與測試都撤掉。**通則**：mutation 沒紅時先查情境存不存在，別急著補斷言；review 的 LOW 也要先查證再修。
+
 2026-11-15 v2.141 時間軸＋「加進來」、v2.142 簡單記粗估三大（本機，push 前）：`--list` 565 條 22 檔。meal-suggest＋estimate＋interaction＋inline-edit＋meal-exit-animation 159 過 2 紅、重跑同樣 2 紅——interaction「踏腳石」與 meal-suggest「舊 GET 在 POST 之後」斷言從 sheet 加入後會進「載入中…」，這批刻意改成原地重撈（loadDay 會讓時間軸重掛、動畫跑不了），改成斷言不進載入態後 2 過；smoke 55 過；vitest 1160 過。新增 e2e 3 條（加進來 ×2、粗估列在 AI 估算後保留）。「加進來」第一版偵測恆假：新列是跟外層 `ul` 一起插進來的，`addedNodes` 只看最外層節點抓不到，要連子孫 `querySelectorAll`。mutation：initial 改 false、sheet 路徑 flashAdded 排到重撈後（都紅在 fadeIn）、改回 loadDay（紅在 pop）。**通則**：MutationObserver 找新掛上的元素，要搜 addedNodes 的子孫，不只看節點本身。
 
 2026-11-15 v2.140 CI（run 43702330220）紅在 shard 3：interaction「v2.53 週列左右滑切週」——**每到星期日必紅、不是偶發**：測試假設從今天往下一週滑一定被擋下，但星期日的明天是下週一，app 照設計夾到明天（旁邊那條驗的就是這個）。改成星期日從明天起手。這批（重量建議）沒動週列，部署被這條擋住。**通則**：斷言「不動」的日期測試，要先想今天是星期幾／月底時會不會剛好越界。

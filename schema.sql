@@ -103,6 +103,8 @@ create table weight (
 -- 範圍同 baseline.ts 的 PLAUSIBLE_MAINTENANCE。既有資料庫補這兩欄：
 --   alter table profile add column measured_tdee numeric(6,1) check (measured_tdee is null or measured_tdee between 800 and 5000);
 --   alter table profile add column measured_tdee_on date;
+-- 2026-11-15 起 measured_tdee_prev＝上一次變動前的值（「還原」用；每週自動調整，spec「每日目標省心」）。既有資料庫補：
+--   alter table profile add column measured_tdee_prev numeric(6,1) check (measured_tdee_prev is null or measured_tdee_prev between 800 and 5000);
 create table profile (
   user_id            uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   sex                text not null check (sex in ('male','female')),
@@ -118,7 +120,8 @@ create table profile (
   custom_fat_g       numeric(5,1) check (custom_fat_g is null or custom_fat_g between 0 and 2000),
   custom_carb_g      numeric(5,1) check (custom_carb_g is null or custom_carb_g between 0 and 2000),
   measured_tdee      numeric(6,1) check (measured_tdee is null or measured_tdee between 800 and 5000),
-  measured_tdee_on   date
+  measured_tdee_on   date,
+  measured_tdee_prev numeric(6,1) check (measured_tdee_prev is null or measured_tdee_prev between 800 and 5000)
 );
 
 alter table foods   enable row level security;
