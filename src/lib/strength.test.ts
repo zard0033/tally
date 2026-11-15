@@ -194,10 +194,14 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
     })
   })
 
-  it('只看最高重量的各組：熱身 40×12 不影響，60×12 兩組都做到 → 加重', () => {
-    expect(suggestWeight(base([[40, 12], [60, 12], [60, 12]]), 'sq', 5, 'cur')).toEqual({
+  it('熱身組不算（低於最重那組的 60%）：30×12 是熱身，60×12 兩組都做到 → 加重，理由只數兩組', () => {
+    expect(suggestWeight(base([[30, 12], [60, 12], [60, 12]]), 'sq', 5, 'cur')).toEqual({
       kind: 'suggest', weight_kg: 65, reason: '上次兩組都做到 12 下',
     })
+  })
+
+  it('不是熱身的輕組也要做到（v2.140：每一組非熱身都要達標）：40×10、60×12 → 40 是 60 的 67%，沒做到 → 維持', () => {
+    expect(suggestWeight(base([[40, 10], [60, 12]]), 'sq', 5, 'cur')).toMatchObject({ weight_kg: 60, reason: '40 kg 那組再做到 12 下' })
   })
 
   it('最高重量那組沒做到就維持，不管輕的組做到幾下：40×12、60×8', () => {
@@ -220,30 +224,21 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
     expect(suggestWeight(otherExercise, 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60, reason: '再做到 12 下' })
   })
 
-  it('只有 1 次訓練、或沒有任何歷史 → insufficient；進行中的訓練不算一次', () => {
+  it('做過一次就給建議（v2.140，原本要兩次）；沒有任何歷史 → insufficient；進行中的訓練不算一次', () => {
     const one = db({
       workouts: [workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
       workout_exercises: [entry('e2', 'h2', 'sq'), entry('e3', 'cur', 'sq')],
-      workout_sets: [set('b', 'e2', 60, 12), set('c', 'e3', 60, 12)],
+      workout_sets: [set('b', 'e2', 60, 12), set('c', 'e3', 100, 12)],
     })
-    expect(suggestWeight(one, 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
+    expect(suggestWeight(one, 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 62.5, reason: '上次那組做到 12 下' })
     expect(suggestWeight(db({ workouts: [workout('cur', '2026-10-12')] }), 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
   })
 
-  it('沒打勾的訓練不算一次：兩次裡有一次全沒打勾 → insufficient', () => {
+  it('全沒打勾的訓練不算：唯一一次全沒打勾 → insufficient', () => {
     const d = db({
-      workouts: [workout('h1', '2026-10-05'), workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
-      workout_exercises: [entry('e1', 'h1', 'sq'), entry('e2', 'h2', 'sq')],
-      workout_sets: [set('a', 'e1', 60, 12, false), set('b', 'e2', 60, 12)],
-    })
-    expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
-  })
-
-  it('同一次訓練同動作出現兩個 entry 不算兩次', () => {
-    const d = db({
-      workouts: [workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
-      workout_exercises: [entry('e1', 'h2', 'sq'), { ...entry('e2', 'h2', 'sq'), position: 1 }],
-      workout_sets: [set('a', 'e1', 60, 12), set('b', 'e2', 60, 12)],
+      workouts: [workout('h1', '2026-10-05'), workout('cur', '2026-10-12')],
+      workout_exercises: [entry('e1', 'h1', 'sq')],
+      workout_sets: [set('a', 'e1', 60, 12, false)],
     })
     expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'insufficient' })
   })
@@ -264,10 +259,10 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
       workout_exercises: [entry('e1', 'h1', 'sq'), entry('e3', 'late', 'sq')],
       workout_sets: [set('a', 'e1', 60, 12), set('c', 'e3', 100, 12)],
     })
-    // 編輯 h2（10/08）：它之前只有 h1 一次 → 不足；若把 10/12 算進來會變成兩次、建議 102.5
-    expect(suggestWeight(d, 'sq', 2.5, 'h2')).toEqual({ kind: 'insufficient' })
-    // 編輯 10/12 那次：之前有 h1 一次，仍然不足
-    expect(suggestWeight(d, 'sq', 2.5, 'late')).toEqual({ kind: 'insufficient' })
+    // 編輯 h2（10/08）：「上次」是 h1 的 60×12 → 62.5；若把 10/12 算進來會建議 102.5
+    expect(suggestWeight(d, 'sq', 2.5, 'h2')).toMatchObject({ weight_kg: 62.5 })
+    // 編輯 10/12 那次：上次也是 h1
+    expect(suggestWeight(d, 'sq', 2.5, 'late')).toMatchObject({ weight_kg: 62.5 })
   })
 
   it('同一天只算開始時間更早的：補記與當天另一次訓練', () => {
@@ -280,8 +275,8 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
       workout_exercises: [entry('e1', 'h1', 'sq'), entry('e2', 'am', 'sq'), entry('e3', 'pm', 'sq')],
       workout_sets: [set('a', 'e1', 60, 12), set('b', 'e2', 70, 12), set('c', 'e3', 90, 12)],
     })
-    // 編輯 am：之前只有 h1（pm 晚於它）→ 不足
-    expect(suggestWeight(d, 'sq', 2.5, 'am')).toEqual({ kind: 'insufficient' })
+    // 編輯 am：上次是 h1 的 60×12（pm 晚於它，不算）→ 62.5
+    expect(suggestWeight(d, 'sq', 2.5, 'am')).toMatchObject({ weight_kg: 62.5 })
     // 編輯 pm：之前有 h1 與 am → 以 am 的 70×12 為準
     expect(suggestWeight(d, 'sq', 2.5, 'pm')).toMatchObject({ weight_kg: 72.5 })
   })
@@ -289,6 +284,82 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
   it('小數相加不留浮點尾巴：57.5＋2.5＝60、12.5＋2.5＝15', () => {
     expect(suggestWeight(base([[57.5, 12]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60 })
     expect(suggestWeight(base([[12.5, 12]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 15 })
+  })
+
+  /* RPE（spec 階段 4 丙 階段 1）：rows 依 set_no 排，最重那組同重量多組有填取最後一組 */
+  const withRpe = (sets: Array<[number, number, number | null]>) =>
+    db({
+      workouts: [workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
+      workout_exercises: [entry('e2', 'h2', 'sq'), entry('e3', 'cur', 'sq')],
+      workout_sets: sets.map(([w, r, rpe], i) => ({ ...set(`b${i}`, 'e2', w, r), set_no: i + 1, rpe })),
+    })
+
+  it('RPE ≤7：還剩 3 下以上，就算次數沒到也加一格', () => {
+    expect(suggestWeight(withRpe([[60, 10, null], [60, 10, 7]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 62.5, reason: '上次 RPE 7，還有餘力',
+    })
+  })
+
+  it('全做到、RPE 8 → 加一格，理由帶 RPE', () => {
+    expect(suggestWeight(withRpe([[60, 12, null], [60, 12, null], [60, 12, 8]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、RPE 8',
+    })
+  })
+
+  it('全做到、RPE 9 或 10 → 維持', () => {
+    expect(suggestWeight(withRpe([[60, 12, null], [60, 12, 9]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 60, reason: '上次 RPE 9，維持',
+    })
+    expect(suggestWeight(withRpe([[60, 12, 10]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60 })
+  })
+
+  it('同重量多組有填取最後一組：RPE 7 在前、9 在後 → 用 9（維持），不是 7（加重）', () => {
+    expect(suggestWeight(withRpe([[60, 12, 7], [60, 12, 9]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60 })
+  })
+
+  it('沒做到、最差那組少 2 下、RPE 9 → 降一格', () => {
+    expect(suggestWeight(withRpe([[60, 12, null], [60, 10, 9]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 57.5, reason: '上次只做到 10 下、RPE 9，降一格',
+    })
+  })
+
+  it('沒做到但只少 1 下、或沒填 RPE → 維持，不降', () => {
+    expect(suggestWeight(withRpe([[60, 11, 10]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60, reason: '再做到 12 下' })
+    expect(suggestWeight(withRpe([[60, 8, null]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60, reason: '再做到 12 下' })
+  })
+
+  it('熱身組的 RPE 不算：30×12 RPE 6 是熱身，60×12 兩組沒填 → 照次數加重', () => {
+    expect(suggestWeight(withRpe([[30, 12, 6], [60, 12, null], [60, 12, null]]), 'sq', 2.5, 'cur')).toMatchObject({
+      weight_kg: 62.5, reason: '上次兩組都做到 12 下',
+    })
+  })
+
+  it('同一次訓練裡同動作出現兩次（後面補一組收尾）：合在一起看，不會只看到後加的那筆', () => {
+    const d = db({
+      workouts: [workout('h2', '2026-10-08'), workout('cur', '2026-10-12')],
+      workout_exercises: [entry('eA', 'h2', 'sq'), { ...entry('eB', 'h2', 'sq'), position: 1 }],
+      workout_sets: [
+        { ...set('a1', 'eA', 60, 12), set_no: 1 },
+        { ...set('a2', 'eA', 60, 12), set_no: 2, rpe: 8 },
+        { ...set('b1', 'eB', 40, 12), set_no: 1 },
+      ],
+    })
+    // 只看後加的 eB 會以 40 為最重 → 42.5；合起來最重是 60、RPE 8、三組都做到 → 62.5
+    expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、RPE 8' })
+  })
+
+  it('較輕的收尾組沒做到：最重那組做到、RPE 9 → 不降，維持並說是哪個重量沒做到', () => {
+    expect(suggestWeight(withRpe([[60, 12, 9], [45, 8, null]]), 'sq', 2.5, 'cur')).toEqual({
+      kind: 'suggest', weight_kg: 60, reason: '45 kg 那組再做到 12 下',
+    })
+  })
+
+  it('RPE 只填在較輕的組：當成沒填（不拿輕組的 RPE 判最重那組），沒填不降', () => {
+    expect(suggestWeight(withRpe([[60, 10, null], [50, 10, 10]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60, reason: '再做到 12 下' })
+  })
+
+  it('降一格會變成 0 或負的 → 維持', () => {
+    expect(suggestWeight(withRpe([[2.5, 8, 10]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 2.5 })
   })
 
   it('組數超過十用阿拉伯數字（11 組都做到）', () => {

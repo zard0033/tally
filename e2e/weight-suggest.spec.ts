@@ -16,7 +16,7 @@ const byName = (name: string) => {
   return row as Record<string, unknown> & { id: string }
 }
 
-type Hist = [number, number][] // 一次訓練裡的各組 [重量, 次數]，全部已打勾
+type Hist = [number, number, number?][] // 一次訓練裡的各組 [重量, 次數, RPE（選填）]，全部已打勾
 interface Plan { name: string; sessions: [Hist, Hist] }
 
 /** 每個動作兩次歷史訓練（-10、-3 天）＋進行中的訓練 w-live（各動作一組、沒打勾，位置依 plans 順序）。 */
@@ -34,8 +34,8 @@ function build(plans: Plan[], opts: { routine?: { id: string; reps: number | nul
       const d = day(si === 0 ? -10 : -3)
       workouts.push({ id: wid, performed_on: d, started_at: `${d}T08:00:00.000Z`, ended_at: `${d}T09:00:00.000Z`, routine_id: null })
       entries.push({ id: `${wid}-e`, workout_id: wid, exercise_id: idOf(p.name), position: 0 })
-      hist.forEach(([w, r], i) =>
-        sets.push({ id: `${wid}-s${i}`, workout_exercise_id: `${wid}-e`, set_no: i + 1, weight_kg: w, reps: r, done: true }),
+      hist.forEach(([w, r, rpe], i) =>
+        sets.push({ id: `${wid}-s${i}`, workout_exercise_id: `${wid}-e`, set_no: i + 1, weight_kg: w, reps: r, rpe: rpe ?? null, done: true }),
       )
     })
     entries.push({ id: `live-e${pi}`, workout_id: 'w-live', exercise_id: idOf(p.name), position: pi })
@@ -86,7 +86,7 @@ async function closeSheet(page: Page) {
 const PLANS: Plan[] = [
   { name: '槓鈴深蹲', sessions: [[[100, 12]], [[100, 12], [100, 12], [100, 12]]] }, // 做到 → +5（槓鈴）
   { name: '啞鈴臥推', sessions: [[[20, 12]], [[20, 12], [20, 12]]] }, // 做到 → +2.5（啞鈴）
-  { name: '腿推舉', sessions: [[[60, 12]], [[60, 12], [60, 11], [60, 10]]] }, // 有一組沒做到 → 維持
+  { name: '腿推舉', sessions: [[[60, 12]], [[60, 12], [60, 11], [60, 10]]] }, // 有一組沒做到、沒填 RPE → 維持（沒填一律不降）
   { name: '我的動作', sessions: [[[10, 12]], [[10, 12]]] }, // 自建 → +2.5
 ]
 
@@ -102,7 +102,7 @@ test('不同器材的加重幅度與理由：槓鈴 +5、啞鈴 +2.5、器械維
   await closeSheet(page)
 
   await openSet(page, 2)
-  await expect(suggest(page)).toContainText('建議 60 kg · 再做到 12 下') // 沒有「降重」，也沒有加重
+  await expect(suggest(page)).toContainText('建議 60 kg · 再做到 12 下') // 沒填 RPE 不降重，也沒有加重
   await closeSheet(page)
 
   await openSet(page, 3)
@@ -127,10 +127,13 @@ test('套用：把重量欄填成建議值、鈕變灰「已套用」；之後�
   await expect(apply).toBeEnabled()
 })
 
-test('徒手動作不給建議（整行不出現）；紀錄只有一次的動作說「還沒有足夠紀錄」', async ({ page }) => {
+const GUIDE = '之前沒做過這個動作：先做一組輕的熱身並記 RPE，挑一個剩 2–3 下的重量'
+
+test('徒手動作不給建議（整行不出現）；做過一次就給建議；沒做過的只給指引、不編數字', async ({ page }) => {
   const plans: Plan[] = [
     { name: '引體向上', sessions: [[[0, 8]], [[0, 8]]] },
     { name: '槓鈴臥推', sessions: [[], [[60, 12]]] },
+    { name: '啞鈴臥推', sessions: [[], []] },
   ]
   await openLive(page, build(plans))
 
@@ -139,17 +142,41 @@ test('徒手動作不給建議（整行不出現）；紀錄只有一次的動�
   await closeSheet(page)
 
   await openSet(page, 1)
-  await expect(suggest(page)).toHaveText('建議：還沒有足夠紀錄（至少 2 次）')
-  await expect(suggest(page).getByRole('button')).toHaveCount(0)
+  await expect(suggest(page), 'v2.140：做過一次就給（原本要兩次）').toContainText('建議 65 kg · 上次那組做到 12 下')
+  await closeSheet(page)
+
+  await openSet(page, 2)
+  await expect(suggest(page)).toHaveText(GUIDE)
+  await expect(suggest(page).getByRole('button'), '指引沒有數字可套用').toHaveCount(0)
 })
 
-test('進行中的這一次不算歷史：只有一次歷史＋今天這次，仍然不足', async ({ page }) => {
-  const fix = build([{ name: '槓鈴深蹲', sessions: [[], [[100, 12]]] }])
-  // 把今天這次的那組也打勾：它是進行中的訓練，不能把自己算成第二次
+test('進行中的這一次不算歷史：沒做過＋今天這次打勾了，仍然只給指引', async ({ page }) => {
+  const fix = build([{ name: '槓鈴深蹲', sessions: [[], []] }])
+  // 把今天這次的那組打勾：它是進行中的訓練，不能把自己算成「上次」
   fix.workout_sets = fix.workout_sets.map((s) => (s.id === 'live-s0' ? { ...s, weight_kg: 100, reps: 12, done: true } : s))
   await openLive(page, fix)
   await openSet(page, 0)
-  await expect(suggest(page)).toHaveText('建議：還沒有足夠紀錄（至少 2 次）')
+  await expect(suggest(page)).toHaveText(GUIDE)
+})
+
+test('用上 RPE（v2.140）：RPE 7 次數沒到也加重、全做到但 RPE 9 維持、少 2 下且 RPE 9 降一格', async ({ page }) => {
+  const plans: Plan[] = [
+    { name: '槓鈴深蹲', sessions: [[], [[100, 10, 7]]] }, // 剩 3 下以上 → +5
+    { name: '啞鈴臥推', sessions: [[], [[20, 12], [20, 12, 9]]] }, // 全做到但吃力 → 維持
+    { name: '腿推舉', sessions: [[], [[60, 12], [60, 10, 9]]] }, // 少 2 下、RPE 9 → −2.5
+  ]
+  await openLive(page, build(plans))
+
+  await openSet(page, 0)
+  await expect(suggest(page)).toContainText('建議 105 kg · 上次 RPE 7，還有餘力')
+  await closeSheet(page)
+
+  await openSet(page, 1)
+  await expect(suggest(page)).toContainText('建議 20 kg · 上次 RPE 9，維持')
+  await closeSheet(page)
+
+  await openSet(page, 2)
+  await expect(suggest(page)).toContainText('建議 57.5 kg · 上次只做到 10 下、RPE 9，降一格')
 })
 
 test('門檻取課表的目標次數：目標 8、上次 60×8 兩組 → 建議 +5、理由寫 8 下；沒設目標才用 12', async ({ page }) => {

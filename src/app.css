@@ -2084,6 +2084,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .set-sec { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-2); }
 .set-none { font-size: var(--t-sm); color: var(--ink-muted); }
+/* 指引會折行：切成三個短語、各自不斷行，只在短語之間換——中文斷行點不好預測，balance 也會把「熱身」拆開（v2.140） */
+.set-none > span { white-space: nowrap; }
 /* 重量建議一行：左邊「建議 62.5 kg · 理由」，右邊文字鈕「套用」；已等於建議時鈕變灰「已套用」 */
 .set-suggest { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
   font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }

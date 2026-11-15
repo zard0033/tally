@@ -267,7 +267,8 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
                   </button>
                 </>
               ) : (
-                <span className="set-none">建議：還沒有足夠紀錄（至少 2 次）</span>
+                /* 這次之前沒做過這個動作（補記舊訓練時，之後才做過的不算）：只給指引、不編數字（spec 階段 4 丙 階段 1，使用者 2026-10-28 裁決；Helms 2016：靠熱身組的 RPE 挑重量） */
+                <span className="set-none"><span>之前沒做過這個動作：</span><span>先做一組輕的熱身並記 RPE，</span><span>挑一個剩 2–3 下的重量</span></span>
               )}
             </div>
           )}

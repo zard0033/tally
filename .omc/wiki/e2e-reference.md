@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-15 v2.140 重量建議用上 RPE（本機，push 前）：`e2e:affected` 247 過；review 修完 weight-suggest 8 過、smoke 55 過；vitest 1155 過。mutation 九項（RPE ≤7 加重、RPE 9 維持、降一格、取最後一組、熱身排除、改回兩次、同訓練兩筆不合併、降級看全部組、維持不寫重量）各自都紅。
+
 2026-11-14 v2.139 拍照讀標示鈕套 AI 光暈（本機，push 前）：food-library＋spring-sheet 66 過（review 修完再跑一次 66 過）、smoke 55 過兩輪。純樣式、選擇器不變，沒有新測試；鍵盤焦點框另截圖確認看得到。
 
 2026-11-14 v2.138 量法斷點（本機，push 前）：`--list` 560 條 22 檔。第一輪 smoke 55＋daily-goal／settings／weight-trend／meal-suggest 151 全過；review 修完再跑 smoke 55＋daily-goal／settings／weight-trend 90 全過。mutation：段號全 0（斷點失效）vitest 紅 4、e2e 紅 3；更新身體數據沒勾也帶欄位 → 紅；review 三項（窗口筆數扣斷點、跨度加總、改到 0 列報錯）各有單元測試。vitest 1144 全過。

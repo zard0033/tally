@@ -202,6 +202,8 @@ export interface CompletedSession {
   readonly workoutId: string
   /** 該次該動作已打勾的組，依 set_no 排 */
   readonly sets: PrefillSet[]
+  /** 同上的原始列（含 id、rpe），給重量建議判熱身與讀 RPE 用（v2.140）。帶入上次的組只用 sets，不會把 RPE 複製到新的組 */
+  readonly rows: readonly Row[]
 }
 
 /** 該動作有已打勾組的各次訓練，由新到舊（同一次訓練的同動作出現兩個 entry 時各算一筆）。 */
@@ -223,12 +225,14 @@ export function completedSessions(db: TrainingDb, exerciseId: string, excludeWor
     })
     .sort(byLastDesc)
 
-  return candidates.map((c) => ({
-    workoutId: c.workout.id,
-    sets: [...c.done]
-      .sort(bySetNo)
-      .map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps) })),
-  }))
+  return candidates.map((c) => {
+    const rows = [...c.done].sort(bySetNo)
+    return {
+      workoutId: c.workout.id,
+      sets: rows.map((s) => ({ weight_kg: Number(s.weight_kg), reps: Number(s.reps) })),
+      rows,
+    }
+  })
 }
 
 /** 該動作「上次實際完成」的各組：最近一次有打勾組的訓練裡，那個動作已打勾的組，依 set_no 排。
