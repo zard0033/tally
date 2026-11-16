@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>訓練換皮：三個方向 × 三個畫面</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（同 today-meals.html） ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 1240px; line-height: 1.6; }
+  .row { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; margin-bottom: 36px; }
+  .colhead { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .colhead h2 { margin: 0; font-size: var(--t-md); font-weight: 800; }
+  .colhead h2 small { font-weight: 600; color: var(--ink-muted); font-size: var(--t-sm); margin-left: 6px; }
+  .colhead ul { margin: 0; padding-left: 1.2em; font-size: var(--t-xs); line-height: 1.65; color: var(--ink-muted); }
+  .colhead ul b { color: var(--ink); font-weight: 700; }
+  .frame-label { font-size: var(--t-sm); font-weight: 700; margin-bottom: 10px; }
+  .frame-label small { font-weight: 600; color: var(--ink-faint); margin-left: 6px; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px; position: relative; background: var(--paper); box-shadow: var(--shadow-2);
+    display: flex; flex-direction: column; }
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  svg.art { display: block; }
+
+  /* ── 共用小件 ── */
+  .ico { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink-muted); flex-shrink: 0; }
+  .ico.sdanger { color: var(--over); }
+  .thumb { width: 44px; height: 44px; border-radius: var(--r-tab); background: var(--fill); display: grid; place-items: center;
+    font-weight: 700; color: var(--ink-muted); flex-shrink: 0; }
+  .thumb.plate { border-radius: 50%; background: var(--plate); color: var(--accent-dark); }
+  .grip { width: 20px; color: var(--ink-faint); font-size: 14px; letter-spacing: -2px; flex-shrink: 0; text-align: center; }
+  .sdots { display: inline-flex; gap: 4px; vertical-align: middle; margin-right: 6px; }
+  .sdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--track); }
+  .sdots i.on { background: var(--accent); }
+  .ssub { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 3px; display: flex; align-items: center; }
+  .snm { font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md); line-height: 1.2; }
+
+  /* 組列（三個方向共用；只有外框不同） */
+  .sets { padding: 0 var(--s-3) var(--s-3); }
+  .sets .hd, .sets .srow { display: grid; grid-template-columns: 28px 1fr 1fr 52px; gap: var(--s-2); align-items: center; }
+  .sets .hd { font-size: var(--t-xs); color: var(--ink-muted); min-height: 32px; text-align: center; }
+  .sets .srow { min-height: 56px; }
+  .sets .sno { text-align: center; color: var(--ink-muted); font-size: var(--t-sm); }
+  .cell { height: 46px; border-radius: var(--r-tab); background: var(--fill); display: grid; place-items: center; font-family: var(--font-num);
+    font-size: 1.15rem; font-weight: 700; }
+  .srow.todo .cell { color: var(--ink-muted); font-weight: 600; }
+  .schk { width: 48px; height: 48px; border-radius: 50%; background: var(--fill); display: grid; place-items: center; color: var(--ink-faint); justify-self: center; }
+  .srow.done .schk { background: var(--accent); color: var(--on-accent); }
+  .addset { margin: var(--s-2) var(--s-1) 0; height: 44px; border-radius: var(--r-tab); border: 1.5px dashed var(--rule-field); display: grid; place-items: center;
+    color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .tips { margin: 0 var(--s-1) var(--s-2); height: 40px; border-radius: var(--r-tab); background: var(--fill); color: var(--ink-faint); font-size: var(--t-sm);
+    display: flex; align-items: center; padding: 0 var(--s-3); }
+
+  /* 底部：休息條＋兩顆鈕（三個方向不動） */
+  .bottom { margin-top: auto; padding: var(--s-2) var(--s-5) var(--s-4); display: flex; gap: var(--s-2); }
+  .btn2 { height: 52px; border-radius: var(--r-btn); background: var(--fill); color: var(--accent); font-weight: 700; display: grid; place-items: center; padding: 0 var(--s-4); }
+  .btn1 { flex: 1; height: 52px; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent); font-weight: 700; display: grid; place-items: center; }
+  .rest { margin: 0 var(--s-5); height: 52px; border-radius: var(--r-pill); background: var(--ink); color: var(--on-accent); display: flex; align-items: center;
+    padding: 0 var(--s-4); gap: var(--s-3); box-shadow: var(--shadow-2); }
+  .rest .t { font-family: var(--font-num); font-size: 1.5rem; font-weight: 800; }
+  .rest .k { margin-left: auto; display: flex; gap: var(--s-4); font-weight: 700; font-size: var(--t-sm); }
+  .scroll { flex: 1; min-height: 0; overflow: hidden; padding: var(--s-3) var(--s-5) 0; }
+
+  /* ── 訓練中的頂端：A／B 共用「天空頂」 ── */
+  .skytop { position: relative; flex-shrink: 0; height: 164px; }
+  .skytop > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .skytop .sk-bar { position: relative; display: flex; align-items: center; height: 52px; padding: 4px var(--s-2) 0; }
+  .skytop .sk-bar .ico { color: var(--ink-sky); }
+  .skytop .sk-bar h1 { margin: 0; flex: 1; font-size: var(--t-md); font-weight: 700; }
+  .skytop .sk-bar h1 small { font-weight: 600; color: var(--ink-sky); font-size: var(--t-sm); margin-left: 6px; }
+  .skytop .st { position: relative; display: flex; align-items: baseline; gap: var(--s-4); padding: 0 var(--s-5); }
+  .skytop .sbig { font-family: var(--font-num); font-size: 2.6rem; font-weight: 900; letter-spacing: var(--track-hero); line-height: 1; }
+  .skytop .lab { font-size: var(--t-xs); color: var(--ink-sky); margin-top: 4px; }
+  .skytop .mini b { font-family: var(--font-num); font-size: 1.15rem; font-weight: 800; display: block; line-height: 1.1; }
+
+  /* 現況（對照用） */
+  .now-top { display: flex; align-items: center; height: 56px; padding: 0 var(--s-2); }
+  .now-top h1 { margin: 0; flex: 1; font-size: var(--t-md); font-weight: 700; }
+  .now-stats { margin: 0 var(--s-5) var(--s-2); background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1);
+    display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; padding: var(--s-3) 0; }
+  .now-stats b { font-family: var(--font-num); font-size: 1.35rem; font-weight: 600; display: block; }
+  .now-stats span { font-size: var(--t-xs); color: var(--ink-muted); }
+
+  /* ═════════ A：天空頂＋白卡 ═════════ */
+  .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); margin-bottom: var(--s-3); overflow: hidden; }
+  .card .head { display: flex; align-items: center; gap: var(--s-2); min-height: 64px; padding: 0 var(--s-1) 0 var(--s-2); }
+  .card .head .stxt { flex: 1; min-width: 0; }
+
+  /* ═════════ B：時間軸 ═════════ */
+  .tl .tex { position: relative; padding: 0 0 var(--s-2) 34px; }
+  .tl .tex::before { content: ""; position: absolute; left: 10px; top: 40px; bottom: 0; width: 2px; background: var(--rule); }
+  .tl .tex:last-child::before { display: none; }
+  .tl .tnode { position: absolute; left: 1px; top: 22px; width: 20px; height: 20px; border-radius: 50%; box-sizing: border-box;
+    border: 2px solid var(--ink-faint); background: var(--paper); display: grid; place-items: center; }
+  .tl .tnode.on { border-color: var(--accent); background: var(--accent); }
+  .tl .tnode.on::after { content: ""; width: 8px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  .tl .tnode.cur { border-color: var(--accent); box-shadow: 0 0 0 5px var(--accent-ring); }
+  .tl .head { display: flex; align-items: center; gap: var(--s-2); min-height: 64px; }
+  .tl .head .stxt { flex: 1; min-width: 0; }
+  .tl .tex.cur .body { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); padding-top: var(--s-2); margin-right: calc(var(--s-1) * -1); }
+
+  /* ═════════ C：山路（組數＝踏腳石） ═════════ */
+  .pathtop { position: relative; flex-shrink: 0; height: 176px; }
+  .pathtop > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ── 訓練首頁 ── */
+  .band { position: relative; height: 96px; flex-shrink: 0; }
+  .band > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .band h1 { position: relative; margin: 0; padding: var(--s-3) var(--s-5) 0; font-size: var(--t-lg); font-weight: 700; }
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; padding: var(--s-2) var(--s-3) var(--s-3); }
+  .week span { font-size: var(--t-xs); color: var(--ink-muted); }
+  .week b { display: grid; place-items: center; width: 38px; height: 38px; margin: 4px auto 0; border-radius: 50%; font-family: var(--font-num); font-weight: 700; color: var(--ink-faint); position: relative; }
+  .week b.past { color: var(--ink); }
+  .week b.sel { background: var(--accent); color: var(--on-accent); }
+  .week b.mk::after { content: ""; position: absolute; bottom: -6px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  .sect { display: flex; align-items: center; font-size: var(--t-sm); font-weight: 600; color: var(--ink-muted); margin: var(--s-3) 0 var(--s-2); }
+  .sect .lnk { margin-left: auto; color: var(--accent); font-weight: 700; }
+  .rowc { display: flex; align-items: center; gap: var(--s-3); min-height: 64px; padding: 0 var(--s-3) 0 var(--s-4); }
+  .rowc + .rowc { border-top: 1px solid var(--rule-subtle); }
+  .rowc .stxt { flex: 1; }
+  .schev { color: var(--ink-faint); }
+  .wk-tl .titem { position: relative; padding-left: 34px; }
+  .wk-tl .titem .tnode { position: absolute; left: 1px; top: 22px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
+  .wk-tl .titem .tnode::after { content: ""; width: 8px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+  .wk-tl .titem .rowc { padding-left: 0; }
+
+  /* ── 完成 sheet ── */
+  .sscrim { position: absolute; inset: 0; background: rgba(29, 43, 69, .45); }
+  .ssheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 24px 24px 0 0; padding: var(--s-2) var(--s-5) var(--s-5); }
+  .ssheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--track); margin: 0 auto var(--s-3); }
+  .ssheet .shd { display: flex; align-items: center; justify-content: space-between; font-size: var(--t-lg); font-weight: 700; }
+  .hero { text-align: center; margin: var(--s-3) 0 var(--s-1); }
+  .hero b { font-family: var(--font-num); font-size: var(--t-display); font-weight: 900; letter-spacing: var(--track-display); line-height: 1; }
+  .hero span { font-size: var(--t-md); font-weight: 700; color: var(--ink-muted); margin-left: 4px; }
+  .facts { text-align: center; color: var(--ink-muted); font-size: var(--t-sm); margin-bottom: var(--s-4); }
+  .recap { border-top: 1px solid var(--rule-subtle); }
+  .recap .r { display: flex; justify-content: space-between; align-items: baseline; min-height: 40px; border-bottom: 1px solid var(--rule-subtle); font-size: var(--t-base); }
+  .recap .r span:last-child { color: var(--ink-muted); font-size: var(--t-sm); }
+  .saveas { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; color: var(--accent); font-weight: 700; }
+  .saveas small { display: block; color: var(--ink-muted); font-weight: 400; font-size: var(--t-xs); }
+  .ssheet .btn1 { margin-top: var(--s-3); }
+  .summit { margin: 0 calc(var(--s-5) * -1) 0; height: 120px; position: relative; }
+  .summit svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1 class="harness-title">訓練換皮：三個方向 × 三個畫面（2026-11-16）</h1>
+<p class="harness-sub">
+  還停在舊樣子的只有三處：<b>訓練中整頁</b>（白色統計卡＋白卡）、<b>訓練首頁的「已完成」</b>、<b>訓練完成 sheet</b>。組編輯、有氧、課表、動作庫這些 sheet 與子頁用的是全站的欄位語言（v2.68），跟記一筆、食品庫同一套，這次不動，否則反而跟飲食那邊分岔。
+  三個方向都<b>不動功能與按鈕位置</b>：組列、勾、休息條、底部兩顆鈕照舊（流汗時的手感不變）。第一列最左是現況，對照用。
+</p>
+
+<!-- ═══════════════ 第一列：方向說明 ═══════════════ -->
+<div class="row">
+  <div class="colhead">
+    <h2>A　天空頂＋白卡<small>改最少</small></h2>
+    <ul>
+      <li><b>頂端：</b>白色統計卡拿掉，「訓練中」與統計坐在天空上（同今日頁「還能吃」坐在天空上）；時長是主數字，Nunito 900。</li>
+      <li><b>動作：</b>白卡照舊，縮圖換成盤子色圓底；收合時標題下一排小圓點＝組數進度。</li>
+      <li><b>代價：</b>頂端比現在高約 25px，第一屏少半列組。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>B　天空頂＋時間軸<small>跟今日頁同一套</small></h2>
+    <ul>
+      <li><b>頂端：</b>同 A。</li>
+      <li><b>動作：</b>左邊一條細線串起動作（做完＝實心打勾、正在做＝藍圈光暈、還沒做＝空心），跟今日頁 v2.141 的餐別時間軸同一套說法；只有正在做的那個動作展開成白卡，其他是紙上的一列。</li>
+      <li><b>代價：</b>白卡從每個動作一張變成只剩一張，收合的動作少了卡片邊界，拖曳排序的落點要靠線與列分辨。</li>
+    </ul>
+  </div>
+  <div class="colhead">
+    <h2>C　山路進度<small>最像故事書</small></h2>
+    <ul>
+      <li><b>頂端：</b>天空裡畫一條上山的小徑，<b>一組＝一塊踏腳石</b>，打勾就亮一塊，做完全部到山頂插旗（同登入頁「日出上山」）。統計縮成一行字。</li>
+      <li><b>動作：</b>同 A 的白卡。<b>完成 sheet</b> 頂端是登頂小景。</li>
+      <li><b>代價：</b>頂端最高（約 +50px）；組數超過約 24 組時石頭要縮小或改成每動作一塊。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════ 第二列：訓練中 ═══════════════ -->
+<div class="row">
+  <div><div class="frame-label">A · 訓練中<small>第 2 個動作做到一半，休息中</small></div><div class="device" id="sa"></div></div>
+  <div><div class="frame-label">B · 訓練中</div><div class="device" id="sb"></div></div>
+  <div><div class="frame-label">C · 訓練中</div><div class="device" id="sc"></div></div>
+</div>
+
+<!-- ═══════════════ 第三列：訓練首頁 ═══════════════ -->
+<div class="row">
+  <div><div class="frame-label">A · 訓練首頁<small>只換「已完成」那張卡的字級</small></div><div class="device" id="ha"></div></div>
+  <div><div class="frame-label">B · 訓練首頁<small>已完成改成時間軸的一節</small></div><div class="device" id="hb"></div></div>
+  <div><div class="frame-label">C · 訓練首頁<small>同 A</small></div><div class="device" id="hc"></div></div>
+</div>
+
+<!-- ═══════════════ 第四列：完成 sheet ═══════════════ -->
+<div class="row">
+  <div><div class="frame-label">A · 訓練完成</div><div class="device" id="fa"></div></div>
+  <div><div class="frame-label">B · 訓練完成<small>回顧也走時間軸</small></div><div class="device" id="fb"></div></div>
+  <div><div class="frame-label">C · 訓練完成<small>頂端登頂小景</small></div><div class="device" id="fc"></div></div>
+</div>
+
+<!-- 現況對照 -->
+<div class="row">
+  <div><div class="frame-label">現況 · 訓練中（對照）</div><div class="device" id="now"></div></div>
+</div>
+
+<script>
+const I = {
+  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  trash: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
+  swap: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>',
+  down: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>',
+  chev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
+  chk: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  copy: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
+}
+const EX = [
+  { nm: '槓鈴臥推', g: '胸部', c: '臥', sets: [[60, 10, 1], [60, 10, 1], [60, 9, 1]] },
+  { nm: '上斜啞鈴臥推', g: '胸部', c: '斜', sets: [[22, 10, 1], [22, 10, 0], [22, 10, 0]], cur: true },
+  { nm: '滑輪三頭下壓', g: '手臂', c: '三', sets: [[25, 12, 0], [25, 12, 0], [25, 12, 0]] },
+  { nm: '器械肩推', g: '肩膀', c: '肩', sets: [[30, 10, 0], [30, 10, 0], [30, 10, 0]] },
+]
+const done = EX.flatMap((e) => e.sets).filter((s) => s[2]).length
+const total = EX.flatMap((e) => e.sets).length
+const vol = EX.flatMap((e) => e.sets).filter((s) => s[2]).reduce((a, s) => a + s[0] * s[1], 0).toLocaleString()
+
+/* 天空與山（同 SkyBand：天空、太陽、雲、遠山、中山、最前面一層紙色地面） */
+const sky = (h, extra = '') => `<svg class="art" viewBox="0 0 393 ${h}" preserveAspectRatio="none" aria-hidden="true">
+  <rect width="393" height="${h}" fill="var(--sky)"/>
+  <circle cx="318" cy="34" r="22" fill="var(--sun-pale)" opacity=".6"/><circle cx="318" cy="34" r="14" fill="var(--sun)"/>
+  <g fill="var(--snow)" opacity=".9"><g transform="translate(206 16) scale(.8)"><ellipse cx="22" cy="17" rx="19" ry="8"/><ellipse cx="34" cy="11" rx="13" ry="9"/><ellipse cx="46" cy="17" rx="13" ry="7"/></g></g>
+  <path d="M0 ${h - 32}C70 ${h - 52} 130 ${h - 48} 190 ${h - 36}S300 ${h - 54} 393 ${h - 42}V${h}H0z" fill="var(--hill-far)"/>
+  <path d="M0 ${h - 19}C80 ${h - 35} 170 ${h - 31} 240 ${h - 21}S350 ${h - 33} 393 ${h - 27}V${h}H0z" fill="var(--hill-mid)"/>
+  ${extra}
+  <path d="M0 ${h - 5}C90 ${h - 14} 200 ${h - 11} 290 ${h - 5}S370 ${h - 7} 393 ${h - 7}V${h}H0z" fill="var(--paper)"/>
+</svg>`
+
+const skyTop = () => `<div class="skytop">${sky(164)}
+  <div class="sk-bar"><span class="ico">${I.back}</span><h1>訓練中<small>推日</small></h1><span class="ico sdanger">${I.trash}</span></div>
+  <div class="st"><div><div class="sbig">42:10</div><div class="lab">時長</div></div>
+    <div class="mini"><b class="num">${vol}</b><div class="lab">訓練量 kg</div></div>
+    <div class="mini"><b class="num">${done}/${total}</b><div class="lab">完成組數</div></div></div>
+</div>`
+
+const dots = (e) => `<span class="sdots">${e.sets.map((s) => `<i class="${s[2] ? 'on' : ''}"></i>`).join('')}</span>`
+const subOf = (e) => { const d = e.sets.filter((s) => s[2]).length; return `${dots(e)}${d}/${e.sets.length} 組` }
+const setsHtml = (e) => `<div class="sets"><div class="tips">加要點</div>
+  <div class="hd"><span>組</span><span>重量 kg</span><span>次數</span><span></span></div>
+  ${e.sets.map((s, i) => `<div class="srow ${s[2] ? 'done' : 'todo'}"><span class="sno">${i + 1}</span><span class="cell">${s[0]}</span><span class="cell">${s[1]}</span><span class="schk">${I.chk}</span></div>`).join('')}
+  <div class="addset">＋ 新增一組</div></div>`
+const restBar = `<div class="rest"><span style="font-size:var(--t-xs);opacity:.75">休息</span><span class="t">1:12</span><span class="k"><span>−15</span><span>＋15</span><span>略過</span></span></div>`
+const bottom = `<div class="bottom"><div class="btn2">＋ 加動作</div><div class="btn1">完成訓練</div></div>`
+
+/* A：天空頂＋白卡 */
+const cardA = (e) => `<div class="card"><div class="head"><span class="grip">⋮⋮</span><span class="thumb plate">${e.c}</span>
+  <div class="stxt"><div class="snm">${e.nm}</div><div class="ssub">${subOf(e)}</div></div>
+  <span class="ico">${I.down}</span><span class="ico">${I.swap}</span><span class="ico sdanger">${I.trash}</span></div>${e.cur ? setsHtml(e) : ''}</div>`
+document.getElementById('sa').innerHTML = skyTop() + `<div class="scroll">${EX.map(cardA).join('')}</div>` + restBar + bottom
+
+/* B：天空頂＋時間軸 */
+const exB = (e) => { const all = e.sets.every((s) => s[2]); const cls = all ? 'on' : e.cur ? 'cur' : ''
+  return `<div class="tex ${e.cur ? 'cur' : ''}"><span class="tnode ${cls}"></span>
+  <div class="${e.cur ? 'body' : ''}"><div class="head" ${e.cur ? 'style="padding:0 var(--s-1) 0 var(--s-2)"' : ''}><span class="thumb plate" style="width:40px;height:40px">${e.c}</span>
+  <div class="stxt"><div class="snm">${e.nm}</div><div class="ssub">${subOf(e)}</div></div>
+  <span class="ico">${I.down}</span>${e.cur ? `<span class="ico">${I.swap}</span><span class="ico sdanger">${I.trash}</span>` : ''}</div>${e.cur ? setsHtml(e) : ''}</div></div>` }
+document.getElementById('sb').innerHTML = skyTop() + `<div class="scroll tl">${EX.map(exB).join('')}</div>` + restBar + bottom
+
+/* C：山路（12 組＝12 塊石頭沿小徑上山，做完的亮） */
+function pathTop() {
+  const h = 176
+  const pts = Array.from({ length: total }, (_, i) => { const t = i / (total - 1); return [28 + t * 300, h - 22 - Math.pow(t, 1.35) * 78 + Math.sin(t * 9) * 5] })
+  const trail = `<path d="M${pts.map((p) => p.join(' ')).join(' L')}" fill="none" stroke="var(--snow)" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round" opacity=".9"/>`
+  const stones = pts.map((p, i) => i < done
+    ? `<circle cx="${p[0]}" cy="${p[1]}" r="6.5" fill="var(--accent)" stroke="var(--snow)" stroke-width="2"/>`
+    : i === done ? `<circle cx="${p[0]}" cy="${p[1]}" r="10" fill="var(--accent-ring)"/><circle cx="${p[0]}" cy="${p[1]}" r="6.5" fill="var(--snow)" stroke="var(--accent)" stroke-width="2.4"/>`
+    : `<circle cx="${p[0]}" cy="${p[1]}" r="5.5" fill="var(--snow)" opacity=".75"/>`).join('')
+  const top = pts[pts.length - 1]
+  const flag = `<g transform="translate(${top[0] + 14} ${top[1] - 4})"><rect x="0" y="-22" width="2" height="24" rx="1" fill="var(--ink)"/><path d="M2 -22l14 5-14 5z" fill="var(--clay)"/></g>`
+  const hill = `<path d="M150 ${h}C230 ${h - 70} 300 ${h - 112} 345 ${h - 108}S393 ${h - 90} 393 ${h - 90}V${h}z" fill="var(--hill-far)" opacity=".9"/>`
+  return `<div class="pathtop">${sky(h, hill + trail + stones + flag)}
+    <div class="skytop" style="height:auto;position:relative"><div class="sk-bar"><span class="ico">${I.back}</span><h1>訓練中<small>推日</small></h1><span class="ico sdanger">${I.trash}</span></div>
+    <div style="position:relative;padding:0 var(--s-5);font-size:var(--t-sm);color:var(--ink-sky)"><b class="num" style="color:var(--ink);font-size:1.15rem">42:10</b> · <b class="num" style="color:var(--ink)">${vol}</b> kg · 第 <b class="num" style="color:var(--ink)">${done + 1}</b> 塊／${total}</div></div></div>`
+}
+document.getElementById('sc').innerHTML = pathTop() + `<div class="scroll">${EX.map(cardA).join('')}</div>` + restBar + bottom
+
+/* 現況 */
+document.getElementById('now').innerHTML = `<div class="now-top"><span class="ico">${I.back}</span><h1>訓練中</h1><span class="ico sdanger">${I.trash}</span></div>
+  <div class="now-stats"><div><b>42:10</b><span>時長</span></div><div><b>${vol}</b><span>訓練量 kg</span></div><div><b>${done}/${total}</b><span>完成組數</span></div></div>
+  <div class="scroll">${EX.map((e) => cardA(e).replace('thumb plate', 'thumb')).join('')}</div>` + restBar + bottom
+
+/* 訓練首頁 */
+const bandArt = `<svg class="art" viewBox="0 0 393 96" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <rect width="393" height="96" fill="var(--sky)"/><circle cx="262" cy="38" r="24" fill="var(--sun-pale)" opacity=".6"/><circle cx="262" cy="38" r="15" fill="var(--sun)"/>
+  <path d="M0 64C70 44 130 48 190 60S300 42 393 54V96H0z" fill="var(--hill-far)"/><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"/>
+  <g transform="translate(168 70) rotate(-8)"><rect x="-13" y="-1.6" width="26" height="3.2" rx="1.6" fill="var(--ink)"/><rect x="-18" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"/><rect x="12.4" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"/></g>
+  <path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"/></svg>`
+const week = `<div class="week">${['一','二','三','四','五','六','日'].map((d, i) => `<div><span>${d}</span><b class="${i === 0 ? 'sel mk' : i < 1 ? 'past' : ''}">${16 + i}</b></div>`).join('')}</div>`
+const homeTop = `<div class="band">${bandArt}<h1>週一 11/16</h1></div>${week}`
+const routines = `<div class="sect">課表<span class="lnk">＋ 新課表</span></div>
+  <div class="card"><div class="rowc"><div class="stxt"><div class="snm">推日</div><div class="ssub">4 個動作 · 上次 11/13</div></div><span class="schev">${I.chev}</span></div>
+  <div class="rowc"><div class="stxt"><div class="snm">拉日</div><div class="ssub">5 個動作 · 上次 11/14</div></div><span class="schev">${I.chev}</span></div></div>
+  <div class="card"><div class="rowc"><div class="stxt"><div class="snm">訓練分析</div><div class="ssub">8 個動作有進度 · 估算 1RM</div></div><span class="schev">${I.chev}</span></div></div>`
+const homeBottom = `<div class="bottom" style="padding-bottom:var(--s-5)"><div class="btn2" style="border-radius:var(--r-pill);background:var(--card);box-shadow:var(--shadow-2);flex:0 0 190px;color:var(--ink-muted)">飲食 · 訓練 · 設定</div><div style="margin-left:auto;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:28px">＋</div></div>`
+const doneCardA = `<div class="sect">已完成</div><div class="card"><div class="rowc"><span class="thumb plate" style="width:40px;height:40px">推</span><div class="stxt"><div class="snm">推日 <span class="num" style="font-weight:800">42</span> 分</div>
+  <div class="ssub">4 個動作 · ${total}/${total} 組 · 3,880 kg</div></div><span class="schev">${I.chev}</span></div></div>`
+const doneTlB = `<div class="sect">今天</div><div class="wk-tl"><div class="titem"><span class="tnode"></span><div class="rowc"><div class="stxt"><div class="snm">推日 · <span class="num" style="font-weight:800">42</span> 分</div>
+  <div class="ssub">4 個動作 · ${total}/${total} 組 · 3,880 kg</div></div><span class="schev">${I.chev}</span></div></div></div>`
+document.getElementById('ha').innerHTML = homeTop + `<div class="scroll" style="padding-top:0">${doneCardA}${routines}</div>${homeBottom}`
+document.getElementById('hb').innerHTML = homeTop + `<div class="scroll" style="padding-top:0">${doneTlB}${routines}</div>${homeBottom}`
+document.getElementById('hc').innerHTML = homeTop + `<div class="scroll" style="padding-top:0">${doneCardA}${routines}</div>${homeBottom}`
+
+/* 完成 sheet：底下墊訓練中 A 的畫面 */
+const under = (id) => document.getElementById(id).innerHTML
+const recapPlain = `<div class="recap">${EX.map((e) => `<div class="r"><span>${e.nm}</span><span class="num">${e.sets.map((s) => `${s[0]}×${s[1]}`).join(' · ')}</span></div>`).join('')}</div>`
+const recapTl = `<div class="tl" style="margin-bottom:var(--s-2)">${EX.map((e) => `<div class="tex" style="padding-bottom:0"><span class="tnode on" style="top:12px"></span>
+  <div class="head" style="min-height:44px"><div class="stxt"><div style="font-weight:700">${e.nm}</div></div><span class="num" style="color:var(--ink-muted);font-size:var(--t-sm)">${e.sets.map((s) => `${s[0]}×${s[1]}`).join(' · ')}</span></div></div>`).join('').replaceAll('top: 40px', '')}</div>`
+const saveas = `<div class="saveas"><span>${I.copy}</span><div>存成課表<small>這次是空白開始的，下次可以直接選</small></div></div>`
+const sheet = (top, recap) => `<div class="sscrim"></div><div class="ssheet"><div class="grab"></div>${top}<div class="shd">訓練完成<span class="ico" style="width:auto">${I.x}</span></div>
+  <div class="hero"><b>3,880</b><span>kg</span></div><div class="facts">總訓練量 · 42 分 · ${total}/${total} 組</div>${recap}${saveas}<div class="btn1">完成</div></div>`
+const summitArt = `<div class="summit"><svg viewBox="0 0 393 120" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <rect width="393" height="120" fill="var(--sky)"/><circle cx="196" cy="58" r="40" fill="var(--sun-pale)" opacity=".7"/><circle cx="196" cy="58" r="24" fill="var(--sun)"/>
+  <path d="M0 96C80 70 140 74 196 44S320 76 393 86V120H0z" fill="var(--hill-far)"/>
+  <path d="M0 108C90 92 170 96 240 104S350 94 393 98V120H0z" fill="var(--hill-mid)"/>
+  <g transform="translate(196 44)"><rect x="-1" y="-30" width="2.4" height="30" rx="1" fill="var(--ink)"/><path d="M1.4 -30l18 6-18 6z" fill="var(--clay)"/></g>
+  <path d="M0 116C90 110 200 112 290 116S370 115 393 115V120H0z" fill="var(--card)"/></svg></div>`
+document.getElementById('fa').innerHTML = under('sa') + sheet('', recapPlain)
+document.getElementById('fb').innerHTML = under('sb') + sheet('', recapTl)
+document.getElementById('fc').innerHTML = under('sc') + `<div class="sscrim"></div><div class="ssheet" style="padding-top:0;overflow:hidden">${summitArt}<div class="shd" style="margin-top:var(--s-2)">訓練完成<span class="ico" style="width:auto">${I.x}</span></div>
+  <div class="hero"><b>3,880</b><span>kg</span></div><div class="facts">總訓練量 · 42 分 · ${total}/${total} 組 · 登頂</div>${recapPlain}${saveas}<div class="btn1">完成</div></div>`
+</script>
+</body>
+</html>

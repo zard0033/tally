@@ -32,6 +32,31 @@ interface FinishSheetProps {
   onSaveRoutine: (name: string) => Promise<boolean>
 }
 
+/* 登頂小景（訓練換皮 C 的完成畫面，樣張 training-reskin.html；使用者 2026-11-16 選「訓練中、首頁用 B，完成用 C」）：
+   太陽在山頂後面、山頂插一面陶土色小旗，同登入頁「日出上山」的收尾。裝飾，aria-hidden；最前面一層是 sheet 的白（--card），
+   畫和下面的數字之間沒有一條硬邊。寬度隨 sheet、高度等比（393 寬約 112px）。 */
+function SummitArt() {
+  return (
+    <svg className="art tr-summit" viewBox="0 0 393 112" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <rect width="393" height="112" fill="var(--sky)" />
+      <circle cx="196" cy="52" r="38" fill="var(--sun-pale)" opacity=".7" />
+      <circle cx="196" cy="52" r="23" fill="var(--sun)" />
+      <g fill="var(--snow)" opacity=".9" transform="translate(40 18) scale(.75)">
+        <ellipse cx="22" cy="17" rx="19" ry="8" />
+        <ellipse cx="34" cy="11" rx="13" ry="9" />
+        <ellipse cx="46" cy="17" rx="13" ry="7" />
+      </g>
+      <path d="M0 90C80 66 140 70 196 42S320 72 393 82V112H0z" fill="var(--hill-far)" />
+      <path d="M0 102C90 88 170 92 240 98S350 90 393 94V112H0z" fill="var(--hill-mid)" />
+      <g transform="translate(196 42)">
+        <rect x="-1.2" y="-28" width="2.4" height="28" rx="1.2" fill="var(--ink)" />
+        <path d="M1.2 -28l17 5.5-17 5.5z" fill="var(--clay)" />
+      </g>
+      <path d="M0 108C90 102 200 104 290 108S370 107 393 107V112H0z" fill="var(--card)" />
+    </svg>
+  )
+}
+
 export default function FinishSheet({
   open,
   volume,
@@ -85,6 +110,7 @@ export default function FinishSheet({
   return (
     <SpringSheet open={open} onClose={onClose} title="訓練完成" screen="finish-sheet" fit>
     <div className="tr-sheet-body tr-sheet-scroll">
+      <SummitArt />
       <div className="tr-summary">
         <span className="big" data-testid="finish-volume">
           {volume.toLocaleString('en-US')}

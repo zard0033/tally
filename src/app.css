@@ -1908,7 +1908,64 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-stat .v { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg);
   font-weight: 600; letter-spacing: var(--track-lg); line-height: 1.1; }
 .tr-stat .l { display: block; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); margin-top: 2px; }
-.ex { margin-bottom: var(--s-3); }
+/* ── 訓練中頂端坐在天空上（訓練換皮 B，2026-11-16，樣張 training-reskin.html）──
+   天空色鋪在容器底色；太陽雲與山坡各一張圖（TrainingSession 的 SessionSkyArt），頂端高度隨字級變時太陽不會被拉成橢圓。
+   天空上的字同今日頁：主字 --ink（10.16:1）、次要字 --ink-sky（5.60:1）；刪除鈕 --over 對 --sky 4.62:1（圖示門檻 3:1）。
+   下內距 42px 讓給山坡（高 45px，遠山的峰在上緣往下約 5px）：統計的標籤不能壓在遠山上（--ink-sky 對遠山 4.28，不到 4.5）。
+   頂端合計約 155px（393 寬），比換皮前的頂欄＋白色統計卡多約 20px。 */
+/* 次要字在容器層換成 --ink-sky（同 .sky）：之後加進頂端的灰字不會掉到 --ink-muted 對 --sky 的 4.30:1 */
+.tr-sky { --ink-muted: var(--ink-sky); position: relative; isolation: isolate; flex-shrink: 0; background: var(--sky); padding-bottom: 42px; }
+.tr-sky > .tr-sky-hills { position: absolute; left: 0; bottom: -1px; width: 100%; height: 45px; z-index: 0; }
+/* 太陽在「訓練中」與刪除鈕之間：刪除鈕佔右邊 12–56px，太陽的光暈外緣離右邊約 63px */
+.tr-sky > .tr-sky-sun { position: absolute; top: 10px; right: 60px; width: 96px; height: 42px; z-index: 0; }
+.tr-sky > .tr-top, .tr-sky > .tr-stats { position: relative; z-index: 1; }
+/* 統計不再是白卡：時長是主數字（Nunito 900，同今日頁「還能吃」的大數字語言），訓練量與組數接在右邊、底線對齊 */
+/* 最壞情況（時長破百分鐘、訓練量六位數）在 375 寬以下放不下一行：允許換行，第二行落在第一行下面、山坡照樣墊底，不會溢出（review 2026-11-16） */
+.tr-sky .tr-stats { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: var(--s-5); row-gap: var(--s-2); margin: 0; padding: 0 var(--s-5);
+  background: none; box-shadow: none; border-radius: 0; }
+.tr-sky .tr-stat { min-width: 0; padding: 0; border-left: none; text-align: left; }
+.tr-sky .tr-stat .v { font-weight: 800; }
+.tr-sky .tr-stat:first-child .v { font-size: var(--t-hero); font-weight: 900; letter-spacing: var(--track-hero); line-height: .9; }
+.tr-sky .tr-stat .l { margin-top: var(--s-1); }
+
+/* ── 訓練中動作的時間軸（訓練換皮 B）──
+   跟今日頁的餐別時間軸同一組數字（溝 30px、節點 18px、2px --rule 的線）與同一套說法：做完＝實心打勾、正在做（展開中）＝藍圈光暈、
+   做了一部分＝藍框空心、還沒做＝灰框空心。外框 .ex-tl 掛排序的 ref，節點跟著整列一起拖。
+   只有展開中的動作是白卡；收合的動作是紙上的一列（拖曳中墊回白卡與陰影，才看得出拿起來的是哪一列）。
+   節點中心對齊卡片頭的中心：卡片頭有縮圖時高 60px（44＋上下 8），中心 30px。 */
+.ex-tl { position: relative; padding-left: 30px; margin-bottom: var(--s-2); }
+.ex-tl::before { content: ""; position: absolute; left: 8px; top: 30px; bottom: calc(var(--s-2) * -1 - 21px); width: 2px; border-radius: 1px;
+  background: var(--rule); }
+.ex-tl:last-child::before { display: none; }
+/* 拖曳中：dnd-kit 在被拖那列後面插一份隱藏的 placeholder，被拖的那列因此永遠不是 :last-child——浮起來的那列不帶線；
+   placeholder 整份 visibility: hidden，它的線要另外打開，空出來的位置軌道才不斷（review 2026-11-16） */
+.ex-tl[data-dnd-dragging]::before { display: none; }
+.ex-tl[data-dnd-placeholder]::before { visibility: visible; }
+.ex-node { position: absolute; left: 0; top: 21px; z-index: 1; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--ink-faint); background: var(--paper); display: grid; place-items: center;
+  transition: background-color var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease); }
+.ex-tl[data-node="partial"] .ex-node { border-color: var(--accent); }
+.ex-tl[data-node="current"] .ex-node { border-color: var(--accent); box-shadow: 0 0 0 5px var(--accent-ring); }
+.ex-tl[data-node="done"] .ex-node { border-color: var(--accent); background: var(--accent); }
+.ex-tl[data-node="done"] .ex-node::after { content: ""; width: 7px; height: 4px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0;
+  transform: translateY(-1px) rotate(-45deg); }
+.ex-tl > .ex { margin-bottom: 0; transition: background-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease); }
+/* 變透明掛在 .is-flat（組列的收合動畫結束才加）而不是 .collapsed：不然白卡先淡掉，組列自己的白底（.swipe-slide）在紙上留成一條條白塊，
+   展開時反過來（review 2026-11-16） */
+.ex-tl > .ex.is-flat:not(.is-dragging) { background: transparent; box-shadow: none; overflow: visible; }
+/* 收合的動作在紙上、不在卡裡，不需要卡片的左內距：16→8px，名稱欄多 8px（393 寬下「全部完成」才不被截成「全部…」）。
+   拖曳中也維持 8px（拿起來時版面不跳，dnd-kit 已經凍結了高度）。握把的 44px 命中區因此往左超出列 4px，所以透明時不裁（沒有組列要裁） */
+.ex-tl > .ex.collapsed .ex-head { padding-left: var(--s-2); }
+
+/* 訓練首頁的「進行中／已完成」：時間軸的一節（同上），不是白卡。.tr-card 留著（e2e 與區塊結構靠它），外觀拿掉 */
+.tr-card.is-timeline { background: none; box-shadow: none; border-radius: 0; overflow: visible; }
+.tr-card.is-timeline > .tr-row { position: relative; padding-left: 30px; padding-right: var(--s-2); border-top: none; }
+.tr-card.is-timeline > .tr-row::before { content: ""; position: absolute; left: 0; top: 50%; margin-top: -9px; width: 18px; height: 18px;
+  box-sizing: border-box; border-radius: 50%; border: 2px solid var(--accent); background: var(--paper); }
+.tr-card.is-timeline[data-node="current"] > .tr-row::before { box-shadow: 0 0 0 5px var(--accent-ring); }
+.tr-card.is-timeline[data-node="done"] > .tr-row::before { background: var(--accent); }
+.tr-card.is-timeline[data-node="done"] > .tr-row::after { content: ""; position: absolute; left: 5.5px; top: 50%; margin-top: -3px; width: 7px; height: 4px;
+  border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: rotate(-45deg); }
 /* 排序中：捲動區往上多開 14px（內距補回，內容位置不動），橡皮筋露出的部分畫得出來、不被捲動區裁掉 */
 .tr-scroll.is-sorting { margin-top: -14px; padding-top: calc(var(--s-1) + 14px); }
 .ex.is-dragging { position: relative; z-index: 2; scale: 1.02; box-shadow: var(--shadow-2); }
@@ -2190,7 +2247,11 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-search input::placeholder { color: var(--ink-muted); }
 .tr-summary { text-align: center; padding: var(--s-2) 0 var(--s-3); }
 .tr-summary .big { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-size: var(--t-hero); font-weight: 600; letter-spacing: var(--track-hero); line-height: .95; }
+  font-size: var(--t-hero); font-weight: 900; letter-spacing: var(--track-hero); line-height: .95; }
+/* 完成 sheet 頂端的登頂小景（訓練換皮 C，FinishSheet 的 SummitArt）：推到 sheet 兩邊（負邊距＝.tr-sheet-body 的左右內距 --s-5，改一處要改兩處）；
+   .sheet svg 預設畫線條圖示，插圖要關掉描邊 */
+.sheet svg.tr-summit { display: block; width: calc(100% + var(--s-5) * 2); height: auto; aspect-ratio: 393 / 112; margin: 0 calc(var(--s-5) * -1);
+  stroke: none; stroke-width: 1; }
 .tr-summary .u { font-size: var(--t-sm); color: var(--ink-muted); margin-left: var(--s-1); }
 .tr-summary .l { display: block; font-size: var(--t-sm); color: var(--ink-muted); margin-top: var(--s-2); }
 .tr-field { display: block; margin: var(--s-3) 0; }

@@ -23,6 +23,7 @@ import { useRestTimer } from '@/components/useRestTimer'
 import { usePendingOrder } from '@/components/usePendingOrder'
 import { rubberBandToElement } from '@/components/rubberBandModifier'
 import { sortableAccessibility } from '@/components/sortableA11y'
+import { useSkyEdge } from '@/components/useSkyEdge'
 import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS } from '@/lib/durations'
 import CardioSheet from './CardioSheet'
 import ExerciseCard from './ExerciseCard'
@@ -90,6 +91,34 @@ function useNow(active: boolean): Date {
 
 /* ═══════════ 整頁 ═══════════ */
 
+/* 訓練中頂端的天空（訓練換皮 B）：天空色由 .tr-sky 的底色鋪滿，這裡只畫兩塊——右上的太陽與雲、底下的山坡（同 SkyBand 的兩層山＋紙色地面）。
+   拆兩塊是因為頂端高度隨字級與寬度變：一張 viewBox 撐滿會把太陽拉成橢圓。山坡寬度跟著螢幕、高度等比，貼著底。只在這一頁用，所以不進 components/。 */
+function SessionSkyArt() {
+  return (
+    <>
+      <svg className="art tr-sky-sun" viewBox="0 0 120 52" aria-hidden="true">
+        <g fill="var(--snow)" opacity=".9" transform="translate(0 12) scale(.8)">
+          <ellipse cx="22" cy="17" rx="19" ry="8" />
+          <ellipse cx="34" cy="11" rx="13" ry="9" />
+          <ellipse cx="46" cy="17" rx="13" ry="7" />
+        </g>
+        <circle cx="94" cy="26" r="22" fill="var(--sun-pale)" opacity=".6" />
+        <circle cx="94" cy="26" r="14" fill="var(--sun)" />
+      </svg>
+      {/* 遠山比 SkyBand 的平：峰頂離山坡圖上緣約 5px，統計的標籤不會壓到山（--ink-sky 對遠山只有 4.28） */}
+      <svg className="art tr-sky-hills" viewBox="0 52 393 44" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <path d="M0 70C80 58 150 60 210 66S320 56 393 62V96H0z" fill="var(--hill-far)" />
+        <path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)" />
+        <g transform="translate(300 65)">
+          <rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)" />
+          <circle cx="0" cy="1" r="8.5" fill="var(--tree)" />
+        </g>
+        <path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)" />
+      </svg>
+    </>
+  )
+}
+
 export default function TrainingSession({ detail, db, onWrite, onBack }: TrainingSessionProps) {
   const { workout, exercises } = detail
   const inProgress = workout.ended_at == null
@@ -98,6 +127,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   const now = useNow(live)
   // 組間休息：只在即時進行中的訓練啟動（補記與已結束的不啟動）；「全部完成」不啟動，只有單點勾組才算「剛做完一組」
   const rest = useRestTimer(String(workout.id), live)
+  // 頂端坐在天空上（訓練換皮 B）：天空頂著狀態列，色條跟著染成天空色（同今日、訓練、設定頁）。頂端不捲，不用接 onScroll
+  const edge = useSkyEdge()
   // RPE 問題（spec.md「階段 4 乙」）：每次勾組都重設——是這個動作的最後一組才問；picked 之後約 0.6 秒收起
   const [ask, setAsk] = useState<RpeAsk | null>(null)
   const askShown = ask !== null && rest.endAt !== null
@@ -326,39 +357,43 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   }
 
   return (
-    <div className={`main${rest.endAt !== null ? ' has-rest' : ''}${askShown ? ' has-rest-ask' : ''}`} data-screen="training-session" data-workout-id={workout.id}>
-      <header className="tr-top">
-        <button className="tr-ib" type="button" aria-label={inProgress ? '返回（訓練繼續進行）' : '返回'} onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-        <h1>{inProgress ? '訓練中' : '訓練紀錄'}</h1>
-        <button className="tr-ib is-danger" type="button" aria-label="刪除這次訓練" onClick={() => setAskDelete(true)}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
-          </svg>
-        </button>
-      </header>
+    <div className={`main${rest.endAt !== null ? ' has-rest' : ''}${askShown ? ' has-rest-ask' : ''}`} data-screen="training-session" data-workout-id={workout.id} ref={edge.ref}>
+      {/* 頂欄與統計坐在天空上（訓練換皮 B，樣張 training-reskin.html）：時長是主數字，訓練量與組數次之；統計的掛點（data-stat、.flip）不變 */}
+      <div className="tr-sky">
+        <SessionSkyArt />
+        <header className="tr-top">
+          <button className="tr-ib" type="button" aria-label={inProgress ? '返回（訓練繼續進行）' : '返回'} onClick={onBack}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <h1>{inProgress ? '訓練中' : '訓練紀錄'}</h1>
+          <button className="tr-ib is-danger" type="button" aria-label="刪除這次訓練" onClick={() => setAskDelete(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
+            </svg>
+          </button>
+        </header>
 
-      <div className="tr-stats" aria-live="polite">
-        <div className="tr-stat">
-          <span className="v" data-stat="time">
-            {timeText}
-          </span>
-          <span className="l">時長</span>
-        </div>
-        <div className="tr-stat">
-          <span className="v" data-stat="volume">
-            <Flip text={summary.volume.toLocaleString('en-US')} ms={DUR.base} />
-          </span>
-          <span className="l">訓練量 kg</span>
-        </div>
-        <div className="tr-stat">
-          <span className="v" data-stat="sets">
-            <Flip text={`${summary.doneSets}/${summary.totalSets}`} ms={DUR.base} />
-          </span>
-          <span className="l">完成組數</span>
+        <div className="tr-stats" aria-live="polite">
+          <div className="tr-stat">
+            <span className="v" data-stat="time">
+              {timeText}
+            </span>
+            <span className="l">時長</span>
+          </div>
+          <div className="tr-stat">
+            <span className="v" data-stat="volume">
+              <Flip text={summary.volume.toLocaleString('en-US')} ms={DUR.base} />
+            </span>
+            <span className="l">訓練量 kg</span>
+          </div>
+          <div className="tr-stat">
+            <span className="v" data-stat="sets">
+              <Flip text={`${summary.doneSets}/${summary.totalSets}`} ms={DUR.base} />
+            </span>
+            <span className="l">完成組數</span>
+          </div>
         </div>
       </div>
 

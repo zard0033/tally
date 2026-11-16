@@ -274,133 +274,146 @@ export default function ExerciseCard(p: ExerciseCardProps) {
         exit: { opacity: 0, x: -12, height: 0, overflow: 'hidden', transition: { duration: sec(DUR.base), ease: 'easeIn' as const } },
       }
   const allDone = allSetsDone(sets)
+  // 時間軸節點（訓練換皮 B，樣張 training-reskin.html）：做完＝實心打勾、正在做（展開中）＝藍圈光暈、做了一部分＝藍框空心、還沒做＝灰框空心。
+  // 有氧沒有組：填了分鐘就算做完
+  const node = cardio
+    ? cardioRecorded(entry) ? 'done' : 'todo'
+    : sets.length > 0 && allDone ? 'done' : p.open ? 'current' : sets.some((s) => s.done === true) ? 'partial' : 'todo'
+  // 收合的卡變透明要等組列收完（AnimatePresence 的 onExitComplete）；展開則立刻是白卡。排序中組列整段不掛、不會有 onExitComplete，
+  // 所以那段期間展開的卡維持白卡（拖曳本來就墊白卡）。節點的「正在做」看 p.open：排序中 open 被強制成 false，節點不該跟著跳
+  const [flat, setFlat] = useState(!open)
+  if (open && flat) setFlat(false)
 
   return (
-    <section
-      ref={ref}
-      className={`tr-card ex${cardio ? ' is-cardio' : ''}${open ? '' : ' collapsed'}${isDragging ? ' is-dragging' : ''}`}
-      aria-label={name}
-      data-entry-id={entry.id}
-    >
-      <div className="ex-head">
-        <button className="tr-grip" type="button" ref={handleRef} aria-label={`拖曳排序：${name}`}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
-          </svg>
-        </button>
-        {/* 縮圖是獨立的放大鈕，不能包在展開／收合的按鈕裡：與 ex-toggle 並排 */}
-        {photo ? <ExerciseThumb exercise={exercise} zoom /> : null}
-        {cardio ? (
-          // 有氧卡：整條名稱鈕開 sheet，不是展開（沒有 aria-expanded）；右側 › 在這裡表示「點進去」
-          <button className="ex-toggle" type="button" aria-haspopup="dialog" onClick={p.onOpenCardio}>
-            {/* 坡度健走有圖：縮圖已是外面的放大鈕，這裡不能再放一個 */}
-            {photo ? null : <ExerciseThumb exercise={exercise} />}
-            <span className="grow">
-              <span className="nm">{name}</span>
-              <span className="sub">
-                {cardioRecorded(entry) ? (
-                  <span className="cardio-sum">{cardioSummary(entry)}</span>
-                ) : (
-                  <span className="is-missing">點一下填寫</span>
-                )}
-              </span>
-            </span>
-            <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" />
+    // 外框掛排序的 ref（拖曳時整列連節點一起移動）；節點與連到下一個動作的線畫在外框左側的溝裡，卡片本身照舊。
+    // 節點只是把卡片頭的進度換一種說法（收合時的圓點與 sr-only 文字仍在），所以 aria-hidden
+    <div ref={ref} className="ex-tl" data-node={node}>
+      <span className="ex-node" aria-hidden="true" />
+      <section
+        className={`tr-card ex${cardio ? ' is-cardio' : ''}${open ? '' : ' collapsed'}${!open && flat ? ' is-flat' : ''}${isDragging ? ' is-dragging' : ''}`}
+        aria-label={name}
+        data-entry-id={entry.id}
+      >
+        <div className="ex-head">
+          <button className="tr-grip" type="button" ref={handleRef} aria-label={`拖曳排序：${name}`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
             </svg>
           </button>
-        ) : (
-          <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
-            {photo ? null : <ExerciseThumb exercise={exercise} />}
-            <span className="grow">
-              <span className="nm">{name}</span>
-              {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
-              <span className="sub" key={open ? 'group' : 'progress'}>
-                {open ? group : <Progress sets={sets} />}
+          {/* 縮圖是獨立的放大鈕，不能包在展開／收合的按鈕裡：與 ex-toggle 並排 */}
+          {photo ? <ExerciseThumb exercise={exercise} zoom /> : null}
+          {cardio ? (
+            // 有氧卡：整條名稱鈕開 sheet，不是展開（沒有 aria-expanded）；右側 › 在這裡表示「點進去」
+            <button className="ex-toggle" type="button" aria-haspopup="dialog" onClick={p.onOpenCardio}>
+              {/* 坡度健走有圖：縮圖已是外面的放大鈕，這裡不能再放一個 */}
+              {photo ? null : <ExerciseThumb exercise={exercise} />}
+              <span className="grow">
+                <span className="nm">{name}</span>
+                <span className="sub">
+                  {cardioRecorded(entry) ? (
+                    <span className="cardio-sum">{cardioSummary(entry)}</span>
+                  ) : (
+                    <span className="is-missing">點一下填寫</span>
+                  )}
+                </span>
               </span>
-            </span>
-            <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-          </button>
-        )}
-        {/* 每張卡都有替換鈕（有氧卡也有）：箭頭、替換、移除在各卡上才對得齊。要換動作比看要點頻繁，所以佔 ⓘ 原本的位置 */}
-        <button className="tr-ib ex-swap" type="button" aria-label={`${name}：替換動作`} onClick={p.onReplace}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 7h11l-3-3M17 17H6l3 3" />
-          </svg>
-        </button>
-        {/* v2.99 拆掉 ⋯ 選單（只剩移除一項）、直接放移除鈕；v2.101 圖示從 ✕ 改成紅色垃圾桶（使用者要求，頂欄的「刪除這次訓練」也跟著紅）。
-            兩顆長得一樣、範圍不同，靠各自確認框的標題與內文分開。一律先跳確認框，所以像有氧卡的名稱鈕一樣標 aria-haspopup */}
-        <button className="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
-          </svg>
-        </button>
-      </div>
-
-      {/* 排序中整段不掛 AnimatePresence：沒有退場動畫，收合在同一次 commit 完成。dnd-kit 在 beforedragstart 之後
-          等 React 渲染完才量尺寸並凍結被拖那張的寬高，退場動畫還在跑的話量到的是展開時的高度 */}
-      {!sorting && (
-        <AnimatePresence initial={false}>
-          {open && (
-            <motion.div
-              key="body"
-              className="ex-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={spring}
-              style={{ overflow: 'hidden' }}
-            >
-              {exercise && <TipsStrip name={name} exercise={exercise} onSave={p.onSaveTips} />}
-              <div className="set-head">
-                <span aria-hidden="true">組</span>
-                <span aria-hidden="true">重量 kg</span>
-                <span aria-hidden="true">次數</span>
-                <button
-                  className={`tr-all${allDone ? ' is-on' : ''}`}
-                  type="button"
-                  aria-pressed={allDone}
-                  aria-label={allDone ? '取消全部完成' : '全部完成'}
-                  disabled={sets.length === 0}
-                  onClick={p.onToggleAll}
-                  {...allPress}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />
-                  </svg>
-                </button>
-              </div>
-              {/* initial={false}：卡片展開時已有的組不跑進場，只有展開之後才新增／刪掉的才動 */}
-              <AnimatePresence initial={false}>
-                {sets.map((s, i) => (
-                  <motion.div key={s.id} className="set-slot" initial={rowMotion.initial} animate={rowMotion.animate} exit={rowMotion.exit}>
-                    <SetRow
-                      set={s}
-                      no={i + 1}
-                      canDelete={sets.length > 1}
-                      swipeOpen={p.swipeId === s.id}
-                      flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
-                      cascadeIndex={p.cascade.includes(s.id) ? p.cascade.indexOf(s.id) : null}
-                      onSwipe={(o) => p.onSwipe(s.id, o)}
-                      onEdit={(opener) => p.onEditSet(s.id, opener)}
-                      onToggle={() => p.onToggleSet(s)}
-                      onDelete={() => p.onDeleteSet(s.id)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              <button className="tr-addset" type="button" onClick={p.onAddSet}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                新增一組
-              </button>
-            </motion.div>
+              <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+          ) : (
+            <button className="ex-toggle" type="button" aria-expanded={open} onClick={p.onToggleOpen}>
+              {photo ? null : <ExerciseThumb exercise={exercise} />}
+              <span className="grow">
+                <span className="nm">{name}</span>
+                {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
+                <span className="sub" key={open ? 'group' : 'progress'}>
+                  {open ? group : <Progress sets={sets} />}
+                </span>
+              </span>
+              <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
           )}
-        </AnimatePresence>
-      )}
-    </section>
+          {/* 每張卡都有替換鈕（有氧卡也有）：箭頭、替換、移除在各卡上才對得齊。要換動作比看要點頻繁，所以佔 ⓘ 原本的位置 */}
+          <button className="tr-ib ex-swap" type="button" aria-label={`${name}：替換動作`} onClick={p.onReplace}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 7h11l-3-3M17 17H6l3 3" />
+            </svg>
+          </button>
+          {/* v2.99 拆掉 ⋯ 選單（只剩移除一項）、直接放移除鈕；v2.101 圖示從 ✕ 改成紅色垃圾桶（使用者要求，頂欄的「刪除這次訓練」也跟著紅）。
+              兩顆長得一樣、範圍不同，靠各自確認框的標題與內文分開。一律先跳確認框，所以像有氧卡的名稱鈕一樣標 aria-haspopup */}
+          <button className="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label={`${name}：移除動作`} onClick={p.onRemove}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 排序中整段不掛 AnimatePresence：沒有退場動畫，收合在同一次 commit 完成。dnd-kit 在 beforedragstart 之後
+            等 React 渲染完才量尺寸並凍結被拖那張的寬高，退場動畫還在跑的話量到的是展開時的高度 */}
+        {!sorting && (
+          <AnimatePresence initial={false} onExitComplete={() => setFlat(true)}>
+            {open && (
+              <motion.div
+                key="body"
+                className="ex-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={spring}
+                style={{ overflow: 'hidden' }}
+              >
+                {exercise && <TipsStrip name={name} exercise={exercise} onSave={p.onSaveTips} />}
+                <div className="set-head">
+                  <span aria-hidden="true">組</span>
+                  <span aria-hidden="true">重量 kg</span>
+                  <span aria-hidden="true">次數</span>
+                  <button
+                    className={`tr-all${allDone ? ' is-on' : ''}`}
+                    type="button"
+                    aria-pressed={allDone}
+                    aria-label={allDone ? '取消全部完成' : '全部完成'}
+                    disabled={sets.length === 0}
+                    onClick={p.onToggleAll}
+                    {...allPress}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5" />
+                    </svg>
+                  </button>
+                </div>
+                {/* initial={false}：卡片展開時已有的組不跑進場，只有展開之後才新增／刪掉的才動 */}
+                <AnimatePresence initial={false}>
+                  {sets.map((s, i) => (
+                    <motion.div key={s.id} className="set-slot" initial={rowMotion.initial} animate={rowMotion.animate} exit={rowMotion.exit}>
+                      <SetRow
+                        set={s}
+                        no={i + 1}
+                        canDelete={sets.length > 1}
+                        swipeOpen={p.swipeId === s.id}
+                        flashIndex={p.flash.includes(s.id) ? p.flash.indexOf(s.id) : null}
+                        cascadeIndex={p.cascade.includes(s.id) ? p.cascade.indexOf(s.id) : null}
+                        onSwipe={(o) => p.onSwipe(s.id, o)}
+                        onEdit={(opener) => p.onEditSet(s.id, opener)}
+                        onToggle={() => p.onToggleSet(s)}
+                        onDelete={() => p.onDeleteSet(s.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <button className="tr-addset" type="button" onClick={p.onAddSet}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  新增一組
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+      </section>
+    </div>
   )
 }

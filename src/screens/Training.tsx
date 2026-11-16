@@ -299,7 +299,8 @@ export default function Training({
             {inProgress.length > 0 && (
               <>
                 <div className="tr-sec">進行中</div>
-                <div className="tr-card">
+                {/* 進行中／已完成是時間軸的一節（訓練換皮 B，同訓練中整頁與今日頁 v2.141）：列前一個節點，不是白卡 */}
+                <div className="tr-card is-timeline" data-node="current">
                   {inProgress.map((c) => (
                     <WorkoutRow key={c.id} card={c} onOpen={() => setSessionId(c.id)} />
                   ))}
@@ -309,7 +310,7 @@ export default function Training({
             {finished.length > 0 && (
               <>
                 <div className="tr-sec">已完成</div>
-                <div className="tr-card">
+                <div className="tr-card is-timeline" data-node="done">
                   {finished.map((c) => (
                     <WorkoutRow key={c.id} card={c} onOpen={() => setSessionId(c.id)} />
                   ))}
