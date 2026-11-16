@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-16）：v2.145 訓練換皮上線（訓練中天空頂＋時間軸、首頁已完成走時間軸、完成 sheet 登頂小景；樣張 training-reskin.html，使用者選 B＋完成用 C、做好就上線）；push 後 CI 全量待確認。
+現況（2026-11-16）：v2.145 訓練換皮上線（訓練中天空頂＋時間軸、首頁已完成走時間軸、完成 sheet 登頂小景；樣張 training-reskin.html，使用者選 B＋完成用 C、做好就上線）；CI 全量 571 過、0 flaky，已部署（run 43821993989）。
 下一步：使用者今晚健身房真機用新版，回報天空頂可讀性、時長大數字、時間軸與拖曳手感；有問題回來修。其餘照舊：最快 11/29 回推第一次會問；真機再估一次壽喜燒。
 
 ## Working Memory
