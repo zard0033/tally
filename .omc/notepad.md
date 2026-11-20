@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-20）：v2.146 體重趨勢圖改版（樣張 A 先講結論：頂端大數字＝趨勢體重、拖曳讀數、趨勢改指數平滑 0.9、Y 軸至少 4 kg、體脂併同卡）＋量法斷點只切體脂（回推不再看斷點）；本機 commit，待使用者確認 push，push 後 CI 全量待確認。
-下一步：push → gh run watch；使用者真機看趨勢頁拖曳手感與大數字；健身房回報訓練換皮。最快 11/29 回推第一次會問。
+現況（2026-11-20）：v2.146 體重趨勢圖改版（樣張 A 先講結論：頂端大數字＝趨勢體重、拖曳讀數、趨勢改指數平滑 0.9、Y 軸至少 4 kg、體脂併同卡）＋量法斷點只切體脂（回推不再看斷點）；CI 全量 571 過、0 flaky，已部署（run 44701820821）。
+下一步：使用者真機看趨勢頁拖曳手感與大數字；健身房回報訓練換皮。最快 11/29 回推第一次會問。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
