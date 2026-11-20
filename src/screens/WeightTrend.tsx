@@ -13,10 +13,12 @@ import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
 import { listWeights, setWeightBreak, type Weight } from '@/lib/api'
+import type { TrainingDb } from '@/lib/training'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { dayIndex, localDate, monthDay, tableDate } from '@/lib/dates'
-import { fmt1, PACE_MIN_SPAN_DAYS, planAt, signed1, spanDomain, TREND_RANGES, trendPoints, withPlan, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
+import { fmt1, PACE_MIN_SPAN_DAYS, planAt, rangeStart, signed1, spanDomain, TREND_RANGES, trendPoints, withPlan, xDomain, xTicks, yTicks, type TrendPoint, type TrendRange } from '@/lib/weightTrend'
 import { trendXAxis } from '@/components/trendAxis'
+import WeeklyCompare from './WeeklyCompare'
 
 /** 「全部」要撈完整歷史：listWeights 預設只給 90 筆。1000 是 Supabase 單次回應上限。 */
 const FULL_HISTORY = 1000
@@ -28,6 +30,10 @@ export interface WeightTrendProps {
   weights: Weight[] | null
   /** 現在設定的每週速度（kg，減重為負）；自訂目標是 null，不畫計畫線（v2.137） */
   plannedKgPerWeek: number | null
+  /** 現在的每日目標（吃、練、體重並排的目標虛線，v2.148）；算不出來是 null */
+  targetKcal: number | null
+  /** 訓練資料（並排卡的訓練次數，v2.148）；null＝App 還沒載到 */
+  training: TrainingDb | null
   /** 明細表改了量法斷點：設定頁重撈體重（v2.138；v2.146 起斷點只切體脂，不再叫 App 重算回推） */
   onBreakChange: () => void
   onBack: () => void
@@ -41,7 +47,7 @@ const chartNote = (x: number, y: number, text: string, anchor: 'start' | 'end') 
   <text className="trend-chart-note" x={x} y={y} textAnchor={anchor}>{text}</text>
 )
 
-export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, onBack }: WeightTrendProps) {
+export default function WeightTrend({ weights, plannedKgPerWeek, targetKcal, training, onBreakChange, onBack }: WeightTrendProps) {
   const [range, setRange] = useState<TrendRange>('90')
   const [full, setFull] = useState<Weight[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -92,6 +98,9 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, 
     [source, range, today, plannedKgPerWeek],
   )
   const dom = useMemo(() => xDomain(points, range, today), [points, range, today])
+  /* 並排卡（v2.148）：趨勢要全部歷史（範圍第一週拿範圍以前的趨勢算變化）；「全部」從第一筆量測那天起，跟上面的圖同一個起點 */
+  const allTrend = useMemo(() => (source ? trendPoints(source, 'all', today) : []), [source, today])
+  const weekFrom = rangeStart(range, today) ?? allTrend[0]?.date ?? today
   const ticks = useMemo(() => (dom ? xTicks(dom[0], dom[1]) : []), [dom])
   /* 軸只照量到的值定、至少跨 4 kg（v2.146：1 kg 的日常起伏不放大成大浪）；計畫線超出就在圖框切掉（allowDataOverflow，v2.137 review） */
   const kgDomain = useMemo(() => spanDomain(points.flatMap((p) => [p.kg, p.trend]), 0.3, 1, 4), [points])
@@ -173,7 +182,13 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, 
       <EmptyNote art="scale">還沒有體重紀錄</EmptyNote>
     )
   } else if (points.length === 0) {
-    body = <TrendNoRecords onSeeAll={() => setRange('all')} />
+    // 範圍內沒量體重，飲食與訓練照樣可能有：並排卡照畫（v2.148 review）
+    body = (
+      <>
+        <TrendNoRecords onSeeAll={() => setRange('all')} />
+        <WeeklyCompare from={weekFrom} today={today} trend={allTrend} targetKcal={targetKcal} training={training} />
+      </>
+    )
   } else {
     body = (
       <>
@@ -266,6 +281,8 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, 
             )}
           </section>
         </div>
+
+        <WeeklyCompare from={weekFrom} today={today} trend={allTrend} targetKcal={targetKcal} training={training} />
 
         <section className="trend-card" aria-label="明細">
           <table className="trend-table">

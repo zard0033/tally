@@ -165,7 +165,9 @@ test('趨勢頁自己的請求失敗、但設定頁已經有資料：退回那�
   await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
   await expect(page.locator('section[aria-label="體重"] .recharts-wrapper')).toBeVisible()
   await expect(tableRows(page)).toHaveCount(inRange(90))
-  await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('連不上伺服器')
+  // 體重卡與明細有退回的那份可畫，不能說連不上；並排卡（v2.148）要另撈飲食紀錄，斷網時照實說連不上
+  for (const c of await page.locator('.trend-card:not(.wk-card)').all()) await expect(c).not.toContainText('連不上伺服器')
+  await expect(page.locator('section.wk-card')).toContainText('連不上伺服器，載不到飲食紀錄')
 })
 
 /* 計畫 vs 實際（v2.137，spec「減重回饋圈 review」④）。FIX 的目標是減重每週 0.5 kg＝每月 2.17 kg。 */

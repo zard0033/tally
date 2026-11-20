@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 32 pages | Last updated: 2026-11-20T10:20:49.792Z
+> 34 pages | Last updated: 2026-11-20T10:51:38.818Z
 
 ## debugging
 
@@ -26,6 +26,7 @@
 - [lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）](lesson-meal-suggest-v2-2026-11-10.md) — # lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
 - [lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）](lesson-presence-animation-mutation-2026-10-27.md) — # lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）
+- [lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）](lesson-recharts-small-multiples-recharts-3-2026-11-20.md) — # lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）
 - [lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）](lesson-recharts-trend-chart-recharts-2026-10-20.md) — # lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）
 - [lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）](lesson-recovery-status-2026-10-21.md) — # lesson-recovery-status 肌群恢復狀態的三條通則（2026-10-21）
 - [lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）](lesson-rpe-and-ddl-rpe-ddl-2026-10-21.md) — # lesson-rpe-and-ddl RPE 與 DDL 的三條通則（2026-10-21）
@@ -48,3 +49,4 @@
 
 - [phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）](phase2-round1-log-2-2026-10-13-14.md) — # phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）
 - [Session Log 2026-11-11](session-log-2026-11-11-b5c81c69.md) — # Session Log 2026-11-11
+- [Session Log 2026-11-20](session-log-2026-11-20-be19c4b2.md) — # Session Log 2026-11-20

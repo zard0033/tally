@@ -24,7 +24,7 @@ const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
   'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest',
 ]
-const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend']
+const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend', 'weekly-compare']
 const SHEETS = ['spring-sheet', 'sync-sheet']
 
 /* 動作庫／食品庫的入口列在設定頁，settings-nav 守「三個入口都進得去」，所以兩個庫多帶它 */
@@ -38,7 +38,7 @@ const SCREENS = {
   // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
   Today: [...FOOD, ...SHEETS], ItemEditor: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
   // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
-  Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS,
+  Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS, WeeklyCompare: SETTINGS,
   Login: ['interaction'],
 }
 
@@ -48,7 +48,7 @@ const SCREENS = {
 const FILES = {
   'src/useTraining.ts': [...TRAIN, ...ANALYSIS],
   'src/trainingSync.ts': [...TRAIN, ...ANALYSIS],
-  'src/lib/training.ts': [...TRAIN, ...ANALYSIS],
+  'src/lib/training.ts': [...TRAIN, ...ANALYSIS, 'weekly-compare'], // 並排卡的訓練次數用 cardioRecorded
   'src/lib/trainingRuntime.ts': [...TRAIN, ...ANALYSIS],
   'src/lib/queue.ts': [...TRAIN, ...ANALYSIS],
   'src/lib/queueStore.ts': [...TRAIN, ...ANALYSIS],
@@ -57,7 +57,8 @@ const FILES = {
   'src/lib/restTimer.ts': TRAIN,
   'src/lib/recovery.ts': ANALYSIS,
   'src/lib/strength.ts': [...TRAIN, ...ANALYSIS],
-  'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend'],
+  'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend', 'weekly-compare'],
+  'src/lib/weeklyCompare.ts': ['settings-nav', 'weight-trend', 'weekly-compare'],
   'src/lib/baseline.ts': SETTINGS,
   'src/useMaintenanceEstimate.ts': SETTINGS,
   'src/lib/mealSuggest.ts': FOOD,

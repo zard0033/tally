@@ -205,3 +205,7 @@
 - **Pages:** session-log-2026-11-20-be19c4b2.md
 - **Summary:** Auto-captured session log for c626eeb0-86aa-4f1d-a543-c23ed8697602 (omc-wiki-capture:ce0094ed04a998539f6c3be7a4750bdaaeec4b591706620d1cb2ac58b13bbf2a)
 
+## [2026-11-20T10:51:38.615Z] ingest
+- **Pages:** lesson-recharts-small-multiples-recharts-3-2026-11-20.md
+- **Summary:** Created new page "lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）"
+

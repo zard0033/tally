@@ -239,7 +239,9 @@ export default function Settings(props: SettingsProps) {
           </div>
         }
       >
-        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={refreshWeights} onBack={() => setView('list')} />
+        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)}
+          targetKcal={Number.isFinite(targets.kcal) ? targets.kcal : null} training={training?.db ?? null}
+          onBreakChange={refreshWeights} onBack={() => setView('list')} />
       </Suspense>
     )
   }
