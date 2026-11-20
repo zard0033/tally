@@ -201,3 +201,7 @@
 - **Pages:** recharts-tooltip.md
 - **Summary:** Created new page "recharts 讀數要跟 tooltip 狀態走，不要聽圖表的指標事件"
 
+## [2026-11-20T10:20:49.216Z] ingest
+- **Pages:** session-log-2026-11-20-be19c4b2.md
+- **Summary:** Auto-captured session log for c626eeb0-86aa-4f1d-a543-c23ed8697602 (omc-wiki-capture:ce0094ed04a998539f6c3be7a4750bdaaeec4b591706620d1cb2ac58b13bbf2a)
+

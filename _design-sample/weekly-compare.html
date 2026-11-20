@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>吃、練、體重並排：三個方向</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（同 weight-chart.html） ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 1240px; line-height: 1.6; }
+  .row { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .colhead { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; min-height: 170px; }
+  .colhead h2 { margin: 0; font-size: var(--t-md); font-weight: 800; }
+  .colhead h2 small { font-weight: 600; color: var(--ink-muted); font-size: var(--t-sm); margin-left: 6px; }
+  .colhead ul { margin: 0; padding-left: 1.2em; font-size: var(--t-xs); line-height: 1.65; color: var(--ink-muted); }
+  .colhead ul b { color: var(--ink); font-weight: 700; }
+  .device { width: 393px; height: 852px; overflow-y: auto; border-radius: 28px; position: relative; background: var(--paper); box-shadow: var(--shadow-2); }
+  .top { display: flex; align-items: center; gap: var(--s-2); height: 56px; padding: 0 var(--s-4); font-size: var(--t-md); font-weight: 700; }
+  .top .back { width: 32px; color: var(--ink-muted); font-size: 22px; }
+  .scroll { padding: 0 var(--s-3) var(--s-6); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: var(--r-tab); background: var(--fill); margin-bottom: var(--s-3); }
+  .seg button { min-height: 36px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: var(--t-sm); color: var(--ink-muted); }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-1); }
+  .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); margin-bottom: var(--s-3); padding: var(--s-4); position: relative; }
+  .card.ghost { color: var(--ink-faint); font-size: var(--t-sm); text-align: center; padding: 28px var(--s-4); }
+  .num { font-family: var(--font-num); }
+  svg { display: block; overflow: visible; touch-action: none; user-select: none; }
+  svg text { font-family: var(--font-num); font-size: 11px; fill: var(--ink-muted); }
+  svg text.cjk { font-family: var(--font-body); }
+  .note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-3) 0 0; }
+  .card-title { margin: 0 0 var(--s-3); font-size: var(--t-base); font-weight: 700; }
+
+  /* 讀數：拖曳／點選時換成那一週（那一天），放開回到上週 */
+  .read-k { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); min-height: 1.4em; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin: var(--s-1) 0 var(--s-3); }
+  .stat b { display: block; font-family: var(--font-num); font-weight: 800; font-size: var(--t-lg); letter-spacing: var(--track-lg); line-height: 1.15; }
+  .stat b small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); margin-left: 2px; }
+  .stat span { font-size: var(--t-xs); color: var(--ink-muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); list-style: none; margin: var(--s-3) 0 0; padding: 0; font-size: var(--t-xs); color: var(--ink-muted); }
+  .legend li { display: flex; align-items: center; gap: 5px; }
+  .k-line { width: 14px; height: 2.5px; border-radius: 2px; background: var(--accent); }
+  .k-bar { width: 8px; height: 11px; border-radius: 2px 2px 0 0; background: var(--ink-muted); }
+  .k-hollow { width: 8px; height: 11px; border-radius: 2px 2px 0 0; border: 1.5px solid var(--ink-faint); border-bottom: 0; box-sizing: border-box; }
+  .k-plan { width: 14px; border-top: 1.5px dashed var(--ink-muted); }
+  .k-sq { width: 9px; height: 9px; border-radius: 2px; background: var(--clay); }
+
+  /* B：週帳 */
+  .wk-row { display: grid; grid-template-columns: 64px 1fr 58px; gap: var(--s-2); align-items: center; padding: var(--s-3) 0; border-top: 1px solid var(--rule-subtle); }
+  .wk-row:first-of-type { border-top: 0; padding-top: 0; }
+  .wk-date { font-size: var(--t-sm); font-weight: 600; line-height: 1.3; }
+  .wk-date small { display: block; font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
+  .wk-mid { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .wk-kcal { display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-xs); color: var(--ink-muted); }
+  .wk-kcal b { font-family: var(--font-num); font-weight: 700; font-size: var(--t-sm); color: var(--ink); min-width: 38px; text-align: right; }
+  .wk-track { position: relative; flex: 1; height: 6px; border-radius: 3px; background: var(--fill); }
+  .wk-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--ink-muted); }
+  .wk-track i.thin { background: transparent; border: 1.5px solid var(--ink-faint); box-sizing: border-box; }
+  .wk-track u { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed var(--ink); }
+  .wk-train { display: flex; align-items: center; gap: 4px; font-size: var(--t-xs); color: var(--ink-muted); min-height: 14px; }
+  .wk-train i { width: 9px; height: 9px; border-radius: 2px; background: var(--clay); }
+  .wk-wt { text-align: right; font-family: var(--font-num); font-weight: 700; font-size: var(--t-sm); }
+  .wk-wt small { display: block; font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
+  .wk-gap { grid-column: 2 / 4; font-size: var(--t-xs); color: var(--ink-faint); }
+
+  /* C：月曆格 */
+  .cal-head, .cal-row { display: grid; grid-template-columns: 40px repeat(7, 1fr) 46px; gap: 3px; align-items: center; }
+  .cal-head { font-size: var(--t-xs); color: var(--ink-muted); text-align: center; margin-bottom: 4px; }
+  .cal-row { margin-bottom: 3px; }
+  .cal-wk { font-size: var(--t-xs); color: var(--ink-muted); font-family: var(--font-num); }
+  .cell { position: relative; aspect-ratio: 1; border-radius: 6px; background: #F1F1EE; border: 0; padding: 0; font: inherit; cursor: pointer; }
+  .cell.none { background: transparent; border: 1.5px dashed var(--rule-field); opacity: .55; }
+  .cell.out { visibility: hidden; }
+  .cell.lo2 { background: #5F88B5; } .cell.lo1 { background: #A9C2DC; }
+  .cell.hi1 { background: #E5AC8C; } .cell.hi2 { background: #C4653F; }
+  .cell[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .cell .tr { position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px; border-radius: 2px; background: var(--ink); }
+  .cell .wt { position: absolute; left: 3px; top: 3px; width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--ink); box-sizing: border-box; }
+  .cal-d { text-align: right; font-family: var(--font-num); font-size: var(--t-xs); font-weight: 700; }
+  .ramp { display: flex; align-items: center; gap: 4px; font-size: var(--t-xs); color: var(--ink-muted); margin-top: var(--s-3); }
+  .ramp i { width: 18px; height: 12px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">吃、練、體重並排（spec 訓練階段 4「運動×飲食並排」）：三個方向</h1>
+<p class="harness-sub">
+  三欄吃同一份<b>仿真資料</b>（數字是編的，只有筆數形狀照真的抓：體重約一週一次、訓練一週 0–3 次、飲食大多天天記、9/7–10/11 幾乎沒記）。
+  <b>三個方向共通</b>：①放在<b>體重趨勢頁</b>，體重卡下面多一張卡，跟著頁面的 30／90 天／全部切換——計畫線已經在這頁，回饋圈集中在一處，也守住「提示不放今日頁」；
+  ②以「週」為單位：體重一週一筆、訓練一週一兩次，照天畫只會看到雜訊；
+  ③攝取只算<b>記完整的天</b>（午、晚餐都有記，同回推的定義），一週不到 4 天記完整就標成「記得不完整」，不跟完整的週同樣看待；
+  ④參考線是<b>現在的</b>每日目標（過去改過目標不回溯，限制寫在卡片下）；
+  ⑤只並排、不下因果結論（spec 階段 4 的出口條件）。訓練量先用「次數」，不用總重量×次數：有氧算不進總重量，一週一次時總重量只是在比哪天練得多。
+</p>
+
+<div class="row">
+  <section class="a">
+    <div class="colhead">
+      <h2>A 三排同一條時間軸<small>我推薦</small></h2>
+      <ul>
+        <li>上到下：<b>體重趨勢</b>（同上一張卡的線）、<b>每週平均攝取</b>（長條＋目標虛線）、<b>訓練次數</b>（一次一格）。三排各自的 Y 軸，<b>共用週的 X 軸</b>。</li>
+        <li>手指在圖上拖曳＝選週，三排同一欄打底色，頂端三個數字換成那週；放開回到上週。</li>
+        <li>好處：一眼看出「沒記的那段體重怎麼走」「練得多的週吃得多不多」。代價：三排擠在一張卡，數字要靠頂端讀數。</li>
+      </ul>
+    </div>
+    <div class="device">
+      <div class="top"><span class="back">‹</span>體重趨勢</div>
+      <div class="scroll">
+        <div class="seg"><button>30 天</button><button aria-pressed="true">90 天</button><button>全部</button></div>
+        <div class="card ghost">（上面那張體重卡不動，見 v2.146）</div>
+        <div class="card" id="A-card">
+          <h3 class="card-title">吃、練、體重：每週</h3>
+          <div class="read-k" id="A-k"></div>
+          <div class="stats" id="A-stats"></div>
+          <svg id="A-svg"></svg>
+          <ul class="legend">
+            <li><i class="k-line"></i>體重趨勢</li>
+            <li><i class="k-bar"></i>平均攝取</li>
+            <li><i class="k-hollow"></i>記不到 4 天</li>
+            <li><i class="k-plan"></i>現在的目標</li>
+            <li><i class="k-sq"></i>訓練一次</li>
+          </ul>
+          <p class="note" id="A-note"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="b">
+    <div class="colhead">
+      <h2>B 週帳（不畫圖）</h2>
+      <ul>
+        <li>一週一列、新的在上：<b>平均攝取</b>（短條對目標虛線）、<b>訓練格</b>、右邊<b>這週體重趨勢變化</b>。</li>
+        <li>沒記的週直接寫「沒記」，不畫空條假裝是 0。</li>
+        <li>好處：每個數字都寫出來，不用拖曳、讀屏也順。代價：14 列要捲，看不出整段的走勢——走勢得回去看上面那張體重卡。</li>
+      </ul>
+    </div>
+    <div class="device">
+      <div class="top"><span class="back">‹</span>體重趨勢</div>
+      <div class="scroll">
+        <div class="seg"><button>30 天</button><button aria-pressed="true">90 天</button><button>全部</button></div>
+        <div class="card ghost">（上面那張體重卡不動，見 v2.146）</div>
+        <div class="card">
+          <h3 class="card-title">每週帳</h3>
+          <div id="B-list"></div>
+          <p class="note">條的虛線＝現在的每日目標 1950 卡；空心條＝記不到 4 天完整的。體重是趨勢的週變化，量不到兩筆的週寫「—」。只並排，不代表誰造成誰。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="c">
+    <div class="colhead">
+      <h2>C 月曆格（看到「天」）</h2>
+      <ul>
+        <li>一格一天，<b>顏色＝比目標多或少</b>（藍＝少、灰＝差不多、陶土＝多，差 200 卡一階），右下黑方塊＝有訓練，左上圓圈＝有量體重；最右一欄是那週體重趨勢變化。</li>
+        <li>點一格，頂端寫那天吃多少、練了什麼。</li>
+        <li>好處：看得到「週末都吃多」「練的那天吃多少」這種日子層級的事。代價：一天的攝取誤差大，顏色容易讓人對單日過度反應；三種資訊擠在一格，要讀圖例。</li>
+      </ul>
+    </div>
+    <div class="device">
+      <div class="top"><span class="back">‹</span>體重趨勢</div>
+      <div class="scroll">
+        <div class="seg"><button>30 天</button><button aria-pressed="true">90 天</button><button>全部</button></div>
+        <div class="card ghost">（上面那張體重卡不動，見 v2.146）</div>
+        <div class="card">
+          <h3 class="card-title">吃、練、體重：每天</h3>
+          <div class="read-k" id="C-k"></div>
+          <div class="stats" id="C-stats"></div>
+          <div class="cal-head"><span></span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span><span>體重</span></div>
+          <div id="C-cal"></div>
+          <div class="ramp"><span>比目標少</span><i style="background:#5F88B5"></i><i style="background:#A9C2DC"></i><i style="background:#F1F1EE;box-shadow:inset 0 0 0 1px var(--rule)"></i><i style="background:#E5AC8C"></i><i style="background:#C4653F"></i><span>多</span></div>
+          <ul class="legend">
+            <li><i style="width:12px;height:12px;border-radius:3px;border:1.5px dashed var(--rule-field);opacity:.55;box-sizing:border-box"></i>沒記完整</li>
+            <li><i style="width:7px;height:7px;border-radius:2px;background:var(--ink)"></i>有訓練</li>
+            <li><i style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink);box-sizing:border-box"></i>有量體重</li>
+          </ul>
+          <p class="note">差 200 卡一階（假設值）。只並排，不代表誰造成誰。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ── 仿真資料（決定性亂數；數字是編的） ── */
+const DAY = 86400000
+const TODAY = Date.UTC(2026, 10, 20)
+const FROM = TODAY - 89 * DAY // 90 天
+const TARGET = 1950
+let seed = 7
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+const iso = (t) => new Date(t).toISOString().slice(0, 10)
+const md = (t) => { const d = new Date(t); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}` }
+const mondayOf = (t) => t - ((new Date(t).getUTCDay() + 6) % 7) * DAY
+
+const days = []
+for (let t = FROM; t <= TODAY; t += DAY) {
+  const s = iso(t)
+  const gap = s >= '2026-09-09' && s <= '2026-10-11' && s !== '2026-09-22'
+  const dow = new Date(t).getUTCDay()
+  const weekend = dow === 0 || dow === 6
+  const complete = !gap && rnd() > 0.08 && s !== '2026-11-20'
+  const kcal = complete ? Math.round(TARGET - 120 + (weekend ? 380 : 0) + (rnd() - 0.5) * 700) : null
+  days.push({ t, s, kcal, complete, dow })
+}
+const workouts = ['2026-08-26', '2026-10-13', '2026-10-15', '2026-10-17', '2026-10-21', '2026-10-28', '2026-11-04']
+const weighIns = [['2026-08-22', 78.6], ['2026-08-31', 78.2], ['2026-09-03', 78.5], ['2026-09-15', 78.9], ['2026-09-18', 79.3], ['2026-09-25', 79.1],
+  ['2026-10-02', 79.4], ['2026-10-09', 79.0], ['2026-10-16', 79.2], ['2026-10-23', 78.8], ['2026-11-13', 79.3], ['2026-11-19', 78.9]]
+  .map(([s, kg]) => ({ t: Date.parse(s), s, kg }))
+// 指數平滑趨勢（同 v2.146：每天 0.9，間隔幾天就乘幾次）
+let tr = null, prev = null
+for (const w of weighIns) {
+  if (tr === null) tr = w.kg
+  else { const a = 1 - Math.pow(0.9, (w.t - prev) / DAY); tr = tr + a * (w.kg - tr) }
+  w.trend = tr; prev = w.t
+}
+const trendAt = (t) => { let v = null; for (const w of weighIns) if (w.t <= t) v = w.trend; return v }
+
+const weeks = []
+for (let m = mondayOf(FROM); m <= TODAY; m += 7 * DAY) {
+  const ds = days.filter((d) => d.t >= m && d.t < m + 7 * DAY)
+  const full = ds.filter((d) => d.complete)
+  const avg = full.length ? Math.round(full.reduce((a, d) => a + d.kcal, 0) / full.length) : null
+  const tw = workouts.filter((s) => Date.parse(s) >= m && Date.parse(s) < m + 7 * DAY).length
+  const ins = weighIns.filter((w) => w.t >= m && w.t < m + 7 * DAY)
+  const startTr = trendAt(m - DAY), endTr = trendAt(m + 6 * DAY)
+  weeks.push({ m, ds, nFull: full.length, avg, tw, ins, delta: startTr != null && endTr != null && ins.length ? endTr - startTr : null, endTr,
+    current: m + 6 * DAY > TODAY, partial: m < FROM })
+}
+const sgn = (n, d = 1) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(d)
+const fmtK = (n) => n.toLocaleString('en-US')
+const statsHtml = (items) => items.map(([v, u, k]) => `<div class="stat"><b>${v}<small>${u}</small></b><span>${k}</span></div>`).join('')
+
+/* ── A：三排同一條時間軸 ── */
+;(function () {
+  const svg = document.getElementById('A-svg')
+  const W = 337, LAB = 0, H1 = 74, H2 = 92, H3 = 34, GAP = 22, AX = 18
+  const top1 = 14, top2 = top1 + H1 + GAP, top3 = top2 + H2 + GAP, H = top3 + H3 + AX
+  svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`)
+  const t0 = weeks[0].m, t1 = weeks[weeks.length - 1].m + 7 * DAY
+  const x = (t) => ((t - t0) / (t1 - t0)) * W
+  const colW = W / weeks.length
+  let s = ''
+  // 選取底色
+  s += `<rect id="A-sel" y="0" height="${top3 + H3}" width="${colW}" rx="4" fill="var(--raised)"/>`
+  // ① 體重
+  const lo = 77.5, hi = 80.5 // 至少跨 3 kg（小排）
+  const y1 = (kg) => top1 + (1 - (kg - lo) / (hi - lo)) * H1
+  s += `<text class="cjk" x="0" y="${top1 - 4}">體重趨勢 kg</text>`
+  for (const g of [78, 79, 80]) s += `<line x1="0" x2="${W}" y1="${y1(g)}" y2="${y1(g)}" stroke="var(--rule-subtle)"/><text x="${W}" y="${y1(g) - 3}" text-anchor="end">${g}</text>`
+  s += `<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${weighIns.map((w) => `${x(w.t + DAY / 2)},${y1(w.trend)}`).join(' ')}"/>`
+  for (const w of weighIns) s += `<circle cx="${x(w.t + DAY / 2)}" cy="${y1(w.trend)}" r="3" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`
+  // ② 攝取
+  const kmax = 2800
+  const y2 = (k) => top2 + (1 - k / kmax) * H2
+  s += `<text class="cjk" x="0" y="${top2 - 4}">平均攝取 卡／天</text>`
+  s += `<line x1="0" x2="${W}" y1="${top2 + H2}" y2="${top2 + H2}" stroke="var(--rule)"/>`
+  weeks.forEach((w, i) => {
+    const cx = i * colW + colW / 2, bw = Math.min(14, colW - 8)
+    if (w.avg == null) { s += `<text class="cjk" x="${cx}" y="${top2 + H2 - 6}" text-anchor="middle" style="font-size:10px;fill:var(--ink-faint)">沒記</text>`; return }
+    const yy = y2(w.avg), hgt = top2 + H2 - yy
+    if (w.nFull >= 4) s += `<path d="M${cx - bw / 2},${top2 + H2} V${yy + 3} q0,-3 3,-3 h${bw - 6} q3,0 3,3 V${top2 + H2} Z" fill="var(--ink-muted)"/>`
+    else s += `<path d="M${cx - bw / 2 + .75},${top2 + H2} V${yy + 3} q0,-3 3,-3 h${bw - 7.5} q3,0 3,3 V${top2 + H2}" fill="none" stroke="var(--ink-faint)" stroke-width="1.5"/>`
+  })
+  s += `<line x1="0" x2="${W}" y1="${y2(TARGET)}" y2="${y2(TARGET)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 3"/>`
+  s += `<text x="0" y="${y2(TARGET) - 4}" style="fill:var(--ink)">目標 ${fmtK(TARGET)}</text>`
+  // ③ 訓練
+  s += `<text class="cjk" x="0" y="${top3 - 4}">訓練</text>`
+  weeks.forEach((w, i) => {
+    const cx = i * colW + colW / 2
+    for (let k = 0; k < w.tw; k++) s += `<rect x="${cx - 4.5}" y="${top3 + H3 - 10 - k * 11}" width="9" height="9" rx="2" fill="var(--clay)"/>`
+  })
+  s += `<line x1="0" x2="${W}" y1="${top3 + H3}" y2="${top3 + H3}" stroke="var(--rule)"/>`
+  // X 軸：每兩週一個刻度
+  weeks.forEach((w, i) => { if (i % 3 === 1) s += `<text x="${i * colW + colW / 2}" y="${top3 + H3 + 14}" text-anchor="middle">${md(w.m)}</text>` })
+  svg.innerHTML = s
+  const sel = svg.querySelector('#A-sel')
+  const def = weeks.length - 2 // 上週
+  function show(i, dragging) {
+    const w = weeks[i]
+    sel.setAttribute('x', i * colW)
+    document.getElementById('A-k').textContent = dragging || i !== def ? `${md(w.m)}–${md(w.m + 6 * DAY)} 那週` : `上週（${md(w.m)}–${md(w.m + 6 * DAY)}）`
+    document.getElementById('A-stats').innerHTML = statsHtml([
+      w.avg == null ? ['—', '', '沒記'] : [fmtK(w.avg), '卡', `平均・記 ${w.nFull} 天完整`],
+      [w.tw, '次', '訓練'],
+      w.delta == null ? ['—', '', '這週沒量體重'] : [sgn(w.delta), 'kg', '體重趨勢'],
+    ])
+  }
+  show(def)
+  const pick = (e) => { const r = svg.getBoundingClientRect(); show(Math.max(0, Math.min(weeks.length - 1, Math.floor((e.clientX - r.left) / colW))), true) }
+  svg.addEventListener('pointerdown', (e) => { svg.setPointerCapture(e.pointerId); pick(e) })
+  svg.addEventListener('pointermove', (e) => { if (e.buttons || e.pointerType === 'mouse') pick(e) })
+  svg.addEventListener('pointerup', () => show(def))
+  svg.addEventListener('pointerleave', () => show(def))
+  const logged = weeks.reduce((a, w) => a + w.nFull, 0)
+  document.getElementById('A-note').textContent =
+    `這 90 天：記完整 ${logged} 天、量體重 ${weighIns.length} 次、訓練 ${workouts.length} 次。目標虛線是現在的設定，以前改過目標不回溯。只並排，不代表誰造成誰。`
+})()
+
+/* ── B：週帳 ── */
+;(function () {
+  const max = 2800
+  let h = ''
+  for (const w of [...weeks].reverse()) {
+    const date = `<div class="wk-date">${md(w.m)}<small>${w.current ? '進行中' : w.partial ? '只算到 ' + md(FROM) + ' 起' : `記 ${w.nFull} 天`}</small></div>`
+    if (w.avg == null && w.tw === 0) { h += `<div class="wk-row">${date}<div class="wk-gap">沒記${w.ins.length ? `・量了 ${w.ins.length} 次體重` : ''}</div></div>`; continue }
+    const bar = w.avg == null ? '<span style="color:var(--ink-faint)">沒記</span>'
+      : `<b>${fmtK(w.avg)}</b><span class="wk-track"><i class="${w.nFull < 4 ? 'thin' : ''}" style="width:${(w.avg / max) * 100}%"></i><u style="left:${(TARGET / max) * 100}%"></u></span>`
+    const train = w.tw ? Array.from({ length: w.tw }, () => '<i></i>').join('') + `<span>訓練 ${w.tw} 次</span>` : '<span style="color:var(--ink-faint)">沒訓練</span>'
+    const wt = w.delta == null ? '—<small>沒量</small>' : `${sgn(w.delta)}<small>kg</small>`
+    h += `<div class="wk-row">${date}<div class="wk-mid"><div class="wk-kcal">${bar}</div><div class="wk-train">${train}</div></div><div class="wk-wt">${wt}</div></div>`
+  }
+  document.getElementById('B-list').innerHTML = h
+})()
+
+/* ── C：月曆格 ── */
+;(function () {
+  const cls = (d) => {
+    if (!d.complete) return 'none'
+    const diff = d.kcal - TARGET
+    return diff <= -400 ? 'lo2' : diff <= -200 ? 'lo1' : diff < 200 ? '' : diff < 400 ? 'hi1' : 'hi2'
+  }
+  let h = ''
+  for (const w of weeks) {
+    h += `<div class="cal-row"><span class="cal-wk">${md(w.m)}</span>`
+    for (let k = 0; k < 7; k++) {
+      const t = w.m + k * DAY
+      const d = days.find((x) => x.t === t)
+      if (!d) { h += '<span class="cell out"></span>'; continue }
+      const tr = workouts.includes(d.s), wt = weighIns.find((x) => x.s === d.s)
+      h += `<button class="cell ${cls(d)}" data-t="${t}" aria-pressed="false" aria-label="${md(t)}">${tr ? '<i class="tr"></i>' : ''}${wt ? '<i class="wt"></i>' : ''}</button>`
+    }
+    h += `<span class="cal-d">${w.delta == null ? '<span style="color:var(--ink-faint);font-weight:400">—</span>' : sgn(w.delta)}</span></div>`
+  }
+  const cal = document.getElementById('C-cal')
+  cal.innerHTML = h
+  function show(t) {
+    const d = days.find((x) => x.t === t)
+    const wt = weighIns.find((x) => x.s === d.s)
+    cal.querySelectorAll('.cell').forEach((c) => c.setAttribute('aria-pressed', String(Number(c.dataset.t) === t)))
+    document.getElementById('C-k').textContent = `${md(t)}（${'日一二三四五六'[d.dow]}）`
+    document.getElementById('C-stats').innerHTML = statsHtml([
+      d.complete ? [fmtK(d.kcal), '卡', `比目標 ${sgn(d.kcal - TARGET, 0)}`] : ['—', '', '沒記完整'],
+      [workouts.includes(d.s) ? '有' : '—', '', '訓練'],
+      wt ? [wt.kg.toFixed(1), 'kg', `趨勢 ${wt.trend.toFixed(1)}`] : ['—', '', '沒量體重'],
+    ])
+  }
+  cal.addEventListener('click', (e) => { const c = e.target.closest('.cell'); if (c) show(Number(c.dataset.t)) })
+  show(TODAY - DAY)
+})()
+</script>
+</body>
+</html>
