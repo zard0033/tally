@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>體重趨勢圖：三個方向</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（同 today-meals.html） ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 1240px; line-height: 1.6; }
+  .row { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .colhead { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; min-height: 150px; }
+  .colhead h2 { margin: 0; font-size: var(--t-md); font-weight: 800; }
+  .colhead h2 small { font-weight: 600; color: var(--ink-muted); font-size: var(--t-sm); margin-left: 6px; }
+  .colhead ul { margin: 0; padding-left: 1.2em; font-size: var(--t-xs); line-height: 1.65; color: var(--ink-muted); }
+  .colhead ul b { color: var(--ink); font-weight: 700; }
+  .device { width: 393px; height: 852px; overflow-y: auto; border-radius: 28px; position: relative; background: var(--paper); box-shadow: var(--shadow-2); }
+  .top { display: flex; align-items: center; gap: var(--s-2); height: 56px; padding: 0 var(--s-4); font-size: var(--t-md); font-weight: 700; }
+  .top .back { width: 32px; color: var(--ink-muted); font-size: 22px; }
+  .scroll { padding: 0 var(--s-3) var(--s-6); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: var(--r-tab); background: var(--fill); margin-bottom: var(--s-3); }
+  .seg button { min-height: 36px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: var(--t-sm); color: var(--ink-muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-1); }
+  .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); margin-bottom: var(--s-3); padding: var(--s-4); position: relative; }
+  .num { font-family: var(--font-num); }
+  svg { display: block; overflow: visible; touch-action: none; user-select: none; }
+  svg text { font-family: var(--font-num); font-size: 11.5px; fill: var(--ink-muted); }
+  svg text.cjk { font-family: var(--font-body); }
+  .note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-2) 0 0; }
+
+  /* 讀數區：拖曳時換成指到的那天，放開回到最新 */
+  .read-k { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); min-height: 1.4em; }
+  .read-big { display: flex; align-items: baseline; gap: 6px; }
+  .read-big b { font-family: var(--font-num); font-weight: 900; font-size: var(--t-hero); letter-spacing: var(--track-hero); line-height: .95; }
+  .read-big span { font-size: var(--t-base); color: var(--ink-muted); }
+  .read-sub { margin-top: var(--s-2); font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; min-height: 1.5em; }
+  .read-sub b { color: var(--ink); font-weight: 600; }
+  .read-sub .up { color: var(--ink); }
+  .chips { display: flex; gap: var(--s-2); margin-top: var(--s-2); flex-wrap: wrap; }
+  .chip { font-size: var(--t-xs); padding: 2px var(--s-2); border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); }
+  .chip b { color: var(--ink); font-family: var(--font-num); font-weight: 700; }
+
+  .legend { display: flex; gap: var(--s-3); list-style: none; margin: var(--s-3) 0 0; padding: 0; font-size: var(--t-xs); color: var(--ink-muted); }
+  .legend li { display: flex; align-items: center; gap: 5px; }
+  .k-ring { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--ink-faint); box-sizing: border-box; }
+  .k-line { width: 14px; height: 2.5px; border-radius: 2px; background: var(--accent); }
+  .k-plan { width: 14px; border-top: 1.5px dashed var(--ink-muted); }
+  .divider { height: 1px; background: var(--rule-subtle); margin: var(--s-4) calc(-1 * var(--s-4)); }
+  .sub-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .sub-head h3 { margin: 0; font-size: var(--t-base); font-weight: 600; }
+  .sub-head .v { font-family: var(--font-num); font-weight: 800; font-size: var(--t-md); }
+  .sub-head .v small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); margin-left: 2px; }
+
+  /* B：天空卡 */
+  .b .card.sky { background: linear-gradient(to bottom, var(--sky) 0%, #E4EDF4 62%, var(--card) 100%); padding-bottom: 0; overflow: hidden; }
+  .b .card.sky .read-k, .b .card.sky .read-sub, .b .card.sky .read-big span { color: var(--ink-sky); }
+  .b .chip { background: var(--sky-track); color: var(--ink-sky); }
+
+  /* C：週格 */
+  .c .weekgrid text.wk { font-family: var(--font-body); }
+</style>
+</head>
+<body>
+<h1 class="harness-title">體重趨勢圖：三個方向</h1>
+<p class="harness-sub">
+  三欄吃同一份仿真資料：90 天量 16 次（3–9 天一次）、11/13 換量法（體脂跳 +2%）、計畫每月 −2.17 kg。
+  <b>三個方向共通的改動</b>：①頂端先寫結論（大數字＝現在的趨勢體重），手指在圖上拖曳時大數字換成那一天的讀數，放開回到最新，浮動框不再蓋住圖；
+  ②Y 軸至少跨 4 kg，1 kg 的日常起伏不再被放大成大浪；③計畫線超出圖框就切在邊上，右緣標「計畫該在 xx」；④「換量法」小標不會被切掉；
+  ⑤<b>趨勢線改用指數平滑</b>（The Hacker's Diet 的做法，每天權重 10%，量得疏時照間隔天數放大權重）——一週量一次時「7 日平均」幾乎等於原始讀數，線才會跟著每一筆抖。
+  這一條動到 <code>src/lib/weightTrend.ts</code> 與大數字的口徑，要你點頭。來源：<a href="https://www.fourmilab.ch/hackdiet/e4/signalnoise.html" target="_blank">fourmilab.ch/hackdiet — Signal and Noise</a>。
+</p>
+
+<div class="row">
+  <section>
+    <div class="colhead">
+      <h2>A 先講結論<small>我推薦</small></h2>
+      <ul>
+        <li><b>大數字在上、圖在下</b>：打開就知道「79.x、這段 +0.x、比計畫多 x」，圖只負責確認</li>
+        <li>原始讀數改成淡色空心圈、趨勢線 2.5px 主藍、線下一層很淡的主藍漸層</li>
+        <li><b>體脂併進同一張卡</b>，共用 X 軸、各自的 Y 軸（兩張小圖上下疊，不是雙軸）</li>
+        <li>保留現有卡片與字級，改動面最小</li>
+      </ul>
+    </div>
+    <div class="device a" id="A"></div>
+  </section>
+  <section>
+    <div class="colhead">
+      <h2>B 故事書山坡</h2>
+      <ul>
+        <li>結構同 A，但體重卡整張是天空，<b>線下填成山坡</b>（遠山色），讀數是白色小石子</li>
+        <li>今天的位置插一面<b>陶土小旗</b>，跟登入頁、訓練完成的登頂小景同一套語言</li>
+        <li>最「像這個 app」；代價是山坡面積會讓人以為「越高越多越好」，體重其實相反</li>
+      </ul>
+    </div>
+    <div class="device b" id="B"></div>
+  </section>
+  <section>
+    <div class="colhead">
+      <h2>C 每週一格</h2>
+      <ul>
+        <li>一週一欄：膠囊＝那週最低到最高、圓點＝那週平均；<b>沒量的週留一格空位</b>，量得疏一眼看得到</li>
+        <li>對上「每週至少量一次」的習慣；拖曳讀的是整週，不是單日</li>
+        <li>30 天只有 4–5 欄，短範圍資訊量少；換量法那週會跨兩段，要拆成兩顆膠囊</li>
+      </ul>
+    </div>
+    <div class="device c" id="C"></div>
+  </section>
+</div>
+
+<script>
+/* ═════════ 資料（三欄共用） ═════════ */
+const TODAY = new Date('2026-11-20T00:00:00')
+const day = (off) => { const d = new Date(TODAY); d.setDate(d.getDate() + off); return d }
+const md = (off) => { const d = day(off); return `${d.getMonth() + 1}/${d.getDate()}` }
+const offs = [-200, -186, -171, -158, -140, -127, -113, -101, -88, -84, -79, -71, -66, -60, -55, -49, -41, -36, -28, -22, -14, -7, -3, 0]
+const BREAK = -7
+const READ = offs.map((off, i) => ({
+  off,
+  kg: +(78.4 + i * 0.05 + Math.sin(i * 1.3) * 0.6).toFixed(1),
+  fat: +(24.4 + Math.cos(i * 2.1) * 0.9 + (off >= BREAK ? 2 : 0)).toFixed(1),
+  seg: off >= BREAK ? 1 : 0,
+}))
+const PLAN_PER_DAY = -0.5 / 7
+
+/* 指數平滑：每天 10%，間隔 d 天＝1−0.9^d；斷點重新起算 */
+function smooth(rows, key) {
+  let tr = null, prev = null, seg = null
+  return rows.map((r) => {
+    if (tr === null || r.seg !== seg) tr = r[key]
+    else tr = tr + (1 - Math.pow(0.9, r.off - prev)) * (r[key] - tr)
+    prev = r.off; seg = r.seg
+    return +tr.toFixed(2)
+  })
+}
+const TR = smooth(READ, 'kg'), FT = smooth(READ, 'fat')
+READ.forEach((r, i) => { r.tr = TR[i]; r.ft = FT[i] })
+
+function slicePts(range) {
+  const from = range === '30' ? -29 : range === '90' ? -89 : -Infinity
+  return READ.filter((r) => r.off >= from)
+}
+function regressionPerDay(pts) {
+  const n = pts.length; if (n < 2) return null
+  const mx = pts.reduce((s, p) => s + p.off, 0) / n, my = pts.reduce((s, p) => s + p.kg, 0) / n
+  let a = 0, b = 0
+  pts.forEach((p) => { a += (p.off - mx) * (p.kg - my); b += (p.off - mx) ** 2 })
+  return a / b
+}
+const sgn = (n, d = 1) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n).toFixed(d)
+
+/* ═════════ 共用：座標、Y 軸、拖曳 ═════════ */
+const NS = 'http://www.w3.org/2000/svg'
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag)
+  for (const k in attrs) e.setAttribute(k, attrs[k])
+  if (parent) parent.appendChild(e)
+  return e
+}
+function yDomain(vals, minSpan, step) {
+  let lo = Math.min(...vals), hi = Math.max(...vals)
+  const mid = (lo + hi) / 2, span = Math.max(hi - lo + step, minSpan)
+  lo = Math.floor((mid - span / 2) / step) * step; hi = Math.ceil((mid + span / 2) / step) * step
+  return [lo, hi]
+}
+function scales(pts, W, H, padL, padR, padT, padB, dom, range) {
+  const x0 = range === '30' ? -29 : range === '90' ? -89 : pts[0].off
+  const x = (off) => padL + ((off - x0) / (0 - x0)) * (W - padL - padR)
+  const y = (v) => padT + (1 - (v - dom[0]) / (dom[1] - dom[0])) * (H - padT - padB)
+  return { x, y, x0 }
+}
+function xTicks(x0) { const n = 3; return Array.from({ length: n + 1 }, (_, i) => Math.round(x0 + (i * (0 - x0)) / n)) }
+function axis(svg, s, dom, step, W, H, padL, padR, padB, showX = true) {
+  for (let v = dom[0]; v <= dom[1] + 1e-9; v += step) {
+    el('line', { x1: padL, x2: W - padR, y1: s.y(v), y2: s.y(v), stroke: 'var(--rule-subtle)' }, svg)
+    el('text', { x: padL - 6, y: s.y(v) + 4, 'text-anchor': 'end' }, svg).textContent = Number.isInteger(step) ? v : v.toFixed(0)
+  }
+  if (showX) xTicks(s.x0).forEach((o, i, a) => {
+    el('text', { x: s.x(o), y: H - padB + 16, 'text-anchor': i === 0 ? 'start' : i === a.length - 1 ? 'end' : 'middle' }, svg).textContent = md(o)
+  })
+}
+function pathOf(pts, s, key) {
+  const segs = {}
+  pts.forEach((p) => (segs[p.seg] ||= []).push(p))
+  return Object.values(segs).map((g) => g.map((p, i) => `${i ? 'L' : 'M'}${s.x(p.off).toFixed(1)},${s.y(p[key]).toFixed(1)}`).join(''))
+}
+function breakMark(svg, s, H, padT, padB, W, padR, withLabel, bg = 'var(--card)') {
+  if (BREAK < s.x0) return
+  const bx = s.x(BREAK)
+  el('line', { x1: bx, x2: bx, y1: padT - 4, y2: H - padB, stroke: 'var(--ink-faint)', 'stroke-dasharray': '2 3' }, svg)
+  if (!withLabel) return
+  // 小標放在線的左邊、右對齊，永遠不會超出右緣
+  const t = el('text', { x: bx - 5, y: padT + 8, 'text-anchor': 'end', class: 'cjk', style: `paint-order:stroke;stroke:${bg};stroke-width:3px;font-size:11px` }, svg)
+  t.textContent = '換量法'
+}
+/* 計畫小標：還在圖內就標在右緣；出界就標在計畫線穿出底邊那裡（不跟換量法虛線搶右下角） */
+function planLabel(svg, s, pts, dom, W, padR, Hb, style) {
+  const px0 = pts[0].off, py0 = pts[0].tr, now = py0 + PLAN_PER_DAY * -px0
+  const out = now < dom[0] - 0.05
+  let x = W - padR - 2, y = s.y(now) - 6, anchor = 'end'
+  if (out) { const offExit = px0 + (dom[0] - py0) / PLAN_PER_DAY; x = s.x(offExit) + 6; y = Hb - 6; anchor = 'start' }
+  el('text', { x, y, 'text-anchor': anchor, class: 'cjk', style }, svg).textContent = `計畫：今天該在 ${now.toFixed(1)}${out ? ' ↓' : ''}`
+}
+/* 拖曳：pointer 在 svg 上移動 → 找最近的點 → onPick(p)；放開 → onPick(null) */
+function scrub(svg, pts, s, onPick) {
+  const pick = (ev) => {
+    const r = svg.getBoundingClientRect(), px = ev.clientX - r.left
+    let best = pts[0]
+    pts.forEach((p) => { if (Math.abs(s.x(p.off) - px) < Math.abs(s.x(best.off) - px)) best = p })
+    onPick(best)
+  }
+  svg.addEventListener('pointerdown', (e) => { svg.setPointerCapture(e.pointerId); pick(e) })
+  svg.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || svg.hasPointerCapture(e.pointerId)) pick(e) })
+  svg.addEventListener('pointerup', () => onPick(null))
+  svg.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') onPick(null) })
+}
+
+/* 外殼：頂列＋範圍控制，body(range) 回傳內容 */
+function shell(root, body) {
+  let range = '90'
+  const draw = () => {
+    root.innerHTML = `<div class="top"><span class="back">‹</span>體重趨勢</div><div class="scroll">
+      <div class="seg" role="group" aria-label="範圍">${[['30', '30 天'], ['90', '90 天'], ['all', '全部']].map(([k, l]) =>
+        `<button type="button" data-k="${k}" aria-pressed="${k === range}">${l}</button>`).join('')}</div><div class="body"></div></div>`
+    root.querySelectorAll('.seg button').forEach((b) => b.onclick = () => { range = b.dataset.k; draw() })
+    body(root.querySelector('.body'), range)
+  }
+  draw()
+}
+
+/* 結論區的字（三欄共用口徑） */
+function summary(pts, range) {
+  const last = pts[pts.length - 1], first = pts[0]
+  const per = regressionPerDay(pts.filter((p) => p.seg === last.seg).length >= 2 ? pts : pts)
+  const planToday = first.tr + PLAN_PER_DAY * (0 - first.off)
+  const label = range === '30' ? '30 天' : range === '90' ? '90 天' : '全部'
+  return { last, first, perMonth: per === null ? null : per * 30.44, planToday, label, delta: last.tr - first.tr }
+}
+function readout(host, pts, range, fatTail = true) {
+  const S = summary(pts, range)
+  host.innerHTML = `<div class="read-k"></div><div class="read-big"><b class="num"></b><span>kg</span></div><div class="read-sub"></div>`
+  const k = host.querySelector('.read-k'), b = host.querySelector('b'), sub = host.querySelector('.read-sub')
+  const rest = () => {
+    k.textContent = '現在的趨勢體重'
+    b.textContent = S.last.tr.toFixed(1)
+    sub.innerHTML = `${S.label} <b class="num">${sgn(S.delta)}</b> kg ・ 比計畫多 <b class="num">${(S.last.tr - S.planToday).toFixed(1)}</b> kg`
+  }
+  rest()
+  return (p) => {
+    if (!p) return rest()
+    k.textContent = `${md(p.off)} 量到`
+    b.textContent = p.kg.toFixed(1)
+    sub.innerHTML = `趨勢 <b class="num">${p.tr.toFixed(1)}</b> ・ 體脂 <b class="num">${p.fat.toFixed(1)}</b>%${p.off === BREAK ? ' ・ 換量法' : ''}`
+  }
+}
+
+/* ═════════ A：先講結論 ═════════ */
+shell(document.getElementById('A'), (host, range) => {
+  const pts = slicePts(range)
+  const card = document.createElement('section'); card.className = 'card'; host.appendChild(card)
+  const rd = document.createElement('div'); card.appendChild(rd)
+  const S = summary(pts, range)
+  const W = 345 - 32, H = 190, padL = 28, padR = 6, padT = 18, padB = 22
+  const dom = yDomain(pts.flatMap((p) => [p.kg, p.tr]), 4, 1)
+  const svg = el('svg', { width: W, height: H, style: 'margin-top:16px' }); card.appendChild(svg)
+  const s = scales(pts, W, H, padL, padR, padT, padB, dom, range)
+  el('defs', {}, svg).innerHTML = `<linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".14"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient>
+    <clipPath id="ca"><rect x="${padL}" y="${padT - 2}" width="${W - padL - padR}" height="${H - padT - padB + 2}"/></clipPath>`
+  axis(svg, s, dom, 1, W, H, padL, padR, padB)
+  const g = el('g', { 'clip-path': 'url(#ca)' }, svg)
+  // 計畫線
+  const px0 = pts[0].off, py0 = pts[0].tr
+  el('line', { x1: s.x(px0), y1: s.y(py0), x2: s.x(0), y2: s.y(py0 + PLAN_PER_DAY * -px0), stroke: 'var(--ink-muted)', 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }, g)
+  // 面積＋趨勢線
+  pathOf(pts, s, 'tr').forEach((d, i, arr) => {
+    const segPts = pts.filter((p) => p.seg === (arr.length === 1 ? pts[0].seg : i))
+    const xa = s.x(segPts[0].off), xb = s.x(segPts[segPts.length - 1].off)
+    el('path', { d: `${d}L${xb},${H - padB}L${xa},${H - padB}Z`, fill: 'url(#ga)' }, g)
+    el('path', { d, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g)
+  })
+  pts.forEach((p) => el('circle', { cx: s.x(p.off), cy: s.y(p.kg), r: 3, fill: 'var(--card)', stroke: 'var(--ink-faint)', 'stroke-width': 1.5 }, g))
+  breakMark(svg, s, H, padT, padB, W, padR, true)
+  planLabel(svg, s, pts, dom, W, padR, H - padB, 'paint-order:stroke;stroke:var(--card);stroke-width:3px')
+  // 端點
+  const L = pts[pts.length - 1]
+  el('circle', { cx: s.x(L.off), cy: s.y(L.tr), r: 4.5, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 2 }, svg)
+  // 十字線
+  const cross = el('line', { y1: padT - 4, y2: H - padB, stroke: 'var(--ink-faint)', visibility: 'hidden' }, svg)
+  const hot = el('circle', { r: 5, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 2, visibility: 'hidden' }, svg)
+  const ul = document.createElement('ul'); ul.className = 'legend'
+  ul.innerHTML = '<li><i class="k-ring"></i>每次量測</li><li><i class="k-line"></i>趨勢</li><li><i class="k-plan"></i>計畫</li>'
+  card.appendChild(ul)
+
+  // 體脂
+  card.insertAdjacentHTML('beforeend', `<div class="divider"></div><div class="sub-head"><h3>體脂</h3><span class="v fatv"></span></div>`)
+  const fatV = card.querySelector('.fatv')
+  const setFat = (p) => { fatV.innerHTML = `${(p ? p.fat : L.ft).toFixed(1)}<small>%${p ? '' : ' 趨勢'}</small>` }
+  setFat(null)
+  const H2 = 96, padT2 = 10
+  const dom2 = yDomain(pts.flatMap((p) => [p.fat, p.ft]), 4, 2)
+  const svg2 = el('svg', { width: W, height: H2, style: 'margin-top:8px' }); card.appendChild(svg2)
+  const s2 = scales(pts, W, H2, padL, padR, padT2, padB, dom2, range)
+  axis(svg2, s2, dom2, 2, W, H2, padL, padR, padB)
+  pathOf(pts, s2, 'ft').forEach((d) => el('path', { d, fill: 'none', stroke: 'var(--ink-muted)', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg2))
+  pts.forEach((p) => el('circle', { cx: s2.x(p.off), cy: s2.y(p.fat), r: 2.5, fill: 'var(--card)', stroke: 'var(--ink-faint)', 'stroke-width': 1.5 }, svg2))
+  breakMark(svg2, s2, H2, padT2, padB, W, padR, false)
+  const cross2 = el('line', { y1: padT2, y2: H2 - padB, stroke: 'var(--ink-faint)', visibility: 'hidden' }, svg2)
+
+  const show = readout(rd, pts, range)
+  const pick = (p) => {
+    show(p); setFat(p)
+    ;[cross, hot, cross2].forEach((n) => n.setAttribute('visibility', p ? 'visible' : 'hidden'))
+    if (p) {
+      cross.setAttribute('x1', s.x(p.off)); cross.setAttribute('x2', s.x(p.off))
+      cross2.setAttribute('x1', s.x(p.off)); cross2.setAttribute('x2', s.x(p.off))
+      hot.setAttribute('cx', s.x(p.off)); hot.setAttribute('cy', s.y(p.kg))
+    }
+  }
+  scrub(svg, pts, s, pick); scrub(svg2, pts, s2, pick)
+  host.insertAdjacentHTML('beforeend', `<p class="note">（下方明細表不變，這裡省略）</p>`)
+})
+
+/* ═════════ B：故事書山坡 ═════════ */
+shell(document.getElementById('B'), (host, range) => {
+  const pts = slicePts(range)
+  const card = document.createElement('section'); card.className = 'card sky'; host.appendChild(card)
+  const rd = document.createElement('div'); card.appendChild(rd)
+  const S = summary(pts, range)
+  const W = 345, H = 210, padL = 44, padR = 22, padT = 26, padB = 26
+  const dom = yDomain(pts.flatMap((p) => [p.kg, p.tr]), 4, 1)
+  const svg = el('svg', { width: W, height: H, style: 'margin:12px -16px 0' }); card.appendChild(svg)
+  const s = scales(pts, W, H, padL, padR, padT, padB, dom, range)
+  el('defs', {}, svg).innerHTML = `<clipPath id="cb"><rect x="0" y="${padT - 2}" width="${W}" height="${H}"/></clipPath>
+    <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--hill-far)"/><stop offset="1" stop-color="var(--hill-far)" stop-opacity=".55"/></linearGradient>`
+  const yl = []
+  for (let v = dom[0]; v <= dom[1]; v += 1) {
+    const t = el('text', { x: padL - 8, y: s.y(v) + 4, 'text-anchor': 'end', style: 'fill:var(--ink-sky);paint-order:stroke;stroke:var(--card);stroke-width:3px' }, svg); t.textContent = v; yl.push(t)
+    el('line', { x1: padL, x2: W - padR, y1: s.y(v), y2: s.y(v), stroke: 'rgba(255,255,255,.65)' }, svg)
+  }
+  const g = el('g', { 'clip-path': 'url(#cb)' }, svg)
+  // 遠山（裝飾，固定不動）＋ 體重山坡
+  el('path', { d: `M0,${H - 40} C60,${H - 70} 110,${H - 52} 170,${H - 66} S290,${H - 44} ${W},${H - 62} L${W},${H} L0,${H} Z`, fill: 'var(--hill-far)', opacity: .35 }, g)
+  pathOf(pts, s, 'tr').forEach((d, i, arr) => {
+    const segPts = pts.filter((p) => p.seg === (arr.length === 1 ? pts[0].seg : i))
+    const xa = s.x(segPts[0].off), xb = s.x(segPts[segPts.length - 1].off)
+    el('path', { d: `${d}L${xb},${H}L${xa},${H}Z`, fill: 'url(#gb)' }, g)
+    el('path', { d, fill: 'none', stroke: 'var(--hill-near)', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g)
+  })
+  // 計畫：點狀小徑
+  const px0 = pts[0].off, py0 = pts[0].tr
+  el('line', { x1: s.x(px0), y1: s.y(py0), x2: s.x(0), y2: s.y(py0 + PLAN_PER_DAY * -px0), stroke: 'var(--ink-sky)', 'stroke-width': 2.5, 'stroke-dasharray': '0.1 6', 'stroke-linecap': 'round' }, g)
+  pts.forEach((p) => el('circle', { cx: s.x(p.off), cy: s.y(p.kg), r: 3.2, fill: 'var(--snow)', stroke: 'var(--hill-mid)', 'stroke-width': 1.2 }, g))
+  breakMark(svg, s, H - 26, padT, 0, W, padR, true, '#D8E6F0')
+  // 地面＋X 軸字
+  el('rect', { x: 0, y: H - padB, width: W, height: padB, fill: 'var(--card)' }, svg)
+  xTicks(s.x0).forEach((o, i, a) => {
+    el('text', { x: s.x(o), y: H - 8, 'text-anchor': i === 0 ? 'start' : i === a.length - 1 ? 'end' : 'middle' }, svg).textContent = md(o)
+  })
+  planLabel(svg, s, pts, dom, W, padR, H - padB, 'fill:var(--ink-sky);paint-order:stroke;stroke:#D5E3EE;stroke-width:3px')
+  yl.forEach((t) => svg.appendChild(t))
+  // 今天的小旗
+  const L = pts[pts.length - 1], fx = s.x(L.off), fy = s.y(L.tr)
+  el('line', { x1: fx, x2: fx, y1: fy, y2: fy - 22, stroke: 'var(--clay-deep)', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, svg)
+  el('path', { d: `M${fx},${fy - 22} L${fx - 11},${fy - 18} L${fx},${fy - 14} Z`, fill: 'var(--clay)' }, svg)
+  el('circle', { cx: fx, cy: fy, r: 3.5, fill: 'var(--hill-near)', stroke: 'var(--snow)', 'stroke-width': 1.5 }, svg)
+  const cross = el('line', { y1: padT - 4, y2: H - padB, stroke: 'var(--ink-sky)', visibility: 'hidden' }, svg)
+  const hot = el('circle', { r: 5, fill: 'var(--snow)', stroke: 'var(--hill-near)', 'stroke-width': 2, visibility: 'hidden' }, svg)
+  const show = readout(rd, pts, range)
+
+  // 體脂：白卡，同 A
+  const c2 = document.createElement('section'); c2.className = 'card'; host.appendChild(c2)
+  c2.innerHTML = `<div class="sub-head"><h3>體脂</h3><span class="v fatv"></span></div>`
+  const fatV = c2.querySelector('.fatv')
+  const setFat = (p) => { fatV.innerHTML = `${(p ? p.fat : L.ft).toFixed(1)}<small>%${p ? '' : ' 趨勢'}</small>` }
+  setFat(null)
+  const W2 = 313, H2 = 96, pl = 28, pr = 6, pt2 = 10, pb = 22
+  const dom2 = yDomain(pts.flatMap((p) => [p.fat, p.ft]), 4, 2)
+  const svg2 = el('svg', { width: W2, height: H2, style: 'margin-top:8px' }); c2.appendChild(svg2)
+  const s2 = scales(pts, W2, H2, pl, pr, pt2, pb, dom2, range)
+  axis(svg2, s2, dom2, 2, W2, H2, pl, pr, pb)
+  pathOf(pts, s2, 'ft').forEach((d) => el('path', { d, fill: 'none', stroke: 'var(--clay)', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg2))
+  pts.forEach((p) => el('circle', { cx: s2.x(p.off), cy: s2.y(p.fat), r: 2.5, fill: 'var(--card)', stroke: 'var(--clay)', 'stroke-opacity': .6, 'stroke-width': 1.5 }, svg2))
+  breakMark(svg2, s2, H2, pt2, pb, W2, pr, false)
+  const cross2 = el('line', { y1: pt2, y2: H2 - pb, stroke: 'var(--ink-faint)', visibility: 'hidden' }, svg2)
+  const pick = (p) => {
+    show(p); setFat(p)
+    ;[cross, hot, cross2].forEach((n) => n.setAttribute('visibility', p ? 'visible' : 'hidden'))
+    if (p) {
+      cross.setAttribute('x1', s.x(p.off)); cross.setAttribute('x2', s.x(p.off))
+      cross2.setAttribute('x1', s2.x(p.off)); cross2.setAttribute('x2', s2.x(p.off))
+      hot.setAttribute('cx', s.x(p.off)); hot.setAttribute('cy', s.y(p.kg))
+    }
+  }
+  scrub(svg, pts, s, pick); scrub(svg2, pts, s2, pick)
+  host.insertAdjacentHTML('beforeend', `<p class="note">（下方明細表不變，這裡省略）</p>`)
+})
+
+/* ═════════ C：每週一格 ═════════ */
+shell(document.getElementById('C'), (host, range) => {
+  const pts = slicePts(range)
+  const card = document.createElement('section'); card.className = 'card'; host.appendChild(card)
+  const rd = document.createElement('div'); card.appendChild(rd)
+  const S = summary(pts, range)
+  // 週：今天所在週往回數，週一起算
+  const todayDow = (TODAY.getDay() + 6) % 7
+  const wkOf = (off) => Math.floor((off + todayDow) / 7) // 0＝本週，-1＝上週…
+  const firstWk = wkOf(range === '30' ? -29 : range === '90' ? -89 : pts[0].off)
+  const weeks = []
+  for (let w = firstWk; w <= 0; w++) {
+    const inW = pts.filter((p) => wkOf(p.off) === w)
+    const segs = [...new Set(inW.map((p) => p.seg))]
+    weeks.push({ w, parts: segs.map((sg) => {
+      const q = inW.filter((p) => p.seg === sg), kg = q.map((p) => p.kg), fat = q.map((p) => p.fat)
+      return { seg: sg, lo: Math.min(...kg), hi: Math.max(...kg), mean: kg.reduce((a, b) => a + b) / kg.length, fat: fat.reduce((a, b) => a + b) / fat.length, n: q.length }
+    }), startOff: w * 7 - todayDow })
+  }
+  const W = 313, H = 190, padL = 28, padR = 4, padT = 14, padB = 22
+  const all = weeks.flatMap((w) => w.parts.flatMap((p) => [p.lo, p.hi]))
+  const dom = yDomain(all, 4, 1)
+  const svg = el('svg', { width: W, height: H, style: 'margin-top:16px' }); card.appendChild(svg)
+  const colW = (W - padL - padR) / weeks.length
+  const cx = (i) => padL + colW * (i + .5)
+  const y = (v) => padT + (1 - (v - dom[0]) / (dom[1] - dom[0])) * (H - padT - padB)
+  for (let v = dom[0]; v <= dom[1]; v += 1) {
+    el('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), stroke: 'var(--rule-subtle)' }, svg)
+    el('text', { x: padL - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = v
+  }
+  // 平均連線（同段才連）
+  let prev = null
+  weeks.forEach((wk, i) => wk.parts.forEach((p, j) => {
+    const x = cx(i) + (wk.parts.length > 1 ? (j ? 5 : -5) : 0)
+    if (prev && prev.seg === p.seg) el('line', { x1: prev.x, y1: prev.y, x2: x, y2: y(p.mean), stroke: 'var(--accent)', 'stroke-opacity': .35, 'stroke-width': 1.5 }, svg)
+    prev = { x, y: y(p.mean), seg: p.seg }
+  }))
+  const cap = Math.min(12, colW - 6)
+  weeks.forEach((wk, i) => {
+    if (!wk.parts.length) {
+      el('line', { x1: cx(i) - 3, x2: cx(i) + 3, y1: H - padB - 4, y2: H - padB - 4, stroke: 'var(--ink-faint)', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, svg)
+      return
+    }
+    wk.parts.forEach((p, j) => {
+      const x = cx(i) + (wk.parts.length > 1 ? (j ? 5 : -5) : 0), cw = wk.parts.length > 1 ? 8 : cap
+      const top = y(p.hi) - 4, bot = y(p.lo) + 4
+      el('rect', { x: x - cw / 2, y: top, width: cw, height: bot - top, rx: cw / 2, fill: 'var(--accent-soft)' }, svg)
+      el('circle', { cx: x, cy: y(p.mean), r: 3.5, fill: 'var(--accent)', stroke: 'var(--card)', 'stroke-width': 1.5 }, svg)
+    })
+  })
+  // X：每隔幾週標日期
+  const every = weeks.length > 8 ? 4 : weeks.length > 5 ? 2 : 1
+  weeks.forEach((wk, i) => { if ((weeks.length - 1 - i) % every === 0)
+    el('text', { x: cx(i), y: H - padB + 16, 'text-anchor': i === weeks.length - 1 ? 'end' : 'middle' }, svg).textContent = i === weeks.length - 1 ? '本週' : md(wk.startOff) })
+  // 換量法：週欄裡拆兩顆，加一個小標
+  const bi = weeks.findIndex((wk) => wk.parts.length > 1)
+  if (bi >= 0) el('text', { x: cx(bi) - 8, y: padT + 4, 'text-anchor': 'end', class: 'cjk', style: 'font-size:11px;paint-order:stroke;stroke:var(--card);stroke-width:3px' }, svg).textContent = '換量法'
+  const band = el('rect', { y: padT - 6, height: H - padT - padB + 6, width: colW, rx: 6, fill: 'var(--raised)', opacity: .7, visibility: 'hidden' }, svg)
+  svg.insertBefore(band, svg.firstChild)
+  const ul = document.createElement('ul'); ul.className = 'legend'
+  ul.innerHTML = '<li><i class="k-line" style="width:8px;height:14px;border-radius:4px;background:var(--accent-soft)"></i>那週最低～最高</li><li><i class="k-ring" style="background:var(--accent);border:0"></i>那週平均</li><li><i class="k-line" style="width:6px;height:2px;background:var(--ink-faint)"></i>沒量</li>'
+  card.appendChild(ul)
+
+  // 讀數區（週版）
+  rd.innerHTML = `<div class="read-k"></div><div class="read-big"><b class="num"></b><span>kg</span></div><div class="read-sub"></div>`
+  const k = rd.querySelector('.read-k'), b = rd.querySelector('b'), sub = rd.querySelector('.read-sub')
+  const measured = weeks.filter((w) => w.parts.length).length
+  const lastWk = [...weeks].reverse().find((w) => w.parts.length), lastP = lastWk.parts[lastWk.parts.length - 1]
+  const rest = () => {
+    k.textContent = '本週平均'
+    b.textContent = lastP.mean.toFixed(1)
+    sub.innerHTML = `${S.label}量了 <b class="num">${measured}</b>／${weeks.length} 週 ・ 比計畫多 <b class="num">${(lastP.mean - S.planToday).toFixed(1)}</b> kg`
+  }
+  rest()
+  // 體脂週列
+  card.insertAdjacentHTML('beforeend', `<div class="divider"></div><div class="sub-head"><h3>體脂</h3><span class="v fatv"></span></div>`)
+  const fatV = card.querySelector('.fatv')
+  const setFat = (p) => { fatV.innerHTML = `${p.fat.toFixed(1)}<small>%</small>` }
+  setFat(lastP)
+  const H2 = 80
+  const fats = weeks.flatMap((w) => w.parts.map((p) => p.fat))
+  const dom2 = yDomain(fats, 4, 2)
+  const y2 = (v) => 8 + (1 - (v - dom2[0]) / (dom2[1] - dom2[0])) * (H2 - 16)
+  const svg2 = el('svg', { width: W, height: H2, style: 'margin-top:8px' }); card.appendChild(svg2)
+  for (let v = dom2[0]; v <= dom2[1]; v += 2) {
+    el('line', { x1: padL, x2: W - padR, y1: y2(v), y2: y2(v), stroke: 'var(--rule-subtle)' }, svg2)
+    el('text', { x: padL - 6, y: y2(v) + 4, 'text-anchor': 'end' }, svg2).textContent = v
+  }
+  weeks.forEach((wk, i) => wk.parts.forEach((p, j) => {
+    const x = cx(i) + (wk.parts.length > 1 ? (j ? 5 : -5) : 0)
+    el('circle', { cx: x, cy: y2(p.fat), r: 3.5, fill: 'var(--ink-muted)', stroke: 'var(--card)', 'stroke-width': 1.5 }, svg2)
+  }))
+  const band2 = el('rect', { y: 0, height: H2, width: colW, rx: 6, fill: 'var(--raised)', opacity: .7, visibility: 'hidden' }, svg2)
+  svg2.insertBefore(band2, svg2.firstChild)
+
+  const pickWk = (svgEl) => (ev) => {
+    const r = svgEl.getBoundingClientRect(), i = Math.max(0, Math.min(weeks.length - 1, Math.floor((ev.clientX - r.left - padL) / colW)))
+    const wk = weeks[i]
+    ;[band, band2].forEach((bd) => { bd.setAttribute('x', padL + colW * i); bd.setAttribute('visibility', 'visible') })
+    k.textContent = i === weeks.length - 1 ? '本週' : `${md(wk.startOff)} 那週`
+    if (!wk.parts.length) { b.textContent = '—'; sub.textContent = '這週沒量'; fatV.innerHTML = '—'; return }
+    const p = wk.parts[wk.parts.length - 1]
+    b.textContent = p.mean.toFixed(1)
+    sub.innerHTML = `量 <b class="num">${wk.parts.reduce((a, q) => a + q.n, 0)}</b> 次 ・ <b class="num">${Math.min(...wk.parts.map((q) => q.lo)).toFixed(1)}</b>～<b class="num">${Math.max(...wk.parts.map((q) => q.hi)).toFixed(1)}</b>${wk.parts.length > 1 ? ' ・ 換量法' : ''}`
+    setFat(p)
+  }
+  const off = () => { [band, band2].forEach((bd) => bd.setAttribute('visibility', 'hidden')); rest(); setFat(lastP) }
+  ;[svg, svg2].forEach((sv) => {
+    const h = pickWk(sv)
+    sv.addEventListener('pointerdown', (e) => { sv.setPointerCapture(e.pointerId); h(e) })
+    sv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || sv.hasPointerCapture(e.pointerId)) h(e) })
+    sv.addEventListener('pointerup', off)
+    sv.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') off() })
+  })
+  host.insertAdjacentHTML('beforeend', `<p class="note">（下方明細表不變，這裡省略）</p>`)
+})
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_FAT_MAX, BODY_FAT_MIN, actualKgPerWeek, fmt1, signedKg, withPlan, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
+import { BODY_FAT_MAX, BODY_FAT_MIN, fmt1, signed1, withPlan, planAt, spanDomain, isValidBodyFatPct, isValidWeightKg, isoOfDay, niceDomain, rangeStart, sparklinePoints, trendPoints, trendTickLabel, xDomain, xTicks, yTicks, type TrendRow } from './weightTrend'
 import { dayIndex, shiftDate } from './dates'
 import { plannedWeeklyKg } from './formulas'
 
@@ -25,27 +25,27 @@ describe('rangeStart', () => {
 })
 
 describe('trendPoints', () => {
-  it('7 日平均是日曆窗口（含當天往前 7 天），不是最近 7 筆', () => {
-    // 10/1 80、10/4 82、10/8 84：10/8 的窗口是 10/2–10/8，只含 82 與 84（10/1 在窗外）
+  it('趨勢是指數平滑：第一筆是起點，隔 d 天的一筆佔 1 − 0.9^d', () => {
+    // 10/1 80 → 10/4 82（隔 3 天，佔 0.271）→ 80.542 → 10/8 84（隔 4 天，佔 0.3439）→ 81.7312062
     const pts = trendPoints([row('2026-10-01', 80), row('2026-10-04', 82), row('2026-10-08', 84)], 'all', '2026-10-08')
-    expect(pts.map((p) => p.avg)).toEqual([80, 81, 83])
+    expect(pts[0].trend).toBe(80)
+    expect(pts[1].trend).toBeCloseTo(80.542, 10)
+    expect(pts[2].trend).toBeCloseTo(81.7312062, 10)
   })
 
-  it('窗口邊界：往前第 7 天在窗外、第 6 天在窗內', () => {
-    const inWin = trendPoints([row('2026-10-01', 80), row('2026-10-07', 90)], 'all', '2026-10-07')
-    expect(inWin[1].avg).toBe(85) // 10/7 往前含當天 7 天＝10/1–10/7
-    const outWin = trendPoints([row('2026-10-01', 80), row('2026-10-08', 90)], 'all', '2026-10-08')
-    expect(outWin[1].avg).toBe(90) // 10/1 距 10/8 是 7 天，掉出窗口
+  it('每天量同一個值：趨勢就是那個值；每天量一筆跳 1 kg：趨勢只動 0.1', () => {
+    const flat = trendPoints([1, 2, 3, 4].map((d) => row(`2026-10-0${d}`, 75)), 'all', '2026-10-04')
+    expect(flat.map((p) => p.trend)).toEqual([75, 75, 75, 75])
+    const jump = trendPoints([row('2026-10-01', 75), row('2026-10-02', 76)], 'all', '2026-10-02')
+    expect(jump[1].trend).toBeCloseTo(75.1, 10)
   })
 
-  it('平均先對全部歷史算再切範圍，範圍第一天的窗口是完整的', () => {
+  it('趨勢先對全部歷史算再切範圍：範圍外的舊資料仍拉著範圍內第一點', () => {
     const rows = [row('2026-10-17', 80), row('2026-10-19', 82), row('2026-10-20', 84)]
-    const pts = trendPoints(rows, '30', '2026-10-20')
-    expect(pts).toHaveLength(3)
-    // 把範圍縮到只剩最後一天不可能（最短 30 天），改驗歷史很舊的列被切掉但仍參與平均
     const old = trendPoints([row('2026-08-01', 70), ...rows], '30', '2026-10-20')
     expect(old.map((p) => p.date)).toEqual(['2026-10-17', '2026-10-19', '2026-10-20'])
-    expect(old[0].avg).toBe(80)
+    // 8/1 → 10/17 隔 77 天：70 + (1 − 0.9^77) × 10
+    expect(old[0].trend).toBeCloseTo(80 - 10 * 0.9 ** 77, 10)
   })
 
   it('範圍切片依今天往前數，不是依最後一筆', () => {
@@ -60,7 +60,7 @@ describe('trendPoints', () => {
     expect(pts.map((p) => p.kg)).toEqual([80.5, 81.5])
     expect(pts[0].fat).toBeNull()
     expect(pts[1].fat).toBe(20.5)
-    expect(pts[1].avg).toBe(81)
+    expect(pts[1].trend).toBeCloseTo(80.6, 10)
   })
 
   it('體重不是有限數字的列整筆丟掉；體脂壞掉當沒填', () => {
@@ -90,6 +90,10 @@ describe('xDomain／xTicks', () => {
 })
 
 describe('yTicks', () => {
+  it('minStep：矮的小圖至少每 minStep 一條', () => {
+    expect(yTicks([22, 26], 2)).toEqual([22, 24, 26])
+    expect(yTicks([22, 26])).toEqual([22, 23, 24, 25, 26])
+  })
   it('依範圍大小選步長，刻度落在步長整數倍、含兩端（兩端本身是倍數時）', () => {
     expect(yTicks([76, 85])).toEqual([76, 78, 80, 82, 84])
     expect(yTicks([75, 79])).toEqual([75, 76, 77, 78, 79])
@@ -163,35 +167,22 @@ describe('記體重的門檻', () => {
   })
 })
 
-describe('計畫 vs 實際（v2.137）', () => {
-  const at = (t: number, kg: number) => ({ t, kg, avg: kg })
-
-  it('實際走勢是迴歸斜率：每天 −0.05 kg 的直線 → 每週 −0.35', () => {
-    const pts = Array.from({ length: 10 }, (_, i) => at(100 + i * 2, 75 - 0.05 * i * 2))
-    expect(actualKgPerWeek(pts)).toBeCloseTo(-0.35, 5)
-  })
-  it('不是頭尾相減：最後一筆是水分跳高，斜率只被拉一點', () => {
-    const pts = [...Array.from({ length: 8 }, (_, i) => at(100 + i * 3, 75)), at(124, 76)]
-    const a = actualKgPerWeek(pts) as number
-    expect(a).toBeGreaterThan(0)
-    expect(a).toBeLessThan((76 - 75) / (24 / 7)) // 頭尾相減會是 +0.29
-  })
-  it('不到 2 筆、或頭尾不到 7 天：算不出來', () => {
-    expect(actualKgPerWeek([at(100, 75)])).toBeNull()
-    expect(actualKgPerWeek([at(100, 75), at(106, 74)])).toBeNull()
-    expect(actualKgPerWeek([at(100, 75), at(107, 74)])).not.toBeNull()
-  })
-  it('計畫線從第一點的 7 日平均起，照每週速度走', () => {
-    const pts = withPlan([{ t: 100, avg: 80 }, { t: 107, avg: 79.9 }, { t: 114, avg: 80.2 }], -0.3)
+describe('計畫線（v2.137）', () => {
+  it('計畫線從第一點的趨勢起，照每週速度走', () => {
+    const pts = withPlan([{ t: 100, trend: 80 }, { t: 107, trend: 79.9 }, { t: 114, trend: 80.2 }], -0.3)
     expect(pts.map((p) => p.plan)).toEqual([80, 79.7, 79.4].map((v) => expect.closeTo(v, 10)))
   })
   it('自訂目標（沒有速度）不畫計畫線', () => {
-    expect(withPlan([{ t: 100, avg: 80 }], null)[0].plan).toBeNull()
+    expect(withPlan([{ t: 100, trend: 80 }], null)[0].plan).toBeNull()
   })
-  it('正負號用減號、兩位小數；捨入到 0 寫 0.00', () => {
-    expect(signedKg(-0.29)).toBe('−0.29')
-    expect(signedKg(0.123)).toBe('+0.12')
-    expect(signedKg(-0.004)).toBe('0.00')
+  it('planAt：照計畫某天該在幾公斤（可以在最後一筆之後，例如今天）；沒有點回 null', () => {
+    expect(planAt([{ t: 100, trend: 80 }, { t: 107, trend: 81 }], -0.7, 120)).toBeCloseTo(78, 10)
+    expect(planAt([], -0.7, 120)).toBeNull()
+  })
+  it('signed1：正負號用減號、一位小數；捨入到 0 寫 ±0.0', () => {
+    expect(signed1(-1.04)).toBe('−1.0')
+    expect(signed1(0.26)).toBe('+0.3')
+    expect(signed1(-0.04)).toBe('±0.0')
   })
 })
 
@@ -209,20 +200,46 @@ describe('plannedWeeklyKg', () => {
   })
 })
 
-describe('量法斷點（v2.138）', () => {
+describe('量法斷點只切體脂（v2.146）', () => {
   const T = '2026-11-14'
-  const r = (off: number, kg: number, brk = false): TrendRow => ({ weight_kg: kg, measured_on: shiftDate(T, off), body_fat_pct: null, method_break: brk })
+  const r = (off: number, kg: number, fat: number | null, brk = false): TrendRow => ({ weight_kg: kg, measured_on: shiftDate(T, off), body_fat_pct: fat, method_break: brk })
 
-  it('7 日平均不跨斷點：斷點那天重新起算', () => {
-    const pts = trendPoints([r(-3, 75), r(-2, 75), r(-1, 77, true), r(0, 77)], '30', T)
-    expect(pts.map((p) => p.avg)).toEqual([75, 75, 77, 77])
-    expect(pts.map((p) => p.brk)).toEqual([false, false, true, false])
+  it('體重趨勢跨過斷點照常連續；體脂趨勢在斷點重新起算', () => {
+    const pts = trendPoints([r(-2, 75, 20), r(-1, 76, 20), r(0, 76, 22, true)], '30', T)
+    expect(pts.map((p) => p.brk)).toEqual([false, false, true])
+    expect(pts.map((p) => p.seg)).toEqual([0, 0, 1])
+    // 體重：75 → 75.1 → 75.19（沒有在斷點重來）
+    expect(pts[2].trend).toBeCloseTo(75.19, 10)
+    // 體脂：20 → 20 → 斷點後從 22 重新起算（不跟 20 平均成 20.2）
+    expect(pts.map((p) => p.fatTrend)).toEqual([20, 20, 22])
   })
 
-  it('這段實際的走勢用分段斜率：持平但換電池後整段 +2，算出來是 0', () => {
-    const rows = [...[-28, -24, -20, -16].map((o) => r(o, 75)), r(-12, 77, true), ...[-8, -4, 0].map((o) => r(o, 77))]
-    expect(actualKgPerWeek(trendPoints(rows, '30', T))).toBeCloseTo(0, 10)
-    // 不標斷點時同一份資料看起來在漲
-    expect(actualKgPerWeek(trendPoints(rows.map((x) => ({ ...x, method_break: false })), '30', T))).toBeGreaterThan(0.3)
+  it('斷點那天沒填體脂：從之後第一筆有填的重新起算；沒填的列 fatTrend 是 null', () => {
+    const pts = trendPoints([r(-3, 75, 20), r(-2, 75, null, true), r(-1, 75, 23), r(0, 75, 24)], '30', T)
+    expect(pts.map((p) => p.fatTrend)).toEqual([20, null, 23, expect.closeTo(23.1, 10)])
+  })
+
+  it('標了斷點，體重趨勢跟沒標完全一樣', () => {
+    const rows = [r(-20, 75, 20), r(-12, 77, 22, true), r(-4, 77, 22), r(0, 76, 22)]
+    const plain = trendPoints(rows.map((x) => ({ ...x, method_break: false })), '30', T)
+    expect(trendPoints(rows, '30', T).map((p) => p.trend)).toEqual(plain.map((p) => p.trend))
+  })
+})
+
+describe('spanDomain（v2.146）', () => {
+  it('資料夠寬時同 niceDomain', () => {
+    expect(spanDomain([70, 78], 0.3, 1, 4)).toEqual(niceDomain([70, 78], 0.3, 1))
+  })
+  it('資料太窄：以中點撐開到至少 minSpan，邊界對齊 step', () => {
+    // 75.6–76.4，中點 76 → [74, 78]
+    expect(spanDomain([75.6, 76.4], 0.3, 1, 4)).toEqual([74, 78])
+    const [lo, hi] = spanDomain([24.1, 24.3], 0.5, 2, 4)
+    expect(hi - lo).toBeGreaterThanOrEqual(4)
+    expect(lo % 2).toBe(0)
+    expect(lo).toBeLessThanOrEqual(24.1)
+    expect(hi).toBeGreaterThanOrEqual(24.3)
+  })
+  it('沒資料回 [0, 1]', () => {
+    expect(spanDomain([], 0.3, 1, 4)).toEqual([0, 1])
   })
 })

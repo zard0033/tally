@@ -947,14 +947,32 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   padding: 0 var(--s-1); }
 .trend-head h2 { margin: 0; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
 .trend-head h2 small { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
-.trend-legend { display: flex; gap: var(--s-3); margin: 0; padding: 0; list-style: none;
+.trend-legend { display: flex; gap: var(--s-3); margin: var(--s-2) 0 0; padding: 0 var(--s-1); list-style: none;
   font-size: var(--t-xs); color: var(--ink-muted); }
 .trend-legend li { display: flex; align-items: center; gap: var(--s-1); }
-.trend-legend .k-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
-.trend-legend .k-line { width: 14px; height: 2px; border-radius: 1px; background: var(--accent); }
-/* 計畫線（v2.137）：虛線＝「預定的」，跟實線的 7 日平均（量到的）分開；--ink-muted 對卡片 5.98 */
+/* 每次量測＝空心圈（v2.146）：讀數是雜訊、趨勢才是重點，原始點退到背景 */
+.trend-legend .k-ring { width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ink-faint); }
+.trend-legend .k-line { width: 14px; height: 2.5px; border-radius: 2px; background: var(--accent); }
+/* 計畫線（v2.137）：虛線＝「預定的」，跟實線的趨勢（量到的）分開；--ink-muted 對卡片 5.98 */
 .trend-legend .k-plan { width: 14px; height: 0; border-top: 1.5px dashed var(--ink-muted); }
-.trend-pace { margin: 0 0 var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
+/* 讀數（v2.146「先講結論」）：大數字＝現在的趨勢體重；手指在圖上時換成那一天。字級沿用每日目標的 --t-hero */
+.trend-read { padding: 0 var(--s-1) var(--s-3); }
+.trend-read-k { min-height: 1.4em; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.trend-read-big { display: flex; align-items: baseline; gap: var(--s-1); }
+.trend-read-big b { font-family: var(--font-num); font-weight: 900; font-size: var(--t-hero); letter-spacing: var(--track-hero);
+  line-height: .95; color: var(--ink); }
+.trend-read-big span { font-size: var(--t-base); color: var(--ink-muted); }
+.trend-read-sub { min-height: 1.5em; margin: var(--s-2) 0 0; font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
+.trend-read-sub b { font-weight: 600; color: var(--ink); }
+/* 體脂小圖（v2.146）：同一張卡、髮絲線隔開，不另開一張卡（兩張圖共用 X 軸，各自的 Y 軸，不是雙軸） */
+.trend-fat { margin: var(--s-4) calc(-1 * var(--s-3)) 0; padding: var(--s-4) var(--s-3) 0; border-top: 1px solid var(--rule-subtle); }
+.trend-subhead { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--s-1); }
+.trend-subhead h3 { margin: 0; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.trend-subval { font-family: var(--font-num); font-weight: 800; font-size: var(--t-md); color: var(--ink); }
+.trend-subval small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
+.trend-note { margin: var(--s-1) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
+/* 圖上的小字（計畫、換量法）：卡片色 3px 光暈（訓練分析的 .trend-endlabel 同款），壓在線上也讀得到、不吃父層 stroke */
+.trend-chart-note { font-size: var(--t-xs); fill: var(--ink-muted); stroke: var(--card); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
 .trend-card .recharts-cartesian-axis-tick-value { font-size: var(--t-xs); fill: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .trend-card .recharts-wrapper:focus, .trend-card .recharts-surface:focus { outline: none; }

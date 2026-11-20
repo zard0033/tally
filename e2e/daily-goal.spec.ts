@@ -1256,8 +1256,8 @@ test('自訂改到一半直接切回自動：新值先存、開關也關，自�
   expect(merged.use_custom_targets).toBe(false)
 })
 
-/* 量法斷點（v2.138，spec「⑤ 量法斷點」AC 2、6）：近 28 天每天 2000 卡；體重持平但換電池後整段 +1 kg。
-   不標斷點：平移被當成變胖，回推偏低；標了：分段迴歸、回推＝平均攝取。 */
+/* 量法斷點（v2.138；v2.146 起只切體脂，spec「⑤ 量法斷點」的修訂）：近 28 天每天 2000 卡；後段體重比前段高 1 kg。
+   標不標斷點，回推都把它當成真的變胖——斷點不再切體重。 */
 const breakWeights = (brk: boolean) =>
   [0, 5, 10, 15, 20, 26].map((i) => ({
     weight_kg: i <= 10 ? 76 : 75,
@@ -1267,17 +1267,17 @@ const breakWeights = (brk: boolean) =>
   }))
 const breakFix = (brk: boolean) => ({ ...windowFix(2000), weight: breakWeights(brk) }) as unknown as typeof FIX
 
-test('量法斷點：沒標時換電池的整段平移被當成變胖，回推偏低', async ({ page }) => {
+test('量法斷點只切體脂：標了斷點，紀錄回推跟沒標一樣', async ({ page, context }) => {
   await openApp(page, {}, breakFix(false))
   await openGoal(page)
   await expect(estVal(page, '紀錄回推')).toContainText('卡')
-  await expect(estVal(page, '紀錄回推')).not.toHaveText('2000 卡')
-})
+  const plain = await estVal(page, '紀錄回推').textContent()
+  expect(plain, '後段高 1 kg 被當成變胖，回推不會剛好等於平均攝取').not.toBe('2000 卡')
 
-test('量法斷點：標了斷點就分段算，回推回到平均攝取', async ({ page }) => {
-  await openApp(page, {}, breakFix(true))
-  await openGoal(page)
-  await expect(estVal(page, '紀錄回推')).toHaveText('2000 卡')
+  const marked = await context.newPage()
+  await openApp(marked, {}, breakFix(true))
+  await openGoal(marked)
+  await expect(estVal(marked, '紀錄回推')).toHaveText(plain as string)
 })
 
 /* 更新身體數據的「換了秤或電池」（v2.138，spec「⑤ 量法斷點」AC 4）：勾了才帶 method_break: true；

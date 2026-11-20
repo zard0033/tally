@@ -46,7 +46,7 @@ function reqNum(ref: React.RefObject<HTMLInputElement | null>): number {
 
 export default function Settings(props: SettingsProps) {
   const {
-    profile, targets, latestWeight, foods, estimate, onWeightsChanged,
+    profile, targets, latestWeight, foods, estimate,
     onSaveProfile, onSaveLost, onSaveWeight, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSetFoodCategory, onSignOut,
     training, onTrainingWrite, onSubViewChange,
   } = props
@@ -187,7 +187,7 @@ export default function Settings(props: SettingsProps) {
           </div>
           <label className="check-row">
             <input ref={wBrk} type="checkbox" />
-            換了秤或電池：從這天起量法不同
+            換了秤或電池：從這天起體脂量法不同
           </label>
           <p className="note">同一天再記一次會覆蓋當天那筆。</p>
           <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
@@ -239,7 +239,7 @@ export default function Settings(props: SettingsProps) {
           </div>
         }
       >
-        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={() => { refreshWeights(); onWeightsChanged() }} onBack={() => setView('list')} />
+        <WeightTrend weights={weights} plannedKgPerWeek={plannedWeeklyKg(profile)} onBreakChange={refreshWeights} onBack={() => setView('list')} />
       </Suspense>
     )
   }

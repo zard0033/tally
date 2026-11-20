@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 30 pages | Last updated: 2026-11-15T09:27:04.870Z
+> 32 pages | Last updated: 2026-11-20T08:11:45.089Z
 
 ## debugging
 
@@ -35,6 +35,7 @@
 - [lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）](lesson-sync-sheet-review-sheet-2026-10-15.md) — # lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）
 - [lesson-training-reskin 時間軸套進可排序清單的三條通則（2026-11-16）](lesson-training-reskin-2026-11-16.md) — # lesson-training-reskin 時間軸套進可排序清單的三條通則（2026-11-16）
 - [lesson-weight-loss-loop 減重回饋圈與回推的四條通則（2026-11-13）](lesson-weight-loss-loop-2026-11-13.md) — # lesson-weight-loss-loop 減重回饋圈與回推的四條通則（2026-11-13）
+- [recharts 讀數要跟 tooltip 狀態走，不要聽圖表的指標事件](recharts-tooltip.md) — # recharts 讀數要跟 tooltip 狀態走，不要聽圖表的指標事件
 - [verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA](verified-platform-rls-a11y-supabase-pwa.md) — # verified-platform 已驗證事實：RLS、a11y 裁決、Supabase 暫停與重試、體重同步、離線 PWA
 
 ## reference

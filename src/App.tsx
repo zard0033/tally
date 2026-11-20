@@ -1174,7 +1174,6 @@ export default function App() {
             targets={targets}
             latestWeight={weight}
             estimate={estimate}
-            onWeightsChanged={() => setWeightSaves((n) => n + 1)}
             foods={foods}
             onSaveProfile={handleSaveProfile}
             onSaveLost={handleSaveLost}

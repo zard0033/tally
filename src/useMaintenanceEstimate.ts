@@ -50,7 +50,8 @@ export function useMaintenanceEstimate(scope: string | null, refreshKey: string,
           scope,
           key: refreshKey,
           daily: dailyKcalFromRows(rows),
-          weights: weights.map((w) => ({ date: w.measured_on, kg: Number(w.weight_kg), brk: w.method_break === true })),
+          // 量法斷點只切體脂（v2.146）：體重看不出平移，回推照常連續；baseline 的分段迴歸留給「換了秤」那天
+          weights: weights.map((w) => ({ date: w.measured_on, kg: Number(w.weight_kg) })),
           today,
         })
       })

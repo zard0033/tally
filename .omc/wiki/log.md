@@ -197,3 +197,7 @@
 - **Pages:** status-facts-edge-function.md, session-log-2026-11-11-b5c81c69.md, e2e-reference.md, verified-testing-e2e-mutation.md, cleanup-inventory-2026-11-02.md, phase2-round1-log-2-2026-10-13-14.md, lesson-exercise-images-2026-10-17.md, lesson-flaky-root-cause-2026-11-03.md, lesson-meal-suggest-v2-2026-11-10.md, lesson-rpe-expansion-rpe-push-review-2026-10-28.md, lesson-spring-sheet-spring-sheet-2026-10-16.md, open-failures.md, verified-platform-rls-a11y-supabase-pwa.md, lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md, lesson-pointers.md, lesson-cardio-merge-2026-10-22.md, lesson-ci-linux-e2e-2026-11-11.md, lesson-cleanup-review-push-review-2026-11-02.md, lesson-meal-suggest-2026-11-04.md, lesson-presence-animation-mutation-2026-10-27.md
 - **Summary:** Query "edge function log diag 查 log read-label 逾時" → 20 results (of 30 total)
 
+## [2026-11-20T08:11:44.778Z] ingest
+- **Pages:** recharts-tooltip.md
+- **Summary:** Created new page "recharts 讀數要跟 tooltip 狀態走，不要聽圖表的指標事件"
+

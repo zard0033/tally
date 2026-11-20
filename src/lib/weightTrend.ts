@@ -1,8 +1,8 @@
-/* 體重趨勢圖（spec.md「體重趨勢圖」）的純運算：7 日平均、範圍切片、軸範圍與刻度。
+/* 體重趨勢圖（spec.md「體重趨勢圖」）的純運算：趨勢（指數平滑）、範圍切片、軸範圍與刻度。
    不沾 DOM、不碰 recharts——圖怎麼畫是 WeightTrend.tsx 的事，這裡只管數字對不對。 */
 import { dayIndex, monthDay, shiftDate } from './dates'
 import { num } from './formulas'
-import { segmentedFit, segmentIds, segmentSpread } from './baseline'
+import { segmentIds } from './baseline'
 
 export type TrendRange = '30' | '90' | 'all'
 
@@ -16,7 +16,7 @@ export interface TrendRow {
   weight_kg: number | string
   measured_on: string
   body_fat_pct: number | string | null
-  /** 量法斷點（v2.138）：舊資料或 stub 沒這欄就當沒有 */
+  /** 體脂量法斷點（v2.138；v2.146 起只切體脂）：舊資料或 stub 沒這欄就當沒有 */
   method_break?: boolean | null
 }
 
@@ -26,13 +26,33 @@ export interface TrendPoint {
   /** 自 1970-01-01 起算的天數；X 軸用數字軸，缺記錄的日子才會留白而不是被擠在一起 */
   t: number
   kg: number
-  /** 7 日平均（不跨量法斷點：只平均同一段的量測） */
-  avg: number
+  /** 體重趨勢（指數平滑，見 TREND_SMOOTHING）；體重不看量法斷點 */
+  trend: number
   fat: number | null
-  /** 這筆是量法斷點（換了之後的第一筆） */
+  /** 體脂趨勢（同一種平滑，在量法斷點重新起算）；這一筆沒填體脂、或這一段還沒有體脂時是 null */
+  fatTrend: number | null
+  /** 這筆是體脂量法斷點（換了之後的第一筆） */
   brk: boolean
-  /** 段號：斷點切出來的第幾段，由舊到新 */
+  /** 體脂的段號：斷點切出來的第幾段，由舊到新 */
   seg: number
+}
+
+/**
+ * 平滑常數：The Hacker's Diet 的指數平滑移動平均，每天舊趨勢留 0.9、新讀數佔 0.1（約等於 20 天簡單平均的延遲）。
+ * https://www.fourmilab.ch/hackdiet/e4/signalnoise.html 。量測不是每天有：隔 d 天的一筆佔 1 − 0.9^d，
+ * 等於中間那幾天都量到同一個值——一週量一次時 7 日平均幾乎就是原始讀數，線會跟著每一筆抖（v2.146）。
+ */
+export const TREND_SMOOTHING = 0.9
+
+/** 指數平滑（由舊到新）：第一筆就是起點；reset 為真的那一筆重新起算。 */
+function smooth(xs: readonly { t: number; v: number; reset: boolean }[]): number[] {
+  let tr = NaN
+  let prevT = 0
+  return xs.map((x, i) => {
+    tr = i === 0 || x.reset ? x.v : tr + (1 - TREND_SMOOTHING ** (x.t - prevT)) * (x.v - tr)
+    prevT = x.t
+    return tr
+  })
 }
 
 /** dayIndex 的反運算。 */
@@ -48,9 +68,9 @@ export function rangeStart(range: TrendRange, today: string): string | null {
 }
 
 /**
- * 全部量測 → 趨勢點（由舊到新）。7 日平均＝該天往前 7 個日曆日（含當天）內所有量測的平均，
- * 不是「最近 7 筆」——記錄不是每天都有。平均先對全部歷史算、再切範圍，所以範圍第一天的窗口是完整的。
- * 體重不是有限數字的列整筆丟掉（不畫比畫錯好）；體脂不是有限數字就當沒填。
+ * 全部量測 → 趨勢點（由舊到新）。趨勢先對全部歷史算、再切範圍，所以範圍第一天的趨勢已經走穩。
+ * 量法斷點只切體脂（v2.146）：換電池後體脂整段平移約 2%，體重看不出平移（2026-11-20 實際資料），
+ * 體重照常連續。體重不是有限數字的列整筆丟掉（不畫比畫錯好）；體脂不是有限數字就當沒填。
  */
 export function trendPoints(rows: TrendRow[], range: TrendRange, today: string): TrendPoint[] {
   const sorted = rows
@@ -58,22 +78,23 @@ export function trendPoints(rows: TrendRow[], range: TrendRange, today: string):
     .filter((r) => Number.isFinite(r.kg))
     .sort((a, b) => a.t - b.t)
   const segs = segmentIds(sorted)
-  const all = sorted.map((r, i) => ({ ...r, seg: segs[i] }))
+  const trend = smooth(sorted.map((r) => ({ t: r.t, v: r.kg, reset: false })))
+  // 體脂只拿有填的列平滑，斷點後的第一筆體脂重新起算（斷點那天沒填體脂的話，從之後第一筆有填的起算）
+  const withFat = sorted.map((r, i) => ({ ...r, seg: segs[i] })).filter((r) => Number.isFinite(r.fat))
+  const fatTr = smooth(withFat.map((r, i) => ({ t: r.t, v: r.fat, reset: i > 0 && r.seg !== withFat[i - 1].seg })))
+  const fatByDate = new Map(withFat.map((r, i) => [r.date, fatTr[i]]))
   const from = rangeStart(range, today)
-  return all
-    .map((r) => {
-      // 7 日平均不跨斷點：換電池前後的讀數整段平移，混在一起平均會畫出一段假的斜坡
-      const win = all.filter((x) => x.t <= r.t && x.t > r.t - 7 && x.seg === r.seg)
-      return {
-        date: r.date,
-        t: r.t,
-        kg: r.kg,
-        avg: win.reduce((s, x) => s + x.kg, 0) / win.length,
-        fat: Number.isFinite(r.fat) ? r.fat : null,
-        brk: r.brk,
-        seg: r.seg,
-      }
-    })
+  return sorted
+    .map((r, i) => ({
+      date: r.date,
+      t: r.t,
+      kg: r.kg,
+      trend: trend[i],
+      fat: Number.isFinite(r.fat) ? r.fat : null,
+      fatTrend: fatByDate.get(r.date) ?? null,
+      brk: r.brk,
+      seg: segs[i],
+    }))
     .filter((p) => from === null || p.date >= from)
 }
 
@@ -85,16 +106,29 @@ export function xDomain(points: readonly { t: number }[], range: TrendRange, tod
   return [from === null ? points[0].t : dayIndex(from), end]
 }
 
+/**
+ * Y 軸範圍，至少跨 minSpan（v2.146）：體重一天上下 1 kg 是常態（水分、吃了什麼），軸只照資料撐的話，
+ * 一段持平的資料會被拉滿整張圖，1 kg 的起伏看起來像大浪。資料夠寬時同 niceDomain；不夠寬時以資料中點為中心撐開。
+ */
+export function spanDomain(values: number[], pad: number, step: number, minSpan: number): [number, number] {
+  if (values.length === 0) return [0, 1]
+  const [lo, hi] = niceDomain(values, pad, step)
+  if (hi - lo >= minSpan) return [lo, hi]
+  const mid = (Math.min(...values) + Math.max(...values)) / 2
+  const nlo = Math.floor((mid - minSpan / 2) / step) * step
+  return [nlo, Math.max(nlo + minSpan, Math.ceil((mid + minSpan / 2) / step) * step)]
+}
+
 /** 在 [t0, t1] 上取 n 個等距刻度（含兩端）；範圍只有一天就一個。 */
 export function xTicks(t0: number, t1: number, n = 4): number[] {
   if (t1 <= t0) return [t0]
   return Array.from({ length: n }, (_, i) => Math.round(t0 + ((t1 - t0) * i) / (n - 1)))
 }
 
-/** Y 軸刻度：範圍 ≤6 每 1、≤12 每 2、≤30 每 5、更大每 10，只落在步長的整數倍上（約 3–7 條格線）。 */
-export function yTicks([lo, hi]: [number, number]): number[] {
+/** Y 軸刻度：範圍 ≤6 每 1、≤12 每 2、≤30 每 5、更大每 10，只落在步長的整數倍上（約 3–7 條格線）；minStep 給矮的小圖用。 */
+export function yTicks([lo, hi]: [number, number], minStep = 1): number[] {
   const span = hi - lo
-  const step = span <= 6 ? 1 : span <= 12 ? 2 : span <= 30 ? 5 : 10
+  const step = Math.max(minStep, span <= 6 ? 1 : span <= 12 ? 2 : span <= 30 ? 5 : 10)
   const out: number[] = []
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(v)
   return out
@@ -135,34 +169,25 @@ export const isValidWeightKg = (kg: number): boolean => Number.isFinite(kg) && k
 /** 體脂率要是 BODY_FAT_MIN–BODY_FAT_MAX 之間的有限數字（留空由呼叫端處理，不在這裡判）。 */
 export const isValidBodyFatPct = (fat: number): boolean => Number.isFinite(fat) && fat >= BODY_FAT_MIN && fat <= BODY_FAT_MAX
 
-/** 實際走勢最少要跨幾天：一週以內的斜率幾乎全是水分與量測時間的差。 */
+/** 這段變化最少要跨幾天：一週以內的差幾乎全是水分與量測時間的差。 */
 export const PACE_MIN_SPAN_DAYS = 7
 
-/**
- * 這段的實際走勢（kg/週，v2.137「計畫 vs 實際」）：範圍內全部量測的線性迴歸斜率——跟回推同一種算法，
- * 不是頭尾相減（頭尾相減會把單次量測的水分波動全算進去）。不到 2 筆或頭尾不到 PACE_MIN_SPAN_DAYS 天回 null。
- */
-export function actualKgPerWeek(points: readonly { t: number; kg: number; seg?: number }[]): number | null {
-  if (points.length < 2) return null
-  // 跨度看各段自己的跨度加總（同回推，v2.138 review）：斷點兩側各只有一兩天的話，斜率幾乎全是雜訊
-  const { span } = segmentSpread(points.map((p, i) => ({ date: isoOfDay(p.t), brk: i > 0 && (p.seg ?? 0) !== (points[i - 1].seg ?? 0) })))
-  if (span < PACE_MIN_SPAN_DAYS) return null
-  // 跨量法斷點時用分段斜率（同回推，v2.138）；每段都只有一筆時算不出來
-  const { slope } = segmentedFit(points.map((p) => ({ x: p.t, y: p.kg, seg: p.seg ?? 0 })))
-  return Number.isFinite(slope) ? slope * 7 : null
+/** 照計畫，到 t 那天該在幾公斤（計畫線上的值）；從範圍內第一點的趨勢起算。 */
+export function planAt(points: readonly { t: number; trend: number }[], perWeek: number, t: number): number | null {
+  const first = points[0]
+  return first === undefined ? null : first.trend + (perWeek / 7) * (t - first.t)
 }
 
 /**
- * 計畫線：從範圍內第一點的 7 日平均起，照 perWeek 的速度走（現在設定的速度；之前改過速度的話，舊的那段不照舊速度畫）。
+ * 計畫線：從範圍內第一點的趨勢起，照 perWeek 的速度走（現在設定的速度；之前改過速度的話，舊的那段不照舊速度畫）。
  * 每一點多一個 plan 值給圖畫線；perWeek 是 null（自訂目標）就不畫。
  */
-export function withPlan<T extends { t: number; avg: number }>(points: readonly T[], perWeek: number | null): (T & { plan: number | null })[] {
-  const first = points[0]
-  return points.map((p) => ({ ...p, plan: perWeek === null || first === undefined ? null : first.avg + (perWeek / 7) * (p.t - first.t) }))
+export function withPlan<T extends { t: number; trend: number }>(points: readonly T[], perWeek: number | null): (T & { plan: number | null })[] {
+  return points.map((p) => ({ ...p, plan: perWeek === null ? null : planAt(points, perWeek, p.t) }))
 }
 
-/** 每週變化的寫法：帶正負號（減號用 −）、兩位小數。 */
-export function signedKg(n: number): string {
-  const v = Math.round(n * 100) / 100
-  return v === 0 ? '0.00' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`
+/** 變化量的寫法：帶正負號（減號用 −）、一位小數；捨入到 0 寫 ±0.0。 */
+export function signed1(n: number): string {
+  const v = Math.round(n * 10) / 10
+  return v === 0 ? '±0.0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`
 }
