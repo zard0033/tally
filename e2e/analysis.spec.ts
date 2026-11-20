@@ -61,7 +61,11 @@ async function openAnalysis(page: Page, fix = build(SESSIONS)) {
 const openExercise = async (page: Page, id: string) => {
   await page.locator(`[data-screen="analysis"] .tr-row[data-exercise-id="${id}"]`).click()
   await expect(page.locator('[data-screen="analysis-exercise"]')).toBeVisible()
+  // 點列的位置換頁後可能落在圖上：滑鼠停在圖上讀數就換成那一次，移開讓讀數從「最近一次」起手（v2.147）
+  await page.mouse.move(0, 0)
 }
+const readBig = (page: Page) => page.locator('[data-screen="analysis-exercise"] .trend-read-big b')
+const readSub = (page: Page) => page.locator('[data-screen="analysis-exercise"] .trend-read-sub')
 const tableRows = (page: Page) => page.locator('.trend-table tbody tr')
 
 test('訓練頁有「訓練分析」入口列，副標算有進度的動作數；點了進整頁、底部列收起', async ({ page }) => {
@@ -99,6 +103,11 @@ test('列表：只列有有效組的動作、依最近練的排、數字是歷�
   await expect(rows.nth(1).locator('.sub')).toContainText('1 次訓練')
   // 臥推：60×10＝80.0；100×12 超過 10 下、90×5 沒打勾，都不能進來
   await expect(rows.nth(1).locator('.an-val')).toContainText('80.0')
+  // v2.147 小走勢＋30 天變化：深蹲 30 天內 off -10／-5／-1 三次，88.7 → 93.3 ＝ +4.6（每次的 e1RM 先捨入到一位再相減，跟畫面上的兩個數字一致）；臥推只有一次，不畫、不寫
+  await expect(rows.nth(0).locator('.an-spark')).toHaveCount(1)
+  await expect(rows.nth(0).locator('.an-delta')).toHaveText('30 天 +4.6')
+  await expect(rows.nth(1).locator('.an-spark')).toHaveCount(0)
+  await expect(rows.nth(1).locator('.an-delta')).toHaveCount(0)
   await expect(page.locator('[data-screen="analysis"]')).not.toContainText('引體向上')
   await expect(page.locator('[data-screen="analysis"]')).not.toContainText('腿推舉')
 })
@@ -109,9 +118,10 @@ test('單一動作：最佳值、最近一次、折線與明細（預設 90 天�
   const screen = page.locator('[data-screen="analysis-exercise"]')
   await expect(screen.locator('h1')).toHaveText('槓鈴深蹲')
   await expect(screen.locator('.seg button[aria-pressed="true"]')).toHaveText('90 天')
-  // 歷來最佳不隨範圍變：116.7；最近一次是 off -1 那次的最大值 93.3（80×5）
-  await expect(screen.locator('.an-hero div').nth(0)).toContainText('116.7')
-  await expect(screen.locator('.an-hero div').nth(1)).toContainText('93.3')
+  // 讀數（v2.147）：大數字＝最近一次 off -1 那次的最大值 93.3（80×5）；下一行歷來最佳（不隨範圍變）116.7、90 天內 88.7 → 93.3 ＝ +4.6
+  await expect(screen.locator('.trend-read-k')).toHaveText('最近一次 e1RM（估算）')
+  await expect(readBig(page)).toHaveText('93.3')
+  await expect(readSub(page)).toHaveText('歷來最佳 116.7・90 天 +4.6 kg')
   await expect(screen.locator('section[aria-label="e1RM"] .recharts-wrapper')).toBeVisible()
   await expect(tableRows(page)).toHaveCount(3)
   // 新到舊；一次訓練取 e1RM 最大的那組：off -1 是 80×5（93.3），不是 60×10（80.0）
@@ -121,8 +131,6 @@ test('單一動作：最佳值、最近一次、折線與明細（預設 90 天�
   await expect(tableRows(page).nth(1)).toContainText('90.0 kg')
   await expect(tableRows(page).nth(2)).toContainText('70 kg × 8')
   await expect(tableRows(page).nth(2)).toContainText('88.7 kg')
-  // 最後一點標出數字
-  await expect(screen.locator('.trend-endlabel')).toHaveText('93.3')
 })
 
 test('範圍切換：30 天／全部，明細列數跟著變，全部才看得到 90 天外那次', async ({ page }) => {
@@ -144,7 +152,7 @@ test('範圍內沒有紀錄但歷史有：說明＋「看全部」可以切過�
   await openExercise(page, SQ)
   const screen = page.locator('[data-screen="analysis-exercise"]')
   await expect(screen).toContainText('這段期間沒有紀錄')
-  await expect(screen.locator('.an-hero div').nth(0)).toContainText('116.7')
+  await expect(readSub(page)).toContainText('歷來最佳 116.7')
   await expect(tableRows(page)).toHaveCount(0)
   await expect(screen.locator('section[aria-label="明細"]'), '沒有紀錄時不該有空的明細卡').toHaveCount(0)
   await page.getByRole('button', { name: '看全部' }).click()
@@ -160,12 +168,13 @@ test('只有 1 次訓練：畫得出點、不丟例外、說明還畫不出線',
   const screen = page.locator('[data-screen="analysis-exercise"]')
   await expect(screen.locator('section[aria-label="e1RM"] .recharts-wrapper')).toBeVisible()
   await expect(screen).toContainText('只有 1 次訓練，再練一次就畫得出線')
-  await expect(screen.locator('.trend-endlabel')).toHaveText('80.0')
+  await expect(readBig(page)).toHaveText('80.0')
+  await expect(readSub(page), '只有一次，頭尾不到 7 天不寫變化').toHaveText('歷來最佳 80.0')
   await expect(tableRows(page)).toHaveCount(1)
   expect(errors, '一個點時頁面丟了例外').toEqual([])
 })
 
-test('指標移到圖上：十字線出現，讀數列出 e1RM 與最重一組', async ({ page }) => {
+test('指標移到圖上：十字線出現，讀數換成那一次的 e1RM 與最重一組，移開回到最近一次', async ({ page }) => {
   await openAnalysis(page)
   await openExercise(page, SQ)
   // 30 天：一天約 10px，指標對得準；90 天一天只有 3px
@@ -173,15 +182,17 @@ test('指標移到圖上：十字線出現，讀數列出 e1RM 與最重一組',
   const chart = page.locator('section[aria-label="e1RM"] .recharts-wrapper')
   const box = await chart.boundingBox()
   expect(box, '拿不到圖的座標').not.toBeNull()
-  // 圖的右緣（扣掉 margin.right 8px）是今天；最後一點在昨天（off -1），往左約一天的寬度
+  // 圖的右緣（扣掉 margin.right 8px）是今天；指 off -5 那次（不是最後一次，讀數跟最近一次不同才驗得出有換）
   const plotW = box!.width - 36 - 8
-  const x = box!.x + box!.width - 8 - plotW / 29
+  const x = box!.x + box!.width - 8 - (plotW * 5) / 29
   await page.mouse.move(x, box!.y + box!.height / 2)
-  const tip = page.locator('.trend-tip')
-  await expect(tip).toHaveCount(1)
-  await expect(tip).toContainText('93.3 kg')
-  await expect(tip).toContainText('80 × 5')
+  await expect(page.locator('[data-screen="analysis-exercise"] .trend-read-k')).toContainText('這次')
+  await expect(readBig(page)).toHaveText('90.0')
+  await expect(readSub(page)).toHaveText('最重一組 75 × 6')
   await expect(page.locator('.recharts-tooltip-cursor')).toHaveCount(1)
+  await page.mouse.move(0, 0)
+  await expect(readBig(page)).toHaveText('93.3')
+  await expect(readSub(page)).toContainText('歷來最佳')
 })
 
 test('單一動作頁返回回到列表', async ({ page }) => {
@@ -206,7 +217,7 @@ test('連不上伺服器：資料來自本機底，列表與單一動作頁照�
   await expect(page.locator('[data-section="progress-list"] .tr-row')).toHaveCount(2)
   await openExercise(page, SQ)
   await expect(tableRows(page)).toHaveCount(3)
-  await expect(page.locator('[data-screen="analysis-exercise"] .an-hero div').nth(0)).toContainText('116.7')
+  await expect(readSub(page)).toContainText('歷來最佳 116.7')
 })
 
 /* ── 訓練分析 C：肌群狀態（spec.md「階段 4 甲」口徑 4）──────────────────────────────────────

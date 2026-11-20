@@ -1,37 +1,27 @@
 /* 訓練分析整頁（階段 4）：頂部分段「動作進度｜肌群狀態」。
    動作進度（A，樣張 `_design-sample/analysis.html`）：列出有已打勾組的動作，點進單一動作看 e1RM 折線、歷來最佳與逐次明細。
+   v2.147（子頁換皮 B，樣張 `_design-sample/subpages.html`）：列表每列一條最近 30 天的小走勢＋這段變化；單一動作改用體重趨勢 v2.146 的寫法——
+   頂端讀數（大數字＝最近一次 e1RM，拖曳換成那一次），不用浮動框。
    肌群狀態（C）：六個肌群最近一次練完到現在的恢復狀態，純顯示、不畫圖。
    運算在 src/lib/strength.ts、src/lib/recovery.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。
    整頁接管畫面（同動作庫、訓練中），進出時 Training 通知 App 收起底部列。 */
 import { useEffect, useMemo, useState } from 'react'
-import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts'
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import ChartActiveDay from '@/components/ChartActiveDay'
 import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl, { type SegItem } from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
 import TrendNoRecords from '@/components/TrendNoRecords'
 import { localDate, monthDay, tableDate } from '@/lib/dates'
 import { recoveryStatus, type MuscleRecovery } from '@/lib/recovery'
-import { bestE1rm, chartPoints, progressList, strengthHistory, type ChartPoint } from '@/lib/strength'
+import { bestE1rm, chartPoints, progressList, strengthHistory, type ProgressListItem } from '@/lib/strength'
 import { formatKg, MUSCLE_GROUP_LABEL, type TrainingDb } from '@/lib/training'
-import { fmt1, niceDomain, TREND_RANGES, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
+import { fmt1, niceDomain, PACE_MIN_SPAN_DAYS, signed1, sparklineOf, TREND_RANGES, xDomain, xTicks, yTicks, type TrendRange } from '@/lib/weightTrend'
 import { trendXAxis } from '@/components/trendAxis'
 
 interface AnalysisProps {
   db: TrainingDb
   onBack: () => void
-}
-
-/** 浮動讀數：值在前（粗）、名稱在後（淡）。 */
-function StrengthTip({ active, payload }: TooltipContentProps) {
-  const p = payload?.[0]?.payload as ChartPoint | undefined
-  if (!active || !p) return null
-  return (
-    <div className="trend-tip" role="status">
-      <div className="trend-tip-date">{monthDay(p.date)}</div>
-      <div className="trend-tip-row"><b>{fmt1(p.e1rm)} kg</b><span>e1RM 估算</span></div>
-      <div className="trend-tip-row"><b>{formatKg(p.topSet.weight_kg)} × {p.topSet.reps}</b><span>最重一組</span></div>
-    </div>
-  )
 }
 
 function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; exerciseId: string; name: string; onBack: () => void }) {
@@ -42,23 +32,33 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
   const dom = useMemo(() => xDomain(points, range, today), [points, range, today])
   const ticks = useMemo(() => (dom ? xTicks(dom[0], dom[1]) : []), [dom])
   const yDomain = useMemo(() => niceDomain(points.map((p) => p.e1rm), 2, 5), [points])
+  const first = points[0]
   const last = points[points.length - 1]
   const best = bestE1rm(history)
   const latest = history[history.length - 1]
+  /* 指到的那一次（日序）；手指放開時收起 tooltip、讀數回到最新（同體重趨勢 v2.146） */
+  const [hoverT, setHoverT] = useState<number | null>(null)
+  const [released, setReleased] = useState(false)
+  const hp = released || hoverT === null ? null : points.find((p) => p.t === hoverT) ?? null
+  const pointer = { onMouseMove: () => setReleased(false), onTouchStart: () => setReleased(false), onTouchEnd: () => setReleased(true) }
+  const label = TREND_RANGES.find((r) => r.key === range)?.label ?? ''
 
   const axis = trendXAxis(dom, ticks)
 
-  /* 每次訓練一個點（點少），只在最後一點標數字，其餘靠十字線讀。 */
+  /* 每次訓練一個點（點少）：空心圈，最後一點實心；數字在讀數區，不再標在圖上 */
   const dot = (props: { cx?: number; cy?: number; index?: number }) => {
     const { cx, cy, index } = props
     if (cx === undefined || cy === undefined) return <g key={index} />
-    const isLast = index === points.length - 1
-    return (
-      <g key={index}>
-        <circle cx={cx} cy={cy} r={isLast ? 5 : 4} fill="var(--accent)" stroke="var(--card)" strokeWidth={2} />
-        {isLast && <text className="trend-endlabel" x={cx} y={cy - 12} textAnchor={points.length > 1 ? 'end' : 'middle'}>{fmt1(last.e1rm)}</text>}
-      </g>
-    )
+    return index === points.length - 1
+      ? <circle key={index} cx={cx} cy={cy} r={4.5} fill="var(--accent)" stroke="var(--card)" strokeWidth={2} />
+      : <circle key={index} cx={cx} cy={cy} r={3} fill="var(--card)" stroke="var(--accent)" strokeWidth={1.5} />
+  }
+
+  /* 讀數下一行（沒指著時）：歷來最佳＋這段變化（頭尾不到 7 天不寫，同體重趨勢） */
+  const summary = () => {
+    const parts = [`歷來最佳 ${best === null ? '—' : fmt1(best)}`]
+    if (first && last && last.t - first.t >= PACE_MIN_SPAN_DAYS) parts.push(`${label} ${signed1(last.e1rm - first.e1rm)} kg`)
+    return parts.join('・')
   }
 
   return (
@@ -67,21 +67,32 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
       <div className="trend-scroll">
         <SegmentedControl label="範圍" items={TREND_RANGES} value={range} onPick={setRange} className="trend-range" />
         <section className="trend-card" aria-label="e1RM">
-          <div className="an-hero">
-            <div><span className="k">歷來最佳（估算）</span><span className="v">{best === null ? '—' : fmt1(best)}<small>kg</small></span></div>
-            <div><span className="k">最近一次（估算）</span><span className="v">{latest ? fmt1(latest.e1rm) : '—'}<small>kg</small></span></div>
+          {/* 讀數：大數字不隨範圍變（最近一次是整段歷史的最後一次）；指著時換成那一次 */}
+          <div className="trend-read">
+            <div className="trend-read-k">{hp ? `${monthDay(hp.date)} 這次（估算）` : '最近一次 e1RM（估算）'}</div>
+            <div className="trend-read-big"><b>{hp ? fmt1(hp.e1rm) : latest ? fmt1(latest.e1rm) : '—'}</b><span>kg</span></div>
+            <p className="trend-read-sub">
+              {hp ? <>最重一組 <b>{formatKg(hp.topSet.weight_kg)} × {hp.topSet.reps}</b></> : summary()}
+            </p>
           </div>
-          <div className="trend-head"><h2>e1RM <small>kg，估算</small></h2></div>
           {points.length === 0 ? (
             <TrendNoRecords onSeeAll={() => setRange('all')} />
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={points} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+            <ResponsiveContainer width="100%" height={190}>
+              <ComposedChart data={points} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} {...pointer}>
+                <defs>
+                  <linearGradient id="an-area-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="var(--accent)" stopOpacity={0.14} />
+                    <stop offset="1" stopColor="var(--accent)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid vertical={false} stroke="var(--rule-subtle)" />
                 <XAxis {...axis} />
                 <YAxis width={36} domain={yDomain} ticks={yTicks(yDomain)} tickLine={false} axisLine={false} />
-                <Tooltip content={StrengthTip} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
-                <Line dataKey="e1rm" name="e1RM 估算" type="monotone" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                <Tooltip active={released ? false : undefined} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
+                <ChartActiveDay onDay={setHoverT} />
+                <Area dataKey="e1rm" type="linear" stroke="none" fill="url(#an-area-fill)" activeDot={false} isAnimationActive={false} />
+                <Line dataKey="e1rm" name="e1RM 估算" type="linear" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
                   dot={dot} activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -108,6 +119,33 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
         )}
       </div>
     </div>
+  )
+}
+
+/** 列表一列（v2.147）：最近 30 天的 e1RM 小走勢＋這段變化；30 天內不到兩次就不畫、不寫變化 */
+function ProgressRow({ db, item, today, onOpen }: { db: TrainingDb; item: ProgressListItem; today: string; onOpen: () => void }) {
+  const recent = useMemo(() => chartPoints(strengthHistory(db, item.exerciseId), '30', today), [db, item.exerciseId, today])
+  // 頭尾不到 7 天不寫變化（同單一動作頁與體重趨勢）；小走勢照畫
+  const delta = recent.length >= 2 && recent[recent.length - 1].t - recent[0].t >= PACE_MIN_SPAN_DAYS ? recent[recent.length - 1].e1rm - recent[0].e1rm : null
+  return (
+    <button className="tr-row" type="button" data-exercise-id={item.exerciseId} onClick={onOpen}>
+      <span className="grow">
+        <span className="nm">{item.name}</span>
+        <span className="sub">{item.sessions} 次訓練 · 最近 {monthDay(item.lastDate)}</span>
+      </span>
+      {recent.length >= 2 && (
+        <svg className="an-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points={sparklineOf(recent.map((p) => p.e1rm))} />
+        </svg>
+      )}
+      <span className="an-val">
+        {fmt1(item.best)} <small>kg 估算</small>
+        {delta !== null && <span className="an-delta">30 天 {signed1(delta)}</span>}
+      </span>
+      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
   )
 }
 
@@ -159,6 +197,7 @@ function RecoveryList({ db }: { db: TrainingDb }) {
 
 export default function Analysis({ db, onBack }: AnalysisProps) {
   const [tab, setTab] = useState<AnalysisTab>('progress')
+  const today = useMemo(() => localDate(), [])
   const [exerciseId, setExerciseId] = useState<string | null>(null)
   const list = useMemo(() => progressList(db), [db])
   const picked = exerciseId === null ? null : list.find((i) => i.exerciseId === exerciseId) ?? null
@@ -186,19 +225,10 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
           <>
             <div className="tr-card" data-section="progress-list">
               {list.map((i) => (
-                <button key={i.exerciseId} className="tr-row" type="button" data-exercise-id={i.exerciseId} onClick={() => setExerciseId(i.exerciseId)}>
-                  <span className="grow">
-                    <span className="nm">{i.name}</span>
-                    <span className="sub">{i.sessions} 次訓練 · 最近 {monthDay(i.lastDate)}</span>
-                  </span>
-                  <span className="an-val">{fmt1(i.best)} <small>kg 估算</small></span>
-                  <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M9 6l6 6-6 6" />
-                  </svg>
-                </button>
+                <ProgressRow key={i.exerciseId} db={db} item={i} today={today} onOpen={() => setExerciseId(i.exerciseId)} />
               ))}
             </div>
-            <p className="an-note">只列有打勾完成的組；超過 10 下的組不估算（次數越多越不準）。</p>
+            <p className="an-note">只列有打勾完成的組；超過 10 下的組不估算（次數越多越不準）。小走勢是最近 30 天的 e1RM。</p>
           </>
         )}
       </div>

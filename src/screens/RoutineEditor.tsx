@@ -13,6 +13,7 @@ import { useSortable } from '@dnd-kit/react/sortable'
 import { move } from '@dnd-kit/helpers'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import GymVisualCredit from '@/components/GymVisualCredit'
+import SubPageTop from '@/components/SubPageTop'
 import { sortableAccessibility } from '@/components/sortableA11y'
 import { usePendingOrder } from '@/components/usePendingOrder'
 import {
@@ -162,20 +163,14 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
 
   return (
     <div className="main" data-screen="routine-editor">
-      <header className="tr-top">
-        <button className="tr-ib" type="button" aria-label="返回" onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-        <h1>{String(routine.name)}</h1>
-        <button className="tr-ib" type="button" aria-label="複製課表" onClick={() => void copy()}>
+      <SubPageTop title={String(routine.name)} backLabel="返回" onBack={onBack} action={
+        <button className="icon-btn" type="button" aria-label="複製課表" onClick={() => void copy()}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="9" y="9" width="11" height="11" rx="2" />
             <path d="M5 15V6a2 2 0 0 1 2-2h8" />
           </svg>
         </button>
-      </header>
+      } />
 
       <div className="tr-scroll">
         <label className="tr-field tr-field-first">
@@ -210,7 +205,8 @@ export default function RoutineEditor({ detail, db, onBack, onOpen, onWrite }: R
             void reorder(move(shown.map((e) => e.entry.id), event))
           }}
         >
-          <ul className="tr-card tr-list" data-section="routine-exercises">
+          {/* 依序的動作＝訓練中那條時間軸（v2.147，子頁換皮 B）：每個動作一張卡、左邊節點寫順序號（CSS counter，排序後自動跟著變） */}
+          <ul className="tr-list is-steps" data-section="routine-exercises">
             {shown.map((item, index) => {
               const label = item.exercise ? String(item.exercise.name) : '（找不到這個動作）'
               return (

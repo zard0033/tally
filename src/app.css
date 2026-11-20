@@ -789,9 +789,10 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 
 /* 子頁共用頂欄：返回鈕＋標題，每日目標／食品庫管理／體重趨勢都用這個，取代 .topbar
    （後者是今日頁與設定頁根層專用，日期切換那組規則跟這裡無關） */
-.lib-topbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-4) var(--s-3) 0; }
+/* v2.147：數字跟訓練中的 .tr-top 對齊（原本上內距 16px、沒有最小高度，標題比訓練那幾頁低 8px） */
+.lib-topbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) var(--s-1); min-height: 52px; flex-shrink: 0; }
 .lib-topbar h1 { flex: 1; min-width: 0; font-weight: 700; font-size: var(--t-md);
-  letter-spacing: var(--track-md); margin: 0; }
+  letter-spacing: var(--track-md); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ═══════════ 每日目標：分組卡片（不用陰影，靠 --card/--raised 分層 + 1px 邊框） ═══════════ */
 .goal-group { margin: 0 0 var(--s-4); border-radius: var(--r-tab); background: var(--card);
@@ -971,23 +972,12 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-subval { font-family: var(--font-num); font-weight: 800; font-size: var(--t-md); color: var(--ink); }
 .trend-subval small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
 .trend-note { margin: var(--s-1) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
-/* 圖上的小字（計畫、換量法）：卡片色 3px 光暈（訓練分析的 .trend-endlabel 同款），壓在線上也讀得到、不吃父層 stroke */
+/* 圖上的小字（計畫、換量法）：卡片色 3px 光暈——recharts 會把線的描邊往下繼承給 <text>，字會變粗變糊；paint-order 讓描邊墊在字下面，壓在點與線上也讀得到（v2.75 起的做法） */
 .trend-chart-note { font-size: var(--t-xs); fill: var(--ink-muted); stroke: var(--card); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
 .trend-card .recharts-cartesian-axis-tick-value { font-size: var(--t-xs); fill: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .trend-card .recharts-wrapper:focus, .trend-card .recharts-surface:focus { outline: none; }
 .trend-card .recharts-wrapper:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
-/* 數字標籤不吃父層 <g> 的 stroke（recharts 會把線的描邊往下繼承，字會變粗變糊）；
-   改成卡片色的 3px 光暈，壓在點與線上也讀得到。 */
-.trend-endlabel { font-size: var(--t-sm); font-weight: 600; fill: var(--ink);
-  stroke: var(--card); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round;
-  font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.trend-tip { padding: var(--s-2) var(--s-3); border-radius: var(--r-tab); background: var(--card);
-  box-shadow: var(--shadow-2); font-size: var(--t-xs); color: var(--ink-muted); min-width: 132px; }
-.trend-tip-date { margin-bottom: var(--s-1); color: var(--ink-muted); }
-.trend-tip-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); line-height: 1.6; }
-.trend-tip-row b { font-size: var(--t-base); font-weight: 600; color: var(--ink);
-  font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .trend-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); color: var(--ink); }
 .trend-table th, .trend-table td { padding: var(--s-2) var(--s-1); text-align: right; font-weight: 400;
   font-variant-numeric: tabular-nums; }
@@ -1023,41 +1013,48 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .skel-row { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; }
 .skel-row > .skel:last-child:not(:first-child) { margin-left: auto; }
 
-/* ═══════════ 食品庫管理：店家分組卡片 ═══════════ */
-.tabrow { display: flex; gap: var(--s-2); padding: 0 var(--s-3) var(--s-3); flex-shrink: 0; }
-.lib-group { margin: 0 var(--s-3) var(--s-3); border-radius: var(--r-tab); background: var(--card);
-  border: 1px solid var(--rule-subtle); overflow: clip; }
-.lib-group-title { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--t-xs);
+/* ═══════════ 食品庫管理：店家分組卡片 ═══════════
+   v2.147（子頁換皮 B）：店家名是卡片外的段頭（同訓練頁的 .tr-sec），卡片跟頁面同寬（原本在 .settings 的 20px 內距裡再縮 12px）、
+   用 --shadow-1 不用邊框（同 .tr-card）；篩選 chip 的左右內距跟搜尋框對齊。 */
+.tabrow { display: flex; gap: var(--s-2); padding: 0 var(--s-5) var(--s-3); flex-shrink: 0; }
+.lib-group { margin: 0 0 var(--s-3); }
+.lib-group-title { margin: var(--s-4) var(--s-1) var(--s-2); font-size: var(--t-xs);
   font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.lib-group:first-child .lib-group-title { margin-top: var(--s-1); }
+.lib-card { list-style: none; margin: 0; padding: 0; border-radius: var(--r-tab); background: var(--card); box-shadow: var(--shadow-1); overflow: clip; }
 .lib-row { border-top: 1px solid var(--rule-subtle); }
-.lib-skel-row { min-height: 68px; padding: 0 var(--s-3); }
+.lib-card > .lib-row:first-child { border-top: none; }
+.lib-skel-row { min-height: 64px; padding: 0 var(--s-3); }
 .lib-skel-txt { flex: 1; display: flex; flex-direction: column; gap: var(--s-2); }
-.lib-group-title + ul .lib-row:first-child { border-top: none; }
-.lib-row-main { display: flex; align-items: center; gap: var(--s-1); min-height: 52px; padding: 0 var(--s-3); }
-.lib-row-main .nm-wrap { flex: 1; min-width: 0; }
-.lib-row-main .nm { font-size: var(--t-base); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 三顆並排（編輯／範本新增／封存，其中封存是破壞性操作）不縮小觸控區——DESIGN.md
-   「觸控區」條的 ≥44×44px 是不可砍的底線，樣張原稿的 40px 縮寫在 precommit-review 抓到，
-   改回繼承全域 .icon-btn 的 44×44，只縮圖示本身。 */
-.lib-row-main .icon-btn svg { width: 17px; height: 17px; }
-/* 類型標籤（v2.120）：品名下面一顆小膠囊，透明的原生 select 疊在上面當命中區（同 .goal-pick）。
-   v2.131 膠囊左端嵌 24px 類型圖示（同記一筆 sheet 的食物列），膠囊高 24px、圖示貼齊左端、只在文字那側留內距。
-   select 上下各撐出 10px 湊滿 44px：往上蓋到品名那行（品名本身不能點，蓋到無妨），往下剛好是這一列的
-   底部留白——不撐出列外，否則會蓋到下一列的品名、點了開成上一列的選單。 */
-.lib-row-main .nm-wrap { display: flex; flex-direction: column; align-items: flex-start; padding: var(--s-1) 0 var(--s-3); }
-.lib-cat { position: relative; display: inline-flex; margin-top: var(--s-1); }
-.lib-cat-tag { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 24px; padding: 0 var(--s-2) 0 0; border-radius: var(--r-pill);
-  background: var(--raised); color: var(--ink-muted); font-size: var(--t-xs); letter-spacing: var(--track-xs); white-space: nowrap; }
-/* 未分類：不填底、只留控件邊界，跟已分類分得開，字色不降（--ink-faint 不能用在要讀的字上） */
-.lib-cat[data-empty] .lib-cat-tag { position: relative; background: none; }
-/* v2.131：框畫在疊在最上層的偽元素上——直接畫在膠囊上（inset 陰影或 outline）都會被左端的圖示圓盤（positioned）蓋掉 */
-.lib-cat[data-empty] .lib-cat-tag::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
-  box-shadow: inset 0 0 0 1px var(--rule-field); pointer-events: none; }
-.lib-cat select { position: absolute; top: -10px; left: -8px; width: calc(100% + 16px); height: 44px; opacity: 0;
-  font-size: var(--t-md); cursor: pointer; }
-.lib-cat:active .lib-cat-tag { opacity: .6; }
-.lib-cat:has(select:focus-visible) .lib-cat-tag { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 一列：類型圖示（自己是改類型的命中區）｜點了展開編輯的主鈕（品名、類型、熱量、›）｜已封存才有的復原鈕 */
+.lib-row-main { display: flex; align-items: center; gap: var(--s-1); min-height: 64px; padding: 0 var(--s-1) 0 var(--s-3); }
+.lib-row-hit { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-1) 0 var(--s-2);
+  border: none; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.lib-row-hit:active { opacity: .6; }
+.lib-row-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
+.lib-row-hit .nm-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lib-row-hit .nm { font-size: var(--t-base); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row-hit .sub { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.lib-kcal { flex-shrink: 0; font-family: var(--font-num); font-weight: 700; font-size: var(--t-base); font-variant-numeric: tabular-nums; }
+.lib-kcal small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
+.lib-chev { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--dur-base) var(--ease); }
+.lib-row[data-open] .lib-chev { transform: rotate(90deg); }
+/* 類型圖示＝改類型的命中區（v2.120 的標籤，v2.147 改成列首 40px 圖示）：透明的原生 select 疊在上面撐滿 44px（同 .goal-pick） */
+.lib-cat { position: relative; display: inline-flex; flex-shrink: 0; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 50%; }
+/* 未分類：圖示外加一圈控件邊界，跟已分類分得開（未分類的圖示本身是淡的） */
+.lib-cat[data-empty]::after { content: ''; position: absolute; inset: 2px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--rule-field); pointer-events: none; }
+.lib-cat select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: var(--t-md); cursor: pointer; }
+.lib-cat:active { opacity: .6; }
+.lib-cat:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 0; }
 .lib-cat-err { padding: 0 var(--s-3) var(--s-2); }
+.lib-row-main .icon-btn svg { width: 17px; height: 17px; }
+/* 展開區裡的次要動作（v2.147，原本是列上的兩顆圖示）：文字鈕，靠左；封存不跳確認（有 5 秒復原，同原本） */
+.lib-edit-more { display: flex; gap: var(--s-2); margin: 0 calc(var(--s-2) * -1) var(--s-1); }
+.lib-text-btn { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 600;
+  color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.lib-text-btn:active { opacity: .6; }
+.lib-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
 /* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.03:1 會隱形（與就地編輯區同一筆帳） */
@@ -1072,10 +1069,14 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    右緣被 .lib-group 的 overflow: clip 切掉（2026-08-05 使用者真機截圖回報）。 */
 .lib-edit-actions .pick-bar-btn { flex: 1 1 auto; width: auto;
   min-height: 44px; font-size: var(--t-sm); }
-.lib-edit-actions .cancel-btn { flex: 0 0 88px; min-height: 44px; border-radius: var(--r-btn);
+.lib-edit-actions .cancel-btn, .sheet-actions .cancel-btn { flex: 0 0 88px; min-height: 44px; border-radius: var(--r-btn);
   border: none; background: none; color: var(--ink-muted); font-family: inherit; font-size: var(--t-sm);
   font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.lib-edit-actions .cancel-btn:active { opacity: .6; }
+.lib-edit-actions .cancel-btn:active, .sheet-actions .cancel-btn:active { opacity: .6; }
+.sheet-actions .cancel-btn:disabled { opacity: .45; cursor: default; }
+/* 釘底列裡的次要鈕＋主鈕並排（v2.147 編輯動作 sheet 的封存）：主鈕的 width: 100%＋flex-shrink: 0 要覆寫，理由同 .lib-edit-actions */
+.sheet-actions { display: flex; gap: var(--s-2); }
+.sheet-actions .pick-bar-btn { flex: 1 1 auto; width: auto; }
 
 .lib-fab { position: fixed; right: var(--s-5); bottom: calc(var(--s-5) + var(--s-4)); z-index: 5;
   width: 56px; height: 56px; border-radius: var(--r-pill); border: none; cursor: pointer;
@@ -2256,6 +2257,11 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .sync-body .tr-card { margin-top: var(--s-2); }
 .sync-body .tr-row .tr-text-btn { padding: 0 var(--s-2); margin-right: calc(var(--s-2) * -1); }
 .tr-filter { margin: 0 calc(var(--s-5) * -1) var(--s-2); padding: 0 var(--s-5) var(--s-1); }
+/* 動作庫依肌群分段的段頭（v2.147）：肌群單字小圓（同自建動作縮圖的 .ex-thumb.is-glyph 配色）＋名稱＋動作數 */
+.tr-sec-group { display: flex; align-items: center; gap: var(--s-2); color: var(--ink); font-size: var(--t-sm); }
+.tr-sec-glyph { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--plate); color: var(--accent); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0; }
+.tr-sec-group .cnt { font-family: var(--font-num); font-weight: 600; font-size: var(--t-xs); color: var(--ink-muted); }
 .tr-search { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-3);
   margin: 0 0 var(--s-3); }
 .tr-search svg { width: 18px; height: 18px; color: var(--ink-muted); flex-shrink: 0; }
@@ -2305,6 +2311,23 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-sec-act { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
 .tr-sec-act .tr-text-btn { padding: 0 var(--s-2); margin-right: calc(var(--s-2) * -1); }
 .tr-list { list-style: none; margin: 0; padding: 0; }
+/* 課表編輯的動作＝時間軸（v2.147，子頁換皮 B）：跟訓練中 .ex-tl 同一組數字（溝 30px、2px --rule 的線），每個動作一張白卡，
+   節點寫順序號（CSS counter：排序後跟著 DOM 順序變，不用另外算）；最後一個是「加動作」，節點寫＋、虛線框。
+   節點框用 --accent（對 --paper 5.96，圖形過 3:1；--hill-mid 只有約 2.4 不能用）。 */
+/* 溝放在 ul 的左內距、不放 li 的 margin（review）：dnd-kit 拖曳時把 li 改成 fixed、用它自己的 left／width，li 上的 margin 與 width 會蓋掉它，
+   拿起來的卡片往右跳 30px、寬度縮成內容寬（同 .ex-tl 把溝放在外框的理由） */
+.tr-list.is-steps { position: relative; counter-reset: step; padding-left: 30px; }
+.tr-list.is-steps::before { content: ""; position: absolute; left: 9px; top: 28px; bottom: 28px; width: 2px; border-radius: 1px; background: var(--rule); }
+.tr-list.is-steps > li { position: relative; margin: 0 0 var(--s-2); border-radius: var(--r-tab); background: var(--card); box-shadow: var(--shadow-1); }
+.tr-list.is-steps > li.tr-row { counter-increment: step; border-top: none; }
+/* dnd-kit 拖曳時在被拖那列後面插一份隱藏的 placeholder（同 class）：visibility 擋不住計數，不排除的話後面每一列都多 1 */
+.tr-list.is-steps > li[data-dnd-placeholder] { counter-increment: none; }
+.tr-list.is-steps > li > .tr-row { border-top: none; }
+.tr-list.is-steps > li::before { content: counter(step); position: absolute; left: -30px; top: 50%; margin-top: -10px; width: 20px; height: 20px;
+  box-sizing: border-box; border-radius: 50%; border: 2px solid var(--accent); background: var(--paper); display: grid; place-items: center;
+  font-family: var(--font-num); font-size: var(--t-xs); font-weight: 800; color: var(--accent); line-height: 1; }
+.tr-list.is-steps > li:not(.tr-row)::before { content: "+"; border-style: dashed; border-color: var(--rule-field); color: var(--ink-muted); }
+.tr-list.is-steps > li.is-dragging { background: var(--raised); }
 .tr-card > li:first-child > .tr-row { border-top: none; }
 .tr-row.accent .nm, .tr-row.accent .lead { color: var(--accent); }
 .tr-row-main { flex: 1; min-width: 0; align-self: stretch; padding: 0; border: none; background: none;
@@ -2359,14 +2382,12 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .tr-dialog .acts .danger { background: var(--over-fill); border-color: var(--over-fill); color: var(--on-accent); }
 
 /* ═══════════ 訓練分析（階段 4 A；樣張 _design-sample/analysis.html）：沿用 .trend-* 的卡片、圖、明細表 ═══════════ */
-.an-val { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.an-val { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
 .an-val small { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
-.an-hero { display: flex; gap: var(--s-5); padding: 0 var(--s-1) var(--s-3); }
-.an-hero div { display: flex; flex-direction: column; gap: 2px; }
-.an-hero .k { font-size: var(--t-xs); color: var(--ink-muted); }
-.an-hero .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 700;
-  color: var(--ink); line-height: 1.2; }
-.an-hero .v small { margin-left: 2px; font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+/* 列表的小走勢與 30 天變化（v2.147）：線用 --accent、不畫軸；viewBox 跟設定頁 sparkline 同為 120×32、拉伸到 56×24，線寬不跟著拉 */
+.an-spark { width: 56px; height: 24px; flex-shrink: 0; overflow: visible; }
+.an-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.an-delta { display: block; margin-top: 2px; font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); white-space: nowrap; }
 .an-state { flex-shrink: 0; font-size: var(--t-sm); font-weight: 600; color: var(--ink); text-align: right; white-space: nowrap; }
 .an-state small { display: block; margin-top: 2px; font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
 .an-state.is-ready { color: var(--accent); }

@@ -1,17 +1,20 @@
-/* 動作庫整頁（樣張 ⑦a）：搜尋＋肌群橫條＋平面列表，點一列開「編輯動作」sheet，右上＋新增。
+/* 動作庫整頁（樣張 ⑦a）：搜尋＋肌群橫條＋列表，點一列開「編輯動作」sheet，右上＋新增。
+   v2.147（子頁換皮 B）：「全部」且沒搜尋時依肌群分段，段頭一顆肌群單字小圓（同自建動作的縮圖）＋動作數；有篩選或搜尋時是平面列表。
    封存的動作不進選單、歷史仍顯示名稱（AC 2），所以列在清單底下的「已封存」區。
-   封存／取消封存是每一列尾端的圖示鈕（v2.93，原本在編輯 sheet 欄位區底下，真機回饋位置怪）：
+   封存／取消封存在編輯 sheet 底部、跟儲存並排（v2.147，使用者 2026-11-20 核可收掉列尾圖示鈕；v2.93 從 sheet 欄位區底下搬到列尾
+   是因為「欄位區底下位置怪」，這次放在釘底的操作列，不回欄位區）。
    **封存先跳確認框**（v2.103，取代 v2.93「不問確認」：真機上點下去那列直接消失到清單最底下，使用者找不到）；取消封存是還原、不問。
    沒有「5 秒復原」提示條——取消封存隨時在已封存區按得到、不丟資料，復原條只會多一層要等它消失的東西。
    整頁接管畫面（同訓練中），放在設定頁的「動作庫管理」（v2.96 從訓練頁搬來）：進出時 Settings 通知 App 收起底部列。 */
 import { useMemo, useState } from 'react'
-import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ExerciseFilterBar from '@/components/ExerciseFilterBar'
 import ExerciseThumb from '@/components/ExerciseThumb'
 import GymVisualCredit from '@/components/GymVisualCredit'
-import { muscleGroupLabel } from '@/lib/exerciseCatalog'
+import SubPageTop from '@/components/SubPageTop'
+import { glyphOf, muscleGroupLabel } from '@/lib/exerciseCatalog'
 import {
+  MUSCLE_GROUPS,
   filterExercises,
   setExerciseArchivedOps,
   type ExerciseFilter,
@@ -28,28 +31,26 @@ interface ExerciseLibraryProps {
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-function ExerciseRow({ exercise, onOpen, onToggleArchive }: { exercise: Row; onOpen: () => void; onToggleArchive: () => void }) {
+/** 「全部」且沒搜尋時依肌群分段（v2.147）；有條件時平面列表，副標寫肌群 */
+const isGrouped = (f: ExerciseFilter) => f.group === 'all' && f.q.trim() === ''
+
+function ExerciseRow({ exercise, grouped, onOpen }: { exercise: Row; grouped: boolean; onOpen: () => void }) {
   const group = muscleGroupLabel(exercise.muscle_group)
   const hasTips = typeof exercise.tips === 'string' && exercise.tips.trim() !== ''
   const name = String(exercise.name)
-  const archived = exercise.archived === true
+  // 分段時段頭已經寫了肌群，副標只剩「有要點」
+  const sub = grouped ? (hasTips ? '有要點' : null) : hasTips ? `${group} · 有要點` : group
   return (
-    // 縮圖與封存都是獨立的鈕，不能包在開編輯的按鈕裡：列拆成「縮圖｜主按鈕｜封存」並排。
-    // 列尾不再放 › ：那個位置給了封存鈕，兩個圖示並排分不出哪個是開編輯（同食品庫的列，沒有箭頭）
+    // 縮圖是獨立的鈕（放大檢視），不能包在開編輯的按鈕裡：列拆成「縮圖｜主按鈕」並排，› 只是裝飾
     <div className="tr-row has-zoom">
       <ExerciseThumb exercise={exercise} zoom />
       <button className="tr-row-main" type="button" data-exercise-id={exercise.id} onClick={onOpen}>
         <span className="nm">{name}</span>
-        <span className="sub">{hasTips ? `${group} · 有要點` : group}</span>
+        {sub && <span className="sub">{sub}</span>}
       </button>
-      <button
-        className="tr-ib tr-row-end"
-        type="button"
-        aria-label={archived ? `取消封存 ${name}` : `封存 ${name}`}
-        onClick={onToggleArchive}
-      >
-        {archived ? RESTORE_ICON : ARCHIVE_ICON}
-      </button>
+      <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
     </div>
   )
 }
@@ -91,30 +92,31 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
   const [archiveAsk, setArchiveAsk] = useState<Row | null>(null)
   const askName = archiveAsk ? String(archiveAsk.name) : ''
 
-  const rowOf = (e: Row) => (
-    <ExerciseRow
-      key={e.id}
-      exercise={e}
-      onOpen={() => open(e)}
-      onToggleArchive={() => (e.archived === true ? void toggleArchive(e) : setArchiveAsk(e))}
-    />
-  )
+  const grouped = isGrouped(filter)
+  const rowOf = (e: Row) => <ExerciseRow key={e.id} exercise={e} grouped={grouped} onOpen={() => open(e)} />
+  const sections = grouped
+    ? MUSCLE_GROUPS.map((g) => ({ g, rows: active.filter((e) => (MUSCLE_GROUPS as readonly string[]).includes(String(e.muscle_group)) ? e.muscle_group === g : g === 'other') }))
+        .filter((s) => s.rows.length > 0)
+    : []
+
+  /* sheet 底部的封存鈕（v2.147）：先收 sheet，封存照舊跳確認框；取消封存是還原、直接寫 */
+  const archiveFromSheet = () => {
+    const row = target
+    if (!row) return
+    setSheetOpen(false)
+    if (row.archived === true) void toggleArchive(row)
+    else setArchiveAsk(row)
+  }
 
   return (
     <div className="main" data-screen="exercise-library">
-      <header className="tr-top">
-        <button className="tr-ib" type="button" aria-label="返回" onClick={onBack}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-        <h1>動作庫</h1>
-        <button className="tr-ib" type="button" aria-label="新增動作" onClick={() => open(null)}>
+      <SubPageTop title="動作庫" backLabel="返回" onBack={onBack} action={
+        <button className="icon-btn" type="button" aria-label="新增動作" onClick={() => open(null)}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
-      </header>
+      } />
 
       {/* 放在捲動區外（同訓練中）：清單捲到哪都看得到 */}
       {error && (
@@ -130,12 +132,24 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
           <p className="muted">{exercises.length === 0 ? '動作庫是空的，按右上的＋新增' : '沒有符合的動作'}</p>
         ) : (
           <>
-            {active.length > 0 && <div className="tr-card">{active.map(rowOf)}</div>}
+            {grouped
+              ? sections.map(({ g, rows }) => (
+                  <section key={g} aria-label={muscleGroupLabel(g)}>
+                    <div className="tr-sec tr-sec-group">
+                      <span className="tr-sec-glyph" aria-hidden="true">{glyphOf(g)}</span>
+                      {muscleGroupLabel(g)}
+                      <span className="cnt">{rows.length}</span>
+                    </div>
+                    <div className="tr-card">{rows.map(rowOf)}</div>
+                  </section>
+                ))
+              : active.length > 0 && <div className="tr-card">{active.map(rowOf)}</div>}
             {archived.length > 0 && (
               <>
                 <div className="tr-sec">已封存</div>
                 <div className="tr-card" data-section="archived">
-                  {archived.map(rowOf)}
+                  {/* 已封存區沒有肌群段頭：副標照舊寫肌群（review） */}
+                  {archived.map((e) => <ExerciseRow key={e.id} exercise={e} grouped={false} onOpen={() => open(e)} />)}
                 </div>
               </>
             )}
@@ -166,6 +180,7 @@ export default function ExerciseLibrary({ exercises, onBack, onWrite }: Exercise
         exercises={exercises}
         onClose={() => setSheetOpen(false)}
         onWrite={write}
+        onToggleArchive={target ? archiveFromSheet : undefined}
       />
     </div>
   )

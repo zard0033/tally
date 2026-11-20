@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>子頁換皮：兩個方向</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（同 today-meals.html） ── */
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 12px; max-width: 1500px; line-height: 1.65; }
+  .harness-sub b { color: var(--ink); }
+  .dir { margin: 36px 0 12px; }
+  .dir h2 { margin: 0 0 4px; font-size: var(--t-lg); font-weight: 800; }
+  .dir h2 small { font-size: var(--t-sm); color: var(--ink-muted); font-weight: 600; margin-left: 8px; }
+  .dir p { margin: 0; font-size: var(--t-sm); color: var(--ink-muted); max-width: 1500px; line-height: 1.6; }
+  .row { display: grid; grid-template-columns: repeat(5, 393px); column-gap: 24px; align-items: start; }
+  .cap { font-size: var(--t-sm); font-weight: 700; margin: 0 0 8px; }
+  .device { width: 393px; height: 745px; overflow: hidden; border-radius: 28px; position: relative; background: var(--paper); box-shadow: var(--shadow-2); }
+  .num { font-family: var(--font-num); }
+  svg.ln { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* ═════════ 共通：一種頂端列、一種篩選、一種卡寬 ═════════ */
+  .top { display: flex; align-items: center; gap: var(--s-1); height: 56px; padding: 0 var(--s-2) 0 var(--s-1); }
+  .top .ib { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink-muted); }
+  .top h1 { flex: 1; margin: 0; font-size: var(--t-md); font-weight: 700; letter-spacing: var(--track-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .body { padding: 0 var(--s-3) var(--s-6); }
+  .search { display: flex; align-items: center; gap: var(--s-2); height: 44px; padding: 0 var(--s-3); border-radius: var(--r-tab); background: var(--fill);
+    color: var(--ink-faint); font-size: var(--t-base); margin-bottom: var(--s-3); }
+  .chips { display: flex; gap: var(--s-2); overflow: hidden; margin-bottom: var(--s-3); }
+  .chip { flex-shrink: 0; height: 32px; padding: 0 var(--s-3); border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: 6px;
+    font-size: var(--t-sm); color: var(--ink-muted); background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
+  .chip.on { background: var(--accent-soft); color: var(--accent-dark); font-weight: 700; box-shadow: none; }
+  .chip .n { font-family: var(--font-num); font-weight: 600; font-size: var(--t-xs); opacity: .8; }
+  .sec { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); margin: var(--s-4) var(--s-1) var(--s-2); display: flex; align-items: center; gap: var(--s-2); }
+  .sec:first-child { margin-top: 0; }
+  .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); overflow: hidden; }
+  .item { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); }
+  .item + .item { border-top: 1px solid var(--rule-subtle); }
+  .item .main { flex: 1; min-width: 0; }
+  .item .nm { font-size: var(--t-base); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .sub { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 2px; }
+  .item .val { text-align: right; font-family: var(--font-num); font-weight: 700; font-size: var(--t-base); }
+  .item .val small { display: block; font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
+  .item .chev { color: var(--ink-faint); width: 18px; height: 18px; }
+  .thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--snow); box-shadow: inset 0 0 0 1px var(--rule); flex-shrink: 0; }
+  .fab { position: absolute; right: 20px; bottom: 28px; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
+    display: grid; place-items: center; box-shadow: var(--shadow-2); }
+  .note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-3) var(--s-1) 0; }
+  .ghost-act { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-4); color: var(--accent); font-weight: 700; font-size: var(--t-base); border-top: 1px solid var(--rule-subtle); }
+  .field-l { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 var(--s-1) var(--s-1); }
+  .field { height: 48px; display: flex; align-items: center; padding: 0 var(--s-3); border-radius: var(--r-tab); background: var(--fill);
+    box-shadow: inset 0 -1.5px 0 var(--rule-field); font-size: var(--t-md); font-weight: 600; margin-bottom: var(--s-4); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: var(--r-tab); background: var(--fill); margin-bottom: var(--s-3); }
+  .seg span { height: 34px; display: grid; place-items: center; border-radius: 9px; font-size: var(--t-sm); color: var(--ink-muted); }
+  .seg span.on { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-1); }
+  .seg.two { grid-template-columns: 1fr 1fr; }
+  .grip { color: var(--ink-faint); width: 18px; }
+  .x { color: var(--ink-faint); width: 20px; height: 20px; }
+  .tag-new { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+
+  /* 讀數（同體重趨勢 v2.146） */
+  .read { padding: var(--s-4) var(--s-4) 0; }
+  .read-k { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .read-big { display: flex; align-items: baseline; gap: var(--s-1); }
+  .read-big b { font-family: var(--font-num); font-weight: 900; font-size: var(--t-hero); letter-spacing: var(--track-hero); line-height: .95; }
+  .read-big span { color: var(--ink-muted); font-size: var(--t-base); }
+  .read-sub { font-size: var(--t-sm); color: var(--ink-muted); margin-top: var(--s-2); }
+  .read-sub b { color: var(--ink); font-weight: 600; }
+  .chart { display: block; margin: var(--s-3) 0 var(--s-2); }
+  .chart text { font-family: var(--font-num); font-size: 11.5px; fill: var(--ink-muted); }
+  .tbl { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+  .tbl th, .tbl td { padding: 10px var(--s-4); text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .tbl th:first-child, .tbl td:first-child { text-align: left; color: var(--ink-muted); }
+  .tbl thead th { font-size: var(--t-xs); color: var(--ink-muted); }
+  .tbl tbody tr { border-top: 1px solid var(--rule-subtle); }
+
+  /* ═════════ B：圖鑑 ═════════ */
+  .b .cat { width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: var(--plate); display: grid; place-items: center; }
+  .b .cat svg { width: 34px; height: 34px; }
+  .b .sec .glyph { width: 22px; height: 22px; border-radius: 50%; background: var(--plate); display: grid; place-items: center; color: var(--accent); }
+  .b .sec .glyph svg { width: 14px; height: 14px; }
+  .b .sec { font-size: var(--t-sm); color: var(--ink); font-weight: 700; }
+  .b .sec .cnt { font-family: var(--font-num); font-weight: 600; color: var(--ink-faint); font-size: var(--t-xs); }
+  .b .spark { width: 64px; height: 24px; flex-shrink: 0; }
+  .b .delta { font-size: var(--t-xs); color: var(--ink-muted); font-family: var(--font-num); }
+  /* 課表編輯：跟訓練中同一條時間軸（v2.145） */
+  .b .tl { position: relative; padding-left: 30px; }
+  .b .tl::before { content: ""; position: absolute; left: 13px; top: 26px; bottom: 26px; width: 2px; background: var(--rule); }
+  .b .tl .rnode { position: absolute; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper); border: 2px solid var(--hill-mid);
+    box-sizing: border-box; display: grid; place-items: center; font-family: var(--font-num); font-size: 10.5px; font-weight: 800; color: var(--accent); }
+  .b .tl .step { position: relative; margin-bottom: var(--s-2); }
+  .b .tl .step .rnode { top: 18px; left: -26px; }
+  .b .tl .step .card .item { padding-left: var(--s-3); }
+  .b .tl .add { margin-left: 0; }
+  .b .hero-ill { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- 燒臘：一支油亮的雞腿（掛著的燒鴨試過，24px 看起來像葫蘆） -->
+  <symbol id="t-roast" viewBox="0 0 48 48">
+    <g transform="translate(24 23) scale(.86) translate(-24 -24) rotate(-40 24 24)">
+      <circle cx="21.2" cy="38.6" r="3.1" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.3"/>
+      <circle cx="26.8" cy="38.6" r="3.1" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.3"/>
+      <rect x="21.5" y="27" width="5" height="11.4" fill="#FFFFFF"/>
+      <path d="M21.5 30v8M26.5 30v8" stroke="#A9C3DC" stroke-width="1.3"/>
+      <path d="M24 6.5c6.6 0 10.8 5.5 10.8 11.8 0 5.8-3.5 9.6-7.2 11.7h-7.2c-3.7-2.1-7.2-5.9-7.2-11.7C13.2 12 17.4 6.5 24 6.5z" fill="#C8613A"/>
+      <path d="M31 9.4c2.4 2.3 3.8 5.5 3.8 8.9 0 5.8-3.5 9.6-7.2 11.7h-3.2c3.6-2.4 6.6-6.4 6.6-11.6 0-3.3 0-6.2 0-9z" fill="#9E4A2A"/>
+      <ellipse cx="19.4" cy="14.6" rx="2" ry="4" fill="#FFFFFF" opacity=".45"/>
+    </g>
+  </symbol>
+  <!-- 便當：方盒＋白紙套＋擱在蓋上的筷子 -->
+  <symbol id="t-bento" viewBox="0 0 48 48">
+    <rect x="8" y="17" width="32" height="21" rx="4" fill="#2E5E93"/>
+    <path d="M8 31h32v3a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z" fill="#1D2B45" opacity=".3"/>
+    <rect x="20.5" y="17" width="7.5" height="21" fill="#FFFFFF"/>
+    <rect x="20.5" y="31" width="7.5" height="7" fill="#C9D7E5"/>
+    <path d="M6.5 12.2l35 3.2M6.5 15.6l35-.6" stroke="#1D2B45" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </symbol>
+  <!-- 健康餐盒：俯視的圓盒，半邊青菜、半顆蛋、兩條烤雞胸 -->
+  <symbol id="t-healthy" viewBox="0 0 48 48">
+    <circle cx="24" cy="24.5" r="15.5" fill="#2E5E93"/>
+    <circle cx="24" cy="24.5" r="12.3" fill="#FFFFFF"/>
+    <path d="M24 12.2a12.3 12.3 0 0 0 0 24.6z" fill="#A9C3DC"/>
+    <path d="M14.6 19.4c3.4-1.4 6.6.6 6.8 3.8-3.4 1.2-6.4-.6-6.8-3.8zM14.2 27.6c3.4-1.6 6.8.4 7.1 3.6-3.4 1.4-6.6-.4-7.1-3.6z" fill="#2E5E93"/>
+    <circle cx="30" cy="19.3" r="3.9" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.2"/>
+    <circle cx="30" cy="19.3" r="2.2" fill="#F0B94A"/>
+    <rect x="25.8" y="25.8" width="9.6" height="2.9" rx="1.45" fill="#C8613A"/>
+    <rect x="25.8" y="30.1" width="8" height="2.9" rx="1.45" fill="#C8613A"/>
+  </symbol>
+  <!-- 飯類：側面的碗，白飯堆成圓頂 -->
+  <symbol id="t-rice" viewBox="0 0 48 48">
+    <path d="M10.5 24.5C10.5 14.6 37.5 14.6 37.5 24.5z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.4" stroke-linejoin="round"/>
+    <g fill="#A9C3DC"><ellipse cx="18" cy="20.6" rx="1.5" ry=".85"/><ellipse cx="24" cy="18" rx="1.5" ry=".85"/><ellipse cx="29.6" cy="20.8" rx="1.5" ry=".85"/><ellipse cx="22.6" cy="22.6" rx="1.5" ry=".85"/></g>
+    <path d="M8 24h32c0 8.3-7.2 14.6-16 14.6S8 32.3 8 24z" fill="#2E5E93"/>
+    <path d="M24 38.6c8.8 0 16-6.3 16-14.6h-3.6c0 7-5.4 12.8-12.4 14.6z" fill="#1D2B45" opacity=".22"/>
+    <rect x="7.5" y="22.6" width="33" height="3.4" rx="1.7" fill="#7DA0C4"/>
+    <rect x="18" y="37.4" width="12" height="3.2" rx="1.6" fill="#1D2B45"/>
+  </symbol>
+  <!-- 麵食：同一個碗，換成黃湯面＋筷子夾起的麵 -->
+  <symbol id="t-noodle" viewBox="0 0 48 48">
+    <path d="M8 24h32c0 8.3-7.2 14.6-16 14.6S8 32.3 8 24z" fill="#2E5E93"/>
+    <path d="M24 38.6c8.8 0 16-6.3 16-14.6h-3.6c0 7-5.4 12.8-12.4 14.6z" fill="#1D2B45" opacity=".22"/>
+    <rect x="7.5" y="22.6" width="33" height="3.4" rx="1.7" fill="#F0B94A"/>
+    <rect x="18" y="37.4" width="12" height="3.2" rx="1.6" fill="#1D2B45"/>
+    <path d="M19.4 14.6c-1.6 2.2 1.4 3.8-.2 6.4M23.2 15.2c-1.6 2.2 1.4 3.8-.2 6.4M27 15.6c-1.4 2 1.2 3.4-.2 5.6" stroke="#D99A2B" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <path d="M17 13.6L40 5.6M18.4 16.4L41 10.6" stroke="#1D2B45" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  </symbol>
+  <!-- 餃類：月牙餃子坐在藍碟上，頂上四道褶 -->
+  <symbol id="t-dumpling" viewBox="0 0 48 48">
+    <ellipse cx="24" cy="35.4" rx="16.5" ry="4.2" fill="#2E5E93"/>
+    <path d="M8.5 31.5C8.5 21 16.5 14 24 14s15.5 7 15.5 17.5c-6 3.4-25 3.4-31 0z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M10.4 30.2c6.4 2.6 20.8 2.6 27.2 0" stroke="#A9C3DC" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <path d="M13.8 22.4C16.9 18.6 20.3 16.8 24 16.8s7.1 1.8 10.2 5.6" stroke="#2E5E93" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <path d="M17.6 19.4l1.4 3.6M24 16.8v3.8M30.4 19.4l-1.4 3.6" stroke="#2E5E93" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </symbol>
+  <!-- 速食：漢堡，上下麵包、肉排、一片起司 -->
+  <symbol id="t-burger" viewBox="0 0 48 48">
+    <path d="M9.5 22.5C9.5 12.2 38.5 12.2 38.5 22.5z" fill="#C8613A"/>
+    <g fill="#FFFFFF"><ellipse cx="18" cy="17" rx="1.4" ry=".85"/><ellipse cx="24" cy="15.2" rx="1.4" ry=".85"/><ellipse cx="30" cy="17.2" rx="1.4" ry=".85"/></g>
+    <rect x="8.5" y="25" width="31" height="5.8" rx="2.9" fill="#1D2B45"/>
+    <path d="M9 22.2h30v3H31l-2.2 3.2-2.2-3.2H9z" fill="#F0B94A"/>
+    <path d="M10 31.8h28v2a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#C8613A"/>
+    <path d="M10 35.4c.6 1.4 2.2 2.4 4 2.4h20c1.8 0 3.4-1 4-2.4z" fill="#9E4A2A"/>
+  </symbol>
+  <!-- 早餐店：一片吐司＋荷包蛋 -->
+  <symbol id="t-toast" viewBox="0 0 48 48">
+    <path d="M14 37V23.2c-3.8-1.3-4.6-8.7 1.4-10.6 3.4-1.8 15.8-1.8 19.2 0 6 1.9 5.2 9.3 1.4 10.6V37a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" fill="#C8613A"/>
+    <path d="M16.8 36.2V22c-3-1-3.2-6.4 1-7.4 3-1.3 9.4-1.3 12.4 0 4.2 1 4 6.4 1 7.4v14.2z" fill="#FBEFD3"/>
+    <path d="M24.4 19.4c3.6-.4 6.2 2.2 5.6 5.4.6 3.1-1.7 5.7-5 5.5-2.7 1.6-6.4.6-7-2.4-2.4-2-1.4-6.1 1.6-6.7.9-1.2 2.7-1.8 4.8-1.8z" fill="#FFFFFF" stroke="#C8613A" stroke-width=".9" stroke-opacity=".5"/>
+    <circle cx="24.2" cy="25" r="3.3" fill="#F0B94A"/>
+  </symbol>
+  <!-- 滷味／鹽水雞：斜插的竹籤，滷蛋、豆干、米血 -->
+  <symbol id="t-skewer" viewBox="0 0 48 48">
+    <path d="M10.5 41.5L38.5 6.5" stroke="#1D2B45" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="31.4" cy="15.4" rx="5.6" ry="4.4" transform="rotate(-51 31.4 15.4)" fill="#C8613A"/>
+    <ellipse cx="29.6" cy="13.6" rx="1.3" ry="2.2" transform="rotate(-51 29.6 13.6)" fill="#FFFFFF" opacity=".45"/>
+    <rect x="19.6" y="19.1" width="9.8" height="9.8" rx="2.2" transform="rotate(-51 24.5 24)" fill="#2E5E93"/>
+    <rect x="13.1" y="28.4" width="9.4" height="8.2" rx="3.6" transform="rotate(-51 17.8 32.5)" fill="#7DA0C4"/>
+  </symbol>
+  <!-- 鍋物：雙耳鍋、深色鍋蓋、三縷蒸氣 -->
+  <symbol id="t-pot" viewBox="0 0 48 48">
+    <path d="M17.5 11.5c-1.6-1.6 1.6-3.2 0-4.8M24 10.5c-1.6-1.6 1.6-3.2 0-4.8M30.5 11.5c-1.6-1.6 1.6-3.2 0-4.8" stroke="#7DA0C4" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <path d="M10 22.5h28v8.5a7 7 0 0 1-7 7H17a7 7 0 0 1-7-7z" fill="#2E5E93"/>
+    <rect x="13.5" y="25" width="2.6" height="8" rx="1.3" fill="#FFFFFF" opacity=".35"/>
+    <rect x="4.6" y="24.6" width="6.4" height="3.8" rx="1.9" fill="#1D2B45"/>
+    <rect x="37" y="24.6" width="6.4" height="3.8" rx="1.9" fill="#1D2B45"/>
+    <path d="M8.5 23.2C9.6 16.6 38.4 16.6 39.5 23.2z" fill="#1D2B45"/>
+    <rect x="21" y="14" width="6" height="3.6" rx="1.8" fill="#1D2B45"/>
+  </symbol>
+  <!-- 日式：三角飯糰＋海苔 -->
+  <symbol id="t-onigiri" viewBox="0 0 48 48">
+    <path d="M24 9.5c2 0 3.4 1.3 4.8 3.6l9.4 16.2c2.4 4.1-.2 8.7-4.9 8.7H14.7c-4.7 0-7.3-4.6-4.9-8.7l9.4-16.2c1.4-2.3 2.8-3.6 4.8-3.6z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.4"/>
+    <path d="M17.4 27h13.2v11H17.4z" fill="#1D2B45"/>
+    <path d="M17.4 27h13.2v2.2H17.4z" fill="#3D6894"/>
+  </symbol>
+  <!-- 其他正餐：餐罩 -->
+  <symbol id="t-cloche" viewBox="0 0 48 48">
+    <path d="M9 33.5C9 23.6 15.6 17.2 24 17.2s15 6.4 15 16.3z" fill="#2E5E93"/>
+    <path d="M14.2 29.5c.6-4.2 3.2-7.6 6.8-9.2" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".5"/>
+    <rect x="6" y="33" width="36" height="3.8" rx="1.9" fill="#1D2B45"/>
+    <circle cx="24" cy="15" r="2.9" fill="#1D2B45"/>
+  </symbol>
+  <!-- 飲料：手搖杯，粗吸管、半杯茶、珍珠 -->
+  <symbol id="t-boba" viewBox="0 0 48 48">
+    <path d="M31 4.6L26.8 17" stroke="#1D2B45" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M13.8 17.4C13.8 12.2 34.2 12.2 34.2 17.4z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.2"/>
+    <path d="M12.8 17.4h22.4l-2.4 20.1a2.6 2.6 0 0 1-2.6 2.3H17.8a2.6 2.6 0 0 1-2.6-2.3z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M13.9 25.4h20.2l-1.4 12.1a2.6 2.6 0 0 1-2.6 2.3H17.9a2.6 2.6 0 0 1-2.6-2.3z" fill="#2E5E93"/>
+    <g fill="#1D2B45"><circle cx="19.3" cy="35.8" r="1.8"/><circle cx="24" cy="36.9" r="1.8"/><circle cx="28.7" cy="35.6" r="1.8"/><circle cx="21.6" cy="31.9" r="1.8"/><circle cx="26.4" cy="31.8" r="1.8"/></g>
+    <rect x="11.8" y="16.2" width="24.4" height="2.8" rx="1.4" fill="#7DA0C4"/>
+  </symbol>
+  <!-- 蛋白質補充：搖搖杯，平蓋帶提環、刻度 -->
+  <symbol id="t-shaker" viewBox="0 0 48 48">
+    <path d="M27.6 11.5V8.2a3.2 3.2 0 0 1 6.4 0v3.3" stroke="#1D2B45" stroke-width="2.4" fill="none"/>
+    <rect x="15.4" y="6.6" width="6.6" height="5.4" rx="1.6" fill="#1D2B45"/>
+    <rect x="12.4" y="11" width="23.2" height="6.2" rx="2.2" fill="#1D2B45"/>
+    <path d="M13.4 17h21.2v18.6a4 4 0 0 1-4 4H17.4a4 4 0 0 1-4-4z" fill="#2E5E93"/>
+    <path d="M30.6 17h4v18.6a4 4 0 0 1-4 4z" fill="#1D2B45" opacity=".25"/>
+    <path d="M17 22h4.6M17 26h3M17 30h4.6M17 34h3" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" opacity=".85"/>
+  </symbol>
+  <!-- 配菜：一朵花椰菜 -->
+  <symbol id="t-veg" viewBox="0 0 48 48">
+    <path d="M19 29.5l-.6 8.6a2 2 0 0 0 2 2.1h7.2a2 2 0 0 0 2-2.1l-.6-8.6z" fill="#7DA0C4"/>
+    <path d="M24 31v-5M24 30l-5-4.4M24 30l5-4.4" stroke="#7DA0C4" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <g fill="#2E5E93"><circle cx="13.6" cy="23.2" r="5.6"/><circle cx="19.6" cy="17.6" r="6.4"/><circle cx="28.4" cy="17.6" r="6.4"/><circle cx="34.4" cy="23.2" r="5.6"/><circle cx="24" cy="22" r="6"/><circle cx="18.4" cy="25.4" r="4"/><circle cx="29.6" cy="25.4" r="4"/></g>
+    <path d="M8.6 25.4c2 2.4 6.6 4.2 15.4 4.2s13.4-1.8 15.4-4.2c-3 1.2-8 1.8-15.4 1.8s-12.4-.6-15.4-1.8z" fill="#1D2B45" opacity=".25"/>
+    <g fill="#FFFFFF" opacity=".4"><circle cx="17.6" cy="15.2" r="1.6"/><circle cx="11.8" cy="21.6" r="1.3"/><circle cx="26.4" cy="15.2" r="1.3"/></g>
+  </symbol>
+  <!-- 主食：一束麥穗 -->
+  <symbol id="t-wheat" viewBox="0 0 48 48">
+    <path d="M24 41.5V12" stroke="#2E5E93" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M24 37.4c-4.6-.6-7.8-3.6-8.6-8.2 4.6.4 7.8 3.6 8.6 8.2z" fill="#2E5E93"/>
+    <g fill="#F0B94A" stroke="#A8761A" stroke-width="1.1">
+      <ellipse cx="19.8" cy="30.4" rx="3.1" ry="5.3" transform="rotate(-38 19.8 30.4)"/>
+      <ellipse cx="28.2" cy="30.4" rx="3.1" ry="5.3" transform="rotate(38 28.2 30.4)"/>
+      <ellipse cx="19.8" cy="22.8" rx="3.1" ry="5.3" transform="rotate(-38 19.8 22.8)"/>
+      <ellipse cx="28.2" cy="22.8" rx="3.1" ry="5.3" transform="rotate(38 28.2 22.8)"/>
+      <ellipse cx="20.4" cy="15.6" rx="2.9" ry="4.8" transform="rotate(-30 20.4 15.6)"/>
+      <ellipse cx="27.6" cy="15.6" rx="2.9" ry="4.8" transform="rotate(30 27.6 15.6)"/>
+      <ellipse cx="24" cy="9.6" rx="2.8" ry="4.6"/>
+    </g>
+  </symbol>
+  <!-- 點心：杯子蛋糕，藍色紙杯、白奶油、一顆櫻桃 -->
+  <symbol id="t-cupcake" viewBox="0 0 48 48">
+    <path d="M12.8 26.5h22.4l-2.8 11.8a2.4 2.4 0 0 1-2.3 1.8H17.9a2.4 2.4 0 0 1-2.3-1.8z" fill="#2E5E93"/>
+    <path d="M19.2 28.6l.9 9.8M24 28.6v9.8M28.8 28.6l-.9 9.8" stroke="#7DA0C4" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M11.4 27c-1.6-4.6 1.6-8.2 5.4-8 .2-4.4 4.2-7 8.4-6 3.8-.4 6.8 2.6 6.4 6 3.8.2 6 4 4.6 8z" fill="#FFFFFF" stroke="#A9C3DC" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M16 22.6c3.2 1.2 11.6 1.4 16-.2" stroke="#A9C3DC" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <path d="M25.8 9.4c.4-2 1.6-3.4 3.4-4" stroke="#1D2B45" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <circle cx="25" cy="11.2" r="3.1" fill="#C8613A"/>
+  </symbol>
+
+  <!-- 徽章：淺底小太陽＝今天稍早（中午）吃過；深底月牙＝昨天吃過。一亮一暗，縮到 11px 還分得開 -->
+  <symbol id="b-sun" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="10" fill="#FFF1CF"/>
+    <path d="M10 2.6v1.8M10 15.6v1.8M2.6 10h1.8M15.6 10h1.8M4.8 4.8l1.2 1.2M14 14l1.2 1.2M4.8 15.2L6 14M14 6l1.2-1.2" stroke="#A8761A" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="10" cy="10" r="4.1" fill="#F0B94A" stroke="#A8761A" stroke-width="1"/>
+  </symbol>
+  <symbol id="b-moon" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="10" fill="#1D2B45"/>
+    <path d="M12.4 4.2a6.2 6.2 0 1 0 3.6 10.1 5 5 0 0 1-3.6-10.1z" fill="#F7E7C4"/>
+  </symbol>
+
+  <!-- 介面圖示 -->
+  <symbol id="u-swap" viewBox="0 0 24 24"><path d="M4 9h13l-3.5-3.5"/><path d="M20 15H7l3.5 3.5"/></symbol>
+  <symbol id="u-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="u-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="u-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></symbol>
+  <symbol id="u-chk" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9"/></symbol>
+  <symbol id="u-food" viewBox="0 0 24 24"><path d="M3.5 11.5h17a8.5 7.5 0 0 1-17 0z"/><path d="M9 8c0-1.6 1.2-2 1.2-3.6M13.5 8c0-1.6 1.2-2 1.2-3.6"/></symbol>
+  <symbol id="u-gym" viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></symbol>
+  <symbol id="u-set" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+
+  <!-- App 圖示：碗裡升起的太陽。碗沿改成跟類型圖示「飯類／麵食」同一條山藍色帶，同一個碗出現在圖示和 app 裡 -->
+  <symbol id="app" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="#CADDED"/>
+    <ellipse cx="292" cy="236" rx="112" ry="40" fill="#FFFFFF" opacity=".9"/><ellipse cx="362" cy="208" rx="78" ry="50" fill="#FFFFFF" opacity=".9"/>
+    <ellipse cx="770" cy="300" rx="64" ry="24" fill="#FFFFFF" opacity=".7"/>
+    <circle cx="512" cy="560" r="296" fill="#FBF0D6" opacity=".75"/>
+    <circle cx="512" cy="560" r="196" fill="#F0B94A"/>
+    <path d="M140 588 H884 C884 760 716 894 512 894 S140 760 140 588 Z" fill="#2E5E93"/>
+    <path d="M512 894 C716 894 884 760 884 588 H806 C806 736 680 860 512 894 Z" fill="#1D2B45" opacity=".22"/>
+    <rect x="124" y="556" width="776" height="68" rx="34" fill="#7DA0C4"/>
+    <rect x="400" y="872" width="224" height="56" rx="28" fill="#1D2B45"/>
+  </symbol>
+</svg>
+<h1 class="harness-title">子頁換皮：兩個方向（待辦 4 剩下的：食品庫、動作庫、課表編輯、訓練分析）</h1>
+<p class="harness-sub">
+  依 2026-11-13 裁決<b>子頁不加天空橫幅</b>。兩個方向都先做同一組<b>共通修正</b>：①頂端列只剩一種（返回＋標題＋右側一顆動作，訓練分析那 8px 落差消失）；
+  ②篩選只剩一種：可橫捲的 chip，選中＝主藍淡底（取代食品庫的深色膠囊、動作庫的深色 chip）；分段控制只留給「範圍」與「動作進度／肌群狀態」這種二選一的檢視切換；
+  ③卡片一律跟頁面同寬（食品庫的店家卡原本縮了一截）；④食品庫每列三顆圖示（編輯、複製、封存）收掉——<b>點列＝編輯</b>，複製與封存移進編輯 sheet 底部，列尾改放熱量（找食物時真正要看的數字）；
+  ⑤動作進度改用體重趨勢 v2.146 的寫法：頂端大數字＝最近一次 e1RM，下一行「歷來最佳・這段變化」，拖曳換成那一次。
+  <b>④ 是互動改動</b>（少一步直接封存），要你點頭。
+</p>
+
+<section class="dir">
+  <h2>A 統一收乾淨<small>只做共通修正</small></h2>
+  <p>字、卡、間距全照現有 token；個性只靠今日頁與訓練頁，子頁安靜。改動面最小，主要是把四頁的零件換成同一套。</p>
+</section>
+<div class="row a">
+  <div><p class="cap">食品庫管理</p><div class="device" id="a-food"></div></div>
+  <div><p class="cap">動作庫</p><div class="device" id="a-ex"></div></div>
+  <div><p class="cap">課表編輯</p><div class="device" id="a-routine"></div></div>
+  <div><p class="cap">訓練分析（列表）</p><div class="device" id="a-an"></div></div>
+  <div><p class="cap">動作進度</p><div class="device" id="a-prog"></div></div>
+</div>
+
+<section class="dir">
+  <h2>B 圖鑑<small>A ＋ 圖示與小走勢</small></h2>
+  <p>在 A 之上加三樣東西，都是已經有的語言：食品列前面放類型圖示（今日頁、記一筆用的同一套 17 個）；動作庫依肌群分段、段頭一個小圖示；訓練分析每列一條 30 天小走勢＋變化；
+  課表編輯用訓練中那條時間軸（節點寫順序號），編課表跟上場時長得一樣。代價：食品庫列高 56→64、一屏少一列；小走勢每列多一次運算（列表通常 &lt; 30 個動作）。</p>
+</section>
+<div class="row b">
+  <div><p class="cap">食品庫管理</p><div class="device" id="b-food"></div></div>
+  <div><p class="cap">動作庫</p><div class="device" id="b-ex"></div></div>
+  <div><p class="cap">課表編輯</p><div class="device" id="b-routine"></div></div>
+  <div><p class="cap">訓練分析（列表）</p><div class="device" id="b-an"></div></div>
+  <div><p class="cap">動作進度</p><div class="device" id="b-prog"></div></div>
+</div>
+
+<script>
+const IMG = (k) => `../src/assets/exercises/${k}.jpg`
+const ln = (id) => `<svg class="ln" aria-hidden="true"><use href="#${id}"/></svg>`
+const BACK = `<svg class="ln" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>`
+const CHEV = `<svg class="ln chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>`
+const PLUS = `<svg class="ln" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`
+const COPY = `<svg class="ln" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V6a1 1 0 0 1 1-1h9"/></svg>`
+const GRIP = `<svg class="ln grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>`
+const X = `<svg class="ln x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>`
+const SEARCH = `<svg class="ln" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>`
+const topBar = (t, right = '') => `<div class="top"><span class="ib">${BACK}</span><h1>${t}</h1>${right ? `<span class="ib" style="color:var(--accent)">${right}</span>` : ''}</div>`
+const cat = (id) => `<span class="cat"><svg viewBox="0 0 48 48"><use href="#${id}"/></svg></span>`
+
+const FOODS = [
+  ['全家', [['拿鐵', '飲料', 't-boba', 180], ['無糖豆漿', '飲料', 't-boba', 120], ['烤地瓜', '配菜', 't-veg', 210]]],
+  ['健康盒', [['雞胸餐盒', '健康餐盒', 't-healthy', 520], ['鮭魚餐盒', '健康餐盒', 't-healthy', 610]]],
+  ['八方雲集', [['招牌鍋貼 10 顆', '水餃鍋貼', 't-dumpling', 560], ['酸辣湯', '湯', 't-pot', 140]]],
+]
+function food(b) {
+  let h = topBar('食品庫管理') + `<div class="body"><div class="search">${SEARCH}搜尋品名或店家</div>
+    <div class="chips"><span class="chip on">使用中 <span class="n">42</span></span><span class="chip">已封存 <span class="n">6</span></span></div>`
+  FOODS.forEach(([v, items]) => {
+    h += `<div class="sec">${v}</div><div class="card">`
+    items.forEach(([n, c, ic, k]) => {
+      h += `<div class="item" style="${b ? 'min-height:64px' : ''}">${b ? cat(ic) : ''}<div class="main"><div class="nm">${n}</div><div class="sub">${b ? `${c} · 1 份` : `${c}・1 份`}</div></div>
+        <div class="val">${k}<span style="font-family:var(--font-body);font-weight:400;font-size:var(--t-xs);color:var(--ink-muted)"> 卡</span></div>${CHEV}</div>`
+    })
+    h += `</div>`
+  })
+  return h + `<p class="note">點一列編輯；複製與封存在編輯 sheet 底部。</p></div><span class="fab">${PLUS}</span>`
+}
+
+const EXS = [['barbell-bench-press', '槓鈴臥推', '胸部'], ['dumbbell-bench-press', '啞鈴臥推', '胸部'], ['cable-chest-press', '滑輪胸推', '胸部'],
+  ['barbell-row', '槓鈴划船', '背部'], ['dumbbell-row', '單臂啞鈴划船', '背部'], ['close-grip-lat-pulldown', '窄握滑輪下拉', '背部'],
+  ['barbell-squat', '槓鈴深蹲', '下半身'], ['barbell-deadlift', '槓鈴硬舉', '下半身']]
+const GLYPH = { '胸部': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 9c3-2 5-2 7 0 2-2 4-2 7 0M6 15c2 1 4 1 6-1 2 2 4 2 6 1"/></svg>',
+  '背部': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 4v16M6 8l6 3 6-3M7 15l5 2 5-2"/></svg>',
+  '下半身': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 4v8l-2 8M15 4v8l2 8"/></svg>' }
+function ex(b) {
+  let h = topBar('動作庫', PLUS) + `<div class="body"><div class="search">${SEARCH}搜尋動作</div>
+    <div class="chips"><span class="chip on">全部</span><span class="chip">胸部</span><span class="chip">背部</span><span class="chip">下半身</span><span class="chip">肩膀</span><span class="chip">手臂</span></div>`
+  if (!b) {
+    h += `<div class="card">` + EXS.map(([k, n, g]) => `<div class="item"><img class="thumb" src="${IMG(k)}" alt=""><div class="main"><div class="nm">${n}</div><div class="sub">${g}</div></div>${CHEV}</div>`).join('') + `</div>`
+  } else {
+    let last = ''
+    EXS.forEach(([k, n, g], i) => {
+      if (g !== last) { if (last) h += `</div>`; h += `<div class="sec"><span class="glyph">${GLYPH[g]}</span>${g}<span class="cnt">${EXS.filter((e) => e[2] === g).length + (g === '胸部' ? 19 : g === '背部' ? 21 : 26)}</span></div><div class="card">`; last = g }
+      h += `<div class="item"><img class="thumb" src="${IMG(k)}" alt=""><div class="main"><div class="nm">${n}</div><div class="sub">${i % 3 === 0 ? '上次 11/19 · 85 kg × 9' : '還沒做過'}</div></div>${CHEV}</div>`
+    })
+    h += `</div>`
+  }
+  return h + `<p class="note">封存在編輯 sheet 底部（現在每列一顆封存鈕）。</p></div>`
+}
+
+const RT = [['barbell-squat', '槓鈴深蹲', '3 組 × 8'], ['barbell-deadlift', '槓鈴硬舉', '3 組 × 5'], ['barbell-bench-press', '槓鈴臥推', '3 組 × 10'], ['dumbbell-shoulder-press', '啞鈴肩推', '3 組 × 12']]
+function routine(b) {
+  let h = topBar('菜單 A：下半身＋推', COPY) + `<div class="body"><div class="field-l">課表名稱</div><div class="field">菜單 A：下半身＋推</div><div class="sec">動作（依序）</div>`
+  if (!b) {
+    h += `<div class="card">` + RT.map(([k, n, s]) => `<div class="item" style="padding-left:var(--s-2)">${GRIP}<img class="thumb" src="${IMG(k)}" alt=""><div class="main"><div class="nm">${n}</div><div class="sub">沒做過時預設 ${s}</div></div><span class="ib">${X}</span></div>`).join('')
+      + `<div class="ghost-act">${PLUS}加動作</div></div>`
+  } else {
+    h += `<div class="tl">` + RT.map(([k, n, s], i) => `<div class="step"><span class="rnode">${i + 1}</span><div class="card"><div class="item">${GRIP}<img class="thumb" src="${IMG(k)}" alt=""><div class="main"><div class="nm">${n}</div><div class="sub">沒做過時預設 ${s}</div></div><span class="ib">${X}</span></div></div></div>`).join('')
+      + `<div class="step"><span class="rnode" style="border-style:dashed;color:var(--ink-faint)">+</span><div class="card"><div class="ghost-act" style="border:0">${PLUS}加動作</div></div></div></div>`
+  }
+  return h + `<p class="note">課表不存重量；開始訓練時組數、次數、重量都取該動作上次實際完成的值。</p></div>`
+}
+
+const AN = [['上斜槓鈴臥推', 110.5, [91, 94.3, 97.5, 100.8, 104, 107.3, 110.5]], ['槓鈴深蹲', 123.5, [118, 117, 120, 121.5, 120, 122, 123.5]], ['坐姿划船', 71.5, [73, 72, 71, 72.5, 71, 71.5, 71.5]], ['槓鈴臥推', 97.5, [88, 90, 91, 93, 94.5, 96, 97.5]], ['啞鈴肩推', 84.5, [86, 85, 85.5, 84, 84.5, 84, 84.5]]]
+function spark(v) {
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi - lo || 1
+  const pts = v.map((y, i) => `${(i / (v.length - 1)) * 60 + 2},${20 - ((y - lo) / r) * 16}`).join(' ')
+  const [lx, ly] = pts.split(' ').pop().split(',')
+  return `<svg class="spark" viewBox="0 0 64 24"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="2.4" fill="var(--accent)"/></svg>`
+}
+function an(b) {
+  let h = topBar('訓練分析') + `<div class="body"><div class="seg two"><span class="on">動作進度</span><span>肌群狀態</span></div><div class="card">`
+  AN.forEach(([n, best, v]) => {
+    const d = v[v.length - 1] - v[0]
+    h += `<div class="item" style="min-height:64px"><div class="main"><div class="nm">${n}</div><div class="sub">7 次訓練 · 最近 11/19</div></div>
+      ${b ? `${spark(v)}<div class="val" style="min-width:58px">${best}<small class="delta">${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d).toFixed(1)}</small></div>` : `<div class="val">${best}<small>kg 估算</small></div>`}${CHEV}</div>`
+  })
+  return h + `</div><p class="note">只列有打勾完成的組；超過 10 下的組不估算（次數越多越不準）。${b ? '小走勢＝最近 30 天的 e1RM，右下是這段變化（kg）。' : ''}</p></div>`
+}
+
+function prog(b) {
+  const v = [91, 94.3, 97.5, 100.8, 104, 107.3, 110.5], days = [-40, -33, -26, -19, -12, -5, -1]
+  const W = 345, H = 170, pl = 30, pr = 8, pt = 8, pb = 22, lo = 85, hi = 115
+  const x = (d) => pl + ((d + 89) / 89) * (W - pl - pr), y = (q) => pt + (1 - (q - lo) / (hi - lo)) * (H - pt - pb)
+  let g = ''
+  for (let q = 85; q <= 115; q += 10) g += `<line x1="${pl}" x2="${W - pr}" y1="${y(q)}" y2="${y(q)}" stroke="var(--rule-subtle)"/><text x="${pl - 6}" y="${y(q) + 4}" text-anchor="end">${q}</text>`
+  ;[['8/23', -89, 'start'], ['9/22', -59, 'middle'], ['10/21', -30, 'middle'], ['11/20', 0, 'end']].forEach(([t, d, a]) => g += `<text x="${x(d)}" y="${H - 6}" text-anchor="${a}">${t}</text>`)
+  const pts = v.map((q, i) => `${x(days[i])},${y(q)}`).join(' ')
+  const area = `M${x(days[0])},${H - pb} L${pts.split(' ').join(' L')} L${x(days[6])},${H - pb} Z`
+  g += `<defs><linearGradient id="ga${b}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".14"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>`
+  g += `<path d="${area}" fill="url(#ga${b})"/><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`
+  g += v.map((q, i) => `<circle cx="${x(days[i])}" cy="${y(q)}" r="${i === 6 ? 4.5 : 3}" fill="${i === 6 ? 'var(--accent)' : 'var(--card)'}" stroke="${i === 6 ? 'var(--card)' : 'var(--accent)'}" stroke-width="${i === 6 ? 2 : 1.5}"/>`).join('')
+  const head = b
+    ? `<div class="hero-ill"><img class="thumb" style="width:52px;height:52px" src="${IMG('incline-barbell-bench-press')}" onerror="this.src='${IMG('barbell-bench-press')}'" alt=""><div><div class="read-k">最近一次 e1RM（估算）</div><div class="read-big"><b>110.5</b><span>kg</span></div></div></div><div class="read-sub" style="padding:0 var(--s-4)">歷來最佳 <b>110.5</b>・90 天 <b>+19.5</b> kg・最重一組 <b>85 × 9</b></div>`
+    : `<div class="read"><div class="read-k">最近一次 e1RM（估算）</div><div class="read-big"><b>110.5</b><span>kg</span></div><div class="read-sub">歷來最佳 <b>110.5</b>・90 天 <b>+19.5</b> kg</div></div>`
+  return topBar('上斜槓鈴臥推') + `<div class="body"><div class="seg"><span>30 天</span><span class="on">90 天</span><span>全部</span></div>
+    <div class="card">${head}<svg class="chart" width="${W}" height="${H}">${g}</svg></div>
+    <div class="card" style="margin-top:var(--s-3)"><table class="tbl"><thead><tr><th>日期</th><th>最重一組</th><th>e1RM</th></tr></thead><tbody>
+    ${[['11/19', '85 × 9', '110.5'], ['11/15', '82.5 × 9', '107.3'], ['11/8', '80 × 9', '104.0'], ['11/1', '77.5 × 9', '100.8']].map((r) => `<tr><td>${r[0]}</td><td>${r[1]} kg</td><td>${r[2]} kg</td></tr>`).join('')}</tbody></table></div></div>`
+}
+
+for (const [k, b] of [['a', false], ['b', true]]) {
+  document.getElementById(`${k}-food`).innerHTML = food(b)
+  document.getElementById(`${k}-ex`).innerHTML = ex(b)
+  document.getElementById(`${k}-routine`).innerHTML = routine(b)
+  document.getElementById(`${k}-an`).innerHTML = an(b)
+  document.getElementById(`${k}-prog`).innerHTML = prog(b)
+}
+</script>
+</body>
+</html>

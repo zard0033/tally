@@ -1,5 +1,6 @@
 /* 編輯動作 sheet（樣張 ⑦b）：（有示意圖的動作先放縮圖，v2.103）名稱 → 肌群（下拉）→ 要點；儲存釘在底部（v2.91）。
-   封存／取消封存不在這裡，在動作庫每一列的圖示鈕（v2.93）；已封存的動作點進來一樣能改這三欄。
+   封存／取消封存在底部、跟儲存並排（v2.147，原本是動作庫每一列的圖示鈕）；只有動作庫開的、編輯既有動作時才有（onToggleArchive），
+   選動作 sheet 的「新增動作」沒有。已封存的動作點進來一樣能改這三欄。
    動作庫管理頁（設定）與選動作 sheet 的「新增動作」開的是**同一張**；exercise 為 null＝新增。訓練中的要點改在展開的卡頂部就地寫（v2.95），不再開這張。
    寫入走 onWrite（排進離線佇列）；失敗留在 sheet 裡說明，不關。
    欄位狀態放在 ExerciseForm，SpringSheet 每次打開都重掛：每次打開都是一份新的草稿，不會殘留上一次打到一半的字。 */
@@ -26,13 +27,15 @@ interface ExerciseEditSheetProps {
   exercises: readonly Row[]
   onClose: () => void
   onWrite: (ops: RowOp[]) => Promise<void>
+  /** 動作庫才給：封存／取消封存（封存的確認框由動作庫跳） */
+  onToggleArchive?: () => void
 }
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 interface FormProps extends Omit<ExerciseEditSheetProps, 'open'> {}
 
-function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
+function ExerciseForm({ exercise, exercises, onClose, onWrite, onToggleArchive }: FormProps) {
   const [name, setName] = useState(exercise ? String(exercise.name) : '')
   // 資料異常（肌群不在七類）時落在「其他」，與清單的歸類一致，否則 select 顯示第一項、state 卻是壞值
   const [group, setGroup] = useState(() => {
@@ -42,6 +45,12 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
   const [tips, setTips] = useState(typeof exercise?.tips === 'string' ? exercise.tips : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /* 改了還沒存：封存會收起 sheet，草稿跟著丟掉，所以先擋（review） */
+  const dirty = exercise !== null && (
+    name !== String(exercise.name) ||
+    group !== String(exercise.muscle_group) ||
+    tips !== (typeof exercise.tips === 'string' ? exercise.tips : '')
+  )
 
   const run = async (ops: RowOp[]) => {
     if (ops.length === 0) {
@@ -128,20 +137,28 @@ function ExerciseForm({ exercise, exercises, onClose, onWrite }: FormProps) {
             {error}
           </p>
         )}
-        <button className="pick-bar-btn" type="submit" disabled={busy}>
-          儲存
-        </button>
+        <div className="sheet-actions">
+          {exercise && onToggleArchive && (
+            <button className="cancel-btn" type="button" aria-label={`${exercise.archived === true ? '取消封存' : '封存'} ${String(exercise.name)}`}
+              disabled={busy || dirty} title={dirty ? '先儲存修改再封存' : undefined} onClick={onToggleArchive}>
+              {exercise.archived === true ? '取消封存' : '封存'}
+            </button>
+          )}
+          <button className="pick-bar-btn" type="submit" disabled={busy}>
+            儲存
+          </button>
+        </div>
       </div>
     </form>
   )
 }
 
-export default function ExerciseEditSheet({ open, exercise, exercises, onClose, onWrite }: ExerciseEditSheetProps) {
+export default function ExerciseEditSheet({ open, exercise, exercises, onClose, onWrite, onToggleArchive }: ExerciseEditSheetProps) {
   const title = exercise ? '編輯動作' : '新增動作'
 
   return (
     <SpringSheet open={open} onClose={onClose} title={title} screen="exercise-edit" fit>
-      <ExerciseForm key={exercise?.id ?? 'new'} exercise={exercise} exercises={exercises} onClose={onClose} onWrite={onWrite} />
+      <ExerciseForm key={exercise?.id ?? 'new'} exercise={exercise} exercises={exercises} onClose={onClose} onWrite={onWrite} onToggleArchive={onToggleArchive} />
     </SpringSheet>
   )
 }

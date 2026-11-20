@@ -151,7 +151,11 @@ export const fmt1 = (n: number) => n.toFixed(1)
 /** sparkline 用：weight_kg 折線，寬 120 高 32 的 viewBox 內線性映射（y 留上下各 4）。
  *  少於 2 筆畫不出線，呼叫端自己判斷要不要渲染。 */
 export function sparklinePoints(weights: Pick<TrendRow, 'weight_kg'>[]): string {
-  const values = weights.map((w) => Number(w.weight_kg))
+  return sparklineOf(weights.map((w) => Number(w.weight_kg)))
+}
+
+/** 同 sparklinePoints，直接吃數字（訓練分析列表的 e1RM 小走勢，v2.147）。 */
+export function sparklineOf(values: readonly number[]): string {
   const min = Math.min(...values)
   const max = Math.max(...values)
   const span = max - min || 1

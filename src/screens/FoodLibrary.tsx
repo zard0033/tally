@@ -1,6 +1,7 @@
 /* 食品庫管理頁：搜尋／使用中·已封存分頁／店家分組／就地編輯／以現有食物為範本新增／
-   封存＋復原／FAB 新增。三顆列操作圖示（編輯／範本新增／封存）不寫字，靠 aria-label。
-   品名下面一顆類型標籤（v2.120），點了用原生 select 從固定清單改；改過的 AI 不再覆蓋。
+   封存＋復原／FAB 新增。v2.147（子頁換皮 B，使用者 2026-11-20 核可）：列內三顆圖示鈕收掉——
+   **點列＝展開就地編輯**，「以此為範本新增」「封存」放進展開區的操作列；列尾放熱量（找食物時要看的數字）。
+   列首是類型圖示（v2.120 的類型標籤改畫成圖示），透明的原生 select 疊在上面，點了從固定清單改；改過的 AI 不再覆蓋。
 
    封存的「樂觀＋5 秒復原」刻意不比照 App.tsx 的 intake 刪除（那邊延遲真正的 DELETE
    5 秒才送出，因為硬刪除不可逆，要留一個「還沒真的發生」的窗口）。封存是可逆的
@@ -10,7 +11,7 @@
    ponytail: 這個決定只在「archived 語意上等於軟刪除、隨時可逆」成立時才安全，
    換成真的 DELETE 就要照抄 App.tsx 那套。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ARCHIVE_ICON, RESTORE_ICON } from '@/components/archiveIcons'
+import { RESTORE_ICON } from '@/components/archiveIcons'
 import CategoryIcon from '@/components/CategoryIcon'
 import EmptyNote from '@/components/EmptyNote'
 import FoodFormFields from '@/components/FoodFormFields'
@@ -35,12 +36,7 @@ export interface FoodLibraryProps {
 
 type Tab = 'active' | 'archived'
 
-const EDIT_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-/* 座標比原稿整體位移 (-0.5, +3.5)：原本的筆畫範圍是 x5–20 / y2–15，重心落在 (12.5, 8.5)，
-   而 viewBox 中心是 (12, 12)——等於整顆圖示在 44px 觸控盒裡往上偏了 3.5 個單位（17px 渲染
-   尺寸下約 2.5px），跟左右兩顆並排時看起來就是沒對齊（使用者真機回報，量 getBBox 確認）。
-   相對指令（a／h／v）不受位移影響，只有起點 M 與絕對的 V 要跟著改。 */
-const TEMPLATE_ICON = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="7.5" width="11" height="11" rx="2" /><path d="M8.5 7.5V6.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-1" /></svg>
+const CHEV = <svg className="lib-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
 
 export default function FoodLibrary(props: FoodLibraryProps) {
   const { foods, onCreateFood, onUpdateFood, onArchiveFood, onUnarchiveFood, onSetCategory, onBack } = props
@@ -263,15 +259,18 @@ export default function FoodLibrary(props: FoodLibraryProps) {
 
       <div className="settings" style={{ paddingTop: 'var(--s-2)', paddingBottom: 96 }}>
         {groups === null ? (
-          /* 一張店家卡、五列，列高同真的食物列（品名＋類型膠囊） */
+          /* 一張店家卡、五列，列高同真的食物列（類型圖示＋品名＋類型＋熱量） */
           <SkelBlock className="lib-group">
             <div className="lib-group-title"><Skel w="4em" h="10px" /></div>
-            {['45%', '60%', '38%', '52%', '44%'].map((w, i) => (
-              <div key={i} className="lib-row skel-row lib-skel-row">
-                <span className="lib-skel-txt"><Skel w={w} /><Skel w="5em" h="20px" /></span>
-                <Skel w="2.4em" />
-              </div>
-            ))}
+            <div className="lib-card">
+              {['45%', '60%', '38%', '52%', '44%'].map((w, i) => (
+                <div key={i} className="lib-row skel-row lib-skel-row">
+                  <Skel h="40px" round />
+                  <span className="lib-skel-txt"><Skel w={w} /><Skel w="3em" h="10px" /></span>
+                  <Skel w="2.4em" />
+                </div>
+              ))}
+            </div>
           </SkelBlock>
         ) : groups.length === 0 && !query.trim() && tab === 'active' ? (
           <EmptyNote art="bowl">食品庫還是空的</EmptyNote>
@@ -281,20 +280,15 @@ export default function FoodLibrary(props: FoodLibraryProps) {
           groups.map((g) => (
             <div className="lib-group" key={g.vendor}>
               <div className="lib-group-title">{g.vendor}</div>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              <ul className="lib-card">
                 {g.items.map((f) => {
                   const cat = catBusy?.id === f.id ? catBusy.category : categoryOf(f.category)
                   return (
-                  <li className="lib-row" key={f.id}>
+                  <li className="lib-row" key={f.id} data-open={editingId === f.id || undefined}>
                     <div className="lib-row-main">
-                      <div className="nm-wrap">
-                        <span className="nm">{f.name}</span>
-                        {/* 原生 select 透明疊在標籤上當命中區（同每日目標的 .goal-pick），iOS 叫出系統滾輪 */}
-                        <label className="lib-cat" data-empty={cat === null || undefined}>
-                          <span className="lib-cat-tag" aria-hidden="true">
-                            <CategoryIcon category={cat} size={24} decorative />
-                            {cat ?? '未分類'}
-                          </span>
+                      {/* 原生 select 透明疊在類型圖示上當命中區（同每日目標的 .goal-pick），iOS 叫出系統滾輪 */}
+                      <label className="lib-cat" data-empty={cat === null || undefined}>
+                        <CategoryIcon category={cat} size={40} decorative />
                           <select
                             aria-label={`${f.name} 的類型：${cat ?? '未分類'}`}
                             value={cat ?? ''}
@@ -308,21 +302,18 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                               {SIDE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                             </optgroup>
                           </select>
-                        </label>
-                      </div>
-                      <button className="icon-btn" type="button" aria-label={`編輯 ${f.name}`} onClick={() => (editingId === f.id ? setEditingId(null) : openEdit(f))}>
-                        {EDIT_ICON}
+                      </label>
+                      {/* 點列＝展開／收起就地編輯（v2.147）。aria-label 沿用「編輯 品名」 */}
+                      <button className="lib-row-hit" type="button" aria-label={`編輯 ${f.name}`} aria-expanded={editingId === f.id}
+                        onClick={() => (editingId === f.id ? setEditingId(null) : openEdit(f))}>
+                        <span className="nm-wrap">
+                          <span className="nm">{f.name}</span>
+                          <span className="sub">{cat ?? '未分類'}</span>
+                        </span>
+                        <span className="lib-kcal">{Math.round(f.kcal)}<small> 卡</small></span>
+                        {CHEV}
                       </button>
-                      {tab === 'active' ? (
-                        <>
-                          <button className="icon-btn" type="button" aria-label={`以 ${f.name} 為範本新增`} onClick={() => openAdd(f)}>
-                            {TEMPLATE_ICON}
-                          </button>
-                          <button className="icon-btn" type="button" aria-label={`封存 ${f.name}`} onClick={() => void archive(f)}>
-                            {ARCHIVE_ICON}
-                          </button>
-                        </>
-                      ) : (
+                      {tab === 'archived' && (
                         <button className="icon-btn" type="button" aria-label={`復原 ${f.name}`} onClick={() => void restore(f)}>
                           {RESTORE_ICON}
                         </button>
@@ -339,6 +330,17 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                           idPrefix="le-"
                           vendorOptions={vendorOptions}
                         />
+                        {/* 列上收掉的兩個動作（v2.147）：只有使用中的食物能當範本、能封存；已封存的復原鈕留在列上 */}
+                        {tab === 'active' && (
+                          <div className="lib-edit-more">
+                            {/* 用展開區裡正在編的值當範本（按鈕就在那些欄位下面，review）；草稿不合法就用存好的 */}
+                            <button className="lib-text-btn" type="button" aria-label={`以 ${f.name} 為範本新增`} onClick={() => {
+                              const draft = validateFoodForm(editForm)
+                              openAdd('error' in draft ? f : { ...f, ...draft.food })
+                            }}>以此為範本新增</button>
+                            <button className="lib-text-btn" type="button" aria-label={`封存 ${f.name}`} onClick={() => void archive(f)}>封存</button>
+                          </div>
+                        )}
                         <div className="lib-edit-actions">
                           <button className="cancel-btn" type="button" onClick={() => setEditingId(null)}>取消</button>
                           {/* 手機上按下就立刻 disabled 的按鈕，觸控結束事件不會正常送達，

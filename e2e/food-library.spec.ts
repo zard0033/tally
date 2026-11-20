@@ -10,6 +10,12 @@ import { FIX } from './fixtures'
 import { openApp, springSettled } from './harness'
 import type { ClassifyStub } from './stub'
 
+/* v2.147：封存與「以此為範本新增」收進點列展開的編輯區；先展開那一列（已展開就不再點——再點一次會收起） */
+async function openRowActions(page: Page, name: string) {
+  const edit = page.locator(`[aria-label="編輯 ${name}"]`)
+  if ((await edit.getAttribute('aria-expanded')) !== 'true') await edit.click()
+}
+
 async function openLibrary(page: Page) {
   await page.locator('.tab[aria-label="設定"]').click()
   await page.locator('.entry-row', { hasText: '食品庫管理' }).click()
@@ -150,32 +156,6 @@ test('就地編輯的儲存鈕不可以溢出卡片，且與輸入框右緣切�
   expect(Math.abs(geo.saveR - geo.inputR), '儲存鈕右緣沒有跟輸入框對齊').toBeLessThanOrEqual(1)
 })
 
-/* 迴歸鎖（2026-08-05）：三顆圖示的 44px 觸控盒與 17px 畫布本來就等距、垂直也一致，
-   但「範本新增」那顆的**筆畫**畫在 viewBox 偏上的位置（重心 y=8.5，中心應是 12），
-   17px 渲染下往上偏約 2.5px，並排時看起來就是沒對齊。量 getBBox 而不是量 svg 元素——
-   後者三顆完全相同，正是它讓這個問題在肉眼發現前一直躲過檢查。 */
-test('三顆列操作圖示的筆畫重心都落在 viewBox 中央，並排才不會有一顆偏高', async ({ page }) => {
-  await openApp(page)
-  await openLibrary(page)
-
-  const inks = await page.evaluate(() =>
-    [...document.querySelectorAll('.lib-row-main')[0].querySelectorAll('.icon-btn svg')].map((s) => {
-      const b = (s as SVGGraphicsElement).getBBox()
-      return {
-        label: s.parentElement!.getAttribute('aria-label') ?? '',
-        cx: +(b.x + b.width / 2).toFixed(2),
-        cy: +(b.y + b.height / 2).toFixed(2),
-      }
-    }),
-  )
-
-  expect(inks).toHaveLength(3)
-  for (const i of inks) {
-    expect(Math.abs(i.cy - 12), `「${i.label}」的筆畫重心 y=${i.cy}，偏離 viewBox 中央 12`).toBeLessThanOrEqual(1)
-    expect(Math.abs(i.cx - 12), `「${i.label}」的筆畫重心 x=${i.cx}，偏離 viewBox 中央 12`).toBeLessThanOrEqual(1)
-  }
-})
-
 /* 迴歸鎖（v2.29 precommit-review 抓到，是 v2.28 自己引入的）：pill 從「封頂半個螢幕」
    放寬成整行之後，長品名會水平覆蓋到右下角的 FAB，而 pill 的 z-index(6) 高於 FAB(5)——
    那 5 秒內想按新增會變成誤觸復原。修法沿用「編輯中隱藏 FAB」同一套語言。
@@ -188,7 +168,8 @@ test('復原提示出現時隱藏 FAB：pill 放寬到整行後會蓋住它，z-
 
   const first = rows(page).first()
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
-  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
 
   await expect(page.locator('.undo-pill')).toBeVisible()
   await expect(page.locator('.lib-fab'), '復原提示會壓在 FAB 上，那 5 秒按新增等於誤觸復原').toHaveCount(0)
@@ -221,7 +202,8 @@ test('封存：該列樂觀消失並浮出復原 pill，按復原就回到清單
   const first = rows(page).first()
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
 
-  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
 
   await expect(rows(page)).toHaveCount(total - 1)
   const pill = page.locator('.undo-pill')
@@ -257,7 +239,8 @@ test('封存提示：長品名不會撐破膠囊，只截品名不截「復原�
 
   const first = rows(page).first()
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
-  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
 
   const pill = page.locator('.undo-pill')
   await expect(pill).toBeVisible()
@@ -515,7 +498,8 @@ test('以現有食物為範本新增：表單預填來源的值，送出是 POST
 
   const first = rows(page).first()
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
-  await first.locator(`[aria-label="以 ${name} 為範本新增"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="以 ${name} 為範本新增"]`).click()
 
   const sheet = page.locator('[data-screen="food-add-sheet"]')
   await expect(sheet).toBeVisible()
@@ -719,14 +703,15 @@ test('封存超過復原時限後，從已封存復原：回到使用中看得�
   await openApp(page)
   await openLibrary(page)
   const name = ((await rows(page).first().locator('.nm').textContent()) ?? '').trim()
-  await rows(page).first().locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
   await expect(page.locator('.undo-pill')).toBeVisible()
   await expect(page.locator('.undo-pill'), '復原提示應該在 5 秒後消失').toHaveCount(0, { timeout: 8000 })
 
   await page.locator('.tabrow .chip', { hasText: '已封存' }).click()
   await page.locator(`[aria-label="復原 ${name}"]`).click()
   await page.locator('.tabrow .chip', { hasText: '使用中' }).click()
-  await expect(page.locator(`[aria-label="封存 ${name}"]`), '復原的食物要回到使用中').toBeVisible()
+  await expect(page.locator(`[aria-label="編輯 ${name}"]`), '復原的食物要回到使用中').toBeVisible()
 })
 
 test('編輯中的列被搜尋濾掉：新增鈕要回來，不然沒有取消鈕也沒有新增鈕', async ({ page }) => {
@@ -747,10 +732,11 @@ test('封存編輯中的列再復原：編輯區收起、新增鈕回來', async
   const name = ((await first.locator('.nm').textContent()) ?? '').trim()
   await first.locator(`[aria-label="編輯 ${name}"]`).click()
   await expect(page.locator('.lib-edit')).toHaveCount(1)
-  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
   await page.locator('.undo-pill').click()
 
-  await expect(page.locator(`[aria-label="封存 ${name}"]`)).toBeVisible()
+  await expect(page.locator(`[aria-label="編輯 ${name}"]`)).toBeVisible()
   await expect(page.locator('.lib-edit'), '編輯區不該復活').toHaveCount(0)
   await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
 })
@@ -766,7 +752,8 @@ test('封存編輯中的列但送不出去：編輯區與草稿都留著', async
   await page.evaluate(() => {
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'foods', method: 'PATCH' }
   })
-  await first.locator(`[aria-label="封存 ${name}"]`).click()
+  await openRowActions(page, name)
+  await page.locator(`[aria-label="封存 ${name}"]`).click()
 
   await expect(page.locator('.lib-edit'), '封存失敗不該丟掉編輯區').toHaveCount(1)
   await expect(page.locator('.lib-edit input').first(), '草稿要留著').toHaveValue('改到一半的草稿')
@@ -782,7 +769,7 @@ test('已封存分頁編輯到一半就復原：回到使用中編輯區不復�
   await page.locator(`[aria-label="復原 ${name}"]`).click()
   await page.locator('.tabrow .chip', { hasText: '使用中' }).click()
 
-  await expect(page.locator(`[aria-label="封存 ${name}"]`)).toBeVisible()
+  await expect(page.locator(`[aria-label="編輯 ${name}"]`)).toBeVisible()
   await expect(page.locator('.lib-edit'), '舊草稿不該復活').toHaveCount(0)
   await expect(page.locator('.lib-fab'), '新增鈕要回來').toBeVisible()
 })
@@ -797,7 +784,8 @@ test('封存請求還在路上時改編輯別列：成功回來不關掉別列�
   await page.evaluate(() => {
     ;(window as unknown as { __writeDelayMs: number }).__writeDelayMs = 500
   })
-  await rows(page).first().locator(`[aria-label="封存 ${a}"]`).click()
+  await openRowActions(page, a)
+  await page.locator(`[aria-label="封存 ${a}"]`).click()
   await page.locator(`[aria-label="編輯 ${b}"]`).click()
   await expect(page.locator('.lib-edit')).toHaveCount(1)
   await page.locator('.lib-edit input').first().fill('別列的草稿')
@@ -815,16 +803,20 @@ test('復原提示還在時封存另一筆失敗：提示照原本的 5 秒消�
   const nameOf = async (n: number) => ((await rows(page).nth(n).locator('.nm').textContent()) ?? '').trim()
   const a = await nameOf(0)
   const b = await nameOf(1)
-  await rows(page).first().locator(`[aria-label="封存 ${a}"]`).click()
+  await openRowActions(page, a)
+  await page.locator(`[aria-label="封存 ${a}"]`).click()
   await expect(page.locator('.undo-pill')).toBeVisible()
   await page.evaluate(() => {
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'foods', method: 'PATCH' }
   })
+  await openRowActions(page, b)
   await page.locator(`[aria-label="封存 ${b}"]`).click()
   await expect.poll(async () => (await foodWrites(page)).length, { message: 'B 的封存要送出（並被伺服器拒絕）' }).toBe(2)
 
   await expect(page.locator('.undo-pill'), 'A 的復原提示應該在 5 秒後消失').toHaveCount(0, { timeout: 8000 })
-  await expect(page.locator('.lib-fab'), '提示消失後新增鈕要回來').toBeVisible()
+  // v2.147 起封存在展開區裡按：B 失敗後展開區照設計留著（草稿不丟），新增鈕在編輯中本來就藏；收起之後要回來
+  await page.locator('.lib-edit .cancel-btn').click()
+  await expect(page.locator('.lib-fab'), '提示消失、編輯收起後新增鈕要回來').toBeVisible()
 })
 
 /* 寫入失敗要說人話：網路斷線的原文（Load failed、Failed to fetch）對使用者沒有意義（lib/errors 的 friendlyError）。 */
@@ -875,7 +867,8 @@ const UNCLASSIFIED_FIX = {
 const AI_CATS = { 地瓜: '主食', 拿鐵: '飲料', 測試便當: '便當' }
 
 const classifyCalls = (page: Page) => page.evaluate(() => (window as unknown as ClassifyWindow).__classifyCalls)
-const tagOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat-tag')
+const tagOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-row-hit .sub')
+const iconOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat .ci')
 const catSelect = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat select')
 
 test('類型補判：開 app 後只送未分類的、一個類型寫一次且帶「未分類、沒手動改過」的條件，食品庫標籤補上', async ({ page }) => {
@@ -910,8 +903,8 @@ test('類型補判：開 app 後只送未分類的、一個類型寫一次且帶
   await expect(tagOf(page, '溫泉蛋'), '原本就有類型的照舊').toHaveText('配菜')
   await expect(catSelect(page, '地瓜')).toHaveAttribute('aria-label', '地瓜 的類型：主食')
   // v2.131：標籤左端是同類型的圖示，補判回來圖示跟著換
-  await expect(tagOf(page, '地瓜').locator('.ci')).toHaveAttribute('data-category', '主食')
-  await expect(tagOf(page, '溫泉蛋').locator('.ci')).toHaveAttribute('data-category', '配菜')
+  await expect(iconOf(page, '地瓜')).toHaveAttribute('data-category', '主食')
+  await expect(iconOf(page, '溫泉蛋')).toHaveAttribute('data-category', '配菜')
 })
 
 test('類型補判失敗：維持未分類、不寫入；重新開 app 再補一次就補上', async ({ page }) => {
@@ -919,7 +912,7 @@ test('類型補判失敗：維持未分類、不寫入；重新開 app 再補一
   await expect.poll(async () => (await classifyCalls(page)).length).toBe(1)
   await openLibrary(page)
   await expect(tagOf(page, '地瓜')).toHaveText('未分類')
-  await expect(tagOf(page, '地瓜').locator('.ci')).toHaveAttribute('data-category', '未分類')
+  await expect(iconOf(page, '地瓜')).toHaveAttribute('data-category', '未分類')
   await expect(rows(page).filter({ hasText: '地瓜' }).locator('.lib-cat')).toHaveAttribute('data-empty', 'true')
   expect(await foodWrites(page), '失敗了不該寫任何東西').toHaveLength(0)
   await expect(page.locator('.notice'), '背景補判失敗不打擾使用者').toHaveCount(0)

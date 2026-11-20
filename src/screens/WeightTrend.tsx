@@ -6,7 +6,8 @@
    量法斷點只切體脂（v2.146）：體重照常連續；體脂在斷點斷開，斷點前的那段畫淡。
    運算在 src/lib/weightTrend.ts；這裡只管畫。本頁是 lazy chunk（recharts 不進主 bundle）。 */
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, useActiveTooltipDataPoints, useIsTooltipActive } from 'recharts'
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import ChartActiveDay from '@/components/ChartActiveDay'
 import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
@@ -34,15 +35,6 @@ export interface WeightTrendProps {
 
 type PlanPoint = TrendPoint & { plan: number | null }
 type LabelBox = { viewBox: { x: number; y: number } }
-
-/** 掛在圖裡面，把 recharts 自己的 tooltip 狀態（指到哪一天）往上回報；記日序不記索引——切範圍、完整歷史晚到時索引會指到別天 */
-function ActiveDay({ onDay }: { onDay: (t: number | null) => void }) {
-  const active = useIsTooltipActive()
-  const pts = useActiveTooltipDataPoints<PlanPoint>()
-  const t = active && pts && pts.length > 0 ? pts[0].t : null
-  useEffect(() => { onDay(t) }, [t, onDay])
-  return null
-}
 
 /** 圖上的小字（計畫、換量法）：卡片色光暈，壓在線上也讀得到（同 v2.75 端點數字的做法） */
 const chartNote = (x: number, y: number, text: string, anchor: 'start' | 'end') => (
@@ -209,7 +201,7 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, 
                 <XAxis {...axis} />
                 <YAxis width={36} domain={kgDomain} ticks={yTicks(kgDomain)} tickLine={false} axisLine={false} allowDataOverflow />
                 <Tooltip active={tipActive} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
-                <ActiveDay onDay={setHoverW} />
+                <ChartActiveDay onDay={setHoverW} />
                 {plannedKgPerWeek !== null && (
                   <Line dataKey="plan" name="計畫" stroke="var(--ink-muted)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={false} isAnimationActive={false} />
                 )}
@@ -255,7 +247,7 @@ export default function WeightTrend({ weights, plannedKgPerWeek, onBreakChange, 
                     {/* 96px 高的小圖放不下每 1% 一條刻度，至少每 2% */}
                     <YAxis width={36} domain={fatDomain} ticks={yTicks(fatDomain, 2)} tickLine={false} axisLine={false} />
                     <Tooltip active={tipActive} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
-                    <ActiveDay onDay={setHoverF} />
+                    <ChartActiveDay onDay={setHoverF} />
                     {breaks.map((p) => (
                       <ReferenceLine key={p.date} x={p.t} stroke="var(--ink-faint)" strokeDasharray="2 3"
                         label={({ viewBox }: LabelBox) => chartNote(viewBox.x - 4, viewBox.y + 10, '換量法', 'end')} />
