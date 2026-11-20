@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-20）：v2.148「吃、練、體重並排」（spec 階段 4 丁，使用者選 A、訓練量用次數）已實作：體重趨勢頁體重卡下面一張卡，三排同軸（體重趨勢／每週平均攝取＋目標虛線／訓練次數）。push 前 review 修 7 條。CI 全量待確認。
-下一步：gh run watch 看 CI；真機看 v2.146／v2.147／v2.148（拖曳選週、30 天範圍、「N 週來」）。最快 11/29 回推第一次會問。
+現況（2026-11-20）：v2.148「吃、練、體重並排」（spec 階段 4 丁，使用者選 A、訓練量用次數）已實作：體重趨勢頁體重卡下面一張卡，三排同軸（體重趨勢／每週平均攝取＋目標虛線／訓練次數）。push 前 review 修 8 條。CI 全量 577 過、0 flaky、已部署（run 44723223743）。
+下一步：真機看 v2.146／v2.147／v2.148（拖曳選週、30 天範圍、「N 週來」）。最快 11/29 回推第一次會問。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
