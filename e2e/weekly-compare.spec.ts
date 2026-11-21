@@ -71,7 +71,7 @@ test('讀數預設上週：平均只算記完整的天、訓練次數、體重�
   await expect(stats.nth(1)).toContainText('2次')
   await expect(stats.nth(2)).toContainText('+0.3kg')
   // 這週以前最後一筆是 10/20，到 11/13 相隔 24 天 → 3 週：變化是三週累積的，要寫出來
-  await expect(stats.nth(2)).toContainText('體重趨勢・3 週來')
+  await expect(stats.nth(2)).toContainText('平均體重・3 週來')
 })
 
 test('三排對齊：體重排的點落在同一欄長條的中心，選取底色三排都有寬度', async ({ page }) => {

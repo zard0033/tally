@@ -209,3 +209,7 @@
 - **Pages:** lesson-recharts-small-multiples-recharts-3-2026-11-20.md
 - **Summary:** Created new page "lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）"
 
+## [2026-11-21T15:49:22.295Z] ingest
+- **Pages:** lesson-chart-touch-2026-11-21.md
+- **Summary:** Created new page "lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）"
+

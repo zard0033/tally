@@ -1,11 +1,12 @@
 /* 吃、練、體重並排（spec「階段 4 丁」，v2.148，樣張 _design-sample/weekly-compare.html 的 A）：體重趨勢頁體重卡下面那張。
-   三排小圖共用週的 X 軸（syncId）：體重趨勢、每週平均攝取＋目標虛線、訓練一次一格——三種量尺度不同，不做雙軸（dataviz）。
+   三排小圖共用週的 X 軸（syncId）：平均體重、每週平均攝取＋目標虛線、訓練一次一格——三種量尺度不同，不做雙軸（dataviz）。
    讀數預設上週；手指在任一排拖曳（滑鼠移過、鍵盤方向鍵）選週，三排同一欄打底色、讀數換那週，放開回到上週（同 v2.146 體重卡）。
    選取底色用 ReferenceArea 畫在長條底下：tooltip 的自訂游標在 recharts 3 畫在所有圖形上面，會蓋住長條。
    運算在 src/lib/weeklyCompare.ts；只並排，不下因果結論。 */
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type BarShapeProps } from 'recharts'
 import ChartActiveDay from '@/components/ChartActiveDay'
+import { useChartHover } from '@/components/useChartHover'
 import { listIntakeKcal } from '@/lib/api'
 import { dailyKcalFromRows, type DailyKcal } from '@/lib/baseline'
 import { monthDay } from '@/lib/dates'
@@ -96,9 +97,8 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
     return rows.map((w, i) => ({ ...w, gap: w.avgKcal === null ? 1 : null, gapText: texts[i] }))
   }, [rows])
 
-  const [hover, setHover] = useState<(number | null)[]>([null, null, null])
-  const [released, setReleased] = useState(false)
-  const onDay = useMemo(() => [0, 1, 2].map((i) => (t: number | null) => setHover((h) => (h[i] === t ? h : h.map((v, j) => (j === i ? t : v))))), [])
+  /* 三排（體重 0、攝取 1、訓練 2）共用一份「指到哪週」，規則見 useChartHover（v2.149） */
+  const hover = useChartHover(3)
 
   if (intake === null || (stale && rows === null)) {
     return (
@@ -118,8 +118,7 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
   }
 
   const def = defaultWeekIndex(rows)
-  const hoverT = released ? null : hover.find((t) => t !== null) ?? null
-  const hoverIdx = hoverT === null ? -1 : rows.findIndex((w) => w.t === hoverT)
+  const hoverIdx = hover.t === null ? -1 : rows.findIndex((w) => w.t === hover.t)
   const sel = rows[hoverIdx >= 0 ? hoverIdx : def]
   const kgVals = rows.flatMap((w) => (w.trend === null ? [] : [w.trend]))
   const kgDomain = spanDomain(kgVals, 0.3, 1, 3)
@@ -133,15 +132,13 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
   const workouts = rows.reduce((a, w) => a + w.workouts, 0)
   const tickEvery = Math.max(1, Math.ceil(rows.length / 4))
 
-  const engage = () => setReleased(false)
-  const pointer = { onMouseMove: engage, onTouchStart: engage, onTouchEnd: () => setReleased(true) }
   /* 只有攝取那張圖可以用鍵盤聚焦（方向鍵選週，另兩張跟著 syncId 走）：三張都可聚焦的話是三個沒有名字的 tab 停點 */
   const KEYBOARD_TITLE = '每週平均攝取；方向鍵切換週，上面的讀數跟著換'
-  const tipActive = released ? false : undefined
+  const tipActive = hover.tipActive
   const common = (i: number) => (
     <>
       <Tooltip active={tipActive} content={() => null} cursor={false} isAnimationActive={false} />
-      <ChartActiveDay onDay={onDay[i]} />
+      <ChartActiveDay onDay={hover.onDay[i]} />
       <ReferenceArea x1={sel.t} x2={sel.t} fill="var(--raised)" fillOpacity={1} stroke="none" ifOverflow="visible" />
     </>
   )
@@ -150,7 +147,7 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
   const kcalSub = sel.avgKcal === null ? '沒記完整' : `平均・記 ${sel.fullDays} 天完整`
   /* 中間幾週沒量時，變化是那幾週累積的：寫出週數，不冒充成這一週的變化 */
   const span = (w: WeekRow) => (w.deltaWeeks !== null && w.deltaWeeks > 1 ? `${w.deltaWeeks} 週來` : '')
-  const kgSub = sel.trendDelta === null ? '這週沒量體重' : span(sel) ? `體重趨勢・${span(sel)}` : '體重趨勢'
+  const kgSub = sel.trendDelta === null ? '這週沒量體重' : span(sel) ? `平均體重・${span(sel)}` : '平均體重變化'
 
   return (
     <section className={`trend-card wk-card${stale ? ' is-stale' : ''}`} aria-label="吃、練、體重" aria-busy={stale || undefined}>
@@ -163,25 +160,26 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
         <div><dt>{kgSub}</dt><dd>{sel.trendDelta === null ? '—' : <>{signed1(sel.trendDelta)}<small>kg</small></>}</dd></div>
       </dl>
 
-      {/* 鍵盤操作也算「回到圖上」：手指放開後 released 會把 tooltip 關掉，只有滑鼠或手指能解開的話，觸控筆電上方向鍵會失效 */}
-      <div onKeyDownCapture={engage}>
-      <h3 className="wk-band">體重趨勢 kg</h3>
+      <h3 className="wk-band">平均體重 kg</h3>
+      <div className="trend-chart-hit" {...hover.bind(0)}>
       <ResponsiveContainer width="100%" height={72}>
-        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} accessibilityLayer={false} {...pointer}>
+        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} accessibilityLayer={false}>
           {common(0)}
           {/* scale="band" 要寫明：沒有 Bar 的圖，recharts 給類別軸 point 比例尺，頭尾兩點貼在圖框邊上、跟下面兩排的欄對不齊，
               選取底色（ReferenceArea 取 bandwidth）也變成 0 寬 */}
           <XAxis dataKey="t" scale="band" hide />
           <YAxis width={AXIS_W} domain={kgDomain} ticks={yTicks(kgDomain)} tickLine={false} axisLine={false} />
-          <Line dataKey="trend" name="體重趨勢" connectNulls stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+          <Line dataKey="trend" name="平均體重" connectNulls stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
             dot={{ r: 3, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} activeDot={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
 
       {/* 目標的數字寫在標題，不標在圖上：長條常常剛好頂到目標線，標在線上會壓到長條 */}
       <h3 className="wk-band">平均攝取 卡／天{targetKcal !== null && <>・目標 <b>{Math.round(targetKcal)}</b></>}</h3>
+      <div className="trend-chart-hit" {...hover.bind(1)}>
       <ResponsiveContainer width="100%" height={96}>
-        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} title={KEYBOARD_TITLE} {...pointer}>
+        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} title={KEYBOARD_TITLE}>
           {common(1)}
           <XAxis dataKey="t" hide />
           <YAxis width={AXIS_W} domain={kcalDomain} ticks={[kcalDomain[1] / 2, kcalDomain[1]]} tickLine={false} axisLine={false} />
@@ -193,11 +191,13 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
           )}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
 
       <h3 className="wk-band">訓練{!trained && '（訓練資料還沒載到）'}</h3>
       {/* 30＝recharts XAxis 預設高度：少算的話最上面那格會超出繪圖區、選取底色蓋不到 */}
+      <div className="trend-chart-hit" {...hover.bind(2)}>
       <ResponsiveContainer width="100%" height={trainH + 30}>
-        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} accessibilityLayer={false} {...pointer}>
+        <ComposedChart data={data} syncId="weekly-compare" margin={MARGIN} accessibilityLayer={false}>
           {common(2)}
           <XAxis dataKey="t" tickFormatter={(t: number) => monthDay(isoOfDay(t))} interval={tickEvery - 1} tickLine={false} axisLine={{ stroke: 'var(--rule)' }} />
           <YAxis width={AXIS_W} domain={[0, maxWorkouts]} tick={false} axisLine={false} />
@@ -207,7 +207,7 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
       </div>
 
       <ul className="trend-legend wk-legend">
-        <li><i className="k-line" aria-hidden="true" />體重趨勢</li>
+        <li><i className="k-line" aria-hidden="true" />平均體重</li>
         <li><i className="k-bar" aria-hidden="true" />平均攝取</li>
         <li><i className="k-hollow" aria-hidden="true" />記不到 {WEEK_FULL_DAYS} 天</li>
         {targetKcal !== null && <li><i className="k-plan" aria-hidden="true" />現在的目標</li>}
@@ -221,7 +221,7 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
       <details className="wk-details">
         <summary>每週明細</summary>
         <table className="wk-table">
-          <caption className="sr-only">每週的平均攝取、訓練次數與體重趨勢變化，新到舊</caption>
+          <caption className="sr-only">每週的平均攝取、訓練次數與平均體重變化，新到舊</caption>
           <thead><tr><th scope="col">週</th><th scope="col">平均攝取</th><th scope="col">訓練</th><th scope="col">體重</th></tr></thead>
           <tbody>
             {[...rows].reverse().map((w) => (

@@ -4,7 +4,10 @@
    不呼叫被測的函式。 */
 import { test, expect, type Page } from '@playwright/test'
 import { FIX, TODAY } from './fixtures'
-import { openApp, shiftIso } from './harness'
+import { openApp, recordText, shiftIso, touch } from './harness'
+
+// 讀數的日期寫法（同 src/lib/dates.ts 的 monthDay）：11/9，不補零
+const md = (iso: string) => iso.split('-').slice(1).map(Number).join('/')
 
 interface Reading { off: number; kg: number; fat: number | null }
 
@@ -72,15 +75,20 @@ test('明細表新到舊：最上面是今天，體重與體脂欄對得上', as
 /* 讀數（v2.146）的預期值用獨立的 Python 照 0.9 平滑常數逐筆算（不呼叫被測函式）：
    全部歷史平滑到今天＝79.709…；90 天範圍第一點（off −58）＝77.175…，變化 +2.53；
    計畫從 77.175 起每週 −0.5、到今天（58 天）＝73.03，比計畫多 6.68。 */
-test('讀數：大數字是現在的趨勢體重，下一行是這段變化與比計畫多少', async ({ page }) => {
+test('讀數：大數字是現在的平均體重，下一行是最近一次量到，再下一行是這段變化與比目標進度多少', async ({ page }) => {
   await openTrend(page)
   const read = page.locator('section[aria-label="體重"] .trend-read')
-  await expect(read.locator('.trend-read-k')).toHaveText('現在的趨勢體重')
+  await expect(weightCard(page).locator('.trend-card-title')).toHaveText('體重')
+  await expect(read.locator('.trend-read-k')).toHaveText('現在的平均體重')
   await expect(read.locator('.trend-read-big b')).toHaveText('79.7')
-  await expect(read.locator('.trend-read-sub')).toHaveText('90 天 +2.5 kg・比計畫多 6.7 kg')
+  await expect(read.locator('.trend-read-sub').nth(0)).toHaveText(`最近一次量到 84.0 kg（${md(TODAY)}）`)
+  await expect(read.locator('.trend-read-sub').nth(1)).toHaveText('90 天下來 +2.5 kg・比目標進度多 6.7 kg')
+  // 「平均體重」第一次出現的地方要說它是什麼（v2.149：使用者看不懂「趨勢體重」）
+  await expect(weightCard(page).locator('.trend-note')).toContainText('平均體重：每天的體重會因為水分上下差 1 公斤')
+  await expect(page.locator('[data-screen="weight-trend"]')).not.toContainText('趨勢體重')
 })
 
-test('指標移到體脂圖：十字線同步，讀數換成那一天（當次量測、趨勢、體脂），移開回到最新', async ({ page }) => {
+test('指標移到體脂圖：十字線同步，讀數換成那一天（大數字仍是平均、下一行是那天量到的），移開回到最新', async ({ page }) => {
   await openTrend(page)
   // 30 天：一天約 9px，指標對得準；90 天一天只有 3px，差幾像素就會落到前兩天
   await page.locator('.seg button', { hasText: '30 天' }).click()
@@ -90,15 +98,15 @@ test('指標移到體脂圖：十字線同步，讀數換成那一天（當次�
   // 圖的右緣（扣掉 margin.right 8px）是今天（X 軸終點）
   await page.mouse.move(box!.x + box!.width - 8, box!.y + box!.height / 2)
   const read = page.locator('section[aria-label="體重"] .trend-read')
-  await expect(read.locator('.trend-read-k')).toContainText('量到')
-  await expect(read.locator('.trend-read-big b')).toHaveText('84.0')
-  await expect(read.locator('.trend-read-sub')).toContainText('趨勢 79.7')
-  await expect(read.locator('.trend-read-sub')).toContainText('體脂 20.5%')
+  await expect(read.locator('.trend-read-k')).toHaveText(`${md(TODAY)} 的平均體重`)
+  // 大數字的意思不變＝平均（那天的平均 79.7），不是那天量到的 84.0（差 4.3，換錯一眼看得出）
+  await expect(read.locator('.trend-read-big b')).toHaveText('79.7')
+  await expect(read.locator('.trend-read-sub').nth(0)).toHaveText('那天量到 84.0 kg・體脂 20.5%')
   await expect(page.locator('section[aria-label="體脂"] .trend-subval')).toHaveText('20.5%')
   await expect(page.locator('.recharts-tooltip-cursor')).toHaveCount(2)
   await page.mouse.move(0, 0)
-  await expect(read.locator('.trend-read-big b')).toHaveText('79.7')
-  await expect(read.locator('.trend-read-k')).toHaveText('現在的趨勢體重')
+  await expect(read.locator('.trend-read-k')).toHaveText('現在的平均體重')
+  await expect(read.locator('.trend-read-sub').nth(0)).toContainText('最近一次量到')
 })
 
 /* 手指放開（v2.146 review H1）：recharts 放開後不收 tooltip，讀數回到最新的同時十字線也要收掉，畫面上不能有兩個「現在」。
@@ -109,12 +117,145 @@ test('手指放開：讀數回到最新，兩張圖的十字線一起收掉', as
   const wrap = page.locator('section[aria-label="體重"] .recharts-wrapper')
   const box = await wrap.boundingBox()
   await page.mouse.move(box!.x + box!.width - 8, box!.y + box!.height / 2)
-  const big = page.locator('section[aria-label="體重"] .trend-read-big b')
-  await expect(big).toHaveText('84.0')
+  const k = page.locator('section[aria-label="體重"] .trend-read-k')
+  await expect(k).toHaveText(`${md(TODAY)} 的平均體重`)
   await expect(page.locator('.recharts-tooltip-cursor')).toHaveCount(2)
   await wrap.locator('.recharts-surface').dispatchEvent('touchend')
-  await expect(big).toHaveText('79.7')
+  await expect(k).toHaveText('現在的平均體重')
   await expect(page.locator('.recharts-tooltip-cursor')).toHaveCount(0)
+})
+
+/* 觸控（v2.149，使用者真機：點的時候會閃一下、體重圖拖不動）。合成 touch 事件見 harness 的 touch()；
+   「閃」只會出現一兩幀，輪詢斷言看不到，用 recordText 記下讀數的每一次變化。 */
+const K = '[data-screen="weight-trend"] section[aria-label="體重"] .trend-read-k'
+async function surfaceOf(page: Page, name: '體重' | '體脂') {
+  const surf = page.locator(`section[aria-label="${name}"] .recharts-surface`).first()
+  await surf.scrollIntoViewIfNeeded()
+  const b = (await surf.boundingBox())!
+  return { surf, y: b.y + b.height / 2, right: b.x + b.width - 12, mid: b.x + b.width * 0.55 }
+}
+
+test('觸控：放開後重新起手，讀數不會先閃回上次那天；只碰一下（touchstart）讀數不變', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const { surf, y, right, mid } = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  // 先從左邊 40px 拖到右邊（今天那筆）、放開：移動超過 10px 才算拖，放開才收
+  await touch(surf, 'touchstart', right - 40, y)
+  await touch(surf, 'touchmove', right, y)
+  await expect(k).toHaveText(`${md(TODAY)} 的平均體重`)
+  const dayA = await k.textContent()
+  await touch(surf, 'touchend', right, y)
+  await expect(k).toHaveText('現在的平均體重')
+
+  const reads = await recordText(page, K, '__reads')
+  // 在中間起手：touchstart 本身不改讀數
+  await touch(surf, 'touchstart', mid, y)
+  await page.waitForTimeout(200)
+  await expect(k).toHaveText('現在的平均體重')
+  await touch(surf, 'touchmove', mid, y)
+  await expect(k).not.toHaveText('現在的平均體重')
+  const dayB = await k.textContent()
+  expect(dayB).not.toBe(dayA)
+  expect(await reads(), '中途閃回上次那天').not.toContain(dayA)
+})
+
+test('觸控：點一下（不拖）不閃；iOS 隨後補發的滑鼠移動顯示點到的那天', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const { surf, y, mid } = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  const reads = await recordText(page, K, '__tap')
+  await touch(surf, 'touchstart', mid, y)
+  await touch(surf, 'touchend', mid, y)
+  await page.waitForTimeout(200)
+  expect(await reads(), '點一下的當下讀數不該動').toEqual([])
+  await page.mouse.move(mid, y)
+  await expect(k).toHaveText(/ 的平均體重$/)
+  await expect(k).not.toHaveText('現在的平均體重')
+})
+
+/* 點一下＝touchstart、touchend，iOS 隨後補發 mousemove。v2.149 review：點一下也「放開」的話，連點兩處讀數會是 A → 現在 → B */
+async function tap(page: Page, surf: import('@playwright/test').Locator, x: number, y: number, jitter = 0) {
+  await touch(surf, 'touchstart', x, y)
+  if (jitter) await touch(surf, 'touchmove', x + jitter, y)
+  await touch(surf, 'touchend', x + jitter, y)
+  await page.mouse.move(x + jitter, y)
+}
+
+test('觸控：連點兩處，讀數從 A 直接換到 B，中途不閃回「現在」', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const { surf, y, right, mid } = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  await tap(page, surf, right, y)
+  await expect(k).toHaveText(`${md(TODAY)} 的平均體重`)
+  const reads = await recordText(page, K, '__taps')
+  await tap(page, surf, mid, y)
+  await expect(k).not.toHaveText(`${md(TODAY)} 的平均體重`)
+  await expect(k).toHaveText(/ 的平均體重$/)
+  await page.waitForTimeout(200)
+  expect(await reads(), '連點中途閃回現在').not.toContain('現在的平均體重')
+})
+
+test('觸控：點的時候手指抖一下（不到 10px）還是算點一下，停在點到的那天', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const { surf, y, mid } = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  await tap(page, surf, mid, y, 3)
+  await page.waitForTimeout(300)
+  await expect(k).toHaveText(/ 的平均體重$/)
+  await expect(k).not.toHaveText('現在的平均體重')
+})
+
+test('觸控：圖上的線、點、字都不接觸控，觸控目標固定是 svg（不會被 render 換掉的節點吃掉）', async ({ page }) => {
+  await openTrend(page)
+  const card = weightCard(page)
+  // 每次量到的點（圓點本身會接觸控，沒有這條規則時命中的是 <circle>）：手指落在上面時，命中的要是 svg 本身
+  for (const el of [card.locator('.recharts-line-dot').first(), card.locator('.recharts-line-dot').last()]) {
+    const b = (await el.boundingBox())!
+    const hit = await page.evaluate(({ x, y }) => (document.elementFromPoint(x, y) as Element).tagName.toLowerCase(), { x: b.x + b.width / 2, y: b.y + b.height / 2 })
+    expect(hit).toBe('svg')
+  }
+})
+
+test('觸控：體重圖拖過、放開後，改拖體脂圖，讀數跟著體脂圖走', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const w = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  await touch(w.surf, 'touchstart', w.right - 40, w.y)
+  await touch(w.surf, 'touchmove', w.right, w.y)
+  await expect(k).toHaveText(`${md(TODAY)} 的平均體重`)
+  const dayA = await k.textContent()
+  await touch(w.surf, 'touchend', w.right, w.y)
+  await expect(k).toHaveText('現在的平均體重')
+  const f = await surfaceOf(page, '體脂')
+  await touch(f.surf, 'touchstart', f.mid - 40, f.y)
+  await touch(f.surf, 'touchmove', f.mid, f.y)
+  await expect(k).toHaveText(/ 的平均體重$/)
+  await expect(k).not.toHaveText(dayA!)
+  await expect(k).not.toHaveText('現在的平均體重')
+})
+
+test('觸控：系統手勢取消觸控（touchcancel）跟放開一樣，讀數回到現在', async ({ page }) => {
+  await openTrend(page)
+  await page.locator('.seg button', { hasText: '30 天' }).click()
+  const { surf, y, mid } = await surfaceOf(page, '體重')
+  const k = page.locator(K)
+  await touch(surf, 'touchstart', mid, y)
+  await touch(surf, 'touchmove', mid, y)
+  await expect(k).not.toHaveText('現在的平均體重')
+  await touch(surf, 'touchcancel', mid, y)
+  await expect(k).toHaveText('現在的平均體重')
+})
+
+test('觸控：圖表那層垂直照樣捲、雙指照樣縮放，橫拖交給圖表（touch-action）', async ({ page }) => {
+  await openTrend(page)
+  const ta = await page.locator('section[aria-label="體重"] .trend-chart-hit').evaluate((el) => getComputedStyle(el).touchAction)
+  expect(ta).toContain('pan-y')
+  expect(ta).toContain('pinch-zoom')
 })
 
 test('範圍內一筆體脂都沒有：體脂卡不畫，改一行說明', async ({ page }) => {
@@ -174,20 +315,20 @@ test('趨勢頁自己的請求失敗、但設定頁已經有資料：退回那�
 const weightCard = (page: Page) => page.locator('section[aria-label="體重"]')
 const planPath = (page: Page) => weightCard(page).locator('path[stroke-dasharray="4 4"]')
 
-test('計畫 vs 實際：讀數寫比計畫多少，圖上有一條虛線計畫線，穿出圖框的地方標「計畫：今天該在」', async ({ page }) => {
+test('計畫 vs 實際：讀數寫比目標進度多少，圖上有一條虛線，穿出圖框的地方標「照目標今天該在」', async ({ page }) => {
   await openTrend(page)
-  await expect(weightCard(page).locator('.trend-read-sub')).toContainText('比計畫多 6.7 kg')
-  await expect(weightCard(page).locator('.trend-legend')).toContainText('計畫')
+  await expect(weightCard(page).locator('.trend-read-sub').nth(1)).toContainText('比目標進度多 6.7 kg')
+  await expect(weightCard(page).locator('.trend-legend')).toContainText('照目標該走的路')
   await expect(planPath(page), '計畫線沒畫出來').toHaveCount(1)
   // 計畫到今天是 73.0，在 Y 軸（照量到的值撐）之外：小標標在穿出底邊的地方，箭頭朝下
-  await expect(weightCard(page).locator('.trend-chart-note')).toHaveText('計畫：今天該在 73.0 ↓')
+  await expect(weightCard(page).locator('.trend-chart-note')).toHaveText('照目標今天該在 73.0 ↓')
 })
 
 test('自訂目標沒有速度：不畫計畫線，讀數只寫這段變化', async ({ page }) => {
   await openApp(page, {}, { ...FIX, weight: toRows(READINGS), profile: [{ ...FIX.profile[0], use_custom_targets: true, custom_kcal: 2000, custom_protein_g: 150, custom_fat_g: 60, custom_carb_g: 200 }] })
   await page.locator('.tab[aria-label="設定"]').click()
   await page.locator('.entry-row', { hasText: '體重趨勢' }).click()
-  await expect(weightCard(page).locator('.trend-read-sub')).toHaveText('90 天 +2.5 kg')
+  await expect(weightCard(page).locator('.trend-read-sub').nth(1)).toHaveText('90 天下來 +2.5 kg')
   await expect(planPath(page)).toHaveCount(0)
   await expect(weightCard(page).locator('.trend-chart-note')).toHaveCount(0)
 })
@@ -202,16 +343,16 @@ const BREAK_ROWS = [
 const fatCard = (page: Page) => page.locator('section[aria-label="體脂"]')
 const breakLine = (page: Page) => fatCard(page).locator('.recharts-reference-line')
 
-test('量法斷點只切體脂：體脂圖一條細線標「換量法」、斷點前那段畫淡；體重圖沒有細線、趨勢一條到底', async ({ page }) => {
+test('量法斷點只切體脂：體脂圖一條細線標「換秤」、斷點前那段畫淡；體重圖沒有細線、趨勢一條到底', async ({ page }) => {
   await openTrend(page, BREAK_ROWS)
   await expect(breakLine(page)).toHaveCount(1)
-  await expect(fatCard(page).locator('.trend-chart-note')).toHaveText('換量法')
+  await expect(fatCard(page).locator('.trend-chart-note')).toHaveText('換秤')
   await expect(weightCard(page).locator('.recharts-reference-line'), '體重不看斷點').toHaveCount(0)
-  await expect(page.locator(`tr[data-date="${shiftIso(TODAY, -20)}"] .trend-brk-tag`)).toHaveText('換量法')
-  await expect(fatCard(page).locator('.trend-note')).toContainText('換量法，前後不能直接比')
+  await expect(page.locator(`tr[data-date="${shiftIso(TODAY, -20)}"] .trend-brk-tag`)).toHaveText('換秤')
+  await expect(fatCard(page).locator('.trend-note')).toContainText('換了秤或電池，前後不能直接比')
   await expect(fatCard(page).locator('.trend-note'), '換了之後量了 6 筆，夠了就不寫筆數').not.toContainText('換了之後量了')
   // 體脂讀數只算新的那段：斷點後全是 22，趨勢就是 22.0（跨段平滑的話會被 20 拉低）
-  await expect(fatCard(page).locator('.trend-subval')).toHaveText('22.0% 趨勢')
+  await expect(fatCard(page).locator('.trend-subval')).toHaveText('22.0% 平均')
   const fatLines = fatCard(page).locator('path.recharts-line-curve[stroke="var(--ink-muted)"]')
   await expect(fatLines, '體脂趨勢要在斷點斷開（兩段各一條）').toHaveCount(2)
   await expect(fatLines.first(), '斷點前那段畫淡').toHaveAttribute('stroke-opacity', '0.45')
@@ -229,7 +370,7 @@ test('量法斷點：明細表點日期展開開關，改了就存；取消後�
   const btn = page.locator(`tr[data-date="${day}"] .trend-row-btn`)
   await btn.click()
   await expect(btn).toHaveAttribute('aria-expanded', 'true')
-  const box = page.getByRole('checkbox', { name: /體脂從這天起量法不同/ })
+  const box = page.getByRole('checkbox', { name: /從這天起換了秤或電池/ })
   await box.check()
   // stub 在頁面裡攔 fetch（不經過網路），寫入記在 __writes
   const patches = () =>

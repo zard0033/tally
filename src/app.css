@@ -954,9 +954,16 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 每次量測＝空心圈（v2.146）：讀數是雜訊、趨勢才是重點，原始點退到背景 */
 .trend-legend .k-ring { width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ink-faint); }
 .trend-legend .k-line { width: 14px; height: 2.5px; border-radius: 2px; background: var(--accent); }
-/* 計畫線（v2.137）：虛線＝「預定的」，跟實線的趨勢（量到的）分開；--ink-muted 對卡片 5.98 */
+/* 照目標該走的路（v2.137 計畫線，v2.149 改名）：虛線＝「預定的」，跟實線的平均體重（量到的）分開；--ink-muted 對卡片 5.98 */
 .trend-legend .k-plan { width: 14px; height: 0; border-top: 1.5px dashed var(--ink-muted); }
-/* 讀數（v2.146「先講結論」）：大數字＝現在的趨勢體重；手指在圖上時換成那一天。字級沿用每日目標的 --t-hero */
+/* 讀數（v2.146「先講結論」，v2.149 大數字固定＝平均體重）：沒指著＝現在、指著＝那一天。字級沿用每日目標的 --t-hero */
+.trend-card-title { margin: 0 var(--s-1) var(--s-2); font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+/* 包住每張趨勢圖的那層（v2.149，useChartHover 的事件掛在這裡）：垂直照樣捲頁面、雙指照樣縮放（WCAG，見 body 的 touch-action），
+   橫向拖曳只交給圖表——不讓瀏覽器把橫拖判成手勢 */
+.trend-chart-hit { touch-action: pan-y pinch-zoom; }
+/* 圖裡的線、點、字都不接觸控（v2.149 review）：讀數走 recharts 的座標，不靠點中哪個圖形；觸控目標固定是不會被重建的 <svg>——
+   起手落在 render 時被換掉的節點上，iOS 之後的 touchmove／touchend 會送給脫離畫面的節點、冒泡不到 React，圖就拖不動、放開也收不回 */
+.trend-chart-hit svg * { pointer-events: none; }
 .trend-read { padding: 0 var(--s-1) var(--s-3); }
 .trend-read-k { min-height: 1.4em; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .trend-read-big { display: flex; align-items: baseline; gap: var(--s-1); }
@@ -965,6 +972,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-read-big span { font-size: var(--t-base); color: var(--ink-muted); }
 .trend-read-sub { min-height: 1.5em; margin: var(--s-2) 0 0; font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
 .trend-read-sub b { font-weight: 600; color: var(--ink); }
+/* 讀數第三行（結論）緊接第二行（單次量到）；指著時第三行多半是空的，min-height 撐住、版面不跳 */
+.trend-read-sub + .trend-read-sub { margin-top: 0; }
 /* 體脂小圖（v2.146）：同一張卡、髮絲線隔開，不另開一張卡（兩張圖共用 X 軸，各自的 Y 軸，不是雙軸） */
 .trend-fat { margin: var(--s-4) calc(-1 * var(--s-3)) 0; padding: var(--s-4) var(--s-3) 0; border-top: 1px solid var(--rule-subtle); }
 .trend-subhead { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--s-1); }
@@ -972,7 +981,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .trend-subval { font-family: var(--font-num); font-weight: 800; font-size: var(--t-md); color: var(--ink); }
 .trend-subval small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
 .trend-note { margin: var(--s-1) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
-/* 圖上的小字（計畫、換量法）：卡片色 3px 光暈——recharts 會把線的描邊往下繼承給 <text>，字會變粗變糊；paint-order 讓描邊墊在字下面，壓在點與線上也讀得到（v2.75 起的做法） */
+/* 圖上的小字（照目標、換秤）：卡片色 3px 光暈——recharts 會把線的描邊往下繼承給 <text>，字會變粗變糊；paint-order 讓描邊墊在字下面，壓在點與線上也讀得到（v2.75 起的做法） */
 .trend-chart-note { font-size: var(--t-xs); fill: var(--ink-muted); stroke: var(--card); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
 .trend-card .recharts-cartesian-axis-tick-value { font-size: var(--t-xs); fill: var(--ink-muted);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; }

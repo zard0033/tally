@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-21 v2.149 體重趨勢講人話＋觸控（本機，autopilot）：weight-trend 20 過（新 5 條觸控、改 9 條用詞）；weekly-compare＋analysis＋recovery-foreground＋settings-nav 35 過；vitest 1197 過。`e2e:affected` 判 FULL（app.css、新檔 useChartHover）→ smoke 第一次只跑 **54 條全過**——**少一條不是過**：smoke.json 存的是測試標題原文，我改了 weight-trend 一條標題，-g 對不到、靜默略過。`scripts/e2e-smoke.mjs` 加檢查（標題對不到任何 spec 就 exit 1，實測會擋），清單改新標題後 55 過。**通則：數條數，不只看綠**。mutation 3 個（stale 過濾、讀數固定優先序、touchcancel）都紅；第一次做 mutation 時改到變數沒用到，`tsc -b` 擋下 build、e2e 一條沒跑，輸出看起來像「沒結果」，要改成能編譯的 mutation。
+
 2026-11-20 v2.148 吃、練、體重並排（`fc1ca52`，run 44723223743）：**CI 8 份 577 條全過、0 flaky、已部署**（87＋75＋50＋85＋72＋64＋72＋72＝577＝上一輪 570＋新檔 `weekly-compare.spec.ts` 7 條）；burn-in 40 過、vitest 1197 過。本機 push 前：`e2e:affected` 判 FULL（app.css）→ smoke 55 過；weekly-compare＋weight-trend＋settings-nav 32 過。改到的既有測試一條：weight-trend「趨勢頁自己的請求失敗、但設定頁已經有資料」原本斷言整頁沒有「連不上伺服器」，新卡斷網時照實說連不上，改成只看體重卡與明細、另斷言並排卡說連不上。mutation 5 個（記完整判斷、打勾判斷、變化基準、實心門檻、體重排 band 比例尺）都紅。
 
 2026-11-16 v2.145 訓練換皮（本機，push 前）：`--list` 571 條 22 檔（這輪沒加測試，掛點都沒動）。`e2e:affected` 判 FULL（app.css、useSkyEdge）→ smoke 55 過；另跑 training＋rest-timer＋weight-suggest 188 條，185 過 3 紅（training「點縮圖只放大不選取」「動畫載不到退成靜態縮圖」「有氧 sheet：標題是動作名稱」）。三條都碰不到這次的改動（加動作 sheet 的檢視器、有氧 sheet 本身），那一輪我同時在 PowerShell 跑 vitest；單跑 8 過、`--repeat-each=4` 12 過，重現不出來，判負載。**教訓：跑 e2e 時別同時跑 vitest**，CLAUDE.md 只寫了 build 與另開 e2e。vitest 1172 過。review 修正後重跑（沒有別的負載）：training＋rest-timer 180 條紅 1 條，又是「有氧 sheet：標題是動作名稱」；單跑 `--repeat-each=10` 10 過；再跑 training 整檔 147 全過。這條整檔三輪紅兩輪、單跑 14 次全過，抓不到穩定重現，CI（run 43821993989）571 全過、0 flaky，這條一次就過；**仍是觀察項**，再紅就要查（錯誤細節兩次都被下一輪的輸出蓋掉了，下次整檔紅要先把 test-results 拷出來）。smoke 55 過。

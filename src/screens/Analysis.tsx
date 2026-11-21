@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ChartActiveDay from '@/components/ChartActiveDay'
+import { useChartHover } from '@/components/useChartHover'
 import EmptyNote from '@/components/EmptyNote'
 import SegmentedControl, { type SegItem } from '@/components/SegmentedControl'
 import SubPageTop from '@/components/SubPageTop'
@@ -36,11 +37,9 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
   const last = points[points.length - 1]
   const best = bestE1rm(history)
   const latest = history[history.length - 1]
-  /* 指到的那一次（日序）；手指放開時收起 tooltip、讀數回到最新（同體重趨勢 v2.146） */
-  const [hoverT, setHoverT] = useState<number | null>(null)
-  const [released, setReleased] = useState(false)
-  const hp = released || hoverT === null ? null : points.find((p) => p.t === hoverT) ?? null
-  const pointer = { onMouseMove: () => setReleased(false), onTouchStart: () => setReleased(false), onTouchEnd: () => setReleased(true) }
+  /* 指到的那一次（日序）；手指放開、重新起手、點一下的規則見 useChartHover（v2.149，同體重趨勢） */
+  const hover = useChartHover(1)
+  const hp = hover.t === null ? null : points.find((p) => p.t === hover.t) ?? null
   const label = TREND_RANGES.find((r) => r.key === range)?.label ?? ''
 
   const axis = trendXAxis(dom, ticks)
@@ -78,8 +77,9 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
           {points.length === 0 ? (
             <TrendNoRecords onSeeAll={() => setRange('all')} />
           ) : (
+            <div className="trend-chart-hit" {...hover.bind(0)}>
             <ResponsiveContainer width="100%" height={190}>
-              <ComposedChart data={points} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} {...pointer}>
+              <ComposedChart data={points} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="an-area-fill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0" stopColor="var(--accent)" stopOpacity={0.14} />
@@ -89,13 +89,14 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
                 <CartesianGrid vertical={false} stroke="var(--rule-subtle)" />
                 <XAxis {...axis} />
                 <YAxis width={36} domain={yDomain} ticks={yTicks(yDomain)} tickLine={false} axisLine={false} />
-                <Tooltip active={released ? false : undefined} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
-                <ChartActiveDay onDay={setHoverT} />
+                <Tooltip active={hover.tipActive} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
+                <ChartActiveDay onDay={hover.onDay[0]} />
                 <Area dataKey="e1rm" type="linear" stroke="none" fill="url(#an-area-fill)" activeDot={false} isAnimationActive={false} />
                 <Line dataKey="e1rm" name="e1RM 估算" type="linear" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
                   dot={dot} activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
+            </div>
           )}
           {points.length === 1 && <p className="an-note">只有 1 次訓練，再練一次就畫得出線。</p>}
         </section>

@@ -259,3 +259,35 @@ export async function centerOf(locator: Locator) {
   const box = (await locator.boundingBox())!
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
+
+/** 在元素上派一個觸控事件（client 座標）。桌面 WebKit 不能 `new Touch`，這裡用一般 Event 掛上
+ *  touches／changedTouches——React 與 recharts 讀的就是這兩個欄位（v2.149）。touchend／touchcancel 的 touches 是空的。 */
+export async function touch(target: Locator, type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel', x: number, y: number) {
+  await target.evaluate(
+    (el, { type, x, y }) => {
+      const t = { identifier: 1, target: el, clientX: x, clientY: y, pageX: x + window.scrollX, pageY: y + window.scrollY, screenX: x, screenY: y }
+      const down = type === 'touchstart' || type === 'touchmove'
+      const e = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperty(e, 'touches', { value: down ? [t] : [] })
+      Object.defineProperty(e, 'targetTouches', { value: down ? [t] : [] })
+      Object.defineProperty(e, 'changedTouches', { value: [t] })
+      el.dispatchEvent(e)
+    },
+    { type, x, y },
+  )
+}
+
+/** 記下某個元素文字的每一次變化（MutationObserver），抓「一閃而過」的值：輪詢斷言只看得到最後停在哪。
+ *  回傳讀取函式；記錄放在 window 上，以 key 區分。 */
+export async function recordText(page: Page, selector: string, key: string): Promise<() => Promise<string[]>> {
+  await page.evaluate(
+    ({ selector, key }) => {
+      const el = document.querySelector(selector)!
+      const w = window as unknown as Record<string, string[]>
+      w[key] = []
+      new MutationObserver(() => w[key].push(el.textContent ?? '')).observe(el, { childList: true, characterData: true, subtree: true })
+    },
+    { selector, key },
+  )
+  return () => page.evaluate((key) => (window as unknown as Record<string, string[]>)[key], key)
+}

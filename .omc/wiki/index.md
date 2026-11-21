@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 34 pages | Last updated: 2026-11-20T10:51:38.818Z
+> 35 pages | Last updated: 2026-11-21T15:49:22.488Z
 
 ## debugging
 
@@ -16,6 +16,7 @@
 
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
 - [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
+- [lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）](lesson-chart-touch-2026-11-21.md) — # lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）
 - [lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）](lesson-ci-linux-e2e-2026-11-11.md) — # lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）
 - [lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）](lesson-cleanup-review-push-review-2026-11-02.md) — # lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）
 - [lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）](lesson-daily-goal-2026-11-04.md) — # lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）

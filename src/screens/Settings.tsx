@@ -187,7 +187,7 @@ export default function Settings(props: SettingsProps) {
           </div>
           <label className="check-row">
             <input ref={wBrk} type="checkbox" />
-            換了秤或電池：從這天起體脂量法不同
+            從這天起換了秤或電池（體脂前後不能直接比）
           </label>
           <p className="note">同一天再記一次會覆蓋當天那筆。</p>
           <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
