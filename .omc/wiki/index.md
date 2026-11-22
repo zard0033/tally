@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 35 pages | Last updated: 2026-11-22T06:30:22.371Z
+> 36 pages | Last updated: 2026-11-22T13:26:01.141Z
 
 ## debugging
 
@@ -14,6 +14,7 @@
 
 ## pattern
 
+- [lesson-ai-accuracy-tests AI 準度測試的五條通則（2026-11-22）](lesson-ai-accuracy-tests-ai-2026-11-22.md) — # lesson-ai-accuracy-tests AI 準度測試的五條通則（2026-11-22）
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
 - [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
 - [lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）](lesson-chart-touch-2026-11-21.md) — # lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）

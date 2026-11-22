@@ -213,3 +213,11 @@
 - **Pages:** lesson-chart-touch-2026-11-21.md
 - **Summary:** Created new page "lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）"
 
+## [2026-11-22T13:04:31.241Z] query
+- **Pages:** status-facts-edge-function.md, e2e-reference.md, verified-testing-e2e-mutation.md
+- **Summary:** Query "Edge Function 部署 read-label deploy 旗標" → 3 results (of 24 total)
+
+## [2026-11-22T13:26:00.945Z] ingest
+- **Pages:** lesson-ai-accuracy-tests-ai-2026-11-22.md
+- **Summary:** Created new page "lesson-ai-accuracy-tests AI 準度測試的五條通則（2026-11-22）"
+
