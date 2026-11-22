@@ -933,6 +933,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .goal-calc-ln b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 .goal-calc-ln .res { font-weight: 600; color: var(--ink); }
 .goal-calc-fine { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--ink-faint); line-height: 1.6; }
+/* 「還算不出來」的條件條列（v2.150）：原本一整段塞在一句裡 */
+.goal-need { margin: var(--s-1) 0 0; padding-left: 1.2em; list-style: disc; } /* Tailwind 的 preflight 把 ul 的點拿掉了，要自己加回來 */
 .goal-custom { margin-bottom: var(--s-4); }
 .goal-macro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); }
 .goal-sum { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; }
@@ -1020,7 +1022,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .wk-card.is-stale > :not(.wk-title) { opacity: .45; }
 .wk-read-k { min-height: 1.4em; padding: 0 var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .wk-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin: var(--s-1) 0 var(--s-3); padding: 0 var(--s-1); }
-.wk-stats div { display: flex; flex-direction: column-reverse; min-width: 0; }
+.wk-stats div { display: flex; flex-direction: column-reverse; justify-content: flex-end; min-width: 0; } /* column-reverse 的 flex-end＝靠上：說明折兩行時三欄的數字仍對齊（v2.150） */
 .wk-stats dd { margin: 0; font-family: var(--font-num); font-weight: 800; font-size: var(--t-lg); letter-spacing: var(--track-lg);
   line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; }
 .wk-stats dd small { margin-left: 2px; font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }

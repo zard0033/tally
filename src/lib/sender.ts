@@ -45,7 +45,7 @@ function toResult(r: SenderResponse, zeroRowsOk: boolean): SendResult {
   if (r.error) return { ok: false, status: r.status, message: r.error.message }
   if (!zeroRowsOk && rowCount(r.data) === 0) {
     // 2xx 卻沒有任何列受影響：多半是 RLS 擋下。分類成 rejected（403），不是 transient——重試不會自己好。
-    return { ok: false, status: 403, message: '伺服器沒有套用這筆（0 列受影響）' }
+    return { ok: false, status: 403, message: '伺服器沒存到這筆' }
   }
   return { ok: true }
 }
@@ -53,7 +53,7 @@ function toResult(r: SenderResponse, zeroRowsOk: boolean): SendResult {
 export function createSender(client: SenderClient): Sender {
   return async (entry, signal) => {
     if (!TABLES.includes(entry.table)) {
-      return { ok: false, status: 400, message: `不認得的表：${entry.table}` }
+      return { ok: false, status: 400, message: '伺服器沒存到這筆' }
     }
     try {
       const table = client.from(entry.table)

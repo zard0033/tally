@@ -1001,7 +1001,7 @@ test('本機 session 格式認不得、後端連不上：退回原開機流程�
   await must(page, '.gate .action-btn', '慢態的重新載入鈕')
 
   await page.clock.runFor(30_000)
-  await expect(page.locator('.gate .headline')).toHaveText('連不上後端')
+  await expect(page.locator('.gate .headline')).toHaveText('連不上伺服器')
   check((await page.locator('#view-login').count()) === 0, '連不上後端被當成沒登入，落到了登入頁')
   check(await authKeyPresent(page), '連不上後端時 session 被清掉了，重新載入也救不回來')
 })

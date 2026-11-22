@@ -296,21 +296,21 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
 
   it('RPE ≤7：還剩 3 下以上，就算次數沒到也加一格', () => {
     expect(suggestWeight(withRpe([[60, 10, null], [60, 10, 7]]), 'sq', 2.5, 'cur')).toEqual({
-      kind: 'suggest', weight_kg: 62.5, reason: '上次 RPE 7，還有餘力',
+      kind: 'suggest', weight_kg: 62.5, reason: '上次還能多做 3 下，可以加重',
     })
   })
 
   it('全做到、RPE 8 → 加一格，理由帶 RPE', () => {
     expect(suggestWeight(withRpe([[60, 12, null], [60, 12, null], [60, 12, 8]]), 'sq', 2.5, 'cur')).toEqual({
-      kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、RPE 8',
+      kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、還能多做 2 下',
     })
   })
 
   it('全做到、RPE 9 或 10 → 維持', () => {
     expect(suggestWeight(withRpe([[60, 12, null], [60, 12, 9]]), 'sq', 2.5, 'cur')).toEqual({
-      kind: 'suggest', weight_kg: 60, reason: '上次 RPE 9，維持',
+      kind: 'suggest', weight_kg: 60, reason: '上次還能多做 1 下，先維持',
     })
-    expect(suggestWeight(withRpe([[60, 12, 10]]), 'sq', 2.5, 'cur')).toMatchObject({ weight_kg: 60 })
+    expect(suggestWeight(withRpe([[60, 12, 10]]), 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 60, reason: '上次已經做到沒力，先維持' })
   })
 
   it('同重量多組有填取最後一組：RPE 7 在前、9 在後 → 用 9（維持），不是 7（加重）', () => {
@@ -319,7 +319,7 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
 
   it('沒做到、最差那組少 2 下、RPE 9 → 降一格', () => {
     expect(suggestWeight(withRpe([[60, 12, null], [60, 10, 9]]), 'sq', 2.5, 'cur')).toEqual({
-      kind: 'suggest', weight_kg: 57.5, reason: '上次只做到 10 下、RPE 9，降一格',
+      kind: 'suggest', weight_kg: 57.5, reason: '上次只做到 10 下又很吃力，減一點重量',
     })
   })
 
@@ -345,7 +345,7 @@ describe('suggestWeight（雙重進階的簡化版）', () => {
       ],
     })
     // 只看後加的 eB 會以 40 為最重 → 42.5；合起來最重是 60、RPE 8、三組都做到 → 62.5
-    expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、RPE 8' })
+    expect(suggestWeight(d, 'sq', 2.5, 'cur')).toEqual({ kind: 'suggest', weight_kg: 62.5, reason: '上次三組都做到 12 下、還能多做 2 下' })
   })
 
   it('較輕的收尾組沒做到：最重那組做到、RPE 9 → 不降，維持並說是哪個重量沒做到', () => {

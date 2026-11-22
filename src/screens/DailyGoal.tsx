@@ -396,10 +396,10 @@ export default function DailyGoal(props: DailyGoalProps) {
 
   const activityRow = (
     <label className="goal-sub-pick" htmlFor="g-activity">
-      <span className="lb">活動係數</span>
+      <span className="lb">平常活動量</span>
       <span className="val">{activity.selected}<small>{activityName(activity.selected)}</small></span>
       {CHEV}
-      <select id="g-activity" aria-label="活動係數" value={String(activity.selected)} onChange={(e) => save({ activity_factor: Number(e.target.value) })}>
+      <select id="g-activity" aria-label="平常活動量" value={String(activity.selected)} onChange={(e) => save({ activity_factor: Number(e.target.value) })}>
         {activity.list.map((v) => <option key={v} value={v}>{activityLabel(v)}</option>)}
       </select>
     </label>

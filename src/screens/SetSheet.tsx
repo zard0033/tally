@@ -268,7 +268,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
                 </>
               ) : (
                 /* 這次之前沒做過這個動作（補記舊訓練時，之後才做過的不算）：只給指引、不編數字（spec 階段 4 丙 階段 1，使用者 2026-10-28 裁決；Helms 2016：靠熱身組的 RPE 挑重量） */
-                <span className="set-none"><span>之前沒做過這個動作：</span><span>先做一組輕的熱身並記 RPE，</span><span>挑一個剩 2–3 下的重量</span></span>
+                <span className="set-none"><span>之前沒做過這個動作：</span><span>先輕輕做一組熱身，</span><span>再挑做完還能多做 2–3 下的重量</span></span>
               )}
             </div>
           )}
@@ -305,10 +305,10 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
           {done && (
             <div className="step-block" data-section="rpe">
               <div className="set-sec-row">
-                <span className="set-sec">吃力程度 RPE</span>
+                <span className="set-sec">吃力程度</span>
                 <span className="rpe-hint">9＝還能再做 1 下，10＝力竭</span>
               </div>
-              <div className="rpe-row" role="group" aria-label="吃力程度 RPE">
+              <div className="rpe-row" role="group" aria-label="吃力程度">
                 {RPE_SHEET_VALUES.map((v) => (
                   <button
                     key={v}
@@ -338,7 +338,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
               </svg>
             </button>
             <button className="tr-secondary set-sync" type="button" disabled={view.remaining === 0} onClick={() => void sync()}>
-              {view.remaining === 0 ? '沒有剩餘組' : syncedSetId === view.setId ? '已同步 ✓' : `同步剩餘 ${view.remaining} 組`}
+              {view.remaining === 0 ? '後面沒有組了' : syncedSetId === view.setId ? '已套用 ✓' : `套用到後面 ${view.remaining} 組`}
             </button>
             <button className="action-btn" type="button" onClick={onClose}>
               完成
@@ -356,7 +356,7 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
         onCancel={() => setAskDelete(false)}
         onConfirm={() => void doDelete()}
       >
-        <p>這一組已經打勾，刪掉後訓練量會跟著減少。</p>
+        <p>這一組已經打勾，刪掉後總重量會跟著減少。</p>
       </ConfirmDialog>
     </SpringSheet>
   )

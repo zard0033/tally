@@ -64,7 +64,7 @@ export default function TabBar({ tab, onChange, settingsDot = false }: { tab: Ta
           className="tab"
           type="button"
           aria-current={tab === t.id ? 'page' : undefined}
-          aria-label={t.id === 'settings' && settingsDot ? `${t.label}，有新的維持熱量` : t.label}
+          aria-label={t.id === 'settings' && settingsDot ? `${t.label}，依你的紀錄算出新的每日消耗` : t.label}
           onClick={() => onChange(t.id)}
         >
           {tab === t.id && (

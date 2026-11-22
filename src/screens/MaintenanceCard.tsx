@@ -55,7 +55,7 @@ function recordFormulaText(res: OkResult): ReactNode {
   const w = shownWeightKcal(res)
   return (
     <>
-      平均吃 <b>{r(res.meanIntake)}</b> {w < 0 ? '−' : '＋'} 體重換算 <b>{Math.abs(w)}</b>
+      平均吃 <b>{r(res.meanIntake)}</b> {w < 0 ? '−' : '＋'} 體重變化折合 <b>{Math.abs(w)}</b> 卡
     </>
   )
 }
@@ -111,7 +111,7 @@ export function ConfirmCard({ result, beforeKcal, afterKcal, inUseTdee, nextTdee
       </p>
       <p className="goal-confirm-why">
         {diff !== 0 && `紀錄回推比${usingMeasured ? '現在用的' : '公式推導'}${diff < 0 ? '少' : '多'} ${Math.abs(diff)} 卡。`}
-        {r(nextTdee) !== r(result.maintenance) && `改用後先移一半，維持熱量用 ${r(nextTdee)} 卡，下週再看。`}
+        {r(nextTdee) !== r(result.maintenance) && `怕一下變太多，先調一半到 ${r(nextTdee)} 卡，下週再看。`}
         {`照現在的目標吃，${weeklyText(expectedWeeklyChangeKg(result.maintenance, beforeKcal))}`}
         {plannedKgPerWeek !== null && `；你設定的是${weeklyText(plannedKgPerWeek)}`}
         {`。${basisText(result)}漏記的餐會讓這個數字偏低。`}
@@ -187,7 +187,7 @@ function RestoreLine(p: Pick<MaintenanceSectionProps, 'measuredTdee' | 'measured
     <div className="goal-undo">
       <span>
         {diff !== null
-          ? `${when}依紀錄調整 ${diff < 0 ? signed(diff) : `＋${diff}`} 卡`
+          ? `${when}App 依你的紀錄自動調了 ${diff < 0 ? signed(diff) : `＋${diff}`} 卡`
           : `${when}改回公式（原本 ${r(p.prevTdee)} 卡）`}
       </span>
       <button type="button" className="goal-undo-btn" aria-label={`還原成 ${r(p.prevTdee)} 卡`} onClick={p.onRestore}>還原</button>
@@ -217,14 +217,14 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
       <EstRow
         on
         label="紀錄回推"
-        sub={p.measuredOn ? `${monthDay(p.measuredOn)} 更新的數字` : '確認過的數字'}
+        sub={p.measuredOn ? `${monthDay(p.measuredOn)} 採用的數字` : '採用的數字'}
         value={p.measuredTdee !== null ? `${r(p.measuredTdee)} 卡` : '—'}
       />
     )
   } else if (estimate.state === 'loading') {
-    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天裡連續完整的記錄倒推" value={<SkelInline w="3.6em" />} />
+    recordRow = <EstRow on={false} label="紀錄回推" sub="看近 28 天吃多少、體重怎麼變來算" value={<SkelInline w="3.6em" />} />
   } else if (estimate.state === 'error') {
-    recordRow = <EstRow on={false} label="紀錄回推" sub="用近 28 天裡連續完整的記錄倒推" value="讀不到紀錄" />
+    recordRow = <EstRow on={false} label="紀錄回推" sub="看近 28 天吃多少、體重怎麼變來算" value="讀不到紀錄" />
   } else if (cur?.status === 'ok') {
     recordRow = (
       <EstRow
@@ -241,7 +241,7 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
       <EstRow
         on={false}
         label="紀錄回推"
-        sub="用近 28 天裡連續完整的記錄倒推"
+        sub="看近 28 天吃多少、體重怎麼變來算"
         value={cur?.status === 'implausible' ? '資料看起來有誤' : '還算不出來'}
       />
     )
@@ -258,7 +258,7 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
         {/* 已改用、最新回推差得多到要人判斷：確認框收起時給一列可以再打開 */}
         {p.askNewer && !p.confirm && cur?.status === 'ok' && (
           <button type="button" className="goal-pick as-btn" onClick={p.onOpenConfirm}>
-            <span className="lb">最新紀錄回推約 {r(cur.maintenance)} 卡，要更新嗎</span>
+            <span className="lb">依最新紀錄算出約 {r(cur.maintenance)} 卡，要換成這個嗎</span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         )}
@@ -354,8 +354,8 @@ export function CalcDetail(p: CalcDetailProps) {
       {ln(<>維持熱量 ＝ BMR <b>{p.bmr !== null ? r(p.bmr) : '—'}</b> × 活動係數 <b>{p.activityFactor}</b> ＝ <span className="res">{p.formulaTdee !== null ? `${r(p.formulaTdee)} 卡` : '—'}</span></>)}
 
       <h3>① 紀錄回推{p.usingMeasured && <InUseTag />}</h3>
-      {ln(<>維持熱量 ＝ 一連串完整記錄裡平均每天吃的 − 體重每天的變化 × 7700</>)}
-      {p.usingMeasured && p.measuredTdee !== null && <p className="goal-calc-fine">使用中的是存下的 {r(p.measuredTdee)} 卡。每週看一次最新回推：差一點不動，差一些自己往它移一半，差很多或調完會低於基礎代謝就先問你。</p>}
+      {ln(<>維持熱量 ＝ 連續有記午、晚餐的那幾天平均每天吃的 − 體重每天的變化 × 7700</>)}
+      {p.usingMeasured && p.measuredTdee !== null && <p className="goal-calc-fine">使用中的是存下的 {r(p.measuredTdee)} 卡。App 每週重算一次：差不多就不動，差一些自動調一半，差很多或調完會低於基礎代謝就先問你。</p>}
       {cur?.status === 'ok' ? (
         <>
           {ln(<>
@@ -364,8 +364,8 @@ export function CalcDetail(p: CalcDetailProps) {
           </>)}
           {ln(<>＝ <b>{r(cur.meanIntake)}</b> {shownWeightKcal(cur) < 0 ? '−' : '＋'} <b>{Math.abs(shownWeightKcal(cur))}</b> ＝ <span className="res">約 {r(cur.maintenance)} 卡</span></>)}
           <p className="goal-calc-fine">
-            {`體重走勢是 ${cur.weighIns} 筆體重畫出的趨勢線，不是頭尾兩筆相減。`}
-            {r(cur.low) !== r(cur.high) && `估計範圍約 ${r(cur.low)}–${r(cur.high)} 卡（約六成把握）。`}
+            {`體重變化是把 ${cur.weighIns} 筆體重整體看下來的走向，不是只拿第一筆和最後一筆相減。`}
+            {r(cur.low) !== r(cur.high) && `實際大概落在 ${r(cur.low)}–${r(cur.high)} 卡之間。`}
             {`${basisText(cur)}漏記的餐會讓它偏低；改變運動習慣後約要 3–4 週才跟上。`}
             {cur.weighIns < FEW_WEIGHINS && `體重只有 ${cur.weighIns} 筆，誤差可能到幾百卡，多量幾次會更準。`}
           </p>
@@ -377,13 +377,22 @@ export function CalcDetail(p: CalcDetailProps) {
           )}
         </>
       ) : (
-        <p className="goal-calc-fine">
+        <div className="goal-calc-fine">
           {p.estimate.state === 'loading' ? <SkelInline w="14em" label="讀取紀錄中" />
             : p.estimate.state === 'error' ? '讀不到紀錄，這段先算不出來。'
-            : cur?.status === 'insufficient'
-              ? `還算不出來：近 ${WINDOW_DAYS} 天裡要有一連串（中間最多空 2 天）完整記錄 ${BASELINE_NEEDS.loggedDays} 天，完整＝午、晚餐都有記；量 ${BASELINE_NEEDS.weighIns} 筆體重、橫跨 ${BASELINE_NEEDS.weightSpanDays} 天以上；最近 ${RECENT_DAYS} 天至少 ${BASELINE_NEEDS.recentDays} 天完整。開始訓練後頭 ${SETTLE_DAYS} 天不算。`
-              : '近 28 天的資料看起來有誤，這段先不算（上面那一列有說要查什麼）。'}
-        </p>
+            : cur?.status === 'insufficient' ? (
+              /* 條列（v2.150 用詞檢查：原本一整段規則塞在一句裡） */
+              <>
+                還算不出來，要符合這幾件：
+                <ul className="goal-need" role="list">
+                  <li>近 {WINDOW_DAYS} 天裡，連續 {BASELINE_NEEDS.loggedDays} 天有記午、晚餐（中間最多空 2 天）</li>
+                  <li>量 {BASELINE_NEEDS.weighIns} 次體重，第一次和最後一次隔 {BASELINE_NEEDS.weightSpanDays} 天以上</li>
+                  <li>最近 {RECENT_DAYS} 天裡至少 {BASELINE_NEEDS.recentDays} 天有記午、晚餐</li>
+                  <li>開始訓練後的頭 {SETTLE_DAYS} 天不算</li>
+                </ul>
+              </>
+            ) : '近 28 天的資料看起來有誤，這段先不算（上面那一列有說要查什麼）。'}
+        </div>
       )}
 
       <h3>② {p.goal === 'cut' ? '減重' : p.goal === 'bulk' ? '增肌' : '維持'}</h3>
@@ -409,15 +418,15 @@ export function CalcDetail(p: CalcDetailProps) {
 
 /** 「依據哪一段」：用的是一連串完整記錄，不是整個 28 天，所以寫出起訖日期（v2.137）。 */
 function basisText(res: Extract<BaselineResult, { status: 'ok' }>): string {
-  return `依據 ${monthDay(res.from)}–${monthDay(res.end)} 這串記錄：完整 ${res.loggedDays} 天（午、晚餐都有記）、體重 ${res.weighIns} 筆。`
+  return `依據 ${monthDay(res.from)}–${monthDay(res.end)} 這串記錄：有記午、晚餐 ${res.loggedDays} 天、體重 ${res.weighIns} 筆。`
 }
 
 function staleText(shown: ShownBaseline, current: BaselineResult): string {
   const { loggedDays, weighIns } = shown.result
-  const base = `依據 ${monthDay(shown.from)}–${monthDay(shown.end)}（完整記錄最多的一連串，不是近 ${WINDOW_DAYS} 天）：完整 ${loggedDays} 天、體重 ${weighIns} 筆。這段只當參考，不能改用。`
+  const base = `依據 ${monthDay(shown.from)}–${monthDay(shown.end)}（較早一段記得比較齊的日子，不是近 ${WINDOW_DAYS} 天）：有記午、晚餐 ${loggedDays} 天、體重 ${weighIns} 筆。只給你參考，不會拿來用。`
   /* 要補的是什麼要看最新窗口：天天有記只是體重太少時，寫「接回記錄」就是錯的（review）。 */
   if (current.status === 'insufficient' && current.settlingUntil !== null) {
-    return `${base}開始訓練後頭 ${SETTLE_DAYS} 天的體重多半是水分，不算；之後每天記完整，最快 ${monthDay(current.settlingUntil)} 之後這裡會自己更新。`
+    return `${base}開始訓練後頭 ${SETTLE_DAYS} 天的體重多半是水分，不算；之後每天記午、晚餐，最快 ${monthDay(current.settlingUntil)} 之後這裡會自己更新。`
   }
   const missingLogs =
     current.status === 'insufficient' &&
@@ -442,10 +451,10 @@ function lackShort(res: Extract<BaselineResult, { status: 'insufficient' }>): st
   return insufficientShortfalls(res).map((s) => {
     switch (s.kind) {
       case 'settling': return `剛開始訓練，最快 ${monthDay(s.until)} 之後`
-      case 'loggedDays': return `完整記錄還差 ${s.need - s.have} 天`
+      case 'loggedDays': return `午、晚餐都有記的天數還差 ${s.need - s.have} 天`
       case 'weighIns': return `體重還差 ${s.need - s.have} 筆`
       case 'weightSpanDays': return `體重要橫跨 ${s.need} 天以上`
-      case 'recentDays': return `最近 ${RECENT_DAYS} 天完整記錄還差 ${s.need - s.have} 天`
+      case 'recentDays': return `最近 ${RECENT_DAYS} 天有記午、晚餐的天數還差 ${s.need - s.have} 天`
     }
   }).join('、')
 }

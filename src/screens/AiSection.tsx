@@ -34,12 +34,12 @@ export default function AiSection({ credits }: { credits: CreditsState }) {
           <span className="lb-wrap">
             <span className="lb">模型</span>
             <span className="lb-sub">
-              {main.label}・備援 {backup.label}
+              平常用 {main.label}；忙或出錯時改用 {backup.label}
             </span>
           </span>
         </div>
       </div>
-      <p className="settings-note">拍營養標示與食物類型的自動分類都用這組模型，主模型回錯誤或被限流時換備援。</p>
+      <p className="settings-note">拍營養標示、估一筆、食物類型的自動分類都用這組 AI。</p>
     </>
   )
 }

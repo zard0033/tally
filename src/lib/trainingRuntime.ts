@@ -100,7 +100,7 @@ const MAX_PAGES = 100
 /** 目前的 session 不是這個帳號（或沒有 session）。與「連不上」分開：前者不該預填。 */
 class SessionMismatch extends Error {
   constructor() {
-    super('登入已失效（沒有這個帳號的有效 session）')
+    super('登入已過期，請重新登入')
   }
 }
 
@@ -227,7 +227,7 @@ export function createTrainingRuntime(deps: TrainingRuntimeDeps): TrainingRuntim
       return { ok: false, status: 0, message: e instanceof Error ? e.message : String(e) }
     }
     // 沒有 session 或換了人：不送（見 sessionUserId 的說明），401＝這一輪停下、條目原樣保留
-    if (who !== entry.userId) return { ok: false, status: 401, message: '登入已失效（沒有這個帳號的有效 session）' }
+    if (who !== entry.userId) return { ok: false, status: 401, message: '登入已過期，請重新登入' }
     const result = await rawSender(entry, signal)
     if (result.ok) {
       await serial(async () => {

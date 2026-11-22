@@ -65,10 +65,10 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
       <SubPageTop title={name} backLabel="返回訓練分析" onBack={onBack} />
       <div className="trend-scroll">
         <SegmentedControl label="範圍" items={TREND_RANGES} value={range} onPick={setRange} className="trend-range" />
-        <section className="trend-card" aria-label="e1RM">
+        <section className="trend-card" aria-label="推估極限">
           {/* 讀數：大數字不隨範圍變（最近一次是整段歷史的最後一次）；指著時換成那一次 */}
           <div className="trend-read">
-            <div className="trend-read-k">{hp ? `${monthDay(hp.date)} 這次（估算）` : '最近一次 e1RM（估算）'}</div>
+            <div className="trend-read-k">{hp ? `${monthDay(hp.date)} 這次的推估極限` : '最近一次的推估極限'}</div>
             <div className="trend-read-big"><b>{hp ? fmt1(hp.e1rm) : latest ? fmt1(latest.e1rm) : '—'}</b><span>kg</span></div>
             <p className="trend-read-sub">
               {hp ? <>最重一組 <b>{formatKg(hp.topSet.weight_kg)} × {hp.topSet.reps}</b></> : summary()}
@@ -92,7 +92,7 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
                 <Tooltip active={hover.tipActive} content={() => null} cursor={{ stroke: 'var(--ink-faint)', strokeWidth: 1 }} isAnimationActive={false} />
                 <ChartActiveDay onDay={hover.onDay[0]} />
                 <Area dataKey="e1rm" type="linear" stroke="none" fill="url(#an-area-fill)" activeDot={false} isAnimationActive={false} />
-                <Line dataKey="e1rm" name="e1RM 估算" type="linear" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+                <Line dataKey="e1rm" name="推估極限" type="linear" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
                   dot={dot} activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -104,8 +104,8 @@ function ExerciseProgress({ db, exerciseId, name, onBack }: { db: TrainingDb; ex
         {points.length > 0 && (
           <section className="trend-card" aria-label="明細">
             <table className="trend-table">
-              <caption className="sr-only">每次訓練的最重一組與估算 1RM，新到舊</caption>
-              <thead><tr><th scope="col">日期</th><th scope="col">最重一組</th><th scope="col">e1RM</th></tr></thead>
+              <caption className="sr-only">每次訓練的最重一組與推估極限，新到舊</caption>
+              <thead><tr><th scope="col">日期</th><th scope="col">最重一組</th><th scope="col">推估極限</th></tr></thead>
               <tbody>
                 {[...points].reverse().map((p) => (
                   <tr key={p.workoutId}>
@@ -140,7 +140,7 @@ function ProgressRow({ db, item, today, onOpen }: { db: TrainingDb; item: Progre
         </svg>
       )}
       <span className="an-val">
-        {fmt1(item.best)} <small>kg 估算</small>
+        {fmt1(item.best)} <small>kg 推估極限</small>
         {delta !== null && <span className="an-delta">30 天 {signed1(delta)}</span>}
       </span>
       <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
@@ -190,7 +190,7 @@ function RecoveryList({ db }: { db: TrainingDb }) {
         {rows.map((r) => <RecoveryRow key={r.group} r={r} />)}
       </div>
       <p className="an-note">
-        依部位與訓練量粗估（下半身 48–72 小時，其餘 24–48 小時）；有一組做到 RPE 9 以上，再加 24 小時。重量不到當天最重一組 60% 的熱身組不計入組數。
+        下半身約 2–3 天、其餘部位約 1–2 天恢復（練越多組越久）；有一組練到近力竭的，多算 1 天；很輕的熱身組（不到當天最重一組的六成）不算。
       </p>
     </>
   )
@@ -221,7 +221,7 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
         {tab === 'recovery' ? (
           <RecoveryList db={db} />
         ) : list.length === 0 ? (
-          <EmptyNote art="bars">還沒有可估算的紀錄。打勾完成的組（10 下以內、重量大於 0）才會列在這裡。</EmptyNote>
+          <EmptyNote art="bars">還沒有能算進度的紀錄。打勾完成的組（10 下以內、重量大於 0）才會列在這裡。</EmptyNote>
         ) : (
           <>
             <div className="tr-card" data-section="progress-list">
@@ -229,7 +229,7 @@ export default function Analysis({ db, onBack }: AnalysisProps) {
                 <ProgressRow key={i.exerciseId} db={db} item={i} today={today} onOpen={() => setExerciseId(i.exerciseId)} />
               ))}
             </div>
-            <p className="an-note">只列有打勾完成的組；超過 10 下的組不估算（次數越多越不準）。小走勢是最近 30 天的 e1RM。</p>
+            <p className="an-note">推估極限＝照你做的重量與次數，推算只做 1 下最重能舉多少。只算打勾完成的組；做超過 10 下的組不算（次數越多越不準）。小圖是最近 30 天的推估極限。</p>
           </>
         )}
       </div>

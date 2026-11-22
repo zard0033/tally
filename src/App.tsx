@@ -304,7 +304,7 @@ export default function App() {
          的那個；navigator.onLine 在伺服器死了仍回「線上」，不能拿來二選一（spec.md 探針 2）。 */
       showNotice(
         '讀不到你的資料',
-        '連不上後端：先確認 Wi-Fi 或行動網路；網路正常的話，可能是 Supabase 專案被閒置暫停（到 dashboard 按 Resume）。',
+        '連不上伺服器：先確認 Wi-Fi 或行動網路；網路正常的話，可能是伺服器睡著了（要到 Supabase 網站按 Resume 叫醒）。',
         '重新載入',
         () => location.reload(),
       )

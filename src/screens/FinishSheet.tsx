@@ -102,7 +102,7 @@ export default function FinishSheet({
   const parsed = backfill ? parseWorkoutMinutes(raw) : null
   const invalid = backfill && parsed === undefined
   const facts = [
-    '總訓練量',
+    '總重量（重量×次數）',
     ...(minutes !== null ? [`${minutes} 分`] : []),
     `${doneSets} / ${totalSets} 組`,
   ].join(' · ')

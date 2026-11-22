@@ -146,7 +146,7 @@ async function recordOffline(page: Page) {
   await dataDown(page, true)
   await startBlank(page)
   await backToList(page)
-  await expect(statusBar(page)).toContainText('1 筆尚未同步')
+  await expect(statusBar(page)).toContainText('1 筆還沒上傳')
 }
 
 /** 伺服器一律拒絕新增訓練（409）：開空白訓練、加腿推舉（預填 2 組）。佇列＝訓練 insert（rejected）
@@ -163,7 +163,7 @@ async function rejectedWorkout(page: Page, tickFirst = false) {
   await backToList(page)
   // 訓練的 insert 真的被送出並被拒絕之後，佇列才有「被拒絕」的條目；等儲存層而不是等時間
   await expect.poll(async () => (await queueEntries(page)).filter((e) => e.failure === 'rejected').length).toBe(1)
-  await expect(statusBar(page)).toContainText(`${tickFirst ? 5 : 4} 筆尚未同步`)
+  await expect(statusBar(page)).toContainText(`${tickFirst ? 5 : 4} 筆還沒上傳`)
 }
 
 /* ═══════════ 1. 離線 ═══════════ */
@@ -182,13 +182,13 @@ test('離線記一筆：細條可點，sheet 講離線並給「立即重試」�
   expect(await statusBar(page).evaluate((el) => el.tagName), '細條不是 button 了').toBe('BUTTON')
   expect(await statusBar(page).evaluate((el) => el.getAttribute('role')), 'role 又掛回 button 上').toBeNull()
   expect(await statusBar(page).evaluate((el) => el.getAttribute('aria-label')), 'aria-label 會蓋掉可見內文').toBeNull()
-  await expect(wrap.getByRole('button', { name: /1 筆尚未同步/ })).toBeVisible()
+  await expect(wrap.getByRole('button', { name: /1 筆還沒上傳/ })).toBeVisible()
   await expect(statusBar(page)).toHaveAccessibleDescription('查看詳情')
 
   await openSheet(page)
   await expect(lines(page).filter({ hasText: '因為離線還沒上傳' })).toHaveText('1 筆因為離線還沒上傳，回到網路後會自動上傳。')
   await expect(sheet(page).getByRole('button', { name: '立即重試' })).toBeVisible()
-  await expect(sheet(page).getByText('全部都已同步')).toHaveCount(0)
+  await expect(sheet(page).getByText('全部都傳上去了')).toHaveCount(0)
   expect(await trainRows(page, 'workouts'), '離線時伺服器還沒收到').toHaveLength(1)
 
   // 只翻旗標、不送 online：確認「立即重試」自己就夠，不是靠自動同步撿回來的
@@ -224,7 +224,7 @@ test('被拒絕：逐條列出白話標籤與「放棄這筆」，文案不叫�
   const rejectedLine = lines(page).filter({ hasText: '被伺服器拒絕' })
   await expect(rejectedLine).toContainText('1 筆被伺服器拒絕')
   await expect(rejectedLine, '不承諾計時重試').not.toContainText('每次同步都會')
-  await expect(rejectedLine).toContainText('下次同步')
+  await expect(rejectedLine).toContainText('下次打開 App')
   await expect(sheet(page).getByText(/丟|刪掉|捨棄/), '文案不能叫人丟掉').toHaveCount(0)
 })
 
@@ -336,14 +336,14 @@ test('伺服器回 401：sheet 說登入已失效、資料都還在；沒有登�
   await expect.poll(async () => (await queueEntries(page)).filter((e) => e.failure === 'auth').length).toBe(1)
 
   await openSheet(page)
-  await expect(lines(page).filter({ hasText: '登入已失效' })).toContainText('1 筆因為登入已失效')
-  await expect(lines(page).filter({ hasText: '登入已失效' })).toContainText('重新登入後')
+  await expect(lines(page).filter({ hasText: '登入過期' })).toContainText('1 筆因為登入過期')
+  await expect(lines(page).filter({ hasText: '登入過期' })).toContainText('重新登入後')
   await expect(sheet(page).getByRole('button', { name: /登入/ }), '只給文字，不放登入鈕').toHaveCount(0)
   await expect(sheet(page).getByRole('link', { name: /登入/ })).toHaveCount(0)
   await expect(rejectedRows(page), '401 不是「被拒絕」，不給放棄鈕').toHaveCount(0)
   await expect(sheet(page).getByRole('button', { name: '立即重試' })).toBeVisible()
   expect(await queueEntries(page), '佇列還在').toHaveLength(1)
-  await expect(statusBar(page)).toContainText('1 筆尚未同步')
+  await expect(statusBar(page)).toContainText('1 筆還沒上傳')
 })
 
 test('401 且另有還沒送的條目：不說「會自動送出」，語意併進「重新登入後會繼續上傳」', async ({ page }) => {
@@ -368,7 +368,7 @@ test('401 且另有還沒送的條目：不說「會自動送出」，語意併�
   await expect.poll(async () => (await queueEntries(page)).filter((e) => e.failure === 'auth').length).toBe(1)
 
   await openSheet(page)
-  await expect(lines(page).filter({ hasText: '登入已失效' })).toContainText('1 筆因為登入已失效')
+  await expect(lines(page).filter({ hasText: '登入過期' })).toContainText('1 筆因為登入過期')
   await expect(sheet(page).getByText('會自動送出'), '登入沒好之前不會自動送出').toHaveCount(0)
   await expect(sheet(page).getByText(/筆等著上傳/)).toHaveCount(0)
 })

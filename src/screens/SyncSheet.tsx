@@ -23,7 +23,7 @@ interface SyncSheetProps {
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-const RETRY_WHEN = '下次同步（回到前景、回線或寫入時）會再試，也可以按「立即重試」。'
+const RETRY_WHEN = '下次打開 App、網路恢復或再記東西時會自動再傳，也可以按「立即重試」。'
 
 interface AskDiscard {
   seq: number
@@ -103,14 +103,14 @@ function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, onBusy 
 
   return (
     <div className="tr-sheet-body tr-sheet-scroll sync-body">
-      {mine === 0 && foreign === 0 && <p className="sync-line">全部都已同步。</p>}
+      {mine === 0 && foreign === 0 && <p className="sync-line">全部都傳上去了。</p>}
       {/* 登入失效時所有「沒失敗」的都是被它擋著：不說「會自動送出」，語意併進下面那句「重新登入後會繼續上傳」 */}
       {pending > 0 && failed.auth === 0 && (
-        <p className="sync-line">{pending} 筆等著上傳。下次同步（回到前景、回線或寫入時）會送出，也可以按「立即重試」。</p>
+        <p className="sync-line">{pending} 筆等著上傳。下次打開 App、網路恢復或再記東西時會送出，也可以按「立即重試」。</p>
       )}
       {failed.offline > 0 && <p className="sync-line">{failed.offline} 筆因為離線還沒上傳，回到網路後會自動上傳。</p>}
       {failed.auth > 0 && (
-        <p className="sync-line">{failed.auth} 筆因為登入已失效而停著。重新登入後會繼續上傳，資料都還在。</p>
+        <p className="sync-line">{failed.auth} 筆因為登入過期而停著。重新登入後會繼續上傳，資料都還在。</p>
       )}
       {failed.transient > 0 && <p className="sync-line">{failed.transient} 筆暫時送不出去。{RETRY_WHEN}</p>}
       {waiting > 0 && <p className="sync-line">{waiting} 筆在等前面那筆送出去。</p>}
@@ -192,7 +192,7 @@ export default function SyncSheet({ open, onClose, ...rest }: SyncSheetProps) {
   }, [open, left, onClose])
 
   return (
-    <SpringSheet open={open} onClose={onClose} title="未同步" screen="sync-sheet" fit locked={busy}>
+    <SpringSheet open={open} onClose={onClose} title="還沒上傳" screen="sync-sheet" fit locked={busy}>
       <SyncBody {...rest} onBusy={setBusy} />
     </SpringSheet>
   )

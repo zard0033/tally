@@ -52,7 +52,7 @@ test('已記的訓練從本機底讀得到：動作數、組數、訓練量、�
   const row = page.locator('[data-screen="training"] .tr-row[data-workout-id="w-1"]')
   await expect(row).toBeVisible()
   await expect(row.locator('.nm')).toHaveText('1 個動作')
-  await expect(row.locator('.sub')).toHaveText('2/2 組 · 1,440 kg · 36 分')
+  await expect(row.locator('.sub')).toHaveText('2/2 組 · 總重量 1,440 kg · 36 分')
   // 有訓練的日子在日期元件上有小點
   await expect(page.locator('[data-screen="training"] .datectl-day.is-today')).toHaveClass(/is-marked/)
 })
@@ -292,9 +292,9 @@ test('同步剩餘組數：只改這一組後面、還沒打勾的組，已打�
   await sheet.getByRole('button', { name: '重量加 5 公斤' }).click()
   await sheet.getByRole('button', { name: '次數加 1' }).click()
   const sync = sheet.locator('.set-sync')
-  await expect(sync, '只有第 3 組還沒打勾').toHaveText('同步剩餘 1 組')
+  await expect(sync, '只有第 3 組還沒打勾').toHaveText('套用到後面 1 組')
   await sync.click()
-  await expect(sync).toHaveText('已同步 ✓')
+  await expect(sync).toHaveText('已套用 ✓')
   await closeSetSheet(page)
 
   const sets = page.locator('.ex .set')
@@ -313,7 +313,7 @@ test('同步剩餘組數：只改這一組後面、還沒打勾的組，已打�
 
   // 最後一組：沒有剩餘組
   await openSetSheet(page, 2)
-  await expect(setSheet(page).getByRole('button', { name: '沒有剩餘組' })).toBeDisabled()
+  await expect(setSheet(page).getByRole('button', { name: '後面沒有組了' })).toBeDisabled()
 })
 
 test('組編輯 sheet 刪除這一組：沒打勾直接刪；已打勾先確認；只剩一組不能刪', async ({ page }) => {
@@ -426,7 +426,7 @@ test('離線時整套記錄下來，回線後自動上傳、不重複、細條�
 
   // 離線：畫面上看得到、細條明講有幾筆沒上傳，伺服器那邊還沒有
   await expect(page.locator('.tr-sec:has-text("已完成") + .tr-card .tr-row')).toHaveCount(2)
-  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('筆尚未同步')
+  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('筆還沒上傳')
   expect(await trainRows(page, 'workouts')).toHaveLength(1)
 
   // 回線：online 觸發同步
@@ -505,7 +505,7 @@ test('登出前佇列非空：先問、說明筆數；「先不要」不登出�
   await setOffline(page, true)
   await startBlank(page)
   await page.getByRole('button', { name: '返回（訓練繼續進行）' }).click()
-  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('1 筆尚未同步')
+  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('1 筆還沒上傳')
 
   await page.locator('.tab[aria-label="設定"]').click()
   await page.locator('.settings .signout').click()
@@ -3865,7 +3865,7 @@ test('離線：加有氧動作、填寫、結束訓練，畫面立刻有；回�
   const row = page.locator('.tr-sec:has-text("已完成") + .tr-card .tr-row')
   await expect(row.locator('.nm')).toHaveText('跑步機坡度健走')
   await expect(row.locator('.sub')).toHaveText('30 分 · 5.5 km/h · 坡度 8%')
-  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('筆尚未同步')
+  await expect(page.locator('[data-screen="training"] .tr-status')).toContainText('筆還沒上傳')
   expect(await trainRows(page, 'workouts'), '離線時伺服器還沒有').toHaveLength(0)
 
   await setOffline(page, false)
@@ -4307,15 +4307,15 @@ test('同步完一組後換開另一組：按鈕不沿用「已同步 ✓」', a
   await openSetSheet(page, 0)
   const sync = setSheet(page).locator('.set-sync')
   await sync.click()
-  await expect(sync).toHaveText('已同步 ✓')
+  await expect(sync).toHaveText('已套用 ✓')
   await closeSetSheet(page)
 
   await openSetSheet(page, 1)
-  await expect(setSheet(page).locator('.set-sync'), '第 2 組還沒同步過').toHaveText('同步剩餘 1 組')
+  await expect(setSheet(page).locator('.set-sync'), '第 2 組還沒同步過').toHaveText('套用到後面 1 組')
   await closeSetSheet(page)
 
   await openSetSheet(page, 0)
-  await expect(setSheet(page).locator('.set-sync'), '回到剛同步的那組仍是已同步').toHaveText('已同步 ✓')
+  await expect(setSheet(page).locator('.set-sync'), '回到剛同步的那組仍是已同步').toHaveText('已套用 ✓')
 })
 
 /* placeholder 也是文字，要過 4.5:1：動作庫／選動作的搜尋欄跟食物搜尋欄（.search-box）一樣用 --ink-muted，

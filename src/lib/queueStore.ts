@@ -69,11 +69,11 @@ export function createQueueStore(kv: KeyValueStore, key: string = QUEUE_STORAGE_
       try {
         raw = await kv.get(key)
       } catch (cause) {
-        throw new QueueStorageError('讀不到本機尚未同步的資料', { cause })
+        throw new QueueStorageError('讀不到本機還沒上傳的資料', { cause })
       }
       if (raw === undefined || raw === null) return null
       if (!isSnapshot(raw)) {
-        throw new QueueStorageError('本機尚未同步的資料格式不認得，已原樣保留、沒有覆蓋')
+        throw new QueueStorageError('本機還沒上傳的資料格式不認得，已原樣保留、沒有覆蓋')
       }
       return raw
     },

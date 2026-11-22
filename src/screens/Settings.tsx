@@ -190,7 +190,7 @@ export default function Settings(props: SettingsProps) {
             從這天起換了秤或電池（體脂前後不能直接比）
           </label>
           <p className="note">同一天再記一次會覆蓋當天那筆。</p>
-          <p className="note">填了體脂率，公式估算會用更準的 Katch-McArdle；沒填則改用 Mifflin-St Jeor，熱量目標可能因此跟著變。</p>
+          <p className="note">有填體脂，熱量算得比較準；沒填也能算，但每日目標可能會跟著變一點。</p>
         </form>
         <div className="confirm-wrap">
           {err && <p className="sheet-error" role="alert">{err}</p>}
@@ -265,7 +265,7 @@ export default function Settings(props: SettingsProps) {
               <span className="lb-sub">
                 {Math.round(targets.kcal)} 卡・蛋白 {Math.round(targets.protein)}g・脂 {Math.round(targets.fat)}g・碳水 {Math.round(targets.carb)}g
               </span>
-              {adviceOf(estimate, adviceContext(profile, targets))?.kind === 'ask' && <span className="lb-sub lb-new">紀錄回推出新的維持熱量</span>}
+              {adviceOf(estimate, adviceContext(profile, targets))?.kind === 'ask' && <span className="lb-sub lb-new">依你的紀錄算出新的每日消耗，點進去看</span>}
             </span>
             <svg className="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>

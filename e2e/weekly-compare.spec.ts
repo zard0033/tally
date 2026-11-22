@@ -67,7 +67,7 @@ test('讀數預設上週：平均只算記完整的天、訓練次數、體重�
   await expect(card.locator('.wk-read-k')).toHaveText('上週（11/9–11/15）')
   const stats = card.locator('.wk-stats > div')
   await expect(stats.nth(0)).toContainText('2000卡')
-  await expect(stats.nth(0)).toContainText('平均・記 2 天完整')
+  await expect(stats.nth(0)).toContainText('每天平均（2 天有記午晚餐）')
   await expect(stats.nth(1)).toContainText('2次')
   await expect(stats.nth(2)).toContainText('+0.3kg')
   // 這週以前最後一筆是 10/20，到 11/13 相隔 24 天 → 3 週：變化是三週累積的，要寫出來
@@ -121,7 +121,7 @@ test('指到別週：讀數換那週，移開回到上週', async ({ page }) => 
   await page.mouse.move(box.x + 36 + (11 + 0.5) * (plotW / WEEKS_90), box.y + box.height / 2)
   await expect(card.locator('.wk-read-k')).toHaveText('11/2–11/8 那週')
   await expect(card.locator('.wk-stats > div').nth(0)).toContainText('2100卡')
-  await expect(card.locator('.wk-stats > div').nth(0)).toContainText('記 4 天完整')
+  await expect(card.locator('.wk-stats > div').nth(0)).toContainText('4 天有記午晚餐')
   await expect(card.locator('.wk-stats > div').nth(2)).toContainText('這週沒量體重')
   await page.mouse.move(0, 0)
   await expect(card.locator('.wk-read-k')).toHaveText('上週（11/9–11/15）')

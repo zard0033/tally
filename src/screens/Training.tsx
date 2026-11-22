@@ -65,7 +65,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 function statusText(view: TrainingView): string | null {
   const parts: string[] = []
   if (view.source !== 'server') parts.push('連不上伺服器，顯示的是本機資料')
-  if (view.summary.mine > 0) parts.push(`${view.summary.mine} 筆尚未同步`)
+  if (view.summary.mine > 0) parts.push(`${view.summary.mine} 筆還沒上傳`)
   if (view.summary.foreign > 0) parts.push(`另有 ${view.summary.foreign} 筆屬於別的帳號`)
   if (view.cacheError) parts.push('本機儲存寫不進去，離線時可能讀不到')
   return parts.length > 0 ? parts.join(' · ') : null
@@ -77,7 +77,7 @@ function WorkoutRow({ card, onOpen }: { card: WorkoutCard; onOpen: () => void })
   const title = solo ? solo.name : `${card.exerciseCount} 個動作`
   const detail = solo
     ? solo.summary || '還沒填'
-    : `${card.doneSets}/${card.totalSets} 組 · ${card.volume.toLocaleString('en-US')} kg · ${card.minutes} 分`
+    : `${card.doneSets}/${card.totalSets} 組 · 總重量 ${card.volume.toLocaleString('en-US')} kg · ${card.minutes} 分`
   return (
     <button className="tr-row" type="button" data-workout-id={card.id} onClick={onOpen}>
       <span className="grow">
@@ -360,7 +360,7 @@ export default function Training({
               </svg>
               <span className="grow">
                 <span className="nm">訓練分析</span>
-                <span className="sub">{analysed > 0 ? `${analysed} 個動作有進度 · 估算 1RM` : '還沒有可估算的紀錄'}</span>
+                <span className="sub">{analysed > 0 ? `${analysed} 個動作有進度 · 推估極限` : '還沒有能算進度的紀錄'}</span>
               </span>
               <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M9 6l6 6-6 6" />

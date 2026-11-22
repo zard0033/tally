@@ -153,6 +153,9 @@ function topSetRpe(rows: readonly Row[], top: number): number | null {
   return rpe
 }
 
+/** RPE 的意思寫成白話：10＝做到沒力，其餘＝還能多做 10 − RPE 下 */
+const spare = (rpe: number): string => (rpe >= 10 ? '已經做到沒力' : `還能多做 ${10 - rpe} 下`)
+
 /**
  * 下次的重量建議（spec.md「階段 4 丙」階段 1，2026-10-28 核可；v2.140 實作）。只看上次這個動作、熱身組不算：
  * - 上次最重那組 RPE ≤7（剩 3 下以上）→ 加一格，不論次數有沒有到；
@@ -184,14 +187,15 @@ export function suggestWeight(db: TrainingDb, exerciseId: string, step: number, 
   const topWorst = Math.min(...work.filter((s) => Number(s.weight_kg) === top).map((s) => Number(s.reps)))
   const up = round2(top + step)
 
-  if (rpe !== null && rpe <= 7) return { kind: 'suggest', weight_kg: up, reason: `上次 RPE ${rpe}，還有餘力` }
+  /* 理由不寫 RPE 數字（v2.150 用詞檢查：使用者看不懂裸的「RPE 7」），換成它的意思「還能多做幾下」＝10 − RPE */
+  if (rpe !== null && rpe <= 7) return { kind: 'suggest', weight_kg: up, reason: `上次${spare(rpe)}，可以加重` }
   if (allDone) {
-    if (rpe !== null && rpe >= 9) return { kind: 'suggest', weight_kg: top, reason: `上次 RPE ${rpe}，維持` }
+    if (rpe !== null && rpe >= 9) return { kind: 'suggest', weight_kg: top, reason: `上次${spare(rpe)}，先維持` }
     const done = work.length === 1 ? '上次那組做到' : `上次${countText(work.length)}組都做到`
-    return { kind: 'suggest', weight_kg: up, reason: rpe === null ? `${done} ${target} 下` : `${done} ${target} 下、RPE ${rpe}` }
+    return { kind: 'suggest', weight_kg: up, reason: rpe === null ? `${done} ${target} 下` : `${done} ${target} 下、${spare(rpe)}` }
   }
   if (rpe !== null && rpe >= 9 && target - topWorst >= 2 && top - step > 0) {
-    return { kind: 'suggest', weight_kg: round2(top - step), reason: `上次只做到 ${topWorst} 下、RPE ${rpe}，降一格` }
+    return { kind: 'suggest', weight_kg: round2(top - step), reason: `上次只做到 ${topWorst} 下又很吃力，減一點重量` }
   }
   // 最重那幾組其實做到了、是較輕的組沒做到：說是哪個重量，不然「再做到 12 下」像在說最重那組（v2.140 review）
   const missed = topWorst >= target ? work.find((s) => Number(s.reps) < target) : undefined

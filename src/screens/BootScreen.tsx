@@ -19,11 +19,11 @@ export default function BootScreen({ bootStatus }: { bootStatus: BootStatus }) {
             <div className="gate-msg">
               {bootStatus === 'unreachable' ? (
                 <>
-                  <p className="headline">連不上後端</p>
-                  <p className="gate-status">可能是網路不通，或 Supabase 專案被閒置暫停。到 dashboard 按 Resume。</p>
+                  <p className="headline">連不上伺服器</p>
+                  <p className="gate-status">可能是網路不通，或伺服器睡著了（要到 Supabase 網站按 Resume 叫醒）。</p>
                 </>
               ) : (
-                <p className="gate-status">連線比平常慢，還在等後端回應…</p>
+                <p className="gate-status">伺服器回得比平常慢，還在等…</p>
               )}
             </div>
           )}

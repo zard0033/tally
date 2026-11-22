@@ -776,7 +776,7 @@ export default function LogSheet(props: LogSheetProps) {
                             </svg>
                             <div className="nm-wrap" aria-hidden="true">
                               <span className="nm">{draftName(d, meal)}</span>
-                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・三大粗估' : '估一筆'}</span>
+                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・蛋白質等是推估的' : '估一筆'}</span>
                             </div>
                             <div className="kc-wrap" aria-hidden="true">
                               <span className="kc">{d.kcal}</span>

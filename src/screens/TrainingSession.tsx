@@ -386,7 +386,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
             <span className="v" data-stat="volume">
               <Flip text={summary.volume.toLocaleString('en-US')} ms={DUR.base} />
             </span>
-            <span className="l">訓練量 kg</span>
+            <span className="l">總重量 kg</span>
           </div>
           <div className="tr-stat">
             <span className="v" data-stat="sets">

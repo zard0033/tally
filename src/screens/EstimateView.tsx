@@ -211,7 +211,7 @@ export default function EstimateView(p: Props) {
                 )}
                 {d.kcalOnly && (
                   <span className="est-why">
-                    <span className="est-only">只估了熱量</span>蛋白質、脂肪、碳水記 0，營養素條會偏低
+                    <span className="est-only">只估了熱量</span>蛋白質、脂肪、碳水記 0，首頁的蛋白質、脂肪、碳水會少算
                   </span>
                 )}
                 {d.macrosGuessed && (

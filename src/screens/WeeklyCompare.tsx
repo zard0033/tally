@@ -144,7 +144,7 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
   )
 
   const readK = hoverIdx >= 0 ? `${weekLabel(sel)} 那週` : sel.current ? `這週（${weekLabel(sel)}，還沒過完）` : `上週（${weekLabel(sel)}）`
-  const kcalSub = sel.avgKcal === null ? '沒記完整' : `平均・記 ${sel.fullDays} 天完整`
+  const kcalSub = sel.avgKcal === null ? '沒有一天記滿午晚餐' : `每天平均（${sel.fullDays} 天有記午晚餐）`
   /* 中間幾週沒量時，變化是那幾週累積的：寫出週數，不冒充成這一週的變化 */
   const span = (w: WeekRow) => (w.deltaWeeks !== null && w.deltaWeeks > 1 ? `${w.deltaWeeks} 週來` : '')
   const kgSub = sel.trendDelta === null ? '這週沒量體重' : span(sel) ? `平均體重・${span(sel)}` : '平均體重變化'
@@ -209,12 +209,12 @@ export default function WeeklyCompare({ from, today, trend, targetKcal, training
       <ul className="trend-legend wk-legend">
         <li><i className="k-line" aria-hidden="true" />平均體重</li>
         <li><i className="k-bar" aria-hidden="true" />平均攝取</li>
-        <li><i className="k-hollow" aria-hidden="true" />記不到 {WEEK_FULL_DAYS} 天</li>
+        <li><i className="k-hollow" aria-hidden="true" />這週午晚餐記不到 {WEEK_FULL_DAYS} 天</li>
         {targetKcal !== null && <li><i className="k-plan" aria-hidden="true" />現在的目標</li>}
         <li><i className="k-sq" aria-hidden="true" />訓練一次</li>
       </ul>
       <p className="trend-note wk-note">
-        這段：記完整 {fullDays} 天、量體重 {weighIns} 次{trained && `、訓練 ${workouts} 次`}。攝取只算午、晚餐都有記的天。
+        這段：有記午、晚餐 {fullDays} 天、量體重 {weighIns} 次{trained && `、訓練 ${workouts} 次`}。攝取只算午、晚餐都有記的天。
         {targetKcal !== null && '目標虛線是現在的設定，以前改過目標不回溯。'}只並排，不代表誰造成誰。
       </p>
 

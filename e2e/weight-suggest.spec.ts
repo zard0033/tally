@@ -127,7 +127,7 @@ test('套用：把重量欄填成建議值、鈕變灰「已套用」；之後�
   await expect(apply).toBeEnabled()
 })
 
-const GUIDE = '之前沒做過這個動作：先做一組輕的熱身並記 RPE，挑一個剩 2–3 下的重量'
+const GUIDE = '之前沒做過這個動作：先輕輕做一組熱身，再挑做完還能多做 2–3 下的重量'
 
 test('徒手動作不給建議（整行不出現）；做過一次就給建議；沒做過的只給指引、不編數字', async ({ page }) => {
   const plans: Plan[] = [
@@ -168,15 +168,15 @@ test('用上 RPE（v2.140）：RPE 7 次數沒到也加重、全做到但 RPE 9 
   await openLive(page, build(plans))
 
   await openSet(page, 0)
-  await expect(suggest(page)).toContainText('建議 105 kg · 上次 RPE 7，還有餘力')
+  await expect(suggest(page)).toContainText('建議 105 kg · 上次還能多做 3 下，可以加重')
   await closeSheet(page)
 
   await openSet(page, 1)
-  await expect(suggest(page)).toContainText('建議 20 kg · 上次 RPE 9，維持')
+  await expect(suggest(page)).toContainText('建議 20 kg · 上次還能多做 1 下，先維持')
   await closeSheet(page)
 
   await openSet(page, 2)
-  await expect(suggest(page)).toContainText('建議 57.5 kg · 上次只做到 10 下、RPE 9，降一格')
+  await expect(suggest(page)).toContainText('建議 57.5 kg · 上次只做到 10 下又很吃力，減一點重量')
 })
 
 test('門檻取課表的目標次數：目標 8、上次 60×8 兩組 → 建議 +5、理由寫 8 下；沒設目標才用 12', async ({ page }) => {
