@@ -116,6 +116,9 @@ export async function seedFetchStub(
         /* 估一筆（read-label 的 `mode: 'estimate'`）。null＝回 502；測試中途可改。__estimateCalls＝每次送來的 text。 */
         __estimate: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
         __estimateCalls: string[]
+        /* 估一筆的修正（read-label 的 `mode: 'estimate-fix'`，v2.151）。null＝回 502；__estimateFixCalls＝每次送來的整個 body。 */
+        __estimateFix: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
+        __estimateFixCalls: Record<string, unknown>[]
         /* 分類與辨識送來的整個 body，依序記下（驗不帶多餘欄位）。 */
         __readLabelBodies: Record<string, unknown>[]
         /* 認證端點行為（見 StubOptions.authMode）。null＝一般測試，/auth/v1/ 走下面那道總擋。 */
@@ -169,6 +172,8 @@ export async function seedFetchStub(
       w.__creditsCalls = 0
       w.__estimate = null
       w.__estimateCalls = []
+      w.__estimateFix = null
+      w.__estimateFixCalls = []
       w.__readLabelBodies = []
 
       const TRAINING_TABLES = [
@@ -269,6 +274,12 @@ export async function seedFetchStub(
           if (sent.credits === true) {
             w.__creditsCalls++
             return w.__credits ? json(w.__credits) : json({ error: '辨識失敗' }, 502)
+          }
+          if (sent.mode === 'estimate-fix') {
+            w.__estimateFixCalls.push(sent as Record<string, unknown>)
+            const e = w.__estimateFix
+            if (e?.delayMs) await new Promise((r) => setTimeout(r, e.delayMs))
+            return e && e.mode === 'ok' ? json(e.body) : json({ error: '辨識失敗' }, 502)
           }
           if (sent.mode === 'estimate') {
             w.__estimateCalls.push(String(sent.text))

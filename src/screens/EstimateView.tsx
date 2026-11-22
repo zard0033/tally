@@ -4,10 +4,17 @@
    動效只動 transform／opacity；減少動態時無限循環全停、逐樣出現改 ≤120ms 淡入、數字直接到位（CSS ＋ useReducedMotion）。 */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { defaultDraftName, draftName, isManualDraft, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
+import { canFix, defaultDraftName, draftName, fixTag, fixTextOk, isManualDraft, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
 import type { MealKey } from '@/lib/meals'
 
 export type EstimateStatus = 'idle' | 'busy' | 'error'
+
+/** 一列的修正（spec A2 階段 1，v2.151）：框開著沒有、打到一半的字、送出狀態。 */
+export interface FixState {
+  open: boolean
+  text: string
+  status: EstimateStatus
+}
 
 interface Props {
   /** 品名用餐別頂替的列（檔位、自己打的）顯示與寫入都跟著目前的餐別；已經建好食物的列品名已定下來，不再跟著變。 */
@@ -32,6 +39,12 @@ interface Props {
   onToggleKeep: (key: string) => void
   /** 寫入中：草稿不能改、檔位不能點。 */
   locked: boolean
+  fixes: Record<string, FixState>
+  /** 有一列正在修正：不能重估整句（結果會換掉那一列）。 */
+  fixBusy: boolean
+  onFixToggle: (key: string) => void
+  onFixText: (key: string, v: string) => void
+  onFixSubmit: (key: string) => void
 }
 
 /** 等的時候換三次說法。秒數界線是設計決定（實測 p50 約 7 秒），只是讓人知道還在跑，不代表真的在做哪一步。 */
@@ -40,7 +53,7 @@ function waitText(sec: number): string {
 }
 
 /** 熱量框：AI 剛回來時先從 0 滾到估算值（600ms），滾完才變成可編輯的框；減少動態時直接到位。 */
-function KcalField({ d, name, animate, locked, onInput, onBlur }: { d: EstimateDraft; name: string; animate: boolean; locked: boolean; onInput: (raw: string) => void; onBlur: () => void }) {
+function KcalField({ d, name, animate, landed, locked, onInput, onBlur }: { d: EstimateDraft; name: string; animate: boolean; landed?: boolean; locked: boolean; onInput: (raw: string) => void; onBlur: () => void }) {
   const reduced = useReducedMotion()
   const [shown, setShown] = useState<number | null>(animate && !reduced ? 0 : null)
   useEffect(() => {
@@ -60,7 +73,7 @@ function KcalField({ d, name, animate, locked, onInput, onBlur }: { d: EstimateD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <label className="est-kc">
+    <label className={landed ? 'est-kc landed' : 'est-kc'}>
       <input
         className={shown !== null ? 'num counting' : 'num'}
         type="text"
@@ -93,6 +106,21 @@ export default function EstimateView(p: Props) {
     setFreshKeys(new Set(fresh.map((d) => d.key)))
     setSaid(`估好了，${fresh.length} 樣`)
   }
+  /* 剛修正完的列（fixCount 比上次看到的多）：熱量框重掛、從 0 滾到新數字並亮一圈（同 AI 剛回來），讀屏唸結果，焦點回那一列的「修正」。
+     第一次掛上時把當下的次數都記成看過，回清單再進來不重播。 */
+  const [fixSeen, setFixSeen] = useState<Record<string, number>>(() => Object.fromEntries(p.drafts.map((d) => [d.key, d.fixCount])))
+  /* 帶次數：同一列修正第二次時 key 一樣，只存 key 的話 effect 不會重跑、焦點不回來（review） */
+  const [justFixed, setJustFixed] = useState<{ key: string; n: number } | null>(null)
+  const refixed = p.drafts.find((d) => d.fixCount > (fixSeen[d.key] ?? 0))
+  if (refixed) {
+    setFixSeen((s) => ({ ...s, [refixed.key]: refixed.fixCount }))
+    setJustFixed({ key: refixed.key, n: refixed.fixCount })
+    setSaid(`已照「${fixTag(refixed.fixedBy ?? '')}」修正，${draftName(refixed, p.meal)} ${refixed.kcal} 卡`)
+  }
+  const fixBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  useEffect(() => {
+    if (justFixed) fixBtnRefs.current[justFixed.key]?.focus()
+  }, [justFixed])
 
   useEffect(() => {
     if (p.status !== 'busy') return
@@ -142,7 +170,7 @@ export default function EstimateView(p: Props) {
       {!busy && (
         <div className="est-act">
           <span>寫越具體越準：大小、份量、幾顆</span>
-          <button className="est-go" type="button" disabled={!p.canSubmit || p.locked} onClick={() => {
+          <button className="est-go" type="button" disabled={!p.canSubmit || p.locked || p.fixBusy} onClick={() => {
               // 估算中這顆鈕會收起來，焦點先交給描述框（readOnly 留得住焦點），不掉到 body
               textRef.current?.focus()
               p.onSubmit()
@@ -187,6 +215,9 @@ export default function EstimateView(p: Props) {
             const name = draftName(d, p.meal)
             /* 已經建好 foods 的列（寫 intake 失敗、等重試）鎖住：再改熱量、勾選或刪掉，都會跟已建的食物對不上（review N1） */
             const made = d.foodId !== null
+            const fix = p.fixes[d.key]
+            const fixing = fix?.status === 'busy'
+            const fixable = canFix(d)
             return (
               <li key={d.key} className={fresh ? 'est-draft fresh' : 'est-draft'} style={fresh ? { animationDelay: `${i * 90}ms` } : undefined}>
                 {/* 品名可以改（使用者 2026-11-13）；空著＝用「餐別＋檔位」頂替，寫入時才決定是哪一餐 */}
@@ -199,10 +230,13 @@ export default function EstimateView(p: Props) {
                   readOnly={p.locked || made}
                   onChange={(e) => p.onName(d.key, e.target.value)}
                 />
-                <KcalField d={d} name={name} animate={fresh} locked={p.locked || made} onInput={(raw) => p.onKcalInput(d.key, raw)} onBlur={() => p.onKcalBlur(d.key)} />
-                <button className="est-del" type="button" aria-label={`刪掉${name}`} disabled={p.locked || made} onClick={() => p.onDelete(d.key)}>
+                {/* key 帶修正次數：修正完重掛，從 0 滾到新數字（同 AI 剛回來）；修正中鎖住，回來的結果會換掉它 */}
+                <KcalField key={`${d.key}-${d.fixCount}`} d={d} name={name} animate={fresh || justFixed?.key === d.key} landed={justFixed?.key === d.key}
+                  locked={p.locked || made || fixing} onInput={(raw) => p.onKcalInput(d.key, raw)} onBlur={() => p.onKcalBlur(d.key)} />
+                <button className="est-del" type="button" aria-label={`刪掉${name}`} disabled={p.locked || made || fixing} onClick={() => p.onDelete(d.key)}>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
                 </button>
+                {d.fixedBy && <span className="est-fixed">☀ 已照「{fixTag(d.fixedBy)}」修正</span>}
                 {(d.low !== null || d.assumption) && (
                   <span className="est-why">
                     {d.low !== null && d.high !== null && <span className="rng num">{d.low}–{d.high}</span>}
@@ -219,10 +253,63 @@ export default function EstimateView(p: Props) {
                     <span className="est-only">粗估</span>三大營養素照你平常這一餐的比例
                   </span>
                 )}
+                {fix?.open && fixable && (
+                  <div className="est-fix">
+                    <div className={fixing ? 'ai-ring busy' : 'ai-ring'}>
+                      <div className="ai-inner">
+                        <input
+                          className="est-fix-in"
+                          type="text"
+                          autoFocus
+                          aria-label={`修正${name}`}
+                          placeholder="例如：5 塊、沒加泡菜、半糖"
+                          value={fix.text}
+                          readOnly={fixing}
+                          aria-busy={fixing}
+                          onChange={(e) => p.onFixText(d.key, e.target.value)}
+                          onCompositionStart={() => (composingRef.current = true)}
+                          onCompositionEnd={() => (composingRef.current = false)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape' && !fixing) {
+                              /* 只收起這個框。不用另外攔 Esc：實測（v2.151）框在同一次按鍵裡被拆掉，sheet 不會跟著關——
+                                 拿掉 stopPropagation／preventDefault 都測過，e2e「Esc 只收起框不關 sheet」守這個行為 */
+                              p.onFixToggle(d.key)
+                              fixBtnRefs.current[d.key]?.focus()
+                              return
+                            }
+                            if (e.key !== 'Enter' || composingRef.current || e.nativeEvent.isComposing) return
+                            e.preventDefault()
+                            if (fixTextOk(fix.text) && !fixing) p.onFixSubmit(d.key)
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <button className="est-go est-fix-go" type="button" disabled={!fixTextOk(fix.text) || p.fixBusy || p.locked} onClick={() => p.onFixSubmit(d.key)}>
+                      {fix.status === 'error' ? '重試' : '重估'}
+                    </button>
+                  </div>
+                )}
+                {fix?.open && fixable && fix.status === 'error' && (
+                  <p className="est-fix-err" role="alert">修正沒成功，原本的估算還在</p>
+                )}
                 <label className="est-keep">
                   <input type="checkbox" checked={d.keep} disabled={p.locked || made} onChange={() => p.onToggleKeep(d.key)} />
                   存進食品庫
                 </label>
+                {fixable && (
+                  <button
+                    ref={(el) => { fixBtnRefs.current[d.key] = el }}
+                    className="est-fix-btn"
+                    type="button"
+                    aria-expanded={!!fix?.open}
+                    aria-label={`修正${name}`}
+                    disabled={p.locked || p.fixBusy || p.status === 'busy'}
+                    onClick={() => p.onFixToggle(d.key)}
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>
+                    修正
+                  </button>
+                )}
               </li>
             )
           })}

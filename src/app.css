@@ -1598,8 +1598,27 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .est-del svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .est-why { grid-column: 1 / 3; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; }
 .est-why .rng { color: var(--ink); font-weight: 600; margin-right: var(--s-2); }
-.est-keep { grid-column: 1 / 3; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer; }
+.est-keep { grid-column: 1 / 2; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer; }
 .est-keep input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+/* 修正（v2.151，spec A2 階段 1，樣張 estimate-correct.html B）：「存進食品庫」同一行右邊一顆「✎ 修正」，點了在那一列裡展開單行框＋重估 */
+.est-fix-btn { grid-column: 2 / 4; justify-self: end; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 var(--s-3);
+  border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent); cursor: pointer; }
+.est-fix-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.est-fix-btn:disabled { color: var(--ink-faint); cursor: default; }
+.est-fix-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-tab); }
+.est-fix { grid-column: 1 / 4; display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0 0; }
+.est-fix .ai-ring { flex: 1; min-width: 0; margin: 0; }
+/* 16px：iOS 對小於 16px 的輸入框聚焦會自動放大整頁 */
+.est-fix-in { display: block; width: 100%; min-height: 44px; padding: 0 var(--s-3); border: none; border-radius: var(--r-tab); background: var(--card);
+  font: inherit; font-size: var(--t-md); color: var(--ink); }
+.est-fix-in::placeholder { color: var(--ink-muted); }
+.est-fix-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.est-fix-go { padding: 0 var(--s-4); }
+.est-fix-err { grid-column: 1 / 4; margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--over); }
+.est-fixed { grid-column: 1 / 3; justify-self: start; margin-top: 2px; padding: 1px var(--s-2); border-radius: var(--r-pill);
+  background: var(--sun-pale); color: var(--sun-deep); font-size: var(--t-xs); font-weight: 700; }
+/* 修正完熱量落定時亮一圈（同 AI 剛回來的 .fresh） */
+.est-kc.landed::after { animation: est-land var(--dur-sheet) var(--ease-sheet) both; animation-delay: 600ms; }
 
 .est-or { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-5) var(--s-5) 0; font-size: var(--t-xs); color: var(--ink-muted); }
 .est-or::before, .est-or::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
@@ -1628,7 +1647,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   .est-cover { transform: translateX(176px); }
   .est-pencil { transform: translate(176px, 52px) rotate(10deg); }
   .est-draft.fresh { animation: est-fade 120ms linear both; animation-delay: 0s !important; }
-  .est-draft.fresh .est-kc::after { animation: none; }
+  .est-draft.fresh .est-kc::after, .est-kc.landed::after { animation: none; }
 }
 @keyframes est-fade { from { opacity: 0; } to { opacity: 1; } }
 

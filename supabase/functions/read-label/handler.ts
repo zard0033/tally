@@ -374,6 +374,60 @@ async function estimate(text: unknown, openrouterKey: string, cors: Record<strin
   return json(result, 200, cors)
 }
 
+/* ── 修正模式（估一筆的「修正」，spec.md A2 階段 1，v2.151） ── */
+
+/* 另一份提示詞，`ESTIMATE_PROMPT` 一個字都不動（它是測過才上線的）。這一份同樣先跑準度檢查才上線（spec A2「準度檢查」），
+   測試腳本讀的就是這裡的字串——測過的跟上線的不能是兩份。使用者的資料接在最後（fixInput），不加分隔。 */
+export const ESTIMATE_FIX_PROMPT = `你是台灣的營養估算助手。你之前根據使用者的一句話估了其中一樣食物，使用者看了之後給了修正，請照修正重估這一樣。
+
+規則：
+1. 只改使用者修正提到的地方；他沒提到的份量、做法、配料照你原本的假設，不要另外改。
+2. 修正改到數量時（例如 6 塊改成 5 塊），熱量、範圍與三大營養素照數量等比例調整，除非修正同時改了別的。
+3. 假設改寫成修正後的樣子（例如原本「炸臭豆腐 6 塊、泡菜一小碟」，修正「5 塊」，改成「炸臭豆腐 5 塊、泡菜一小碟」）。
+4. 熱量給一個點估計與一個合理範圍（kcal_low ≤ kcal ≤ kcal_high）。
+5. 假設只寫食物本身的份量、做法與配料，不要寫「使用者修正為」「等比例換算」這類說明。
+6. 只回 JSON，不要任何其他文字，格式：
+{"items":[{"name":"品名","kcal":0,"kcal_low":0,"kcal_high":0,"protein_g":0,"fat_g":0,"carb_g":0,"assumption":"假設"}]}
+
+`
+
+/** 修正字的上限（碼位計，理由同 MAX_SENTENCE）。「5 塊」「沒加泡菜、半糖」幾個字就夠，100 是寬鬆的界。 */
+export const MAX_FIX = 100
+
+/** 接在 ESTIMATE_FIX_PROMPT 後面的使用者資料。原本的估算用 JSON 給，模型才看得到它自己原本的數字與假設。 */
+export function fixInput(sentence: string, item: EstimateItem, fix: string): string {
+  return `使用者原本的描述：${sentence}
+你原本的估算：${JSON.stringify(item)}
+使用者的修正：${fix}`
+}
+
+/**
+ * 修正模式：重估一樣。前端送來的「原本的估算」是外部資料，照 parseEstimate 同一套規則驗過才轉給模型（不合法 400）；
+ * 模型回的也照 parseEstimate 驗，而且必須剛好一樣（拆成兩樣代表它沒照規則只改那一樣，當失敗）。
+ */
+async function estimateFix(body: Record<string, unknown>, openrouterKey: string, cors: Record<string, string>): Promise<Response> {
+  const sentence = typeof body.text === 'string' ? body.text.trim() : ''
+  const fix = typeof body.fix === 'string' ? body.fix.trim() : ''
+  const sLen = [...sentence].length
+  const fLen = [...fix].length
+  const item = parseEstimate(JSON.stringify({ items: [body.item] }))?.items[0] ?? null
+  if (sLen < 1 || sLen > MAX_SENTENCE || fLen < 1 || fLen > MAX_FIX || !item) {
+    // 不記句子、修正與估算本身（使用者的資料），只記長度與哪一欄不對
+    diag('400 bad-fix', { textLen: sLen, fixLen: fLen, item: item !== null })
+    return json({ error: BAD_REQUEST }, 400, cors)
+  }
+  const t0 = Date.now()
+  const reply = await askModel([{ type: 'text', text: ESTIMATE_FIX_PROMPT + fixInput(sentence, item, fix) }], openrouterKey, AI_MODELS, ESTIMATE_REQUEST)
+  if (!reply) return json({ error: READ_FAILED }, 502, cors)
+  const result = parseEstimate(reply.content)
+  if (!result || result.items.length !== 1) {
+    diag('502 fix-unparseable', { model: reply.model, len: reply.content.length, items: result?.items.length ?? null })
+    return json({ error: READ_FAILED }, 502, cors)
+  }
+  diag('200 fix ok', { ms: Date.now() - t0, model: reply.model, usage: reply.usage })
+  return json(result, 200, cors)
+}
+
 /** 額度查詢的回應：只有數字（或 null＝上游沒給／不是數字）。單位是 OpenRouter 的美元。 */
 export interface AiCredits {
   total_credits: number | null
@@ -604,6 +658,7 @@ export async function handleRequest(
   }
   if (body.credits === true) return credits(openrouterKey, cors)
   if (body.mode === 'estimate') return estimate(body.text, openrouterKey, cors)
+  if (body.mode === 'estimate-fix') return estimateFix(body, openrouterKey, cors)
   if ('foods' in body) return classify(body.foods, openrouterKey, cors)
 
   // 取圖。只認前端那個形狀的 data URI，其餘一律 400——這是不當轉發任意網址的那道閘。

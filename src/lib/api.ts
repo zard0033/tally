@@ -475,6 +475,20 @@ export async function estimateMeal(text: string): Promise<EstimateItem[]> {
   return items
 }
 
+/**
+ * 「修正」（spec A2 階段 1，v2.151）：把原句、那一樣目前的估算、使用者的修正送給 `read-label` 的修正模式，回新的那一樣。
+ * 回應照 `parseEstimateResponse` 逐欄驗過，而且必須剛好一樣；失敗一律收斂成同一句（理由同 scanLabel）。
+ */
+export async function estimateFix(text: string, item: EstimateItem, fix: string): Promise<EstimateItem> {
+  const { data, error } = await supabase.functions.invoke<unknown>('read-label', {
+    body: { mode: 'estimate-fix', text: text.trim(), item, fix: fix.trim() },
+    signal: AbortSignal.timeout(ESTIMATE_TIMEOUT),
+  })
+  const items = error ? null : parseEstimateResponse(data)
+  if (!items || items.length !== 1) throw new Error('修正失敗')
+  return items[0]
+}
+
 /* 分類跟辨識走同一支函式、同一把 key；文字模型比讀圖快，但上游同一家在排隊，界照辨識那條訂。 */
 const CLASSIFY_TIMEOUT = SCAN_TIMEOUT
 /** 與 read-label handler 的 MAX_TEXT 同值。 */

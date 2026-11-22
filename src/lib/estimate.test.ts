@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyFix,
+  canFix,
+  fixRequestItem,
+  fixTag,
+  fixTextOk,
   mealMacroRatio,
   draftFromKcal,
   draftFromTier,
@@ -176,3 +181,58 @@ describe('檔位與自己打的熱量照這一餐的歷史比例粗估三大（v
   })
 })
 
+describe('修正（spec A2 階段 1，v2.151）', () => {
+  const ai = (o: Partial<Parameters<typeof draftsFromItems>[0][number]> = {}) =>
+    draftsFromItems([{ name: '臭豆腐', kcal: 480, kcal_low: 380, kcal_high: 600, protein_g: 22, fat_g: 30, carb_g: 28, assumption: '炸臭豆腐 6 塊', ...o }], '  夜市臭豆腐、珍奶 ')[0]
+  const fixed = { name: '臭豆腐', kcal: 400, kcal_low: 320, kcal_high: 500, protein_g: 18, fat_g: 25, carb_g: 23, assumption: '炸臭豆腐 5 塊' }
+
+  it('AI 的列記下那句話（trim）與 AI 給的品名；檔位與自己打的沒有句子、不能修正', () => {
+    const d = ai()
+    expect(d.sentence).toBe('夜市臭豆腐、珍奶')
+    expect(d.aiName).toBe('臭豆腐')
+    expect(canFix(d)).toBe(true)
+    expect(canFix(draftFromTier('normal'))).toBe(false)
+    expect(canFix(draftFromKcal(500))).toBe(false)
+    expect(canFix({ ...d, foodId: 9 }), '已建好食物的列鎖住').toBe(false)
+    expect(canFix({ ...d, sentence: null })).toBe(false)
+    // 手改到函式收不下的數字（熱量 > 3000、營養素 > 300 克）：送去會 400，不給修正
+    expect(canFix({ ...d, kcal: 3001 })).toBe(false)
+    expect(canFix({ ...d, kcal: 3000 })).toBe(true)
+    expect(canFix({ ...d, protein: 301 })).toBe(false)
+  })
+
+  it('送出的估算照畫面上的數字；手改熱量到範圍外，範圍夾住它（不然函式那端驗 low ≤ kcal ≤ high 會 400）', () => {
+    expect(fixRequestItem(ai())).toEqual({ name: '臭豆腐', kcal: 480, kcal_low: 380, kcal_high: 600, protein_g: 22, fat_g: 30, carb_g: 28, assumption: '炸臭豆腐 6 塊' })
+    const up = withKcalInput(ai(), '700')
+    expect(fixRequestItem(up)).toMatchObject({ kcal: 700, kcal_low: 380, kcal_high: 700 })
+    const down = withKcalInput(ai(), '300')
+    expect(fixRequestItem(down)).toMatchObject({ kcal: 300, kcal_low: 300, kcal_high: 600 })
+  })
+
+  it('套用：數字、範圍、假設換新，換算基準重設；key、勾選不變；記下修正字與次數', () => {
+    const d = { ...ai(), keep: true }
+    const n = applyFix(d, fixed, '  5 塊 ')
+    expect(n).toMatchObject({ key: d.key, keep: true, kcal: 400, kcalDraft: '400', low: 320, high: 500, assumption: '炸臭豆腐 5 塊', fixedBy: '5 塊', fixCount: 1, sentence: '夜市臭豆腐、珍奶' })
+    expect(n.origin).toEqual({ kcal: 400, protein: 18, fat: 25, carb: 23 })
+    // 再修正一次：次數累加，換算基準照新的那組
+    expect(applyFix(n, { ...fixed, kcal: 320, kcal_low: 260, kcal_high: 400 }, '4 塊').fixCount).toBe(2)
+  })
+
+  it('品名：沒改過就換成新的；使用者改過就保留他的', () => {
+    expect(applyFix(ai(), { ...fixed, name: '炸臭豆腐' }, '5 塊').name).toBe('炸臭豆腐')
+    expect(applyFix({ ...ai(), name: '阿宗臭豆腐' }, { ...fixed, name: '炸臭豆腐' }, '5 塊').name).toBe('阿宗臭豆腐')
+    // 清空成空白＝沒改（用餐別頂替），換成新的
+    expect(applyFix({ ...ai(), name: '' }, fixed, '5 塊').name).toBe('臭豆腐')
+  })
+
+  it('修正字：trim 後 1–100 碼位；小標超過 12 字截斷加…', () => {
+    expect(fixTextOk('')).toBe(false)
+    expect(fixTextOk('   ')).toBe(false)
+    expect(fixTextOk('5 塊')).toBe(true)
+    expect(fixTextOk('𠮷'.repeat(100))).toBe(true)
+    expect(fixTextOk('x'.repeat(101))).toBe(false)
+    expect(fixTag('5 塊')).toBe('5 塊')
+    expect(fixTag('一二三四五六七八九十一二')).toBe('一二三四五六七八九十一二')
+    expect(fixTag('一二三四五六七八九十一二三')).toBe('一二三四五六七八九十一二…')
+  })
+})

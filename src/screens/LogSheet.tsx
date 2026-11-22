@@ -12,6 +12,7 @@ import FoodFormFields from '@/components/FoodFormFields'
 import QtyStepper from '@/components/QtyStepper'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import {
+  estimateFix,
   estimateMeal,
   listRecentIntake,
   scanLabel,
@@ -19,8 +20,12 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import {
+  applyFix,
+  canFix,
   draftFromKcal,
   draftFromTier,
+  fixRequestItem,
+  fixTextOk,
   isManualDraft,
   draftsFromItems,
   draftsToIntake,
@@ -32,7 +37,9 @@ import {
   withKcalInput,
   type EstimateDraft,
 } from '@/lib/estimate'
-import EstimateView, { type EstimateStatus } from './EstimateView'
+import EstimateView, { type EstimateStatus, type FixState } from './EstimateView'
+
+const FIX_IDLE: FixState = { open: false, text: '', status: 'idle' }
 import { isPlannable } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
@@ -217,6 +224,9 @@ export default function LogSheet(props: LogSheetProps) {
   const [estStartedAt, setEstStartedAt] = useState<number | null>(null)
   const [drafts, setDrafts] = useState<EstimateDraft[]>([])
   const [revealSeq, setRevealSeq] = useState(0)
+  /* 修正（spec A2 階段 1，v2.151）：每一列各自的框、修正字、送出狀態。修正中整個估一筆不能帶回、返回、重估（結果會換掉那一列）。 */
+  const [fixes, setFixes] = useState<Record<string, FixState>>({})
+  const fixBusy = Object.values(fixes).some((f) => f.status === 'busy')
   const estReqRef = useRef(0)
   const estTitleRef = useRef<HTMLSpanElement | null>(null)
   /** 這次進估一筆是不是帶了句子（搜尋列帶字進來）：是才把焦點放描述框，回來改草稿不叫出鍵盤。 */
@@ -251,6 +261,7 @@ export default function LogSheet(props: LogSheetProps) {
     setEstStatus('idle')
     setEstStartedAt(null)
     setDrafts([])
+    setFixes({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -374,7 +385,7 @@ export default function LogSheet(props: LogSheetProps) {
   }
 
   async function submitEstimate() {
-    if (!meal || !estimateTextOk(estText) || estStatus === 'busy') return
+    if (!meal || !estimateTextOk(estText) || estStatus === 'busy' || fixBusy) return
     const id = ++estReqRef.current
     setEstStatus('busy')
     setEstStartedAt(Date.now())
@@ -383,7 +394,8 @@ export default function LogSheet(props: LogSheetProps) {
       const items = await estimateMeal(estText)
       if (id !== estReqRef.current) return
       /* 新的估算取代上一次 AI 的草稿（重估同一句不該疊成兩份）；檔位與自己打的那幾列留著。 */
-      setDrafts((prev) => [...prev.filter((d) => isManualDraft(d) || d.foodId !== null), ...draftsFromItems(items)])
+      setDrafts((prev) => [...prev.filter((d) => isManualDraft(d) || d.foodId !== null), ...draftsFromItems(items, estText)])
+      setFixes({})
       setRevealSeq((n) => n + 1)
       setEstStatus('idle')
     } catch {
@@ -393,6 +405,25 @@ export default function LogSheet(props: LogSheetProps) {
   }
 
   const patchDraft = (key: string, fn: (d: EstimateDraft) => EstimateDraft) => setDrafts((prev) => prev.map((d) => (d.key === key ? fn(d) : d)))
+  const patchFix = (key: string, patch: Partial<FixState>) =>
+    setFixes((prev) => ({ ...prev, [key]: { ...(prev[key] ?? FIX_IDLE), ...patch } }))
+
+  /* 修正一樣：送原句＋那一列目前的估算＋修正字，只換那一列。回來時那一列不在了（重估換掉、刪掉、已建食物）就丟掉結果。
+     失敗那一列維持原樣，修正字留著，按「重試」再送。 */
+  async function submitFix(key: string) {
+    const d = drafts.find((x) => x.key === key)
+    const f = fixes[key]
+    if (!d || !f || !canFix(d) || !fixTextOk(f.text) || fixBusy || estStatus === 'busy') return
+    const text = f.text.trim()
+    patchFix(key, { status: 'busy' })
+    try {
+      const it = await estimateFix(d.sentence as string, fixRequestItem(d), text)
+      setDrafts((prev) => prev.map((x) => (x.key === key && x.foodId === null ? applyFix(x, it, text) : x)))
+      patchFix(key, { open: false, text: '', status: 'idle' })
+    } catch {
+      patchFix(key, { status: 'error' })
+    }
+  }
 
   /* 「加入」：清單勾的食物＋估一筆帶回來的草稿一次寫入（使用者 2026-11-13：估一筆的結果帶回 sheet 打勾，一起加入）。
      草稿要先建 foods（沒勾存進食品庫就建立即封存）、記下 id，再跟勾的食物一起寫 intake。
@@ -804,7 +835,7 @@ export default function LogSheet(props: LogSheetProps) {
             </button>
           </SheetGrabZone>
           <div className="back-row">
-            <button className="back-btn" type="button" disabled={busy || estStatus === 'busy'} aria-label={`返回${meal ? mealLabel(meal) : ''}清單`} onClick={backToList}>
+            <button className="back-btn" type="button" disabled={busy || estStatus === 'busy' || fixBusy} aria-label={`返回${meal ? mealLabel(meal) : ''}清單`} onClick={backToList}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M15 6l-6 6 6 6" />
               </svg>
@@ -829,12 +860,17 @@ export default function LogSheet(props: LogSheetProps) {
               onName={(key, v) => patchDraft(key, (d) => (d.foodId === null ? { ...d, name: v } : d))}
               onDelete={(key) => setDrafts((prev) => prev.filter((d) => d.key !== key || d.foodId !== null))}
               onToggleKeep={(key) => patchDraft(key, (d) => (d.foodId === null ? { ...d, keep: !d.keep } : d))}
+              fixes={fixes}
+              fixBusy={fixBusy}
+              onFixToggle={(key) => patchFix(key, { open: !fixes[key]?.open, status: fixes[key]?.status === 'busy' ? 'busy' : 'idle' })}
+              onFixText={(key, v) => patchFix(key, { text: v })}
+              onFixSubmit={(key) => void submitFix(key)}
               locked={busy}
             />
           </div>
           {drafts.length > 0 && (
             <div className="pick-bar">
-              <button className="pick-bar-btn" type="button" disabled={busy || estStatus === 'busy'} onClick={backToList}>
+              <button className="pick-bar-btn" type="button" disabled={busy || estStatus === 'busy' || fixBusy} onClick={backToList}>
                 帶回清單（{estTotals.n} 樣 · {Math.round(estTotals.kcal)} 卡）
               </button>
             </div>

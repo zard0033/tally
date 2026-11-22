@@ -338,3 +338,147 @@ test('減少動態：繞光與插圖不循環，草稿只淡入、數字不滾�
   const rowAnim = await page.locator('.est-draft').first().evaluate((el) => getComputedStyle(el).animationName)
   expect(rowAnim).toBe('est-fade')
 })
+
+/* ── 修正（spec A2 階段 1，v2.151，樣張 estimate-correct.html B）。read-label 的修正模式由 stub 的 __estimateFix 控制。 ── */
+interface FixWindow {
+  __estimateFix: { mode: 'ok' | 'fail'; body?: unknown; delayMs?: number } | null
+  __estimateFixCalls: Record<string, unknown>[]
+}
+const STINKY = [
+  { name: '臭豆腐', kcal: 480, kcal_low: 380, kcal_high: 600, protein_g: 22, fat_g: 30, carb_g: 28, assumption: '炸臭豆腐 6 塊、泡菜一小碟' },
+  { name: '珍珠奶茶', kcal: 450, kcal_low: 350, kcal_high: 560, protein_g: 5, fat_g: 12, carb_g: 80, assumption: '中杯 500 毫升、全糖' },
+]
+const FIXED = { name: '臭豆腐', kcal: 400, kcal_low: 320, kcal_high: 500, protein_g: 18, fat_g: 25, carb_g: 23, assumption: '炸臭豆腐 5 塊、泡菜一小碟' }
+async function setFix(page: Page, v: FixWindow['__estimateFix']) {
+  await page.evaluate((x) => ((window as unknown as FixWindow).__estimateFix = x), v)
+}
+const fixCalls = (page: Page) => page.evaluate(() => (window as unknown as FixWindow).__estimateFixCalls)
+async function estimateStinky(page: Page) {
+  await openApp(page)
+  await openEstimate(page)
+  await setEstimate(page, { mode: 'ok', body: { items: STINKY } })
+  await page.locator('textarea[aria-label="描述吃了什麼"]').fill('夜市臭豆腐、珍奶')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-draft')).toHaveCount(2)
+}
+const row = (page: Page, i: number) => page.locator('.est-draft').nth(i)
+
+test('修正：AI 的列有「修正」，檔位與自己打的沒有；點了展開框、聚焦，Esc 只收起框不關 sheet', async ({ page }) => {
+  await estimateStinky(page)
+  await page.locator('.est-tier').first().click()
+  await expect(page.locator('.est-draft')).toHaveCount(3)
+  await expect(page.locator('.est-fix-btn')).toHaveCount(2)
+  await expect(row(page, 2).locator('.est-fix-btn'), '檔位的列沒有修正').toHaveCount(0)
+  await row(page, 0).locator('.est-fix-btn').click()
+  await expect(row(page, 0).locator('.est-fix-btn')).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.est-fix-in')).toBeFocused()
+  await expect(page.locator('.est-fix-go'), '空白不能送').toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.est-fix')).toHaveCount(0)
+  await expect(page.locator('.sheet-title', { hasText: '估一筆' }), 'Esc 只收起修正框').toBeVisible()
+})
+
+test('修正：送原句＋那一列目前的估算＋修正字，只換那一列；標「已照…修正」，焦點回到修正鈕', async ({ page }) => {
+  await estimateStinky(page)
+  await setFix(page, { mode: 'ok', body: { items: [FIXED] }, delayMs: 300 })
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('5 塊')
+  await page.locator('.est-fix-go').click()
+  // 修正中：帶回清單、返回、重估都停用
+  await expect(page.locator('.pick-bar-btn', { hasText: '帶回清單' })).toBeDisabled()
+  await expect(page.locator('.back-btn')).toBeDisabled()
+  await expect(row(page, 0).locator('.est-why')).toContainText('炸臭豆腐 5 塊')
+  const calls = await fixCalls(page)
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toEqual({ mode: 'estimate-fix', text: '夜市臭豆腐、珍奶', item: STINKY[0], fix: '5 塊' })
+  await expect(row(page, 0).locator('.est-kc input')).toHaveValue('400')
+  await expect(row(page, 0).locator('.est-fixed')).toHaveText('☀ 已照「5 塊」修正')
+  await expect(page.locator('.est-fix'), '成功後框收起').toHaveCount(0)
+  await expect(row(page, 0).locator('.est-fix-btn')).toBeFocused()
+  // 其他列不動
+  await expect(row(page, 1).locator('.est-name')).toHaveValue('珍珠奶茶')
+  await expect(row(page, 1).locator('.est-kc input')).toHaveValue('450')
+  await expect(row(page, 1).locator('.est-fixed')).toHaveCount(0)
+  await expect(page.locator('.pick-bar-btn', { hasText: '帶回清單' })).toContainText('2 樣 · 850 卡')
+})
+
+test('修正：手改過的品名保留；手改過的熱量照畫面上的數字送（範圍夾住它）', async ({ page }) => {
+  await estimateStinky(page)
+  await setFix(page, { mode: 'ok', body: { items: [{ ...FIXED, name: '炸臭豆腐' }] } })
+  await row(page, 0).locator('.est-name').fill('阿宗臭豆腐')
+  const kc = row(page, 0).locator('.est-kc input')
+  await kc.fill('700')
+  await kc.blur()
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('5 塊')
+  await page.keyboard.press('Enter')
+  await expect(row(page, 0).locator('.est-fixed')).toBeVisible()
+  const [call] = await fixCalls(page)
+  expect(call.item).toMatchObject({ name: '阿宗臭豆腐', kcal: 700, kcal_low: 380, kcal_high: 700 })
+  await expect(row(page, 0).locator('.est-name')).toHaveValue('阿宗臭豆腐')
+  await expect(kc).toHaveValue('400')
+})
+
+test('修正失敗：那一列維持原樣、說原本的估算還在、修正字留著，按重試再送', async ({ page }) => {
+  await estimateStinky(page)
+  await setFix(page, { mode: 'fail' })
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('5 塊')
+  await page.locator('.est-fix-go').click()
+  await expect(page.locator('.est-fix-err')).toHaveText('修正沒成功，原本的估算還在')
+  await expect(row(page, 0).locator('.est-kc input')).toHaveValue('480')
+  await expect(page.locator('.est-fix-in')).toHaveValue('5 塊')
+  await expect(page.locator('.est-fix-go')).toHaveText('重試')
+  await setFix(page, { mode: 'ok', body: { items: [FIXED] } })
+  await page.locator('.est-fix-go').click()
+  await expect(row(page, 0).locator('.est-kc input')).toHaveValue('400')
+  await expect(page.locator('.est-fix-err')).toHaveCount(0)
+  expect(await fixCalls(page)).toHaveLength(2)
+})
+
+test('修正後帶回清單、加入：寫進去的是修正後的數字', async ({ page }) => {
+  await estimateStinky(page)
+  await setFix(page, { mode: 'ok', body: { items: [FIXED] } })
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('5 塊')
+  await page.locator('.est-fix-go').click()
+  await expect(row(page, 0).locator('.est-kc input')).toHaveValue('400')
+  await bringBackAndAdd(page)
+  await expect(page.locator('.sheet')).toHaveCount(0)
+  const intake = (await writes(page, 'intake'))[0] as { kcal: number }[]
+  expect(intake.map((r) => r.kcal)).toEqual([400, 450])
+})
+
+test('修正：一列修正中，其他列的修正、整句重估、那一列的刪除都停用；同一列修正第二次，焦點照樣回到修正鈕', async ({ page }) => {
+  await estimateStinky(page)
+  await setFix(page, { mode: 'ok', body: { items: [FIXED] }, delayMs: 400 })
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('5 塊')
+  await page.locator('.est-fix-go').click()
+  await expect(row(page, 1).locator('.est-fix-btn'), '別列不能同時修正').toBeDisabled()
+  await expect(page.locator('.est-go').first(), '不能整句重估（結果會換掉那一列）').toBeDisabled()
+  await expect(row(page, 0).locator('.est-del'), '修正中那一列不能刪').toBeDisabled()
+  await expect(row(page, 0).locator('.est-fixed')).toHaveText('☀ 已照「5 塊」修正')
+  await expect(row(page, 1).locator('.est-fix-btn')).toBeEnabled()
+  await expect(row(page, 0).locator('.est-fix-btn')).toBeFocused()
+
+  // 同一列再修正一次
+  await setFix(page, { mode: 'ok', body: { items: [{ ...FIXED, kcal: 320, kcal_low: 260, kcal_high: 400, assumption: '炸臭豆腐 4 塊、泡菜一小碟' }] } })
+  await row(page, 0).locator('.est-fix-btn').click()
+  await page.locator('.est-fix-in').fill('4 塊')
+  await page.locator('.est-fix-go').click()
+  await expect(row(page, 0).locator('.est-fixed')).toHaveText('☀ 已照「4 塊」修正')
+  await expect(row(page, 0).locator('.est-kc input')).toHaveValue('320')
+  await expect(row(page, 0).locator('.est-fix-btn'), '第二次修正完焦點也要回來').toBeFocused()
+  const calls = await fixCalls(page)
+  expect(calls[1].item, '第二次拿的是修正過的那一列').toMatchObject({ kcal: 400, assumption: '炸臭豆腐 5 塊、泡菜一小碟' })
+})
+
+test('修正：Esc 收起框，焦點回到修正鈕', async ({ page }) => {
+  await estimateStinky(page)
+  await row(page, 0).locator('.est-fix-btn').click()
+  await expect(page.locator('.est-fix-in')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.est-fix')).toHaveCount(0)
+  await expect(row(page, 0).locator('.est-fix-btn')).toBeFocused()
+})

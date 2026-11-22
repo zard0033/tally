@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { SignJWT, exportJWK, generateKeyPair, type JWK } from 'jose'
-import { AI_MODELS, CATEGORIES, ESTIMATE_PROMPT, handleRequest, VISION_MODELS } from './handler.ts'
+import { AI_MODELS, CATEGORIES, ESTIMATE_FIX_PROMPT, ESTIMATE_PROMPT, fixInput, handleRequest, MAX_FIX, VISION_MODELS } from './handler.ts'
 import { FOOD_CATEGORIES } from '../../../src/lib/categories.ts'
 import * as front from '../../../src/lib/aiModels.ts'
 
@@ -887,5 +887,88 @@ describe('read-label 估算模式', () => {
     stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
     const res = await handleRequest(post(token, { mode: 'other', foods: [{ id: 1, name: '叉燒飯', vendor: null }] }), JWKS, OR_KEY)
     expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }] })
+  })
+})
+
+/* 修正模式（spec.md A2 階段 1，v2.151）：body `{mode:'estimate-fix', text, item, fix}`。只新增，估算模式的測試一條不動。 */
+describe('read-label 修正模式', () => {
+  const SENTENCE = '夜市臭豆腐、珍奶'
+  const item = (o: Record<string, unknown> = {}) => ({
+    name: '臭豆腐', kcal: 480, kcal_low: 380, kcal_high: 600, protein_g: 22, fat_g: 30, carb_g: 28,
+    assumption: '炸臭豆腐 6 塊、泡菜一小碟', ...o,
+  })
+  const fixed = item({ kcal: 400, kcal_low: 320, kcal_high: 500, protein_g: 18, fat_g: 25, carb_g: 23, assumption: '炸臭豆腐 5 塊、泡菜一小碟' })
+  const reply = (items: unknown[]) => upstreamReply(JSON.stringify({ items }))
+  const sentBody = (spy: ReturnType<typeof stubUpstream>) => JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+  const body = (o: Record<string, unknown> = {}) => ({ mode: 'estimate-fix', text: SENTENCE, item: item(), fix: '5 塊', ...o })
+
+  it('提示詞逐字等於 spec.md「修正用的提示詞」：上線的與測過的不能是兩份', () => {
+    const spec = readFileSync(new URL('../../../spec.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+    const block = /\*\*修正用的提示詞\*\*[^\n]*\n[\s\S]*?```[^\n]*\n([\s\S]*?)\n```/.exec(spec)?.[1]
+    expect(block, '在 spec.md 找不到「修正用的提示詞」那段 code block').toBeDefined()
+    // 提示詞最後是空行，接使用者的資料；code block 取不到結尾空行，比對時去掉
+    expect(ESTIMATE_FIX_PROMPT.replace(/\r\n/g, '\n').trimEnd()).toBe(block)
+  })
+
+  it('驗證閘一樣有效：沒 token → 401、沒有 key → 500，都不外呼', async () => {
+    expect((await handleRequest(post(undefined, body(), SITE), JWKS, OR_KEY)).status).toBe(401)
+    expect((await handleRequest(post(await validToken(), body()), JWKS, undefined)).status).toBe(500)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('原句、修正字、原本的估算任一不對 → 400，不外呼', async () => {
+    const token = await validToken()
+    const bad = [
+      body({ text: '' }), body({ text: 'x'.repeat(301) }), body({ text: 123 }),
+      body({ fix: '' }), body({ fix: '   ' }), body({ fix: 'x'.repeat(MAX_FIX + 1) }), body({ fix: null }),
+      body({ item: undefined }), body({ item: 'x' }), body({ item: item({ kcal: -1 }) }),
+      body({ item: item({ kcal_low: 500 }) }), body({ item: item({ protein_g: '22' }) }),
+    ]
+    for (const b of bad) {
+      const res = await handleRequest(post(token, b, SITE), JWKS, OR_KEY)
+      expect(res.status, JSON.stringify(b).slice(0, 80)).toBe(400)
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+    }
+  })
+
+  it('修正字剛好 100 碼位收；前後空白先 trim', async () => {
+    const token = await validToken()
+    for (const fix of ['𠮷'.repeat(MAX_FIX), `  5 塊  `]) {
+      stubUpstream(reply([fixed]))
+      expect((await handleRequest(post(token, body({ fix })), JWKS, OR_KEY)).status).toBe(200)
+    }
+  })
+
+  it('成功：送「修正用的提示詞＋原句＋原本的估算＋修正」、走 AI_MODELS、不思考＋JSON 模式，回剛好一樣、逐欄重建', async () => {
+    const spy = stubUpstream(reply([{ ...fixed, extra: '多的' }]))
+    const res = await handleRequest(post(await validToken(), body(), SITE), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ items: [fixed] })
+    const sent = sentBody(spy)
+    expect(sent.models).toEqual([...AI_MODELS])
+    expect(sent.reasoning).toEqual({ effort: 'none' })
+    expect(sent.response_format).toEqual({ type: 'json_object' })
+    expect(sent.messages[0].content).toEqual([{ type: 'text', text: ESTIMATE_FIX_PROMPT + fixInput(SENTENCE, item(), '5 塊') }])
+  })
+
+  it('原本的估算帶了多的欄位：照 parseEstimate 重建，多的不轉給模型', async () => {
+    const spy = stubUpstream(reply([fixed]))
+    await handleRequest(post(await validToken(), body({ item: { ...item(), secret: 'x' } })), JWKS, OR_KEY)
+    expect(sentBody(spy).messages[0].content[0].text).not.toContain('secret')
+  })
+
+  it('模型回兩樣、零樣、壞格式 → 502（只改那一樣，拆成兩樣代表沒照規則）', async () => {
+    const token = await validToken()
+    for (const content of [JSON.stringify({ items: [fixed, fixed] }), JSON.stringify({ items: [] }), '不是 JSON']) {
+      stubUpstream(upstreamReply(content))
+      expect((await handleRequest(post(token, body()), JWKS, OR_KEY)).status, content.slice(0, 20)).toBe(502)
+    }
+  })
+
+  it('mode 不是 estimate-fix：照原本的估算模式走（帶 text 不帶 fix）', async () => {
+    const spy = stubUpstream(reply([item()]))
+    const res = await handleRequest(post(await validToken(), { mode: 'estimate', text: SENTENCE }), JWKS, OR_KEY)
+    expect(res.status).toBe(200)
+    expect(sentBody(spy).messages[0].content[0].text).toBe(ESTIMATE_PROMPT + SENTENCE)
   })
 })

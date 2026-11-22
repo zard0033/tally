@@ -56,6 +56,14 @@ export interface EstimateDraft {
   /** 縮放的基準：AI（或檔位）原本給的那組數字。改熱量一律從這組換算——每打一個字就拿「目前」的數字再縮放，
    *  四捨五入會一路疊加，中間打出 0 還會把營養素永久歸零（review B1）。 */
   origin: { kcal: number; protein: number; fat: number; carb: number }
+  /** AI 的列：估這一樣用的那句話（修正時一起送，v2.151）；檔位與自己打的是 null。 */
+  sentence: string | null
+  /** AI 給的品名：使用者改過品名（name ≠ aiName）就保留他的，修正只換數字與假設。 */
+  aiName: string
+  /** 最近一次修正的字（畫面小標「已照『…』修正」）；沒修正過是 null。 */
+  fixedBy: string | null
+  /** 修正過幾次：畫面用來判斷「剛修正完」要播熱量滾動。 */
+  fixCount: number
 }
 
 let seq = 0
@@ -63,8 +71,9 @@ const nextKey = () => `est-${++seq}`
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-/** AI 回來的品項 → 草稿列。品名讀不到時留空，顯示與寫入用餐別頂替，不讓一列沒有名字。 */
-export function draftsFromItems(items: readonly EstimateItem[]): EstimateDraft[] {
+/** AI 回來的品項 → 草稿列。品名讀不到時留空，顯示與寫入用餐別頂替，不讓一列沒有名字。
+ *  sentence＝估這批用的那句話，修正時要一起送回去（v2.151）。 */
+export function draftsFromItems(items: readonly EstimateItem[], sentence: string | null = null): EstimateDraft[] {
   return items.map((it) => {
     const kcal = Math.round(it.kcal)
     const protein = round1(it.protein_g), fat = round1(it.fat_g), carb = round1(it.carb_g)
@@ -86,6 +95,10 @@ export function draftsFromItems(items: readonly EstimateItem[]): EstimateDraft[]
       keep: false,
       foodId: null,
       origin: { kcal, protein, fat, carb },
+      sentence: sentence?.trim() || null,
+      aiName: it.name?.trim() ?? '',
+      fixedBy: null,
+      fixCount: 0,
     }
   })
 }
@@ -149,6 +162,10 @@ function kcalOnlyDraft(kcal: number, tag: string, ratioIn: MacroRatio | null): E
     keep: false,
     foodId: null,
     origin: { kcal: k, protein, fat, carb },
+    sentence: null,
+    aiName: '',
+    fixedBy: null,
+    fixCount: 0,
   }
 }
 
@@ -247,4 +264,58 @@ export function parseEstimateResponse(data: unknown): EstimateItem[] | null {
     })
   }
   return out
+}
+
+/* ── 修正（spec.md A2 階段 1，v2.151） ── */
+
+/** 修正字的上限，同函式那端 MAX_FIX（碼位計）。 */
+export const FIX_TEXT_MAX = 100
+export function fixTextOk(text: string): boolean {
+  const n = [...text.trim()].length
+  return n >= 1 && n <= FIX_TEXT_MAX
+}
+
+/** 函式那端 parseEstimate 收的範圍（熱量 0–3000、三大營養素 0–300 克）：手改超過的列送去會被整個擋掉（400），乾脆不給修正。 */
+const FIX_KCAL_MAX = 3000
+const FIX_MACRO_MAX = 300
+
+/** 可以修正的列：AI 估的、有那句話、還沒建好食物（建好之後那一列鎖住）、數字在函式收得下的範圍。檔位與自己打的沒有假設可改。 */
+export const canFix = (d: EstimateDraft): boolean =>
+  !isManualDraft(d) && d.sentence !== null && d.foodId === null &&
+  d.kcal <= FIX_KCAL_MAX && [d.protein, d.fat, d.carb].every((g) => g <= FIX_MACRO_MAX)
+
+/**
+ * 送去修正的「這一樣目前的估算」：照畫面上現在的數字（使用者手改過熱量就是改過的）。
+ * 範圍要夾住目前的熱量——手改到範圍外時，函式那端照 parseEstimate 驗 low ≤ kcal ≤ high 會整個擋掉（400）。
+ */
+export function fixRequestItem(d: EstimateDraft): EstimateItem {
+  const low = Math.min(d.low ?? d.kcal, d.kcal)
+  const high = Math.max(d.high ?? d.kcal, d.kcal)
+  return {
+    name: d.name.trim() || d.aiName || null,
+    kcal: d.kcal, kcal_low: low, kcal_high: high,
+    protein_g: d.protein, fat_g: d.fat, carb_g: d.carb,
+    assumption: d.assumption,
+  }
+}
+
+/** 修正回來的結果套回那一列：數字、範圍、假設換新，換算基準（origin）重設；使用者改過品名就保留他的。key 與「存進食品庫」不變。 */
+export function applyFix(d: EstimateDraft, it: EstimateItem, fix: string): EstimateDraft {
+  const [next] = draftsFromItems([it], d.sentence)
+  const userNamed = d.name.trim() !== '' && d.name !== d.aiName
+  return {
+    ...next,
+    key: d.key,
+    keep: d.keep,
+    name: userNamed ? d.name : next.name,
+    aiName: next.aiName,
+    fixedBy: fix.trim(),
+    fixCount: d.fixCount + 1,
+  }
+}
+
+/** 小標「已照『…』修正」裡的修正字：超過 12 字截斷加…（碼位計，不切斷罕用字）。 */
+export function fixTag(fix: string): string {
+  const cs = [...fix.trim()]
+  return cs.length > 12 ? `${cs.slice(0, 12).join('')}…` : cs.join('')
 }
