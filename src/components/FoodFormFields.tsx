@@ -13,8 +13,10 @@
    **放在 sheet 裡用就一定要傳**；不在 sheet 裡（食品庫的就地編輯）留空走預設即可。 */
 import { useEffect, useRef, useState } from 'react'
 import { Autocomplete } from '@base-ui/react/autocomplete'
-import { readingToForm, type FoodForm, type LabelReading } from '@/lib/foodForm'
+import { addAliases, readingToForm, type FoodForm, type LabelReading } from '@/lib/foodForm'
+import { SOURCE_CHOICES } from '@/lib/foodSource'
 import { compressToDataUri } from './compressImage'
+import SegmentedControl from './SegmentedControl'
 import { useScrollFocusedIntoView } from './useScrollFocusedIntoView'
 
 interface FieldOpts {
@@ -88,6 +90,12 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      結果就是卡在 90% 或衝到 99% 乾等——比沒有更煩。秒數不假裝知道還要多久，
      但回答了使用者真正在問的問題：**它還活著嗎**（辨識期間表單是鎖住的，這點更重要）。 */
   const [scanSec, setScanSec] = useState(0)
+  /* 「更多」（來源、別名、一份幾克，spec「食品庫改版」）預設收起：新增食物照舊三行就能送出，不變長。 */
+  const [moreOpen, setMoreOpen] = useState(false)
+  /** 別名輸入框裡還沒加進去的字。 */
+  const [aliasDraft, setAliasDraft] = useState('')
+  /** 注音選字中：Enter 是選字、不是加入（同估一筆描述框）。 */
+  const composingRef = useRef(false)
   useEffect(() => {
     if (!scanning) return
     const id = setInterval(() => setScanSec((s) => s + 1), 1000)
@@ -192,6 +200,21 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
   const formElRef = useRef<HTMLFormElement | null>(null)
   useScrollFocusedIntoView(formElRef)
 
+  /* 別名：打到頓號、逗號就把前面那段加進去（剩下的留在框裡）；Enter 或離開框把整段加進去。
+     選字中不動——注音的頓號在選字結束才算數，compositionEnd 再跑一次。 */
+  function aliasInput(v: string) {
+    if (composingRef.current || !/[、，,]/.test(v)) return setAliasDraft(v)
+    const parts = v.split(/[、，,]/)
+    const rest = parts.pop() ?? ''
+    set({ aliases: addAliases(form.aliases, parts.join('、')) })
+    setAliasDraft(rest)
+  }
+  function commitAlias() {
+    if (!aliasDraft.trim()) return
+    set({ aliases: addAliases(form.aliases, aliasDraft) })
+    setAliasDraft('')
+  }
+
   const scrollFocusedIntoView = (e: React.FocusEvent) => {
     /* **只認 `<input>`**。掛在 `<form>` 上等於接住底下每一個可聚焦的東西——辨識鈕（它也在
        form 裡）、以及店家 Autocomplete 那份 Portal 出去的清單（React 的合成事件走元件樹不走
@@ -291,6 +314,52 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         {renderField({ id: id('fat'), label: '脂肪 g', numeric: true, value: form.fat, onChange: (v) => set({ fat: v }) })}
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}
       </div>
+      {/* 「更多」留在同一個 fieldset 裡：辨識中一起鎖住，iOS 鍵盤上下箭頭也照樣切得到（見 <form> 那段註解） */}
+      <button className="form-more-btn" type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+        更多：來源、別名、一份幾克
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+      </button>
+      {moreOpen && (
+        <div className="form-more">
+          {/* 未標的舊食物＝四顆都沒按下（SegmentedControl 的 value 不在選項裡就沒有白塊） */}
+          <p className="form-more-label" aria-hidden="true">數字從哪來</p>
+          <SegmentedControl label="數字從哪來" items={SOURCE_CHOICES} value={form.source} onPick={(k) => set({ source: k })} />
+          <div className="field-float alias-field">
+            <input
+              id={id('alias')}
+              type="text"
+              placeholder=" "
+              value={aliasDraft}
+              onChange={(e) => aliasInput(e.target.value)}
+              onCompositionStart={() => (composingRef.current = true)}
+              onCompositionEnd={(e) => {
+                composingRef.current = false
+                aliasInput(e.currentTarget.value)
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || composingRef.current || e.nativeEvent.isComposing) return
+                e.preventDefault()
+                commitAlias()
+              }}
+              onBlur={commitAlias}
+            />
+            <label htmlFor={id('alias')}>別名（按 Enter 或打頓號加入）</label>
+          </div>
+          {form.aliases.length > 0 && (
+            <ul className="alias-chips" aria-label="別名">
+              {form.aliases.map((a) => (
+                <li key={a}>
+                  <span>{a}</span>
+                  <button type="button" aria-label={`拿掉別名 ${a}`} onClick={() => set({ aliases: form.aliases.filter((x) => x !== a) })}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {renderField({ id: id('serving'), label: '一份約幾克', numeric: true, value: form.serving_g, onChange: (v) => set({ serving_g: v }) })}
+        </div>
+      )}
       </fieldset>
     </form>
   )

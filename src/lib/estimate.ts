@@ -223,9 +223,10 @@ export function estimateTotals(drafts: readonly EstimateDraft[]) {
   )
 }
 
-/** 建 foods 用的那一筆。店家一律空：估算沒有抽店家（spec A「明確不做」）。 */
+/** 建 foods 用的那一筆。店家一律空：估算沒有抽店家（spec A「明確不做」）。
+ *  來源一律「AI 粗估」——勾不勾存進食品庫都是（spec「食品庫改版」）；檔位與自己打的熱量列也走這裡，同樣是粗估。 */
 export function draftToFood(d: EstimateDraft, meal: MealKey) {
-  return { name: draftName(d, meal), vendor: null, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb }
+  return { name: draftName(d, meal), vendor: null, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb, source: 'ai' as const }
 }
 
 /** 寫 intake 用的列（份量 1、營養快照＝草稿當下的數字）。還沒建好 food 的列不該走到這裡，丟錯讓呼叫端知道順序錯了。 */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, byFoodName, foodMatches, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
+import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, addAliases, byFoodName, foodMatches, foodToForm, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -20,7 +20,19 @@ describe('readingToForm', () => {
       protein: '0.4',
       fat: '3.6',
       carb: '12.1',
+      source: 'label',
+      serving_g: '17',
+      labelScan: { kcal: 82, protein: 0.4, fat: 3.6, carb: 12.1 },
     })
+  })
+
+  it('一份幾克：每份標示帶每份重量、讀不到重量留空；每 100 克的標示帶 100', () => {
+    expect(readingToForm({ ...BROWN, serving_g: null }).serving_g).toBe('')
+    expect(readingToForm({ ...BROWN, basis: 'per_100g', serving_g: null }).serving_g).toBe('100')
+  })
+
+  it('不碰別名——重拍一張標示不該洗掉使用者加的別名', () => {
+    expect(readingToForm(BROWN)).not.toHaveProperty('aliases')
   })
 
   it('每份但標示沒印公克數 → 只寫「（每份）」，不用兩欄比值回推', () => {
@@ -61,6 +73,31 @@ describe('foodMatches', () => {
   it('沒有店家時只比品名', () => {
     expect(foodMatches({ name: '雞胸餐盒', vendor: null }, 'a店')).toBe(false)
   })
+  it('也比對別名：「中薯」找得到「麥當勞薯條（中）」；沒帶別名（舊呼叫端）照舊', () => {
+    expect(foodMatches({ name: '麥當勞薯條（中）', vendor: '麥當勞', aliases: ['中薯', 'Fries'] }, '中薯')).toBe(true)
+    expect(foodMatches({ name: '麥當勞薯條（中）', vendor: '麥當勞', aliases: ['中薯', 'Fries'] }, 'fries')).toBe(true)
+    expect(foodMatches({ name: '麥當勞薯條（中）', vendor: '麥當勞', aliases: [] }, '中薯')).toBe(false)
+  })
+})
+
+describe('addAliases', () => {
+  it('照頓號、逗號切開，去空白、去重、丟掉空的，不跟已有的重複', () => {
+    expect(addAliases(['中薯'], ' 薯條、中薯，,Fries ')).toEqual(['中薯', '薯條', 'Fries'])
+  })
+  it('空字串不加；不改動傳進來的陣列', () => {
+    const cur = ['a']
+    expect(addAliases(cur, '  ')).toEqual(['a'])
+    addAliases(cur, 'b')
+    expect(cur).toEqual(['a'])
+  })
+})
+
+describe('foodToForm', () => {
+  it('來源、別名、一份幾克帶進表單；labelScan 一律 null（編輯舊食物不是拍照）', () => {
+    const f = { name: 'x', vendor: null, kcal: 1, protein: 2, fat: 3, carb: 4, source: 'official' as const, aliases: ['y'], serving_g: 116 }
+    expect(foodToForm(f)).toMatchObject({ source: 'official', aliases: ['y'], serving_g: '116', labelScan: null })
+    expect(foodToForm({ ...f, serving_g: null }).serving_g).toBe('')
+  })
 })
 
 describe('byFoodName', () => {
@@ -97,7 +134,9 @@ describe('validateFoodForm', () => {
   const ok = { ...BLANK_FOOD_FORM, name: '雞胸', kcal: '120', protein: '25' }
 
   it('品名與熱量必填，營養素留空當 0', () => {
-    expect(validateFoodForm(ok)).toEqual({ food: { name: '雞胸', vendor: null, kcal: 120, protein: 25, fat: 0, carb: 0 } })
+    expect(validateFoodForm(ok)).toEqual({
+      food: { name: '雞胸', vendor: null, kcal: 120, protein: 25, fat: 0, carb: 0, source: 'manual', aliases: [], serving_g: null },
+    })
     expect(validateFoodForm({ ...ok, name: ' ' })).toEqual({ error: '品名要填' })
     expect(validateFoodForm({ ...ok, kcal: '' })).toEqual({ error: '熱量要填數字' })
     expect(validateFoodForm({ ...ok, kcal: '-1' })).toEqual({ error: '熱量要填數字' })
@@ -111,5 +150,57 @@ describe('validateFoodForm', () => {
     for (const key of ['protein', 'fat', 'carb'] as const) {
       expect(validateFoodForm({ ...ok, [key]: '10000' })).toEqual({ error: '營養素要填 0 到 9999.99 之間的數字或留空' })
     }
+  })
+
+  describe('來源', () => {
+    const scanned = { ...BLANK_FOOD_FORM, ...readingToForm(BROWN) }
+    const src = (f: typeof scanned) => {
+      const v = validateFoodForm(f)
+      return 'food' in v ? v.food.source : v.error
+    }
+    it('拍標示後沒改數字 → 標示', () => {
+      expect(src(scanned)).toBe('label')
+    })
+    it('拍標示後改了任一個數字 → 自己填', () => {
+      for (const key of ['kcal', 'protein', 'fat', 'carb'] as const) expect(src({ ...scanned, [key]: '99' })).toBe('manual')
+    })
+    it('改品名、店家不影響（標示上的數字沒動）；「82.0」跟 82 是同一個數', () => {
+      expect(src({ ...scanned, name: '奶茶', vendor: '全聯', kcal: '82.0' })).toBe('label')
+    })
+    it('沒拍（labelScan 是 null）→ 照表單選的，改數字不自動變（編輯舊食物）', () => {
+      expect(src({ ...ok, source: 'official' })).toBe('official')
+      expect(src({ ...ok, source: 'label', kcal: '999' })).toBe('label')
+      expect(src({ ...ok, source: 'unknown' })).toBe('unknown')
+    })
+  })
+
+  describe('別名與一份幾克', () => {
+    it('別名去空白去重；超過 10 個或單個超過 40 字擋下', () => {
+      const v = validateFoodForm({ ...ok, aliases: [' 中薯 ', '中薯', '薯條'] })
+      expect('food' in v && v.food.aliases).toEqual(['中薯', '薯條'])
+      expect(validateFoodForm({ ...ok, aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) })).toEqual({ error: '別名最多 10 個' })
+      expect('food' in validateFoodForm({ ...ok, aliases: ['字'.repeat(40)] })).toBe(true)
+      expect(validateFoodForm({ ...ok, aliases: ['字'.repeat(41)] })).toEqual({ error: '每個別名最多 40 個字' })
+    })
+    it('一份幾克：空白＝不知道；0、負數、超過 5000、不是數字都擋', () => {
+      const g = (s: string) => {
+        const v = validateFoodForm({ ...ok, serving_g: s })
+        return 'food' in v ? v.food.serving_g : v.error
+      }
+      expect(g(' ')).toBe(null)
+      expect(g('116')).toBe(116)
+      expect(g('5000')).toBe(5000)
+      for (const bad of ['0', '-1', '5001', 'x']) expect(g(bad)).toBe('一份幾克要大於 0、最多 5000，或留空')
+    })
+
+    it('一份幾克照 DB 的 numeric(7,2) 四捨五入到兩位：0.004 變 0、擋下，不讓 DB 回原文錯誤', () => {
+      const g = (s: string) => {
+        const v = validateFoodForm({ ...ok, serving_g: s })
+        return 'food' in v ? v.food.serving_g : v.error
+      }
+      expect(g('0.004')).toBe('一份幾克要大於 0、最多 5000，或留空')
+      expect(g('0.005')).toBe(0.01)
+      expect(g('17.456')).toBe(17.46)
+    })
   })
 })

@@ -157,8 +157,11 @@ function suggestedFood(item: RepeatItem): Food {
     carb: item.carb,
     archived: item.archived,
     category: item.category,
-    // 只給 sheet 顯示與寫入用，不會寫回食品庫；手動與否這裡不知道也用不到
+    // 只給 sheet 顯示與寫入用，不會寫回食品庫；手動與否、來源、別名這裡不知道也用不到
     category_manual: false,
+    source: 'unknown',
+    aliases: [],
+    serving_g: null,
   }
 }
 

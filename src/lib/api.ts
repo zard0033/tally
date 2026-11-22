@@ -102,7 +102,16 @@ export interface Food {
   category: string | null
   /** 使用者在食品庫手動改過類型：AI 補判跳過它。 */
   category_manual: boolean
+  /** 數字從哪來（spec「食品庫改版」）：標示／官方／AI 粗估／自己填／未標。 */
+  source: FoodSource
+  /** 別的叫法，記一筆搜尋與（第二步的）估一筆比對用。 */
+  aliases: string[]
+  /** 一份幾克（飲料用毫升），知道才有。 */
+  serving_g: number | null
 }
+
+export type FoodSource = 'label' | 'official' | 'ai' | 'manual' | 'unknown'
+const FOOD_SOURCES: readonly FoodSource[] = ['label', 'official', 'ai', 'manual', 'unknown']
 
 export interface NewFood {
   name: string
@@ -111,19 +120,36 @@ export interface NewFood {
   protein: number
   fat: number
   carb: number
+  /** 不帶＝資料庫預設 unknown。 */
+  source?: FoodSource
+  aliases?: string[]
+  serving_g?: number | null
 }
 
-const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived,category,category_manual'
+const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived,category,category_manual,source,aliases,serving_g'
+
+/** 讀進來的 foods 列在這裡補齊新欄位：舊的 e2e fixture 沒有這三欄，一律當未標／沒別名／不知道幾克。
+ *  只在讀取邊界收斂一次，畫面與 lib 不必各自防 undefined。numeric 欄 PostgREST 可能回字串，一併轉數字。 */
+export function normalizeFood(row: Food): Food {
+  const r = row as Omit<Food, 'source' | 'aliases' | 'serving_g'> & { source?: unknown; aliases?: unknown; serving_g?: unknown }
+  return {
+    ...r,
+    source: FOOD_SOURCES.includes(r.source as FoodSource) ? (r.source as FoodSource) : 'unknown',
+    // 去重：DB 不擋重複，重複的別名在表單 chip 會撞 key、按 ✕ 一次拿掉兩個
+    aliases: Array.isArray(r.aliases) ? [...new Set(r.aliases.filter((a): a is string => typeof a === 'string'))] : [],
+    serving_g: r.serving_g == null || !Number.isFinite(Number(r.serving_g)) ? null : Number(r.serving_g),
+  }
+}
 
 /** 今日頁記一筆的挑選清單只給使用中的食物——封存是「以後不再用」的宣告，
  *  不該讓它繼續冒出來讓人選到。 */
 export async function listFoods(): Promise<Food[]> {
-  return unwrap(await supabase.from('foods').select(FOOD_COLS).eq('archived', false).abortSignal(dbSignal()))
+  return unwrap<Food[]>(await supabase.from('foods').select(FOOD_COLS).eq('archived', false).abortSignal(dbSignal())).map(normalizeFood)
 }
 
 /** 食品庫管理頁「已封存」分頁專用，其餘畫面不需要看到已封存的食物。 */
 export async function listArchivedFoods(): Promise<Food[]> {
-  return unwrap(await supabase.from('foods').select(FOOD_COLS).eq('archived', true).abortSignal(dbSignal()))
+  return unwrap<Food[]>(await supabase.from('foods').select(FOOD_COLS).eq('archived', true).abortSignal(dbSignal())).map(normalizeFood)
 }
 
 /** archived：「估一筆」沒勾「存進食品庫」的列一建立就封存——不出現在選單，食品庫「已封存」找得回，
@@ -134,7 +160,7 @@ export async function createFood(food: NewFood, opts: { archived?: boolean } = {
   const row = rows[0]
   /* 沒拿到新列就不能往下選取。食物其實已經建立了，講清楚讓呼叫端能引導使用者重開清單找到它 */
   if (!row) throw new Error('食物已建立，但沒拿到回傳資料')
-  return row
+  return normalizeFood(row)
 }
 
 /** 就地編輯與封存/復原共用一支：封存只是把 archived 這一欄改掉，不是真的刪列
@@ -215,6 +241,26 @@ export async function listIntakeKcal(
        第一頁就會不滿 PAGE，那時用「不滿一頁」判結束會把最新的幾天靜默砍掉——
        而升冪排序丟掉的正是最新的那幾天。offset 跟著實際拿到的列數走，對任何上限都對；
        代價是每次多一趟請求（最後那頁一定是空的）。 */
+    if (rows.length === 0) return out
+    out.push(...rows)
+  }
+  throw new Error('intake 區間查詢超過分頁上限')
+}
+
+/** 食品庫「沒查證過」排序用：from（含）之後每一列吃了哪樣、多少（spec「食品庫改版」）。
+ *  分頁同 listIntakeKcal（停在空頁）。 */
+export async function listIntakeFoodKcal(from: string): Promise<{ food_id: number; kcal: number; qty: number }[]> {
+  const PAGE = 1000
+  const MAX_PAGES = 20
+  const out: { food_id: number; kcal: number; qty: number }[] = []
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const rows = unwrap(await supabase
+      .from('intake')
+      .select<'food_id,kcal,qty', { food_id: number; kcal: number; qty: number }>('food_id,kcal,qty')
+      .gte('eaten_on', from)
+      .order('id', { ascending: true })
+      .range(out.length, out.length + PAGE - 1)
+      .abortSignal(dbSignal()))
     if (rows.length === 0) return out
     out.push(...rows)
   }

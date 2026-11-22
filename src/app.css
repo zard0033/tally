@@ -1085,6 +1085,14 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .lib-row-hit .nm-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .lib-row-hit .nm { font-size: var(--t-base); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-row-hit .sub { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+/* 來源小標（v2.153）：只有標示／官方／粗估會出現，跟在類型後面。樣式同估一筆的「粗估」（.est-only）。 */
+.src-tag { display: inline-block; margin-left: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--raised);
+  color: var(--ink-muted); font-size: var(--t-xs); font-weight: 600; vertical-align: 1px; }
+/* 「沒查證過」是使用中分頁上的開關，不是第三個分頁：推到這一排最右 */
+.lib-unverified { margin-left: auto; }
+.lib-unverified-note { padding: 0 var(--s-5) var(--s-2); font-size: var(--t-sm); }
+/* 食藥署開放資料的出處（政府資料開放授權要求標示） */
+.lib-attrib { margin: var(--s-4) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
 .lib-kcal { flex-shrink: 0; font-family: var(--font-num); font-weight: 700; font-size: var(--t-base); font-variant-numeric: tabular-nums; }
 .lib-kcal small { font-family: var(--font-body); font-weight: 400; font-size: var(--t-xs); color: var(--ink-muted); }
 .lib-chev { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
@@ -1738,6 +1746,29 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 辨識中把整組欄位鎖住。fieldset 純粹當開關用，樣式全部重置——
    `min-width: 0` 不可省：fieldset 的預設 min-content 寬度會把裡面的 flex 版面撐破。 */
 .form-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+/* 「更多：來源、別名、一份幾克」（v2.153，spec「食品庫改版」第一步）：文字鈕同 .lib-text-btn 的語氣，
+   展開時箭頭轉下。收起是預設——新增食物照舊三行就能送出。 */
+.form-more-btn { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 44px; margin: calc(var(--s-2) * -1) 0 var(--s-2);
+  padding: 0 var(--s-1); border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--accent);
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.form-more-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--dur-base) var(--ease); }
+.form-more-btn[aria-expanded="true"] svg { transform: rotate(90deg); }
+.form-more-btn:active { opacity: .6; }
+.form-more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
+.form-more { display: flex; flex-direction: column; }
+.form-more-label { margin: 0 0 var(--s-2) var(--s-1); font-size: var(--t-sm); letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.form-more .seg { flex: none; margin-bottom: var(--s-4); }
+.form-more .alias-field { margin-bottom: var(--s-2); }
+/* 別名的 chip：顯示用，✕ 拿掉。命中區 44px 由 ✕ 鈕自己撐，pill 本身只是字。 */
+.alias-chips { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); margin: 0 0 var(--s-4); padding: 0; list-style: none; }
+.alias-chips li { display: inline-flex; align-items: center; min-height: 36px; padding-left: var(--s-3); border-radius: var(--r-pill); background: var(--raised);
+  font-size: var(--t-sm); color: var(--ink); }
+.alias-chips button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -4px 0; border: none; background: none;
+  color: var(--ink-muted); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.alias-chips button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.alias-chips button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-pill); }
 
 /* 辨識中的等待動效：空欄位變骨架、輕微呼吸。四個版本做成對照 demo 讓使用者挑，
    選的是「骨架呼吸」——比掃描線含蓄，不與畫面上其他東西搶注意力。

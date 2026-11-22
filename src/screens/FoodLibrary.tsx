@@ -18,10 +18,12 @@ import FoodFormFields from '@/components/FoodFormFields'
 import { Skel, SkelBlock } from '@/components/Skeleton'
 import SpringSheet, { SheetGrabZone } from '@/components/SpringSheet'
 import SubPageTop from '@/components/SubPageTop'
-import { listArchivedFoods, scanLabel, type Food, type NewFood } from '@/lib/api'
+import { listArchivedFoods, listIntakeFoodKcal, scanLabel, type Food, type NewFood } from '@/lib/api'
 import { MEAL_TYPE_CATEGORIES, SIDE_CATEGORIES, categoryOf, normalizeCategory, type FoodCategory } from '@/lib/categories'
+import { localDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, foodMatches, foodToForm, groupByVendor, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
+import { kcalByFood, rankUnverified, sourceTag } from '@/lib/foodSource'
 
 export interface FoodLibraryProps {
   /** 使用中的食品庫（App 既有 state，已排除封存）。 */
@@ -75,6 +77,23 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     archivedFetchedRef.current = true
     void listArchivedFoods().then(setArchived).catch(() => setArchived([]))
   }, [tab])
+
+  /* 「沒查證過」（v2.153，spec「食品庫改版」）：只在使用中分頁、只列 AI 粗估與未標，依近 90 天吃掉的熱量排。
+     近 90 天的 intake 第一次打開才撈（約 300 列），不是每次進食品庫都撈。撈失敗就照品名排、講一句。 */
+  const [unverified, setUnverified] = useState(false)
+  const [eaten, setEaten] = useState<Map<number, number> | 'error' | null>(null)
+  const eatenFetchedRef = useRef(false)
+  useEffect(() => {
+    if (!unverified || eatenFetchedRef.current) return
+    eatenFetchedRef.current = true
+    void listIntakeFoodKcal(shiftDate(localDate(), -90))
+      .then((rows) => setEaten(kcalByFood(rows)))
+      .catch(() => {
+        // 放掉旗標：關掉再打開「沒查證過」會再撈一次，不必離開畫面
+        eatenFetchedRef.current = false
+        setEaten('error')
+      })
+  }, [unverified])
 
   function openEdit(f: Food) {
     setEditingId(f.id)
@@ -166,7 +185,9 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const vendorOptions = useMemo(() => vendorOptionsOf(foods), [foods])
 
   function openAdd(prefill: Food | null) {
-    setAddForm(prefill ? foodToForm(prefill) : BLANK_FOOD_FORM)
+    /* 以範本新增是一筆新的食物：來源不跟範本走（官方的範本改了數字就不再是官方），別名也不複製
+       ——兩筆共用同一個別名，估一筆查食品庫時就對到兩筆（v2.153 review）。 */
+    setAddForm(prefill ? { ...foodToForm(prefill), source: 'manual', aliases: [] } : BLANK_FOOD_FORM)
     setAddSourceName(prefill ? prefill.name : null)
     setAddErr(null)
     setAddOpen(true)
@@ -234,8 +255,22 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const visible = sourceList
     ?.filter((f) => tab !== 'active' || !hiddenIds.has(f.id))
     .filter((f) => foodMatches(f, query)) ?? null
-  const groups = visible ? groupByVendor(visible) : null
+  const unverifiedOn = unverified && tab === 'active'
+  const eatenMap = eaten instanceof Map ? eaten : new Map<number, number>()
+  /* 沒查證過：不分店家，一張卡照「吃最多的在前」排——分組會把排序打散。90 天還在撈時先不出清單（骨架）。 */
+  const groups = !visible
+    ? null
+    : unverifiedOn
+      ? eaten === null
+        ? null
+        : (() => {
+            const ranked = rankUnverified(visible, eatenMap)
+            return ranked.length ? [{ vendor: '沒查證過・近 90 天吃最多的在前', items: ranked }] : []
+          })()
+      : groupByVendor(visible)
   const editorShown = visible?.some((f) => f.id === editingId) ?? false
+  /* 食藥署開放資料的出處標示（政府資料開放授權要求標示）：食品庫有官方數字才出現 */
+  const hasOfficial = foods.some((f) => f.source === 'official') || (archived?.some((f) => f.source === 'official') ?? false)
 
   return (
     <div className="main" data-screen="food-library" style={{ position: 'relative' }}>
@@ -255,7 +290,12 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       <div className="tabrow" role="group" aria-label="食品庫篩選">
         <button className="chip" type="button" aria-pressed={tab === 'active'} onClick={() => setTab('active')}>使用中</button>
         <button className="chip" type="button" aria-pressed={tab === 'archived'} onClick={() => setTab('archived')}>已封存</button>
+        {/* 不是第三個分頁：是使用中分頁上的開關（spec 決定，review B3），所以推到最右、只在使用中出現 */}
+        {tab === 'active' && (
+          <button className="chip lib-unverified" type="button" aria-pressed={unverified} onClick={() => setUnverified((v) => !v)}>沒查證過</button>
+        )}
       </div>
+      {unverifiedOn && eaten === 'error' && <p className="muted lib-unverified-note" role="status">近 90 天的紀錄沒撈到，先照品名排</p>}
 
       <div className="settings" style={{ paddingTop: 'var(--s-2)', paddingBottom: 96 }}>
         {groups === null ? (
@@ -272,6 +312,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
               ))}
             </div>
           </SkelBlock>
+        ) : groups.length === 0 && !query.trim() && unverifiedOn ? (
+          <p className="muted">每一樣都查證過了</p>
         ) : groups.length === 0 && !query.trim() && tab === 'active' ? (
           <EmptyNote art="bowl">食品庫還是空的</EmptyNote>
         ) : groups.length === 0 ? (
@@ -308,7 +350,11 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         onClick={() => (editingId === f.id ? setEditingId(null) : openEdit(f))}>
                         <span className="nm-wrap">
                           <span className="nm">{f.name}</span>
-                          <span className="sub">{cat ?? '未分類'}</span>
+                          <span className="sub">
+                            {cat ?? '未分類'}
+                            {unverifiedOn && eatenMap.has(f.id) && <> · 近 90 天 {Math.round(eatenMap.get(f.id)!).toLocaleString()} 卡</>}
+                            {sourceTag(f.source) && <span className="src-tag">{sourceTag(f.source)}</span>}
+                          </span>
                         </span>
                         <span className="lib-kcal">{Math.round(f.kcal)}<small> 卡</small></span>
                         {CHEV}
@@ -363,6 +409,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
             </div>
           ))
         )}
+        {hasOfficial && groups !== null && <p className="lib-attrib">官方數字部分取自衛福部食藥署食品營養成分資料庫（政府資料開放授權）</p>}
       </div>
 
       {/* 編輯中隱藏：FAB 是 fixed 定位，展開的編輯區一長，操作列剛好捲到 FAB 那個

@@ -25,6 +25,17 @@ create table foods (
   -- 回滾：alter table foods drop column category_manual; alter table foods drop column category;
   category        text,
   category_manual boolean not null default false,
+  -- 來源、別名、一份幾克（2026-11-22，spec.md「食品庫改版」）。source 決定數字可不可信（標示／官方／AI 粗估／
+  -- 自己填／未標），舊資料一律 unknown 不硬猜；aliases 給記一筆搜尋與估一筆比對用；serving_g 知道才填。
+  -- 既有資料庫補這三欄：
+  --   alter table foods add column source text not null default 'unknown'
+  --     check (source in ('label','official','ai','manual','unknown'));
+  --   alter table foods add column aliases text[] not null default '{}' check (cardinality(aliases) <= 10);
+  --   alter table foods add column serving_g numeric(7,2) check (serving_g > 0 and serving_g <= 5000);
+  -- 回滾：alter table foods drop column serving_g; alter table foods drop column aliases; alter table foods drop column source;
+  source    text not null default 'unknown' check (source in ('label','official','ai','manual','unknown')),
+  aliases   text[] not null default '{}' check (cardinality(aliases) <= 10),
+  serving_g numeric(7,2) check (serving_g > 0 and serving_g <= 5000),
   created_at timestamptz not null default now()
 );
 
