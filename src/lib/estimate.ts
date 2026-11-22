@@ -3,8 +3,11 @@
    跟清單勾的食物一起按「加入」才寫入（使用者 2026-11-13：估一筆的結果帶回 sheet 打勾，一次加入）。
    寫入分兩步：每一列先建一筆 foods（沒勾「存進食品庫」的直接封存），再寫 intake——intake 要 food_id。
    這一層禁沾 DOM（未來要原樣帶去 React Native）。 */
+import type { FoodSource } from './api'
 import { MACRO_MAX } from './foodForm'
+import { exactMatch, nearMatch, normalizeKey, type MatchFood } from './foodMatch'
 import { mealLabel, type MealKey } from './meals'
+import { normalizeQty } from './quantity'
 
 /** read-label 估算模式回來的一樣（形狀同 handler.ts 的 parseEstimate）。 */
 export interface EstimateItem {
@@ -64,6 +67,44 @@ export interface EstimateDraft {
   fixedBy: string | null
   /** 修正過幾次：畫面用來判斷「剛修正完」要播熱量滾動。 */
   fixCount: number
+  /** 食品庫的列（spec「食品庫改版」第二步）：數字是食品庫那一筆 × 份數，不建新食物，寫入時直接用那筆的 food_id。AI 的、檔位、自己打的是 null。 */
+  lib: LibLink | null
+  /** AI 的列：食品庫有相近的那一筆（按「改用」才換）；沒有或已經不要食品庫了是 null。 */
+  near: NearFood | null
+  /** 使用者選了 AI 估（按過「改用 AI 估」）：這一列不再自動換成食品庫、也不出相近提示，否則按了又被換回去。 */
+  noLib: boolean
+}
+
+/** 食品庫列記住的那一筆：顯示、換算、寫入都用這份（之後食品庫改了，這張草稿的數字不跟著變）。 */
+export interface LibFood {
+  id: number
+  name: string
+  vendor: string | null
+  source: FoodSource
+  kcal: number
+  protein: number
+  fat: number
+  carb: number
+}
+
+export interface LibLink {
+  food: LibFood
+  qty: number
+  /** 份量框正在打的字（同清單的 qtyDrafts）。 */
+  qtyDraft: string
+  /** pre＝送 AI 之前整段就對上了（沒叫 AI）；post＝AI 回來的那一樣對上的，或按了相近提示的「改用」。 */
+  via: 'pre' | 'post'
+  /** 對上的那一段原文（pre 的「改用 AI 估」拿它去估）。 */
+  segment: string
+  /** post 的列：換成食品庫之前 AI 給的那一樣，「改用 AI 估」就換回它。 */
+  ai: EstimateItem | null
+}
+
+export interface NearFood {
+  id: number
+  name: string
+  vendor: string | null
+  kcal: number
 }
 
 let seq = 0
@@ -99,6 +140,9 @@ export function draftsFromItems(items: readonly EstimateItem[], sentence: string
       aiName: it.name?.trim() ?? '',
       fixedBy: null,
       fixCount: 0,
+      lib: null,
+      near: null,
+      noLib: false,
     }
   })
 }
@@ -166,6 +210,9 @@ function kcalOnlyDraft(kcal: number, tag: string, ratioIn: MacroRatio | null): E
     aiName: '',
     fixedBy: null,
     fixCount: 0,
+    lib: null,
+    near: null,
+    noLib: false,
   }
 }
 
@@ -229,12 +276,122 @@ export function draftToFood(d: EstimateDraft, meal: MealKey) {
   return { name: draftName(d, meal), vendor: null, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb, source: 'ai' as const }
 }
 
-/** 寫 intake 用的列（份量 1、營養快照＝草稿當下的數字）。還沒建好 food 的列不該走到這裡，丟錯讓呼叫端知道順序錯了。 */
+/** 寫 intake 用的列（份量 1、營養快照＝草稿當下的數字）。還沒建好 food 的列不該走到這裡，丟錯讓呼叫端知道順序錯了。
+ *  食品庫的列不建新食物：直接用那一筆的 food_id、份數，營養快照是那筆的單份值（同清單勾選的寫法）。 */
 export function draftsToIntake(drafts: readonly EstimateDraft[], meal: MealKey, date: string) {
   return drafts.map((d) => {
+    if (d.lib) {
+      const f = d.lib.food
+      return { eaten_on: date, meal, food_id: f.id, qty: d.lib.qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: null }
+    }
     if (d.foodId === null) throw new Error(`draft ${d.key} has no foodId yet`)
     return { eaten_on: date, meal, food_id: d.foodId, qty: 1, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb, name: null }
   })
+}
+
+/* ── 先查食品庫（spec「食品庫改版」第二步，樣張 estimate-library.html A） ── */
+
+/** 比對要用的食物：MatchFood 加上數字（食品庫列要顯示、換算）。 */
+export type LibCandidate = MatchFood & Omit<LibFood, 'id' | 'name' | 'vendor' | 'source'>
+
+const libFoodOf = (f: LibCandidate): LibFood => ({
+  id: f.id, name: f.name, vendor: f.vendor, source: f.source,
+  kcal: Number(f.kcal), protein: Number(f.protein), fat: Number(f.fat), carb: Number(f.carb),
+})
+
+/** 食品庫列：數字＝那一筆 × 份數（份數預設 1——AI 估的份數不搬過來，它可能是 8 顆的總熱量，食品庫是 1 顆）。 */
+export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: string, ai: EstimateItem | null = null): EstimateDraft {
+  return withLibQty(
+    {
+      key: nextKey(),
+      name: f.name,
+      tag: '',
+      kcal: 0, kcalDraft: '0', protein: 0, fat: 0, carb: 0,
+      low: null, high: null, assumption: null,
+      kcalOnly: false, macrosGuessed: false, keep: false, foodId: null,
+      origin: { kcal: 0, protein: 0, fat: 0, carb: 0 },
+      sentence: null, aiName: '', fixedBy: null, fixCount: 0,
+      lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', via, segment, ai },
+      near: null,
+      noLib: false,
+    },
+    1,
+  )
+}
+
+/** 食品庫列換份數：熱量取整、營養素到 0.1（同清單小計的捨入）。不是食品庫列就原樣回傳。 */
+export function withLibQty(d: EstimateDraft, qty: number, raw: string = String(qty)): EstimateDraft {
+  if (!d.lib) return d
+  const f = d.lib.food
+  const kcal = Math.round(f.kcal * qty)
+  return {
+    ...d,
+    kcal, kcalDraft: String(kcal),
+    protein: round1(f.protein * qty), fat: round1(f.fat * qty), carb: round1(f.carb * qty),
+    lib: { ...d.lib, qty, qtyDraft: raw },
+  }
+}
+
+/** 食品庫列的份數按 −／＋（同清單：normalizeQty，最少 1 份由按鈕停用守）。 */
+export const stepLibQty = (d: EstimateDraft, dir: 1 | -1): EstimateDraft => (d.lib ? withLibQty(d, normalizeQty(d.lib.qty + dir)) : d)
+
+/** AI 的列：附上相近的那一筆（沒有就 null）。使用者選過 AI 估的列不附。 */
+function withNear(d: EstimateDraft, foods: readonly LibCandidate[], rank: ReadonlyMap<number, number>): EstimateDraft {
+  if (d.noLib || d.lib || isManualDraft(d)) return d
+  const n = nearMatch(d.name || d.aiName, foods, rank)
+  return { ...d, near: n ? { id: n.id, name: n.name, vendor: n.vendor, kcal: Math.round(Number(n.kcal)) } : null }
+}
+
+/**
+ * ① 送 AI 之前：每一段都完全對上就回食品庫列（不叫 AI）；有一段對不上回 null（照舊整句送 AI）。
+ * 段落是 splitSegments 切的；空句子回 null。
+ */
+export function resolveBeforeAi(segments: readonly string[], foods: readonly LibCandidate[], rank: ReadonlyMap<number, number>): EstimateDraft[] | null {
+  if (segments.length === 0) return null
+  const hits = segments.map((s) => exactMatch(s, foods, rank))
+  if (hits.some((h) => h === null)) return null
+  return hits.map((f, i) => draftFromLibrary(f as LibCandidate, 'pre', segments[i]))
+}
+
+/** ② AI 回來後：品名完全一樣的換成食品庫列（記住 AI 那一樣，可以換回去）；其餘照舊是 AI 的列、附相近提示。 */
+export function resolveAfterAi(items: readonly EstimateItem[], sentence: string, foods: readonly LibCandidate[], rank: ReadonlyMap<number, number>): EstimateDraft[] {
+  const said = normalizeKey(sentence)
+  return items.map((it) => {
+    const hit = it.name ? exactMatch(it.name, foods, rank) : null
+    /* AI 回的品名常把店家拿掉（「星巴克拿鐵」回「拿鐵」），只靠品名會對到別家的那一筆（全家拿鐵）。
+       那筆有店家、而使用者那句話裡沒提到這個店家 → 不自動換，降成相近提示、按了才換（v2.154 review H1）。 */
+    if (hit && (!hit.vendor || said.includes(normalizeKey(hit.vendor)))) return { ...draftFromLibrary(hit, 'post', it.name ?? '', it), sentence }
+    const [d] = draftsFromItems([it], sentence)
+    if (hit) return { ...d, near: { id: hit.id, name: hit.name, vendor: hit.vendor, kcal: Math.round(Number(hit.kcal)) } }
+    return withNear(d, foods, rank)
+  })
+}
+
+/** ③ 相近提示的「改用」：AI 的列換成那一筆食品庫列，記住目前的估算（「改用 AI 估」換回來）。key 不變，畫面不重掛。 */
+export function adoptNear(d: EstimateDraft, f: LibCandidate): EstimateDraft {
+  const lib = draftFromLibrary(f, 'post', d.name || d.aiName, fixRequestItem(d))
+  return { ...lib, key: d.key, sentence: d.sentence }
+}
+
+/** post 的食品庫列按「改用 AI 估」：換回 AI 那一樣，之後不再自動換、不再提示。pre 的列沒有 AI 結果，呼叫端要先去估。 */
+export function backToAi(d: EstimateDraft): EstimateDraft {
+  if (!d.lib?.ai) return d
+  const [next] = draftsFromItems([d.lib.ai], d.sentence)
+  return { ...next, key: d.key, noLib: true }
+}
+
+/** pre 的食品庫列按「改用 AI 估」、估回來的品項：取代那一列，同樣標「選過 AI」。 */
+export function aiDraftsChosen(items: readonly EstimateItem[], sentence: string): EstimateDraft[] {
+  return draftsFromItems(items, sentence).map((d) => ({ ...d, noLib: true }))
+}
+
+/** 結果上面那一行：都是送 AI 前就對上的＝「N 樣都在食品庫，沒叫 AI」；有食品庫也有 AI 的＝「N 樣用食品庫、M 樣 AI 估」。沒有食品庫列不出這行。 */
+export function libSummary(drafts: readonly EstimateDraft[]): string | null {
+  const lib = drafts.filter((d) => d.lib)
+  if (lib.length === 0) return null
+  const ai = drafts.filter((d) => !d.lib && !isManualDraft(d) && d.foodId === null).length
+  if (ai === 0 && lib.every((d) => d.lib?.via === 'pre')) return `${lib.length} 樣都在食品庫，沒叫 AI`
+  return ai === 0 ? `${lib.length} 樣用食品庫` : `${lib.length} 樣用食品庫、${ai} 樣 AI 估`
 }
 
 /** 描述框：送出前 trim，1–300 字（以 code point 計，同 handler.ts）。 */
@@ -282,7 +439,7 @@ const FIX_MACRO_MAX = 300
 
 /** 可以修正的列：AI 估的、有那句話、還沒建好食物（建好之後那一列鎖住）、數字在函式收得下的範圍。檔位與自己打的沒有假設可改。 */
 export const canFix = (d: EstimateDraft): boolean =>
-  !isManualDraft(d) && d.sentence !== null && d.foodId === null &&
+  !isManualDraft(d) && d.lib === null && d.sentence !== null && d.foodId === null &&
   d.kcal <= FIX_KCAL_MAX && [d.protein, d.fat, d.carb].every((g) => g <= FIX_MACRO_MAX)
 
 /**
@@ -312,6 +469,9 @@ export function applyFix(d: EstimateDraft, it: EstimateItem, fix: string): Estim
     aiName: next.aiName,
     fixedBy: fix.trim(),
     fixCount: d.fixCount + 1,
+    // 選過 AI 的列修正完還是 AI 的；相近提示照舊
+    noLib: d.noLib,
+    near: d.near,
   }
 }
 

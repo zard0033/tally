@@ -1126,8 +1126,55 @@ test('拍標示：沒改數字存成「標示」、帶每份重量；拍了又�
   expect((await foodWrites(page)).filter((w) => w.method === 'POST')[0].body).toMatchObject({ source: 'label', serving_g: 17, kcal: 82 })
 
   sheet = await scanAndOpen()
+  // 第二次存成另一個品名：同名同店家會被新增時查重擋下（v2.154，AC 13）
+  await page.locator('#lf-name').fill('奶茶（大杯）')
   await page.locator('#lf-kcal').fill('90')
   await sheet.locator('.pick-bar-btn', { hasText: '加入食品庫' }).click()
   await expect.poll(async () => (await foodWrites(page)).filter((w) => w.method === 'POST').length).toBe(2)
   expect((await foodWrites(page)).filter((w) => w.method === 'POST')[1].body).toMatchObject({ source: 'manual', kcal: 90 })
+})
+
+/* ── 新增時查重（spec「食品庫改版」AC 13）＋文字鈕新規則（v2.154） ── */
+
+test('新增時查重：同店家同品名擋下（鈕停用）；品名一樣、店家不同只提醒、照樣能存', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await expect(sheet).toBeVisible()
+  await page.locator('#lf-name').fill('無糖豆漿')
+  await page.locator('#lf-vendor').fill('全家')
+  await expect(sheet.locator('.dup-block')).toHaveText('食品庫已有「全家 無糖豆漿」')
+  await expect(sheet.locator('.confirm-wrap .pick-bar-btn')).toBeDisabled()
+  // 換成別的店家：只提醒
+  await page.locator('#lf-vendor').fill('7-11')
+  await expect(sheet.locator('.dup-block')).toHaveCount(0)
+  await expect(sheet.locator('.dup-note')).toContainText('食品庫已有 全家 的「無糖豆漿」')
+  await page.locator('#lf-kcal').fill('130')
+  await sheet.locator('.confirm-wrap .pick-bar-btn').click()
+  await expect(sheet).toHaveCount(0)
+  const writes = await foodWrites(page)
+  expect(writes).toHaveLength(1)
+  expect(writes[0].body).toMatchObject({ name: '無糖豆漿', vendor: '7-11' })
+})
+
+test('編輯時改名撞到另一筆才擋；沒改名只改數字不擋', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await openRowActions(page, '地瓜')
+  await page.locator('#le-kcal').fill('140')
+  await expect(page.locator('.lib-edit .dup-block')).toHaveCount(0)
+  await page.locator('#le-name').fill('香蕉')
+  await expect(page.locator('.dup-block')).toHaveText('食品庫已有「香蕉」')
+  await expect(page.locator('.lib-edit-actions .pick-bar-btn')).toBeDisabled()
+})
+
+test('文字鈕新規則：食品庫就地編輯的「取消」是藍字', async ({ page }) => {
+  await openApp(page)
+  await openLibrary(page)
+  await openRowActions(page, '地瓜')
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())
+  const color = await page.locator('.lib-edit-actions .cancel-btn').evaluate((el) => getComputedStyle(el).color)
+  const rgb = `rgb(${parseInt(accent.slice(1, 3), 16)}, ${parseInt(accent.slice(3, 5), 16)}, ${parseInt(accent.slice(5, 7), 16)})`
+  expect(color).toBe(rgb)
 })

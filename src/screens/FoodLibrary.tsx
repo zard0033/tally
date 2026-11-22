@@ -24,6 +24,7 @@ import { localDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, foodMatches, foodToForm, groupByVendor, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
 import { kcalByFood, rankUnverified, sourceTag } from '@/lib/foodSource'
+import { duplicateCheck, foodLabel, type DuplicateCheck } from '@/lib/foodMatch'
 
 export interface FoodLibraryProps {
   /** 使用中的食品庫（App 既有 state，已排除封存）。 */
@@ -101,8 +102,16 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     setEditErr(null)
   }
 
+  /** 編輯時查重：只在改了品名、店家或別名時查（改數字不查——不然舊資料裡本來就重複的兩筆，哪一筆都改不了數字）。 */
+  function editDupOf(f: Food): DuplicateCheck<Food> {
+    const vendor = editForm.vendor.trim() || null
+    const renamed = editForm.name.trim() !== f.name || vendor !== f.vendor || editForm.aliases.join('、') !== f.aliases.join('、')
+    return renamed ? duplicateCheck({ name: editForm.name, vendor, aliases: editForm.aliases }, foods, f.id) : { block: null, note: null }
+  }
+
   async function saveEdit(id: number) {
-    if (editBusy) return
+    const self = foods.find((x) => x.id === id) ?? archived?.find((x) => x.id === id)
+    if (editBusy || (self && editDupOf(self).block)) return
     const validated = validateFoodForm(editForm)
     if ('error' in validated) return setEditErr(validated.error)
     setEditBusy(true)
@@ -193,8 +202,12 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     setAddOpen(true)
   }
 
+  /* 新增時查重（spec「食品庫改版」AC 13）：同店家同品名（或別名）擋下；只有品名一樣、店家不同一行提醒、照樣能存。邊打邊算。
+     食品庫這裡只講一句、不給「改用那筆」（這裡是在管食品庫，不是在記一餐）。 */
+  const addDup = duplicateCheck({ name: addForm.name, vendor: addForm.vendor.trim() || null, aliases: addForm.aliases }, foods)
+
   async function submitAdd() {
-    if (addBusy) return
+    if (addBusy || addDup.block) return
     const validated = validateFoodForm(addForm)
     if ('error' in validated) return setAddErr(validated.error)
     setAddBusy(true)
@@ -207,6 +220,13 @@ export default function FoodLibrary(props: FoodLibraryProps) {
       setAddBusy(false)
       setAddErr(friendlyError(errMsg(e)))
     }
+  }
+
+  /** 查重的提示：擋下是一個淡藍框，提醒是一行小字。 */
+  function renderDup(d: DuplicateCheck<Food>) {
+    if (d.block) return <div className="dup-block" role="alert"><span>食品庫已有「{foodLabel(d.block)}」</span></div>
+    if (d.note) return <p className="dup-note">食品庫已有{d.note.vendor ? ` ${d.note.vendor} 的` : ''}「{d.note.name}」，不同店家照樣可以存</p>
+    return null
   }
 
   const addTitle = addSourceName ? `以「${addSourceName}」為範本新增` : '新增食物'
@@ -238,10 +258,11 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         />
       </div>
       <div className="confirm-wrap">
+        {renderDup(addDup)}
         {addErr && <p className="sheet-error" role="alert">{addErr}</p>}
         {/* scanBusy：確認鈕在 fieldset 之外（confirm-wrap 是 form-wrap 的兄弟節點），鎖不到。
             辨識中送出會建立一筆用舊值組出來的食物。 */}
-        <button className="pick-bar-btn" type="button" disabled={addBusy || scanBusy} onClick={() => void submitAdd()}>
+        <button className="pick-bar-btn" type="button" disabled={addBusy || scanBusy || addDup.block !== null} onClick={() => void submitAdd()}>
           {addBusy ? '加入中…' : '加入食品庫'}
         </button>
       </div>
@@ -387,6 +408,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                             <button className="lib-text-btn" type="button" aria-label={`封存 ${f.name}`} onClick={() => void archive(f)}>封存</button>
                           </div>
                         )}
+                        {renderDup(editDupOf(f))}
                         <div className="lib-edit-actions">
                           <button className="cancel-btn" type="button" onClick={() => setEditingId(null)}>取消</button>
                           {/* 手機上按下就立刻 disabled 的按鈕，觸控結束事件不會正常送達，
@@ -394,7 +416,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                            *  「一直按著」，直到重新整理才恢復——即使資料其實已經存進去
                            *  （使用者 2026-08-04 真機回報）。點下當下先手動 blur 一次，
                            *  跳過對「disabled 元素還能不能收到後續事件」的依賴。 */}
-                          <button className="pick-bar-btn" type="button" disabled={editBusy} onClick={(e) => { e.currentTarget.blur(); void saveEdit(f.id) }}>
+                          <button className="pick-bar-btn" type="button" disabled={editBusy || editDupOf(f).block !== null} onClick={(e) => { e.currentTarget.blur(); void saveEdit(f.id) }}>
                             {editBusy ? '儲存中…' : '儲存'}
                           </button>
                         </div>

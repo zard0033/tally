@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 37 pages | Last updated: 2026-11-22T14:26:25.342Z
+> 38 pages | Last updated: 2026-11-22T16:13:07.690Z
 
 ## debugging
 
@@ -24,6 +24,7 @@
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）
+- [lesson-food-library-redesign 食品庫改版的四條通則（2026-11-22）](lesson-food-library-redesign-2026-11-22.md) — # lesson-food-library-redesign 食品庫改版的四條通則（2026-11-22）
 - [lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）](lesson-grams-format-2026-11-22.md) — # lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）
 - [lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）](lesson-meal-suggest-2026-11-04.md) — # lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）
 - [lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）](lesson-meal-suggest-v2-2026-11-10.md) — # lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）

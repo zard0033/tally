@@ -225,3 +225,7 @@
 - **Pages:** lesson-grams-format-2026-11-22.md
 - **Summary:** Created new page "lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）"
 
+## [2026-11-22T16:13:07.413Z] ingest
+- **Pages:** lesson-food-library-redesign-2026-11-22.md
+- **Summary:** Created new page "lesson-food-library-redesign 食品庫改版的四條通則（2026-11-22）"
+

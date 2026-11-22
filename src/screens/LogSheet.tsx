@@ -20,23 +20,31 @@ import {
   type NewIntake,
 } from '@/lib/api'
 import {
+  adoptNear,
+  aiDraftsChosen,
   applyFix,
+  backToAi,
   canFix,
   draftFromKcal,
   draftFromTier,
   fixRequestItem,
   fixTextOk,
   isManualDraft,
-  draftsFromItems,
   draftsToIntake,
   draftName,
   draftToFood,
   estimateTextOk,
   estimateTotals,
+  resolveAfterAi,
+  resolveBeforeAi,
   settleKcal,
+  stepLibQty,
   withKcalInput,
+  withLibQty,
   type EstimateDraft,
 } from '@/lib/estimate'
+import { duplicateCheck, foodLabel, recencyRank, splitSegments } from '@/lib/foodMatch'
+import { sourceTag } from '@/lib/foodSource'
 import EstimateView, { type EstimateStatus, type FixState } from './EstimateView'
 
 const FIX_IDLE: FixState = { open: false, text: '', status: 'idle' }
@@ -208,6 +216,8 @@ export default function LogSheet(props: LogSheetProps) {
   const [recent, setRecent] = useState<Map<MealKey, number[]> | null>(null)
   const [lastQty, setLastQty] = useState<Map<string, number>>(new Map())
   const [mealCounts, setMealCounts] = useState<Map<MealKey, Map<number, number>>>(new Map())
+  /** 最近記過的順序（同一份 listRecentIntake）：估一筆對到同名好幾筆時，挑最近記過的那筆（spec「食品庫改版」第二步）。撈不到就是空的，退回照來源挑。 */
+  const [rank, setRank] = useState<Map<number, number>>(new Map())
   /** 「其他餐的」收合列展開了沒；每次打開 sheet 都收回去。 */
   const [elsewhereOpen, setElsewhereOpen] = useState(false)
   const recentFetchedRef = useRef(false)
@@ -229,7 +239,9 @@ export default function LogSheet(props: LogSheetProps) {
   const [revealSeq, setRevealSeq] = useState(0)
   /* 修正（spec A2 階段 1，v2.151）：每一列各自的框、修正字、送出狀態。修正中整個估一筆不能帶回、返回、重估（結果會換掉那一列）。 */
   const [fixes, setFixes] = useState<Record<string, FixState>>({})
-  const fixBusy = Object.values(fixes).some((f) => f.status === 'busy')
+  /* 送 AI 前就對上的食品庫列按「改用 AI 估」：那一段去估，估的時候那一列轉圈、失敗留一句。同修正，這期間整個估一筆不能帶回、返回、重估。 */
+  const [libAi, setLibAi] = useState<Record<string, EstimateStatus>>({})
+  const fixBusy = Object.values(fixes).some((f) => f.status === 'busy') || Object.values(libAi).some((s) => s === 'busy')
   const estReqRef = useRef(0)
   const estTitleRef = useRef<HTMLSpanElement | null>(null)
   /** 這次進估一筆是不是帶了句子（搜尋列帶字進來）：是才把焦點放描述框，回來改草稿不叫出鍵盤。 */
@@ -265,6 +277,7 @@ export default function LogSheet(props: LogSheetProps) {
     setEstStartedAt(null)
     setDrafts([])
     setFixes({})
+    setLibAi({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -280,7 +293,9 @@ export default function LogSheet(props: LogSheetProps) {
     recentFetchedRef.current = true
     void (async () => {
       try {
-        const stats = recentStats(await listRecentIntake())
+        const hist = await listRecentIntake()
+        const stats = recentStats(hist)
+        setRank(recencyRank(hist))
         setLastQty(stats.lastQty)
         setRecent(stats.recent)
         setMealCounts(stats.counts)
@@ -389,6 +404,20 @@ export default function LogSheet(props: LogSheetProps) {
 
   async function submitEstimate() {
     if (!meal || !estimateTextOk(estText) || estStatus === 'busy' || fixBusy) return
+    /* 新的估算取代上一次 AI（與食品庫）的草稿（重估同一句不該疊成兩份）；檔位與自己打的那幾列留著。 */
+    const keepOld = (d: EstimateDraft) => isManualDraft(d) || d.foodId !== null
+    /* ① 先查食品庫：每一段都完全對上就不叫 AI（不花錢、馬上出來、離線也行）；有一段對不上才整句送 AI（spec「食品庫改版」第二步） */
+    const pre = resolveBeforeAi(splitSegments(estText), foods, rank)
+    if (pre) {
+      estReqRef.current++
+      setDrafts((prev) => [...prev.filter(keepOld), ...pre])
+      setFixes({})
+      setLibAi({})
+      setRevealSeq((n) => n + 1)
+      setEstStatus('idle')
+      setErr(null)
+      return
+    }
     const id = ++estReqRef.current
     setEstStatus('busy')
     setEstStartedAt(Date.now())
@@ -396,15 +425,47 @@ export default function LogSheet(props: LogSheetProps) {
     try {
       const items = await estimateMeal(estText)
       if (id !== estReqRef.current) return
-      /* 新的估算取代上一次 AI 的草稿（重估同一句不該疊成兩份）；檔位與自己打的那幾列留著。 */
-      setDrafts((prev) => [...prev.filter((d) => isManualDraft(d) || d.foodId !== null), ...draftsFromItems(items, estText)])
+      // ② AI 回來後：品名完全一樣的換成食品庫列，其餘附相近提示
+      setDrafts((prev) => [...prev.filter(keepOld), ...resolveAfterAi(items, estText, foods, rank)])
       setFixes({})
+      setLibAi({})
       setRevealSeq((n) => n + 1)
       setEstStatus('idle')
     } catch {
       if (id !== estReqRef.current) return
       setEstStatus('error')
     }
+  }
+
+  /* 食品庫列按「改用 AI 估」：post（AI 估過）直接換回 AI 那一樣；pre（沒叫過 AI）拿那一段去估，估回來取代這一列。
+     估回來的列標「選過 AI」，不會又被自動換回食品庫。 */
+  async function libToAi(key: string) {
+    const d = drafts.find((x) => x.key === key)
+    if (!d?.lib || fixBusy || estStatus === 'busy') return
+    if (d.lib.via === 'post' || d.lib.ai) {
+      patchDraft(key, backToAi)
+      return
+    }
+    const segment = d.lib.segment
+    setLibAi((s) => ({ ...s, [key]: 'busy' }))
+    try {
+      const items = await estimateMeal(segment)
+      setDrafts((prev) => prev.flatMap((x) => (x.key === key ? aiDraftsChosen(items, segment) : [x])))
+      setLibAi((s) => {
+        const next = { ...s }
+        delete next[key]
+        return next
+      })
+      setRevealSeq((n) => n + 1)
+    } catch {
+      setLibAi((s) => ({ ...s, [key]: 'error' }))
+    }
+  }
+
+  /** 相近提示按「改用」、或查重提示按「改用那筆」：那一列換成食品庫的那一筆。 */
+  function adoptFood(key: string, foodId: number) {
+    const f = foods.find((x) => x.id === foodId)
+    if (f) patchDraft(key, (d) => (d.foodId === null && !d.lib ? adoptNear(d, f) : d))
   }
 
   const patchDraft = (key: string, fn: (d: EstimateDraft) => EstimateDraft) => setDrafts((prev) => prev.map((d) => (d.key === key ? fn(d) : d)))
@@ -441,10 +502,20 @@ export default function LogSheet(props: LogSheetProps) {
       if (!f) continue
       rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null })
     }
+    /* 勾了「存進食品庫」、但食品庫已有同名同店家的：不再存一筆（AC 13）。在估一筆那一列有「改用那筆」，這裡只擋下說原因 */
+    const hit = drafts
+      .filter((d) => !d.lib && d.keep && d.foodId === null)
+      .map((d) => duplicateCheck({ name: draftName(d, meal), vendor: null }, foods).block)
+      .find((b) => b !== null)
+    if (hit) {
+      setBusy(false)
+      setErr(`食品庫已有「${foodLabel(hit)}」，回估一筆改用那筆，或取消勾「存進食品庫」`)
+      return
+    }
     try {
       const done: EstimateDraft[] = []
       for (const d of drafts) {
-        if (d.foodId !== null) {
+        if (d.foodId !== null || d.lib) {
           done.push(d)
           continue
         }
@@ -463,10 +534,24 @@ export default function LogSheet(props: LogSheetProps) {
     }
   }
 
+  /* 新增時查重（AC 13）：同店家同品名（或別名）擋下、給「改用那筆」；只有品名一樣、店家不同就一行提醒、照樣能存。邊打邊算。 */
+  const formDup = duplicateCheck({ name: foodForm.name, vendor: foodForm.vendor.trim() || null, aliases: foodForm.aliases }, foods)
+
+  /** 查重擋下時「改用那筆」：不新增，直接把食品庫那一筆勾起來回清單。 */
+  function pickExisting(id: number) {
+    setPicks((prev) => (prev.has(id) ? prev : new Map(prev).set(id, 1)))
+    setQtyDrafts((prev) => (prev.has(id) ? prev : new Map(prev).set(id, '1')))
+    setView('list')
+    setQuery('')
+    setFilterQuery('')
+    setErr(null)
+  }
+
   async function submitFoodForm() {
     if (busy) return
     const validated = validateFoodForm(foodForm)
     if ('error' in validated) return setErr(validated.error)
+    if (formDup.block) return setErr(null)
 
     setBusy(true)
     setErr(null)
@@ -590,9 +675,12 @@ export default function LogSheet(props: LogSheetProps) {
     overAmounts,
   }
 
+  /* 估一筆已經對上的食品庫食物也算「已選」：不然清單還會把它列成沒勾，再勾一次就寫兩筆同一樣（v2.154 review M1） */
+  const taken = new Set<number>([...picks.keys(), ...drafts.flatMap((d) => (d.lib ? [d.lib.food.id] : []))])
+
   let browseBody: ReactNode = null
   if (trimmedQuery) {
-    const hits = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && foodMatches(f, trimmedQuery)), overAmounts)
+    const hits = byQuotaFit(sortedFoods.filter((f) => !taken.has(f.id) && foodMatches(f, trimmedQuery)), overAmounts)
     browseBody = (
       <>
         <div className="sect-lb">搜尋結果</div>
@@ -625,7 +713,7 @@ export default function LogSheet(props: LogSheetProps) {
     /* 建議段：該餐已有紀錄或沒有來源時 repeatByMeal 就沒有這一餐。沒有「已選用」狀態：勾了進已選、
        取消回來，全靠這裡每次重算。同一食物不同時出現在建議與常吃／全部，所以兩段都要先濾再取。 */
     const suggestion = meal ? repeatByMeal[meal] : undefined
-    const suggestItems = suggestion ? mergeByFood(suggestion.items).filter((i) => !picks.has(i.food_id)) : []
+    const suggestItems = suggestion ? mergeByFood(suggestion.items).filter((i) => !taken.has(i.food_id)) : []
     const suggestIds = new Set(suggestItems.map((i) => i.food_id))
     /* 預覽（逐筆超標）與勾下去的份量同源，都是建議量，不是「該餐上次的份量」。 */
     const suggestHandlers: FoodRowHandlers = {
@@ -638,11 +726,11 @@ export default function LogSheet(props: LogSheetProps) {
     }
     const recentIds = (meal ? recent?.get(meal) : undefined) ?? []
     const recentFoods = recentIds
-      .filter((id) => !picks.has(id) && !suggestIds.has(id))
+      .filter((id) => !taken.has(id) && !suggestIds.has(id))
       .map(foodById)
       .filter((f): f is Food => !!f)
       .slice(0, 5)
-    const restFoods = byQuotaFit(sortedFoods.filter((f) => !picks.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
+    const restFoods = byQuotaFit(sortedFoods.filter((f) => !taken.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
     /* 依類型分組：組序看這一餐吃過幾次（常吃那份歷史），組內沿用軟性排序；只在其他餐吃過的類型收在最底。
        次數要用整個食品庫查類型，不能只看 restFoods——已勾、常吃那幾樣也是這一類吃過的次數。 */
     const grouped = groupByCategory(restFoods, meal, mealCounts, (id) => catById.get(id))
@@ -800,7 +888,7 @@ export default function LogSheet(props: LogSheetProps) {
                           <button
                             className="food-row est-picked"
                             type="button"
-                            aria-label={`${draftName(d, meal)}，估一筆，${d.kcal} 大卡，點了回估一筆修改`}
+                            aria-label={`${draftName(d, meal)}，${d.lib ? `食品庫，${d.lib.qty} 份` : '估一筆'}，${d.kcal} 大卡，點了回估一筆修改`}
                             disabled={busy}
                             onClick={() => openEstimate('')}
                           >
@@ -810,7 +898,11 @@ export default function LogSheet(props: LogSheetProps) {
                             </svg>
                             <div className="nm-wrap" aria-hidden="true">
                               <span className="nm">{draftName(d, meal)}</span>
-                              <span className="sub">{d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・蛋白質等是推估的' : '估一筆'}</span>
+                              <span className="sub">
+                                {d.lib
+                                  ? [d.lib.food.vendor, `食品庫${sourceTag(d.lib.food.source) ? `・${sourceTag(d.lib.food.source)}` : ''}`, `${d.lib.qty} 份`].filter(Boolean).join(' · ')
+                                  : d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・蛋白質等是推估的' : '估一筆'}
+                              </span>
                             </div>
                             <div className="kc-wrap" aria-hidden="true">
                               <span className="kc">{d.kcal}</span>
@@ -868,6 +960,18 @@ export default function LogSheet(props: LogSheetProps) {
               onFixToggle={(key) => patchFix(key, { open: !fixes[key]?.open, status: fixes[key]?.status === 'busy' ? 'busy' : 'idle' })}
               onFixText={(key, v) => patchFix(key, { text: v })}
               onFixSubmit={(key) => void submitFix(key)}
+              foods={foods}
+              libAi={libAi}
+              onLibStep={(key, dir) => patchDraft(key, (d) => stepLibQty(d, dir))}
+              onLibQtyInput={(key, raw) =>
+                patchDraft(key, (d) => {
+                  if (!d.lib) return d
+                  const n = parseTypedQty(raw)
+                  return n === null ? { ...d, lib: { ...d.lib, qtyDraft: raw } } : withLibQty(d, n, raw)
+                })}
+              onLibQtyBlur={(key, raw) => patchDraft(key, (d) => withLibQty(d, normalizeQty(raw)))}
+              onLibToAi={(key) => void libToAi(key)}
+              onAdopt={adoptFood}
               locked={busy}
             />
           </div>
@@ -917,12 +1021,20 @@ export default function LogSheet(props: LogSheetProps) {
           </div>
 
           <div className="confirm-wrap">
+            {formDup.block ? (
+              <div className="dup-block" role="alert">
+                <span>食品庫已有「{foodLabel(formDup.block)}」</span>
+                <button className="row-pill" type="button" onClick={() => formDup.block && pickExisting(formDup.block.id)}>改用那筆</button>
+              </div>
+            ) : (
+              formDup.note && <p className="dup-note">食品庫已有{formDup.note.vendor ? ` ${formDup.note.vendor} 的` : ''}「{formDup.note.name}」，不同店家照樣可以存</p>
+            )}
             {err && (
               <p className="sheet-error" role="alert">
                 {err}
               </p>
             )}
-            <button className="pick-bar-btn" type="button" disabled={busy || scanBusy} onClick={() => void submitFoodForm()}>
+            <button className="pick-bar-btn" type="button" disabled={busy || scanBusy || formDup.block !== null} onClick={() => void submitFoodForm()}>
               {busy ? '加入中…' : '加入食品庫'}
             </button>
           </div>

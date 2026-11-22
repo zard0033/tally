@@ -482,3 +482,174 @@ test('修正：Esc 收起框，焦點回到修正鈕', async ({ page }) => {
   await expect(page.locator('.est-fix')).toHaveCount(0)
   await expect(row(page, 0).locator('.est-fix-btn')).toBeFocused()
 })
+
+/* ── 先查食品庫（spec「食品庫改版」第二步，AC 9–12；樣張 estimate-library.html A） ── */
+
+/** 茶葉蛋兩筆：7-11 那筆最近記過（未標）、通用版官方。全糖綠茶給互斥詞用。 */
+const LIB_FIX = {
+  ...FIX,
+  foods: [
+    ...FIX.foods,
+    { id: 31, name: '茶葉蛋', vendor: '7-11', kcal: 70, protein: 7, fat: 4.5, carb: 1, category: '配菜', category_manual: false, source: 'unknown', aliases: [], serving_g: null },
+    { id: 32, name: '茶葉蛋', vendor: null, kcal: 75, protein: 7.1, fat: 4.7, carb: 1.1, category: '配菜', category_manual: false, source: 'official', aliases: [], serving_g: 51.5 },
+    { id: 33, name: '全糖綠茶', vendor: '50嵐', kcal: 280, protein: 0, fat: 0, carb: 70, category: '飲料', category_manual: false, source: 'unknown', aliases: [], serving_g: null },
+  ],
+  history: [{ meal: 'breakfast', food_id: 31, qty: 1 }, ...FIX.history],
+} as unknown as typeof FIX
+
+const descBox = (page: Page) => page.locator('textarea[aria-label="描述吃了什麼"]')
+
+test('① 每一段都在食品庫：不叫 AI、份數可調、加入時直接用那筆的 food_id，不建新食物', async ({ page }) => {
+  await openApp(page)
+  await openEstimate(page)
+  await descBox(page).fill('減醣廚房 溫泉蛋、香蕉')
+  await page.locator('.est-go').click()
+
+  const lib = page.locator('.est-draft.est-lib')
+  await expect(lib).toHaveCount(2)
+  expect(await estimateCalls(page), '全部對上不該叫 AI').toEqual([])
+  await expect(page.locator('.est-lib-sum')).toHaveText('2 樣都在食品庫，沒叫 AI')
+  await expect(page.locator('.est-body > [role="status"]')).toHaveText('2 樣都在食品庫，沒叫 AI')
+  await expect(lib.nth(0).locator('.est-lib-name')).toHaveText('減醣廚房溫泉蛋')
+  await expect(lib.nth(0).locator('.est-lib-tag')).toHaveText('食品庫')
+  await expect(lib.nth(1).locator('.est-lib-kc')).toContainText('105')
+  // 份數 ＋ 一次：熱量跟著變
+  await lib.nth(1).locator('.qty-btn').nth(1).click()
+  await expect(lib.nth(1).locator('.est-lib-kc')).toContainText('210')
+  await expect(page.locator('.pick-bar-btn')).toHaveText('帶回清單（2 樣 · 290 卡）')
+
+  await bringBackAndAdd(page)
+  await expect(page.locator('.sheet')).toHaveCount(0)
+  expect(await writes(page, 'foods'), '食品庫的列不建新食物').toEqual([])
+  expect(await writes(page, 'intake')).toEqual([
+    [
+      { eaten_on: TODAY, meal: 'dinner', food_id: 16, qty: 1, kcal: 80, protein: 7, fat: 5, carb: 1, name: null },
+      { eaten_on: TODAY, meal: 'dinner', food_id: 17, qty: 2, kcal: 105, protein: 1.3, fat: 0.4, carb: 27, name: null },
+    ],
+  ])
+})
+
+test('① AI 服務壞掉時全部對上照樣出結果（不靠 AI）', async ({ page }) => {
+  await openApp(page)
+  await setEstimate(page, null) // 函式回 502
+  await openEstimate(page)
+  await descBox(page).fill('香蕉')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-draft.est-lib')).toHaveCount(1)
+  await expect(page.locator('.est-err')).toHaveCount(0)
+  expect(await estimateCalls(page)).toEqual([])
+})
+
+test('同名好幾筆：挑最近記過的（7-11 茶葉蛋），不是來源最好的（官方通用版）', async ({ page }) => {
+  await openApp(page, {}, LIB_FIX)
+  await openEstimate(page)
+  await descBox(page).fill('茶葉蛋')
+  await page.locator('.est-go').click()
+  const lib = page.locator('.est-draft.est-lib')
+  await expect(lib).toHaveCount(1)
+  await expect(lib.locator('.est-lib-name')).toHaveText('7-11茶葉蛋')
+  await expect(lib.locator('.est-lib-kc')).toContainText('70')
+})
+
+test('② 有一段對不上就整句送 AI；AI 回來品名完全一樣的換成食品庫列，「改用 AI 估」換回 AI 那一樣', async ({ page }) => {
+  await openApp(page)
+  await setEstimate(page, { mode: 'ok', body: { items: [
+    { name: '拿鐵', kcal: 200, kcal_low: 150, kcal_high: 260, protein_g: 8, fat_g: 8, carb_g: 20, assumption: '中杯' },
+    { name: '臭豆腐', kcal: 480, kcal_low: 380, kcal_high: 600, protein_g: 20, fat_g: 30, carb_g: 25, assumption: '炸臭豆腐 6 塊' },
+  ] } })
+  await openEstimate(page)
+  await descBox(page).fill('全家拿鐵、夜市臭豆腐')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-draft')).toHaveCount(2)
+  expect(await estimateCalls(page)).toEqual(['全家拿鐵、夜市臭豆腐'])
+  await expect(page.locator('.est-lib-sum')).toHaveText('1 樣用食品庫、1 樣 AI 估')
+  const first = page.locator('.est-draft').nth(0)
+  await expect(first).toHaveClass(/est-lib/)
+  await expect(first.locator('.est-lib-kc')).toContainText('150') // 食品庫的 150，不是 AI 的 200
+  await first.locator('.row-pill', { hasText: '改用 AI 估' }).click()
+  await expect(page.locator('.est-draft').nth(0)).not.toHaveClass(/est-lib/)
+  await expect(page.locator('.est-draft').nth(0).locator('.est-kc input')).toHaveValue('200')
+  await expect(page.locator('.est-lib-sum')).toHaveCount(0)
+  expect(await estimateCalls(page), 'post 的列換回 AI 不用再叫一次').toEqual(['全家拿鐵、夜市臭豆腐'])
+})
+
+test('③ 相近只提示、按「改用」才換；互斥詞（無糖 vs 全糖）連提示都不出', async ({ page }) => {
+  await openApp(page, {}, LIB_FIX)
+  await setEstimate(page, { mode: 'ok', body: { items: [
+    { name: '健康盒雞胸餐盒便當', kcal: 500, kcal_low: 420, kcal_high: 600, protein_g: 40, fat_g: 15, carb_g: 45, assumption: '一盒' },
+    { name: '無糖綠茶', kcal: 0, kcal_low: 0, kcal_high: 10, protein_g: 0, fat_g: 0, carb_g: 0, assumption: '大杯' },
+    { name: '全糖綠茶大杯', kcal: 300, kcal_low: 250, kcal_high: 350, protein_g: 0, fat_g: 0, carb_g: 75, assumption: '大杯' },
+  ] } })
+  await openEstimate(page)
+  await descBox(page).fill('雞胸便當、無糖綠茶、全糖綠茶大杯')
+  await page.locator('.est-go').click()
+  const rows = page.locator('.est-draft')
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(0).locator('.est-near')).toContainText('食品庫有「健康盒 雞胸餐盒」420 卡')
+  await expect(rows.nth(1).locator('.est-near'), '無糖不該提示全糖').toHaveCount(0)
+  await expect(rows.nth(2).locator('.est-near'), '同樣是全糖就照常提示').toContainText('50嵐 全糖綠茶')
+  // 沒按之前那一列還是 AI 的
+  await expect(rows.nth(0)).not.toHaveClass(/est-lib/)
+  await rows.nth(0).locator('.est-near .row-pill').click()
+  await expect(rows.nth(0)).toHaveClass(/est-lib/)
+  await expect(rows.nth(0).locator('.est-lib-name')).toHaveText('健康盒雞胸餐盒')
+  // 換回 AI 之後不再提示（選過 AI 了）
+  await rows.nth(0).locator('.row-pill', { hasText: '改用 AI 估' }).click()
+  await expect(rows.nth(0)).not.toHaveClass(/est-lib/)
+  await expect(rows.nth(0).locator('.est-near')).toHaveCount(0)
+})
+
+test('① 的列按「改用 AI 估」：拿那一段去估一次，估回來的列不會又被換回食品庫', async ({ page }) => {
+  await openApp(page)
+  await openEstimate(page)
+  await descBox(page).fill('香蕉')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-draft.est-lib')).toHaveCount(1)
+  await setEstimate(page, { mode: 'ok', body: { items: [{ name: '香蕉', kcal: 120, kcal_low: 90, kcal_high: 150, protein_g: 1, fat_g: 0, carb_g: 30, assumption: '一根大的' }] } })
+  await page.locator('.row-pill', { hasText: '改用 AI 估' }).click()
+  await expect(page.locator('.est-draft.est-lib')).toHaveCount(0)
+  await expect(page.locator('.est-draft .est-kc input')).toHaveValue('120')
+  expect(await estimateCalls(page)).toEqual(['香蕉'])
+})
+
+test('勾「存進食品庫」但食品庫已有同名：擋下、給「改用那筆」；按了換成食品庫列', async ({ page }) => {
+  await openApp(page)
+  await setEstimate(page, { mode: 'ok', body: { items: [{ name: '香蕉片', kcal: 150, kcal_low: 120, kcal_high: 180, protein_g: 1, fat_g: 8, carb_g: 20, assumption: '一包' }] } })
+  await openEstimate(page)
+  await descBox(page).fill('香蕉片')
+  await page.locator('.est-go').click()
+  const row0 = page.locator('.est-draft').nth(0)
+  await row0.locator('.est-name').fill('香蕉')
+  await row0.locator('.est-keep input').check()
+  await expect(row0.locator('.est-dup')).toContainText('食品庫已有「香蕉」')
+  await row0.locator('.est-dup .row-pill').click()
+  await expect(page.locator('.est-draft').nth(0)).toHaveClass(/est-lib/)
+})
+
+test('文字鈕新規則：返回是藍字、修正是描邊膠囊（DESIGN「文字鈕與列內動作」）', async ({ page }) => {
+  await openApp(page)
+  await setEstimate(page, { mode: 'ok', body: { items: ITEMS } })
+  await openEstimate(page)
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())
+  const back = await page.locator('.back-btn').evaluate((el) => getComputedStyle(el).color)
+  const toRgb = (hex: string) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`
+  expect(back).toBe(toRgb(accent))
+  await descBox(page).fill('夜市螺獅粉、梅子可樂、一份地瓜球')
+  await page.locator('.est-go').click()
+  await expect(page.locator('.est-fix-btn.row-pill')).toHaveCount(3)
+  // 「地瓜球」不提示「地瓜」（相近只比 3 個字以上的）
+  await expect(page.locator('.est-near')).toHaveCount(0)
+})
+
+test('記一筆的新增食物：同名同店家擋下，「改用那筆」直接勾起食品庫那一筆回清單、不新增', async ({ page }) => {
+  await openApp(page)
+  await openSheetDinner(page)
+  await page.fill('input[aria-label="搜尋食物"]', '香蕉')
+  await page.locator('.add-food-row').click()
+  await expect(page.locator('#f-name')).toHaveValue('香蕉')
+  await expect(page.locator('.dup-block')).toContainText('食品庫已有「香蕉」')
+  await expect(page.locator('.confirm-wrap .pick-bar-btn')).toBeDisabled()
+  await page.locator('.dup-block .row-pill', { hasText: '改用那筆' }).click()
+  await expect(page.locator('.food-list li .food-row[aria-pressed="true"] .nm', { hasText: '香蕉' })).toBeVisible()
+  expect(await writes(page, 'foods')).toEqual([])
+})

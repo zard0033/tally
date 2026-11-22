@@ -128,7 +128,7 @@ function SyncBody({ summary, entries, onDiscard, discardImpact, onRetry, onBusy 
                     <span className="nm">{label}</span>
                   </span>
                   <button
-                    className="tr-text-btn is-quiet"
+                    className="tr-text-btn is-danger"
                     type="button"
                     aria-label={`放棄這筆：${label}`}
                     disabled={busy || retrying}

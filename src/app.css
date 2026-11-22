@@ -1128,8 +1128,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .lib-edit-actions .pick-bar-btn { flex: 1 1 auto; width: auto;
   min-height: 44px; font-size: var(--t-sm); }
 .lib-edit-actions .cancel-btn, .sheet-actions .cancel-btn { flex: 0 0 88px; min-height: 44px; border-radius: var(--r-btn);
-  border: none; background: none; color: var(--ink-muted); font-family: inherit; font-size: var(--t-sm);
-  font-weight: 600; cursor: pointer; -webkit-appearance: none; appearance: none; }
+  border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm);
+  font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .lib-edit-actions .cancel-btn:active, .sheet-actions .cancel-btn:active { opacity: .6; }
 .sheet-actions .cancel-btn:disabled { opacity: .45; cursor: default; }
 /* 釘底列裡的次要鈕＋主鈕並排（v2.147 編輯動作 sheet 的封存）：主鈕的 width: 100%＋flex-shrink: 0 要覆寫，理由同 .lib-edit-actions */
@@ -1403,7 +1403,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 收合列：三個小圖示疊一排＋「其他餐的（…）」＋往下的 chevron；展開後 chevron 翻上 */
 .grp-more { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 48px;
   margin-top: var(--s-2); padding: 0 var(--s-5); border: none; border-top: 1px solid var(--rule);
-  background: none; text-align: left; font-family: inherit; font-size: var(--t-base); color: var(--ink-muted);
+  background: none; text-align: left; font-family: inherit; font-size: var(--t-base); font-weight: 600; color: var(--accent);
   cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
 .grp-more:active { opacity: .6; }
 .grp-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1609,11 +1609,47 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .est-keep { grid-column: 1 / 2; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer; }
 .est-keep input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 /* 修正（v2.151，spec A2 階段 1，樣張 estimate-correct.html B）：「存進食品庫」同一行右邊一顆「✎ 修正」，點了在那一列裡展開單行框＋重估 */
-.est-fix-btn { grid-column: 2 / 4; justify-self: end; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 var(--s-3);
-  border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent); cursor: pointer; }
-.est-fix-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.est-fix-btn:disabled { color: var(--ink-faint); cursor: default; }
-.est-fix-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-tab); }
+/* v2.154 起外觀走 .row-pill（DESIGN「文字鈕與列內動作」：同一列有兩個以上動作就用描邊膠囊），這裡只管位置 */
+.est-fix-btn { grid-column: 2 / 4; justify-self: end; margin-right: var(--s-3); }
+
+/* 列內動作：描邊小膠囊（v2.154，使用者 2026-11-22 選，樣張 estimate-library.html）。視覺 32px 高，::before 把命中區撐到 44px。
+   .solid＝相近提示裡那顆「改用」：放在淡藍提示框裡，用實心才看得出是主要動作 */
+.row-pill { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill);
+  background: var(--card); box-shadow: inset 0 0 0 1.5px var(--rule-field); color: var(--accent); font: inherit; font-size: var(--t-sm); font-weight: 700;
+  white-space: nowrap; cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.row-pill::before { content: ""; position: absolute; inset: -6px -2px; }
+.row-pill svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.row-pill:active { opacity: .6; }
+.row-pill:disabled { color: var(--ink-faint); cursor: default; }
+.row-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row-pill.solid { background: var(--accent); box-shadow: none; color: var(--on-accent); }
+.row-pill.solid:disabled { background: var(--fill); color: var(--ink-faint); }
+
+/* 估一筆先查食品庫（v2.154，spec「食品庫改版」第二步，樣張 estimate-library.html A）：
+   食品庫的列淡藍底、右邊是份數不是熱量框；藍＝食品庫、太陽色＝AI 估的 */
+.est-lib-sum { display: flex; align-items: center; gap: var(--s-1); margin: var(--s-3) var(--s-5) 0; font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
+.est-lib-sum svg, .est-lib-tag svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; }
+.est-draft.est-lib { grid-template-columns: 1fr auto auto 44px; background: color-mix(in srgb, var(--accent-soft) 45%, var(--card)); }
+.est-draft.est-lib.busy { opacity: .6; }
+.est-lib-name { min-width: 0; font-size: var(--t-md); font-weight: 600; color: var(--ink); line-height: 1.3; overflow-wrap: anywhere; }
+.est-lib-name .vd { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); }
+.est-lib-kc { justify-self: end; font-family: var(--font-num); font-size: var(--t-md); font-weight: 700; color: var(--ink); white-space: nowrap; }
+.est-lib-kc small { margin-left: 3px; font-family: var(--font-body); font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+.est-row-foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 44px; padding-right: var(--s-3); }
+.est-lib-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px var(--s-2); border-radius: var(--r-pill); background: var(--accent-soft);
+  color: var(--accent-dark); font-size: var(--t-xs); font-weight: 600; }
+.est-lib-tag b { font-weight: 800; }
+/* 相近提示與「已有同名」提示：同一種淡藍框，按鈕在右邊 */
+.est-near { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--s-2); margin: var(--s-2) var(--s-3) 0 0; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border-radius: var(--r-tab); background: var(--accent-soft); }
+.est-near p { flex: 1; min-width: 0; margin: 0; font-size: var(--t-sm); line-height: 1.45; color: var(--ink); }
+.est-near p b { font-weight: 800; }
+.est-dup { margin-bottom: var(--s-2); }
+.dup-note { margin: 0 0 var(--s-2); font-size: var(--t-xs); line-height: 1.5; color: var(--ink-muted); }
+.est-dup-note { grid-column: 1 / -1; padding-right: var(--s-3); }
+/* 新增食物表單：同名同店家擋下、給「改用那筆」 */
+.dup-block { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border-radius: var(--r-tab); background: var(--accent-soft); font-size: var(--t-sm); color: var(--ink); }
 .est-fix { grid-column: 1 / 4; display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0 0; }
 .est-fix .ai-ring { flex: 1; min-width: 0; margin: 0; }
 /* 16px：iOS 對小於 16px 的輸入框聚焦會自動放大整頁 */
@@ -1810,13 +1846,15 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .form-wrap::-webkit-scrollbar { display: none; }
 .back-row { display: flex; align-items: center; padding: var(--s-1) var(--s-4) 0; flex-shrink: 0; }
 .back-btn { display: flex; align-items: center; gap: var(--s-1); min-height: 44px;
-  padding: 0 var(--s-2); border: none; background: none; color: var(--ink-muted);
-  font-family: inherit; font-size: var(--t-sm); font-weight: 600; cursor: pointer;
+  padding: 0 var(--s-2); border: none; background: none; color: var(--accent);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer;
   -webkit-appearance: none; appearance: none; }
 .back-btn svg { width: 16px; height: 16px; }
 .back-btn { transition: opacity var(--dur-base) var(--ease); }
 .back-btn:active { opacity: .5; }
 .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 藍字＝可以按（DESIGN「文字鈕與列內動作」）：停用時（估算中）退成淡灰，不然看起來還能按（v2.154 review L5） */
+.back-btn:disabled { color: var(--ink-faint); cursor: default; }
 .confirm-wrap { flex-shrink: 0; padding: var(--s-4) var(--s-5);
   padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; gap: var(--s-2); }
@@ -2278,7 +2316,8 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   border: none; background: none; color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 600;
   cursor: pointer; -webkit-appearance: none; appearance: none; }
 .tr-text-btn svg { width: 16px; height: 16px; }
-.tr-text-btn.is-quiet { color: var(--ink-muted); font-weight: 400; }
+/* 會丟資料的文字鈕（未同步清單的「放棄這筆」）：紅字。灰字會被看成說明（DESIGN「文字鈕與列內動作」，v2.154） */
+.tr-text-btn.is-danger { color: var(--over); font-weight: 600; }
 .tr-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 組編輯 sheet：重量與次數各一排 ±（填色膠囊＋浮起圓鈕）、底部一列左右並排 */
 .set-sheet-body { display: flex; flex-direction: column; gap: var(--s-4); padding-top: var(--s-2); }

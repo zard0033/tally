@@ -4,7 +4,11 @@
    動效只動 transform／opacity；減少動態時無限循環全停、逐樣出現改 ≤120ms 淡入、數字直接到位（CSS ＋ useReducedMotion）。 */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { canFix, defaultDraftName, draftName, fixTag, fixTextOk, isManualDraft, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
+import QtyStepper from '@/components/QtyStepper'
+import type { Food } from '@/lib/api'
+import { canFix, defaultDraftName, draftName, fixTag, fixTextOk, isManualDraft, libSummary, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
+import { duplicateCheck, foodLabel } from '@/lib/foodMatch'
+import { sourceTag } from '@/lib/foodSource'
 import type { MealKey } from '@/lib/meals'
 
 export type EstimateStatus = 'idle' | 'busy' | 'error'
@@ -45,7 +49,22 @@ interface Props {
   onFixToggle: (key: string) => void
   onFixText: (key: string, v: string) => void
   onFixSubmit: (key: string) => void
+  /** 使用中的食品庫：AI 的列勾「存進食品庫」時查重（AC 13）。 */
+  foods: Food[]
+  /** 送 AI 前就對上的食品庫列按了「改用 AI 估」、正在估那一段（或失敗）。 */
+  libAi: Record<string, EstimateStatus>
+  onLibStep: (key: string, dir: 1 | -1) => void
+  onLibQtyInput: (key: string, raw: string) => void
+  onLibQtyBlur: (key: string, raw: string) => void
+  onLibToAi: (key: string) => void
+  /** 相近提示的「改用」、查重的「改用那筆」：那一列換成食品庫的那一筆。 */
+  onAdopt: (key: string, foodId: number) => void
 }
+
+/** 書本小圖示：食品庫的記號（摘要那一行、列上的小標）。 */
+const BookIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h4.5a1.5 1.5 0 0 1 1.5 1.5v8M13 3.5H8.5" /><path d="M3 3.5v9h5M13 3.5v9H9" /></svg>
+)
 
 /** 等的時候換三次說法。秒數界線是設計決定（實測 p50 約 7 秒），只是讓人知道還在跑，不代表真的在做哪一步。 */
 function waitText(sec: number): string {
@@ -102,9 +121,9 @@ export default function EstimateView(p: Props) {
   const [said, setSaid] = useState('')
   if (seenSeq !== p.revealSeq) {
     setSeenSeq(p.revealSeq)
-    const fresh = p.drafts.filter((d) => !isManualDraft(d) && d.foodId === null)
+    const fresh = p.drafts.filter((d) => !isManualDraft(d) && d.foodId === null && !d.lib)
     setFreshKeys(new Set(fresh.map((d) => d.key)))
-    setSaid(`估好了，${fresh.length} 樣`)
+    setSaid(libSummary(p.drafts) ?? `估好了，${fresh.length} 樣`)
   }
   /* 剛修正完的列（fixCount 比上次看到的多）：熱量框重掛、從 0 滾到新數字並亮一圈（同 AI 剛回來），讀屏唸結果，焦點回那一列的「修正」。
      第一次掛上時把當下的次數都記成看過，回清單再進來不重播。 */
@@ -208,9 +227,42 @@ export default function EstimateView(p: Props) {
         </p>
       )}
 
+      {libSummary(p.drafts) && (
+        <p className="est-lib-sum"><BookIcon />{libSummary(p.drafts)}</p>
+      )}
+
       {p.drafts.length > 0 && (
         <ul className="est-drafts" aria-label={`估算草稿，${p.drafts.length} 樣`}>
           {p.drafts.map((d, i) => {
+            if (d.lib) {
+              const lib = d.lib
+              const tag = sourceTag(lib.food.source)
+              const swapping = p.libAi[d.key] === 'busy'
+              const made = d.foodId !== null
+              return (
+                <li key={d.key} className={swapping ? 'est-draft est-lib busy' : 'est-draft est-lib'} aria-busy={swapping}>
+                  <span className="est-lib-name">
+                    {lib.food.vendor && <span className="vd">{lib.food.vendor}</span>}
+                    {lib.food.name}
+                  </span>
+                  <QtyStepper qty={lib.qty} draft={lib.qtyDraft} name={lib.food.name}
+                    onStep={(dir) => !p.locked && p.onLibStep(d.key, dir)}
+                    onInput={(raw) => !p.locked && p.onLibQtyInput(d.key, raw)}
+                    onBlur={(raw) => p.onLibQtyBlur(d.key, raw)} />
+                  <span className="est-lib-kc num" aria-label={`${d.kcal} 卡`}>{d.kcal}<small aria-hidden="true">卡</small></span>
+                  <button className="est-del" type="button" aria-label={`刪掉${lib.food.name}`} disabled={p.locked || made || swapping} onClick={() => p.onDelete(d.key)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                  <div className="est-row-foot">
+                    <span className="est-lib-tag"><BookIcon />食品庫{tag && <>・<b>{tag}</b></>}</span>
+                    <button className="row-pill" type="button" disabled={p.locked || p.fixBusy || p.status === 'busy'} onClick={() => p.onLibToAi(d.key)}>
+                      {swapping ? '估算中…' : p.libAi[d.key] === 'error' ? '重試 AI 估' : '改用 AI 估'}
+                    </button>
+                  </div>
+                  {p.libAi[d.key] === 'error' && <p className="est-fix-err" role="alert">這一樣估不出來，食品庫的數字還在</p>}
+                </li>
+              )
+            }
             const fresh = freshKeys.has(d.key)
             const name = draftName(d, p.meal)
             /* 已經建好 foods 的列（寫 intake 失敗、等重試）鎖住：再改熱量、勾選或刪掉，都會跟已建的食物對不上（review N1） */
@@ -218,6 +270,9 @@ export default function EstimateView(p: Props) {
             const fix = p.fixes[d.key]
             const fixing = fix?.status === 'busy'
             const fixable = canFix(d)
+            const near = d.near && !d.noLib && !made ? d.near : null
+            /* 勾了「存進食品庫」才查重（AC 13）：同名（沒有店家）已經有了就不會再存一筆，給「改用那筆」 */
+            const dup = d.keep && !made ? duplicateCheck({ name, vendor: null }, p.foods) : null
             return (
               <li key={d.key} className={fresh ? 'est-draft fresh' : 'est-draft'} style={fresh ? { animationDelay: `${i * 90}ms` } : undefined}>
                 {/* 品名可以改（使用者 2026-11-13）；空著＝用「餐別＋檔位」頂替，寫入時才決定是哪一餐 */}
@@ -292,6 +347,13 @@ export default function EstimateView(p: Props) {
                 {fix?.open && fixable && fix.status === 'error' && (
                   <p className="est-fix-err" role="alert">修正沒成功，原本的估算還在</p>
                 )}
+                {near && (
+                  <div className="est-near">
+                    <p>食品庫有「<b>{foodLabel(near)}</b>」<span className="num">{near.kcal}</span> 卡</p>
+                    <button className="row-pill solid" type="button" aria-label={`改用食品庫的${foodLabel(near)}`}
+                      disabled={p.locked || p.fixBusy || fixing} onClick={() => p.onAdopt(d.key, near.id)}>改用</button>
+                  </div>
+                )}
                 <label className="est-keep">
                   <input type="checkbox" checked={d.keep} disabled={p.locked || made} onChange={() => p.onToggleKeep(d.key)} />
                   存進食品庫
@@ -299,7 +361,7 @@ export default function EstimateView(p: Props) {
                 {fixable && (
                   <button
                     ref={(el) => { fixBtnRefs.current[d.key] = el }}
-                    className="est-fix-btn"
+                    className="est-fix-btn row-pill"
                     type="button"
                     aria-expanded={!!fix?.open}
                     aria-label={`修正${name}`}
@@ -309,6 +371,15 @@ export default function EstimateView(p: Props) {
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" /></svg>
                     修正
                   </button>
+                )}
+                {dup?.block ? (
+                  <div className="est-near est-dup" role="alert">
+                    <p>食品庫已有「<b>{foodLabel(dup.block)}</b>」，不會再存一筆</p>
+                    <button className="row-pill" type="button" disabled={p.locked || p.fixBusy || fixing}
+                      onClick={() => dup.block && p.onAdopt(d.key, dup.block.id)}>改用那筆</button>
+                  </div>
+                ) : (
+                  dup?.note && <p className="dup-note est-dup-note">食品庫已有{dup.note.vendor ? ` ${dup.note.vendor} 的` : ''}「{dup.note.name}」，不同店家照樣存</p>
                 )}
               </li>
             )
