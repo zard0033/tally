@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 35 pages | Last updated: 2026-11-21T15:49:22.488Z
+> 35 pages | Last updated: 2026-11-22T06:30:22.371Z
 
 ## debugging
 
