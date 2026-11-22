@@ -221,3 +221,7 @@
 - **Pages:** lesson-ai-accuracy-tests-ai-2026-11-22.md
 - **Summary:** Created new page "lesson-ai-accuracy-tests AI 準度測試的五條通則（2026-11-22）"
 
+## [2026-11-22T14:26:25.100Z] ingest
+- **Pages:** lesson-grams-format-2026-11-22.md
+- **Summary:** Created new page "lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）"
+

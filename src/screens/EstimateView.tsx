@@ -169,7 +169,7 @@ export default function EstimateView(p: Props) {
       </div>
       {!busy && (
         <div className="est-act">
-          <span>寫越具體越準：大小、份量、幾顆</span>
+          <span>越具體越準：幾顆、大小、炸或煎、甜度</span>
           <button className="est-go" type="button" disabled={!p.canSubmit || p.locked || p.fixBusy} onClick={() => {
               // 估算中這顆鈕會收起來，焦點先交給描述框（readOnly 留得住焦點），不掉到 body
               textRef.current?.focus()
