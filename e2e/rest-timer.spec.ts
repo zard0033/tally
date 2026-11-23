@@ -153,6 +153,29 @@ test('倒數由「結束時間點 − 現在」算：撥時鐘 30 秒顯示 1:00
   await expect(bar(page)).toHaveCount(0)
 })
 
+test('訓練中小條（v2.160）：離開訓練中整頁後，別的分頁的小條在休息中改寫「休息 m:ss」、跟著倒數；休息完回到已進行時間', async ({ page }) => {
+  await prepare(page)
+  await openLive(page)
+  await tick(page, 0)
+  await expect(barText(page)).toHaveText('1:30')
+  await page.getByRole('button', { name: '返回（訓練繼續進行）' }).click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await page.locator('.tab[aria-label="飲食"]').click()
+
+  const live = page.locator('.live-bar')
+  await expect(live).toHaveClass(/is-resting/)
+  await expect(live.locator('.live-nm')).toHaveText('1 個動作')
+  await expect(live.locator('.live-time')).toHaveText('休息 1:30')
+  await jump(page, 30_000)
+  await expect(live.locator('.live-time')).toHaveText('休息 1:00')
+  await jump(page, 61_000)
+  await expect(live).not.toHaveClass(/is-resting/)
+  await expect(live.locator('.live-time')).toHaveText(/^\d+:\d{2}$/)
+
+  await live.click()
+  await expect(page.locator('[data-screen="training-session"]')).toHaveAttribute('data-workout-id', 'w-live')
+})
+
 test('−15／＋15：各調整 15 秒；＋15 最多到 10:00；−15 減到 0 就是結束（約 3 秒後自動收起）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
@@ -368,12 +391,12 @@ test('最後一組勾完才問：前兩組不問；問題與四顆 chip 在條�
   await tick(page, 1) // 這一下做完了整個動作
   await expect(ask(page)).toBeVisible()
   await expect(ask(page)).toContainText('最後一組還能再做幾下')
-  await expect(ask(page).getByRole('button')).toHaveText(['3 下以上', '2 下', '1 下', '力竭'])
+  await expect(ask(page).getByRole('button')).toHaveText(['剩 3+', '剩 2', '剩 1', '力竭'])
   await expect(barText(page), '倒數照常').toHaveText('1:30')
   await expect(btn(page, '略過休息')).toBeVisible()
 })
 
-for (const [label, value] of [['3 下以上', 7], ['2 下', 8], ['1 下', 9], ['力竭', 10]] as const) {
+for (const [label, value] of [['剩 3+', 7], ['剩 2', 8], ['剩 1', 9], ['力竭', 10]] as const) {
   test(`點「${label}」寫入 rpe＝${value}：只寫那一組、選中的標示起來、問題列收起、倒數續跑`, async ({ page }) => {
     await prepare(page)
     await openLive(page)
@@ -433,12 +456,12 @@ test('休息條答 9 之後，組編輯 sheet 裡 RPE 9 是高亮的', async ({ 
   await prepare(page)
   await openLive(page)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '1 下').click()
+  await chip(page, '剩 1').click()
   await expect(ask(page)).toHaveCount(0)
   await page.locator('.ex .set').nth(2).locator('.w').click()
   const sheet = page.locator('[data-screen="set-sheet"]')
   await expect(sheet).toBeVisible()
-  await expect(sheet.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(sheet.getByRole('button', { name: '剩 1' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('已經有 RPE 的組重勾不再問', async ({ page }) => {
@@ -447,7 +470,7 @@ test('已經有 RPE 的組重勾不再問', async ({ page }) => {
   await tick(page, 0)
   await tick(page, 1)
   await tick(page, 2)
-  await chip(page, '1 下').click()
+  await chip(page, '剩 1').click()
   await expect(ask(page)).toHaveCount(0)
   await tick(page, 2) // 取消勾
   await tick(page, 2) // 再勾回來
@@ -501,7 +524,7 @@ test('減少動態：問題列照出現、點了照寫入，收起只淡出', as
   await tick(page, 1)
   await tick(page, 2)
   await expect(ask(page)).toBeVisible()
-  await chip(page, '2 下').click()
+  await chip(page, '剩 2').click()
   await expect.poll(() => rpeWrites(page)).toEqual([8])
   await expect(ask(page)).toHaveCount(0)
 })
@@ -511,43 +534,43 @@ test('休息條只寫最後一組（v2.105）：別組（sheet 填過的）的 R
   const withOld: typeof FIX = { ...LIVE, workout_sets: LIVE.workout_sets.map((x, i) => (i === 0 ? { ...x, rpe: 8 } : x)) }
   await openLive(page, true, withOld)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '1 下').click()
+  await chip(page, '剩 1').click()
   await expect.poll(() => rpeWrites(page)).toEqual([9]) // 只寫最後一組，沒有 null：第 1 組的 8 還在
-  await expect(page.locator('.set .rpe-badge'), '第 1 組（原本的 8）與最後一組（休息條答的 9）各有標籤').toHaveText(['8', '9'])
+  await expect(page.locator('.set .rpe-badge'), '第 1 組（原本的 8）與最後一組（休息條答的 9）各有標籤').toHaveText(['2', '1'])
 })
 
 test('點組號格的 RPE 標籤開那一組的組編輯 sheet，亮的格子就是標籤上的值（v2.107，動作卡沒有 RPE 頁尾）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '2 下').click() // 休息條答 8，寫在最後一組
+  await chip(page, '剩 2').click() // 休息條答 8，寫在最後一組
   await expect(ask(page)).toHaveCount(0)
   const badge = page.locator('.ex .set').nth(2).locator('.rpe-badge')
-  await expect(badge).toHaveText('8')
+  await expect(badge).toHaveText('2')
   await badge.click()
   const sheet = page.locator('[data-screen="set-sheet"]')
   await expect(sheet).toBeVisible()
-  await expect(sheet.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'true')
-  await sheet.getByRole('button', { name: 'RPE 10' }).click() // 在 sheet 改成 10
+  await expect(sheet.getByRole('button', { name: '剩 2' })).toHaveAttribute('aria-pressed', 'true')
+  await sheet.getByRole('button', { name: '力竭' }).click() // 在 sheet 改成 10
   await expect.poll(() => rpeWrites(page)).toEqual([8, 10])
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
-  await expect(badge, '標籤跟著變').toHaveText('10')
+  await expect(badge, '標籤跟著變').toHaveText('0')
 })
 
 test('標籤開的 sheet 裡把 RPE 取消、標籤卸載後關 sheet：焦點回到同一列的重量鈕，不掉到 body（v2.108 review）', async ({ page }) => {
   await prepare(page)
   await openLive(page)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '2 下').click()
+  await chip(page, '剩 2').click()
   const row = page.locator('.ex .set').nth(2)
   const badge = row.locator('.rpe-badge')
-  await expect(badge).toHaveText('8')
+  await expect(badge).toHaveText('2')
   await badge.focus()
   await page.keyboard.press('Enter')
   const sheet = page.locator('[data-screen="set-sheet"]')
   await expect(sheet).toBeVisible()
-  await sheet.getByRole('button', { name: 'RPE 8' }).click() // 再點亮著那格＝取消
+  await sheet.getByRole('button', { name: '剩 2' }).click() // 再點亮著那格＝取消
   await expect(badge, '標籤隨取消卸載').toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(sheet).toHaveCount(0)
@@ -562,7 +585,7 @@ test('在組編輯 sheet 填了最後一組的 RPE：休息條上同一題跟著
   await page.locator('.ex .set').nth(2).locator('.w').click()
   const sheet = page.locator('[data-screen="set-sheet"]')
   await expect(sheet).toBeVisible()
-  await sheet.getByRole('button', { name: 'RPE 8' }).click()
+  await sheet.getByRole('button', { name: '剩 2' }).click()
   await expect(ask(page), '條上那題標已答後收起').toHaveCount(0)
   await expect.poll(() => rpeWrites(page)).toEqual([8]) // 只有 sheet 寫的那一筆
 })
@@ -632,8 +655,8 @@ test('超時狀態用鍵盤答 RPE：問題列收起後焦點交給「收起」'
   await expect(ask(page)).toBeVisible()
   await jump(page, 113_000)
   await expect(bar(page)).toHaveAttribute('data-rest', 'over')
-  await chip(page, '1 下').focus()
-  await chip(page, '1 下').press('Enter')
+  await chip(page, '剩 1').focus()
+  await chip(page, '剩 1').press('Enter')
   await expect(bar(page).getByRole('button', { name: '收起' })).toBeFocused()
 })
 
@@ -641,7 +664,7 @@ test('倒數中用鍵盤答 RPE：問題列收起後焦點交給「略過休息�
   await prepare(page)
   await openLive(page)
   for (const n of [0, 1, 2]) await tick(page, n)
-  await chip(page, '1 下').focus()
-  await chip(page, '1 下').press('Enter')
+  await chip(page, '剩 1').focus()
+  await chip(page, '剩 1').press('Enter')
   await expect(btn(page, '略過休息')).toBeFocused()
 })

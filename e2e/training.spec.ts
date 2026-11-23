@@ -40,7 +40,9 @@ test('訓練分頁進得去：日期元件在、這天沒有訓練、分頁選�
   const screen = page.locator('[data-screen="training"]')
   await expect(screen).toBeVisible()
   await expect(screen.locator('.datectl')).toBeVisible()
-  await expect(screen.getByText('這天沒有訓練紀錄')).toBeVisible()
+  // v2.160 起空狀態由天空那行字講（沒有任何紀錄＝「今天還沒練」），不再有「這天沒有訓練紀錄」小景
+  await expect(screen.locator('.tr-hero')).toContainText('今天還沒練')
+  await expect(screen.getByText('這天沒有訓練紀錄')).toHaveCount(0)
   await expect(page.locator('.tab[aria-current="page"]')).toHaveAttribute('aria-label', '訓練')
   // 沒有任何異常時不顯示同步細條（它不是常駐的裝飾）
   await expect(screen.locator('.tr-status')).toHaveCount(0)
@@ -140,6 +142,29 @@ const setOffline = (page: Page, down: boolean) =>
 
 async function openTraining(page: Page) {
   await page.locator('.tab[aria-label="訓練"]').click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+}
+
+/** 天空右上「課表」進課表子頁（v2.160 起課表管理搬出首頁本體）。 */
+async function openRoutines(page: Page) {
+  await page.locator('[data-action="open-routines"]').click()
+  await expect(page.locator('[data-screen="routines"]')).toBeVisible()
+}
+
+/** 「完成訓練」→ 確認 sheet 按「結束」→ 停在完成畫面。補記的時長在確認 sheet 填。 */
+async function endWorkout(page: Page, minutes?: string) {
+  await page.getByRole('button', { name: '完成訓練' }).click()
+  const sheet = page.locator('[data-screen="finish-sheet"]')
+  await expect(sheet).toBeVisible()
+  if (minutes !== undefined) await sheet.getByLabel('時長（分鐘）').fill(minutes)
+  await sheet.getByRole('button', { name: '結束', exact: true }).click()
+  await expect(page.locator('[data-screen="finish"]')).toBeVisible()
+}
+
+/** endWorkout ＋ 完成畫面按「好」回訓練頁。 */
+async function finishWorkout(page: Page, minutes?: string) {
+  await endWorkout(page, minutes)
+  await page.locator('[data-action="finish-done"]').click()
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
 }
 
@@ -384,7 +409,7 @@ test('sheet 裡的確認框：在對話框上往下拖不會拖走 sheet；點�
   await expect(page.locator('.ex .set'), '取消不該刪').toHaveCount(2)
 })
 
-test('完成訓練：摘要 sheet 列事實，按完成回到清單並落到伺服器', async ({ page }) => {
+test('完成訓練：確認 sheet 按「結束」→ 完成畫面列事實，按「好」回到清單並落到伺服器', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -395,10 +420,17 @@ test('完成訓練：摘要 sheet 列事實，按完成回到清單並落到伺�
   await page.getByRole('button', { name: '完成訓練' }).click()
   const sheet = page.locator('[data-screen="finish-sheet"]')
   await expect(sheet).toBeVisible()
-  await expect(sheet.getByTestId('finish-volume')).toContainText('1,440')
-  await expect(sheet.locator('.tr-row', { hasText: '腿推舉' })).toContainText('60 × 12 · 60 × 12')
+  await expect(sheet.getByRole('heading', { name: '結束這次訓練？' })).toBeVisible()
+  await expect(sheet.getByTestId('finish-undone'), '都勾了：不提沒勾的組').toHaveCount(0)
   await expect(sheet.getByLabel('時長（分鐘）'), '即時的訓練不問時長（有計時）').toHaveCount(0)
-  await sheet.getByRole('button', { name: '完成', exact: true }).click()
+  await sheet.getByRole('button', { name: '結束', exact: true }).click()
+
+  // 完成畫面：總重量從 0 數上來，等到最終值；組數
+  const done = page.locator('[data-screen="finish"]')
+  await expect(done).toBeVisible()
+  await expect(done.getByTestId('finish-volume')).toHaveText('1,440')
+  await expect(done.locator('.fc-stats')).toContainText('2組')
+  await done.locator('[data-action="finish-done"]').click()
 
   // 回到清單：今天現在有兩次已完成的訓練
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
@@ -421,8 +453,7 @@ test('離線時整套記錄下來，回線後自動上傳、不重複、細條�
   await addExercise(page, '腿推舉')
   await tick(page, 0)
   await tick(page, 1)
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  await page.locator('[data-screen="finish-sheet"]').getByRole('button', { name: '完成', exact: true }).click()
+  await finishWorkout(page)
 
   // 離線：畫面上看得到、細條明講有幾筆沒上傳，伺服器那邊還沒有
   await expect(page.locator('.tr-sec:has-text("已完成") + .tr-card .tr-row')).toHaveCount(2)
@@ -452,10 +483,7 @@ test('補記過去的日子：不計時、完成時手填時長，記在那一�
 
   await addExercise(page, '腿推舉')
   await tick(page, 0)
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  const sheet = page.locator('[data-screen="finish-sheet"]')
-  await sheet.getByLabel('時長（分鐘）').fill('45')
-  await sheet.getByRole('button', { name: '完成', exact: true }).click()
+  await finishWorkout(page, '45')
 
   // 昨天那天的清單有一筆 45 分；今天的還是原本那一筆
   await expect(page.locator('.tr-row .sub', { hasText: '45 分' })).toHaveCount(1)
@@ -481,7 +509,7 @@ test('刪除整次訓練要確認，確認後從清單與伺服器都消失', as
 
   await page.getByRole('button', { name: '刪除這次訓練' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: '刪除', exact: true }).click()
-  await expect(page.getByText('這天沒有訓練紀錄')).toBeVisible()
+  await expect(page.locator('[data-screen="training"] .tr-hero')).toContainText('今天還沒練')
   await expect(page.locator('.bottom-bar')).toHaveCount(1)
   await expect.poll(async () => (await trainRows(page, 'workouts')).length).toBe(0)
 })
@@ -1984,7 +2012,9 @@ const ROUTINE_FIX: typeof FIX = {
   ],
 }
 
+/** 從訓練頁進課表子頁，「新課表」建一份並進編輯頁。 */
 async function newRoutine(page: Page, name: string) {
+  await openRoutines(page)
   await page.locator('[data-action="new-routine"]').click()
   await nameSheet(page).getByRole('textbox', { name: '課表名稱' }).fill(name)
   await nameSheet(page).getByRole('button', { name: '建立' }).click()
@@ -1994,7 +2024,9 @@ async function newRoutine(page: Page, name: string) {
 test('新課表：先問名稱才建立（空名稱擋在 sheet 裡），建好直接進編輯頁、底部列收起', async ({ page }) => {
   await openApp(page, {}, LIBRARY_FIX)
   await openTraining(page)
-  await expect(page.locator('[data-screen="training"]')).toContainText('還沒有課表')
+  await expect(page.locator('[data-screen="training"] [data-action="new-routine"]'), 'v2.160：首頁沒有新課表鈕').toHaveCount(0)
+  await openRoutines(page)
+  await expect(page.locator('[data-screen="routines"]')).toContainText('還沒有課表')
 
   await page.locator('[data-action="new-routine"]').click()
   await nameSheet(page).getByRole('button', { name: '建立' }).click()
@@ -2009,6 +2041,9 @@ test('新課表：先問名稱才建立（空名稱擋在 sheet 裡），建好�
   await expect
     .poll(async () => (await trainRows(page, 'routines'))[0])
     .toMatchObject({ name: '菜單 A', archived: false })
+  // 編輯頁返回回到課表子頁（不是訓練首頁），新的那份在清單裡
+  await editor(page).getByRole('button', { name: '返回' }).click()
+  await expect(page.locator('[data-screen="routines"] [data-section="routines"] .tr-row')).toContainText('菜單 A')
 })
 
 test('課表編輯：加動作、改預設組次、移除；每個修改都落到伺服器', async ({ page }) => {
@@ -2045,6 +2080,7 @@ test('課表編輯：加動作、改預設組次、移除；每個修改都落�
 test('預設組次的守門：範圍外擋在 sheet 裡說明，不寫入、不關', async ({ page }) => {
   await openApp(page, {}, ROUTINE_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await page.locator('.tr-row[data-routine-id="r-a"]').click()
   await editor(page).getByRole('button', { name: /改預設組次/ }).click()
 
@@ -2066,6 +2102,7 @@ test('預設組次的守門：範圍外擋在 sheet 裡說明，不寫入、不�
 test('改名：失焦才寫；改成空白放回原值並說明', async ({ page }) => {
   await openApp(page, {}, ROUTINE_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await page.locator('.tr-row[data-routine-id="r-a"]').click()
   const field = editor(page).getByRole('textbox', { name: '課表名稱' })
 
@@ -2085,6 +2122,7 @@ test('改名：失焦才寫；改成空白放回原值並說明', async ({ page 
 test('複製課表：進到「原名稱 複本」，動作與預設組次照搬，原本那份不動', async ({ page }) => {
   await openApp(page, {}, ROUTINE_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await page.locator('.tr-row[data-routine-id="r-a"]').click()
   await editor(page).getByRole('button', { name: '複製課表' }).click()
 
@@ -2108,18 +2146,23 @@ test('複製課表：進到「原名稱 複本」，動作與預設組次照搬�
 test('封存課表：回清單、從開始訓練選單消失、列在「已封存的課表」；可取消封存', async ({ page }) => {
   await openApp(page, {}, ROUTINE_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await page.locator('.tr-row[data-routine-id="r-a"]').click()
   await editor(page).locator('[data-action="toggle-routine-archive"]').click()
 
-  const screen = page.locator('[data-screen="training"]')
+  // 封存後回到課表子頁（v2.160：課表管理在子頁）
+  const screen = page.locator('[data-screen="routines"]')
   await expect(screen).toBeVisible()
   await expect(screen.locator('[data-section="routines"]')).toHaveCount(0)
   await expect(screen.locator('[data-section="archived-routines"] .tr-row')).toContainText('菜單 A')
+  await screen.getByRole('button', { name: '返回訓練' }).click()
+  await expect(page.locator('[data-screen="training"]')).toBeVisible()
   await page.getByRole('button', { name: '開始訓練' }).click()
   await expect(page.locator('[data-screen="start-sheet"] [data-routine-id]'), '封存的課表不進選單').toHaveCount(0)
   await page.getByRole('button', { name: '關閉' }).click()
   await expect(page.locator('[data-screen="start-sheet"]')).toHaveCount(0)
 
+  await openRoutines(page)
   await screen.locator('[data-section="archived-routines"] .tr-row').click()
   await editor(page).locator('[data-action="toggle-routine-archive"]').click()
   await expect(editor(page), '取消封存留在原頁').toBeVisible()
@@ -2133,7 +2176,9 @@ test('封存課表：回清單、從開始訓練選單消失、列在「已封�
 test('開始訓練選課表：動作依序帶入、有歷史的取上次實際完成的值、訓練記下 routine_id', async ({ page }) => {
   await openApp(page, {}, ROUTINE_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await expect(page.locator('.tr-row[data-routine-id="r-a"]')).toContainText(/1 個動作 · 上次 \d+\/\d+/)
+  await page.getByRole('button', { name: '返回訓練' }).click()
 
   await page.getByRole('button', { name: '開始訓練' }).click()
   const pick = page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]')
@@ -2207,6 +2252,7 @@ const storedOrder = async (page: Page) =>
 async function openSortRoutine(page: Page) {
   await openApp(page, {}, SORT_FIX)
   await openTraining(page)
+  await openRoutines(page)
   await page.locator('.tr-row[data-routine-id="r-s"]').click()
   await expect(sortRows(page)).toHaveCount(3)
 }
@@ -3271,9 +3317,10 @@ test('訓練中排序：只有握把是拖曳來源（名稱區按下拖動不�
   await expect.poll(() => storedExerciseOrder(page), { timeout: 15_000 }).toEqual([ROW_ID, LEG_ID])
 })
 
-/* ═══════════ 存成課表（第二輪 B 段，完成訓練 sheet） ═══════════ */
+/* ═══════════ 存成課表（第二輪 B 段；v2.160 起在完成畫面） ═══════════ */
 
 const finishSheet = (page: Page) => page.locator('[data-screen="finish-sheet"]')
+const finishPage = (page: Page) => page.locator('[data-screen="finish"]')
 
 test('存成課表：空白開始的訓練完成時可存；空名稱擋住；存下後不再提供第二次，課表進清單與伺服器', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
@@ -3281,9 +3328,9 @@ test('存成課表：空白開始的訓練完成時可存；空名稱擋住；�
   await startBlank(page)
   await addExercise(page, '腿推舉')
   await tick(page, 0)
-  await page.getByRole('button', { name: '完成訓練' }).click()
+  await endWorkout(page)
 
-  const sheet = finishSheet(page)
+  const sheet = finishPage(page)
   await sheet.locator('[data-action="save-as-routine"]').click()
   await sheet.getByRole('button', { name: '存成課表', exact: true }).click()
   await expect(sheet.getByText('名稱不能是空的')).toBeVisible()
@@ -3300,8 +3347,9 @@ test('存成課表：空白開始的訓練完成時可存；空名稱擋住；�
     .toEqual([[EX_ID, 0, 2, 12]])
   expect((await trainRows(page, 'routines')).map((r) => r.name)).toEqual(['菜單 C'])
 
-  await sheet.getByRole('button', { name: '完成', exact: true }).click()
+  await sheet.locator('[data-action="finish-done"]').click()
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await openRoutines(page)
   await expect(page.locator('[data-section="routines"] .tr-row')).toContainText('菜單 C')
 })
 
@@ -3311,18 +3359,18 @@ test('照課表開的訓練：完成時不提供「存成課表」（已經有�
   await page.getByRole('button', { name: '開始訓練' }).click()
   await page.locator('[data-screen="start-sheet"] [data-routine-id="r-a"]').click()
   await expect(page.locator('.ex .set').first()).toBeVisible()
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  await expect(finishSheet(page)).toBeVisible()
-  await expect(finishSheet(page).locator('[data-section="save-routine"]')).toHaveCount(0)
+  await endWorkout(page)
+  await expect(finishPage(page).locator('.fc-title')).toHaveText('菜單 A · 練完了')
+  await expect(finishPage(page).locator('[data-section="save-routine"]')).toHaveCount(0)
 })
 
 test('空白開始、還沒加任何動作：完成時不提供「存成課表」', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  await expect(finishSheet(page)).toBeVisible()
-  await expect(finishSheet(page).locator('[data-section="save-routine"]')).toHaveCount(0)
+  await endWorkout(page)
+  await expect(finishPage(page).locator('.fc-title')).toHaveText('練完了')
+  await expect(finishPage(page).locator('[data-section="save-routine"]')).toHaveCount(0)
 })
 
 test('存成課表連按兩次 Enter：只存一份（Enter 不經過按鈕的 disabled）', async ({ page }) => {
@@ -3331,8 +3379,8 @@ test('存成課表連按兩次 Enter：只存一份（Enter 不經過按鈕的 d
   await startBlank(page)
   await addExercise(page, '腿推舉')
   await tick(page, 0)
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  const sheet = finishSheet(page)
+  await endWorkout(page)
+  const sheet = finishPage(page)
   await sheet.locator('[data-action="save-as-routine"]').click()
   const input = sheet.getByRole('textbox', { name: '課表名稱' })
   await input.fill('菜單 D')
@@ -3408,7 +3456,7 @@ const rpeWrites = (page: Page) =>
       .map((w) => w.body.rpe),
   )
 
-test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高亮，換 9 高亮跟著換；沒有清除鈕、再點同一格取消；說明在欄位名稱右側', async ({ page }) => {
+test('組編輯 sheet 的吃力程度：只有已完成的組才有；點剩 2 寫 8 並高亮，換剩 1 高亮跟著換；沒有清除鈕、再點同一格取消；字是剩幾下不是 RPE 數字', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -3422,31 +3470,26 @@ test('組編輯 sheet 的 RPE：只有已完成的組才有；點 8 寫 8 並高
 
   await openSetSheet(page, 0)
   const rpe = setSheet(page).locator('[data-section="rpe"]')
-  await expect(rpe.getByRole('button'), 'v2.104 拿掉清除鈕').toHaveText(['6', '7', '8', '9', '10'])
-  // 說明與欄位名稱同一行、在名稱右側（原本在五格下面）
-  // 同一個 evaluate 裡一次量兩個：sheet 開啟時還在滑動，分兩次量會量到不同時刻的位置
-  const pos = await rpe.evaluate((el) => {
-    const r = (s: string) => el.querySelector(s)!.getBoundingClientRect()
-    return { label: r('.set-sec'), hint: r('.rpe-hint') }
-  })
-  expect(Math.abs(pos.hint.y - pos.label.y), '同一行').toBeLessThanOrEqual(6)
-  expect(pos.hint.x, '在名稱右側').toBeGreaterThan(pos.label.right - 1)
+  await expect(rpe.getByRole('button'), 'v2.104 拿掉清除鈕').toHaveText(['剩 4+', '剩 3', '剩 2', '剩 1', '力竭'])
+  // v2.160：字就是意思，拿掉「9＝還能再做 1 下」的說明；欄位名稱改成問句
+  await expect(rpe.locator('.set-sec')).toHaveText('還能再做幾下')
+  await expect(rpe.locator('.rpe-hint')).toHaveCount(0)
   await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
 
-  await rpe.getByRole('button', { name: 'RPE 8' }).click()
-  await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'true')
-  await rpe.getByRole('button', { name: 'RPE 9' }).click()
-  await expect(rpe.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(rpe.getByRole('button', { name: 'RPE 8' })).toHaveAttribute('aria-pressed', 'false')
-  await rpe.getByRole('button', { name: 'RPE 9' }).click() // v2.108：再點同一格＝取消，寫 null
-  await expect(rpe.getByRole('button', { name: 'RPE 9' })).toHaveAttribute('aria-pressed', 'false')
+  await rpe.getByRole('button', { name: '剩 2' }).click()
+  await expect(rpe.getByRole('button', { name: '剩 2' })).toHaveAttribute('aria-pressed', 'true')
+  await rpe.getByRole('button', { name: '剩 1' }).click()
+  await expect(rpe.getByRole('button', { name: '剩 1' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(rpe.getByRole('button', { name: '剩 2' })).toHaveAttribute('aria-pressed', 'false')
+  await rpe.getByRole('button', { name: '剩 1' }).click() // v2.108：再點同一格＝取消，寫 null
+  await expect(rpe.getByRole('button', { name: '剩 1' })).toHaveAttribute('aria-pressed', 'false')
   await expect(rpe.locator('[aria-pressed="true"]')).toHaveCount(0)
   await expect.poll(() => rpeWrites(page)).toEqual([8, 9, null])
   await closeSetSheet(page)
   await expect(page.locator('.ex .set .rpe-badge'), '取消後組號格標籤跟著消失').toHaveCount(0)
 })
 
-test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝RPE；沒填與沒打勾的沒有；不壓到重量欄', async ({ page }) => {
+test('v2.105 組號格的吃力程度標籤：有填的打勾組才有，數字是還剩幾下（v2.160）；沒填與沒打勾的沒有；不壓到重量欄', async ({ page }) => {
   await openApp(page, {}, WITH_WORKOUT)
   await openTraining(page)
   await startBlank(page)
@@ -3457,17 +3500,17 @@ test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝
   await expect(badges, '都沒填：沒有標籤').toHaveCount(0)
 
   await openSetSheet(page, 0)
-  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: 'RPE 8' }).click()
+  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: '剩 2' }).click()
   await closeSetSheet(page)
-  await expect(badges).toHaveText(['8'])
+  await expect(badges).toHaveText(['2'])
   await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge'), '標籤在第 1 組的組號格裡').toHaveCount(1)
   await expect(page.locator('.ex .set').nth(1).locator('.rpe-badge'), '沒填的第 2 組沒有').toHaveCount(0)
-  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge')).toHaveAttribute('aria-label', '第 1 組 RPE 8，調整')
+  await expect(page.locator('.ex .set').nth(0).locator('.rpe-badge')).toHaveAttribute('aria-label', '第 1 組還能再做 2 下，調整')
 
   await openSetSheet(page, 1)
-  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: 'RPE 10' }).click()
+  await setSheet(page).locator('[data-section="rpe"]').getByRole('button', { name: '力竭' }).click()
   await closeSetSheet(page)
-  await expect(badges).toHaveText(['8', '10'])
+  await expect(badges).toHaveText(['2', '0'])
 
   // 不壓到重量欄：標籤右緣在同一列重量鈕的左緣之內（right -8px 剛好碰到）；也不能蓋住組號數字（見下面的相交檢查）
   const gap = await page.locator('.ex .set').nth(1).evaluate((row) => {
@@ -3493,7 +3536,7 @@ test('v2.105 組號格的 RPE 標籤：有填 RPE 的打勾組才有，數字＝
 
   // 取消勾：RPE 只在打勾的組有意義，標籤跟著不顯示（資料還在，重勾就回來）
   await tick(page, 0)
-  await expect(badges).toHaveText(['10'])
+  await expect(badges).toHaveText(['0'])
 })
 
 test('新增的組不帶 rpe：預填（上次的組有 rpe）、按「新增一組」、勾組的寫入 payload 都沒有 rpe 這個鍵', async ({ page }) => {
@@ -3857,9 +3900,7 @@ test('離線：加有氧動作、填寫、結束訓練，畫面立刻有；回�
   await saveCardio(page)
   await expect(cardioCard(page, '跑步機坡度健走').locator('.cardio-sum')).toHaveText('30 分 · 5.5 km/h · 坡度 8%')
 
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  await expect(finishSheet(page).locator('.tr-row', { hasText: '跑步機坡度健走' }).locator('.sub')).toHaveText('30 分 · 5.5 km/h · 坡度 8%')
-  await finishSheet(page).getByRole('button', { name: '完成', exact: true }).click()
+  await finishWorkout(page)
 
   // 離線：列表上已經有（只有一張有氧卡的訓練＝動作名稱＋摘要），伺服器還沒有
   const row = page.locator('.tr-sec:has-text("已完成") + .tr-card .tr-row')
@@ -3898,9 +3939,7 @@ test('開始訓練 sheet 沒有「記一筆有氧」；加有氧、填寫、完�
   await cardioField(page, '預估熱量 kcal').fill('121')
   await saveCardio(page)
   await expect(cardioCard(page, '有氧拳擊').locator('.cardio-sum')).toHaveText('36 分 · 預估 121 kcal')
-  await page.getByRole('button', { name: '完成訓練' }).click()
-  await finishSheet(page).getByRole('button', { name: '完成', exact: true }).click()
-  await expect(page.locator('[data-screen="training"]')).toBeVisible()
+  await finishWorkout(page)
   await expect.poll(async () => (await trainRows(page, 'workouts'))[0]?.ended_at ?? null).not.toBeNull()
 
   const fetches = await page.evaluate(() => (window as unknown as { __allFetches: string[] }).__allFetches)
@@ -3968,7 +4007,7 @@ test('只有一張有氧卡的訓練：點進去可刪除那次訓練（沿用�
   expect((await trainRows(page, 'workout_exercises')).find((r) => r.id === 'we-box'), '有氧那列隨訓練 cascade 刪掉').toBeUndefined()
 })
 
-test('完成訓練 sheet：有氧卡那一列寫摘要，沒填寫「還沒填」（不寫「沒有打勾的組」）', async ({ page }) => {
+test('結束確認 sheet：有氧卡沒有組，不算進「還有 N 組沒勾」（填了沒填都一樣）', async ({ page }) => {
   await openApp(page, {}, CARDIO_LIB)
   await openTraining(page)
   await startBlank(page)
@@ -3979,11 +4018,18 @@ test('完成訓練 sheet：有氧卡那一列寫摘要，沒填寫「還沒填�
   await cardioField(page, '預估熱量 kcal').fill('121')
   await saveCardio(page)
 
+  // 只有有氧卡：沒有「沒勾的組」可講
   await page.getByRole('button', { name: '完成訓練' }).click()
   const sheet = finishSheet(page)
-  await expect(sheet.locator('.tr-row', { hasText: '有氧拳擊' }).locator('.sub')).toHaveText('36 分 · 預估 121 kcal')
-  await expect(sheet.locator('.tr-row', { hasText: '跑步機坡度健走' }).locator('.sub')).toHaveText('還沒填')
-  await expect(sheet).not.toContainText('沒有打勾的組')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByTestId('finish-undone')).toHaveCount(0)
+  await sheet.getByRole('button', { name: '繼續練' }).click()
+  await expect(sheet).toHaveCount(0)
+
+  // 加一個重訓（沒做過：預設 3 組，都沒勾）：只數那 3 組，兩張有氧卡不算
+  await addExercise(page, '腿推舉')
+  await page.getByRole('button', { name: '完成訓練' }).click()
+  await expect(sheet.getByTestId('finish-undone')).toHaveText('還有 3 組沒勾，沒勾的不算進紀錄')
 })
 
 test('有氧卡也能用握把排序（鍵盤）：順序換了，位置落到伺服器', async ({ page }) => {

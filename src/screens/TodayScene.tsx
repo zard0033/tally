@@ -45,15 +45,18 @@ function useNow(): Date {
 }
 
 /** logged：這天哪幾餐有紀錄；null＝還在載入（DESIGN「載入態」：還沒讀到不能畫成讀到空）。
- *  onPick：點踏腳石＝開那一餐的記錄（v2.125；跟時間軸的餐別列同一個入口）。 */
+ *  onPick：點踏腳石＝開那一餐的記錄（v2.125；跟時間軸的餐別列同一個入口）。
+ *  variant training（訓練分頁改版 A）：訓練頁用同一幅天空，兩頁頂端長一樣；沒有踏腳石與小徑，右邊地面上一支啞鈴。 */
 export default function TodayScene({
   date,
   logged,
   onPick,
+  variant = 'today',
 }: {
   date: string
   logged: ReadonlySet<MealKey> | null
   onPick: (meal: MealKey) => void
+  variant?: 'today' | 'training'
 }) {
   const now = useNow()
   const isToday = date === localDate(now)
@@ -66,7 +69,7 @@ export default function TodayScene({
   const next = rememberStones(mem, logged)
   if (next !== mem) setMem(next)
   const { known, lit } = next
-  const stones = known && stonesFor(known, isToday ? nextMeal(known, now) : null)
+  const stones = variant === 'today' && known ? stonesFor(known, isToday ? nextMeal(known, now) : null) : null
   const glowId = useId()
 
   return (
@@ -117,7 +120,16 @@ export default function TodayScene({
         {/* 最前面這層是紙：頁面就是畫裡的地面，營養素與餐別長在這塊地上（v2.125）。原本是最深的 --hill-near，
             整頁最暗的一條直接貼最亮的紙（5.19:1），天空讀起來像貼上去的一塊長方形 */}
         <path d="M0 42 C 90 32, 200 35, 290 42 S 370 39, 393 41 V76 H0Z" fill="var(--paper)" />
-        <path
+        {variant === 'training' && (
+          <g transform="translate(336 52) rotate(-9)">
+            <rect x="-15" y="-2" width="30" height="4" rx="2" fill="var(--ink)" />
+            <rect x="-21" y="-8.5" width="6.4" height="17" rx="3.2" fill="var(--accent)" />
+            <rect x="14.6" y="-8.5" width="6.4" height="17" rx="3.2" fill="var(--accent)" />
+            <rect x="-25" y="-5" width="4.2" height="10" rx="2.1" fill="var(--ink)" />
+            <rect x="20.8" y="-5" width="4.2" height="10" rx="2.1" fill="var(--ink)" />
+          </g>
+        )}
+        {variant === 'today' && <path
           d="M36 60 C 90 52, 120 66, 168 58 S 230 53, 262 60 S 330 67, 358 59"
           fill="none"
           stroke="var(--ink-faint)"
@@ -125,7 +137,7 @@ export default function TodayScene({
           strokeWidth="2"
           strokeDasharray="1 7"
           strokeLinecap="round"
-        />
+        />}
         {stones?.map((s, i) => {
           const [x, y] = STONE_AT[i]
           return (

@@ -68,13 +68,12 @@ const readBig = (page: Page) => page.locator('[data-screen="analysis-exercise"] 
 const readSub = (page: Page) => page.locator('[data-screen="analysis-exercise"] .trend-read-sub')
 const tableRows = (page: Page) => page.locator('.trend-table tbody tr')
 
-test('訓練頁有「訓練分析」入口列，副標算有進度的動作數；點了進整頁、底部列收起', async ({ page }) => {
+test('訓練頁天空右上有「訓練分析」鈕（v2.160 起取代首頁的入口列）；點了進整頁、底部列收起', async ({ page }) => {
   await openApp(page, {}, build(SESSIONS))
   await page.locator('.tab[aria-label="訓練"]').click()
   const entry = page.locator('[data-screen="training"] [data-action="open-analysis"]')
   await expect(entry).toBeVisible()
-  // 深蹲、臥推有效；引體向上 0 kg 不算；腿推舉沒有紀錄 → 2 個
-  await expect(entry.locator('.sub')).toHaveText('2 個動作有進度 · 推估極限')
+  await expect(entry).toHaveAccessibleName('訓練分析')
   await entry.click()
   await expect(page.locator('[data-screen="analysis"] h1')).toHaveText('訓練分析')
   await expect(page.locator('.tab[aria-label="設定"]'), '整頁接管畫面，底部列收起').toBeHidden()
@@ -82,10 +81,9 @@ test('訓練頁有「訓練分析」入口列，副標算有進度的動作數�
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
 })
 
-test('沒有任何可估算的紀錄：入口副標與整頁都說還沒有', async ({ page }) => {
+test('沒有任何可估算的紀錄：整頁說還沒有', async ({ page }) => {
   await openApp(page, {}, build([]))
   await page.locator('.tab[aria-label="訓練"]').click()
-  await expect(page.locator('[data-action="open-analysis"] .sub')).toHaveText('還沒有能算進度的紀錄')
   await page.locator('[data-action="open-analysis"]').click()
   await expect(page.locator('[data-screen="analysis"]')).toContainText('還沒有能算進度的紀錄')
   await expect(page.locator('[data-section="progress-list"]')).toHaveCount(0)

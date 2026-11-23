@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>訓練分頁改版：樣張</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  /* ── 樣張外框（不是產品碼） ── */
+  html, body { height: auto; background: var(--raised); }
+  body { padding: 40px 40px 96px; width: max-content; min-height: 0; }
+  .intro { max-width: 860px; }
+  .intro h1 { font-size: var(--t-lg); font-weight: 800; letter-spacing: var(--track-lg); margin: 0 0 var(--s-2); }
+  .intro p { font-size: var(--t-base); color: var(--ink-muted); line-height: 1.7; margin: 0 0 var(--s-1); }
+  .intro p b { color: var(--ink); }
+  .part { margin-top: 64px; }
+  .part > h2 { font-size: var(--t-lg); font-weight: 800; letter-spacing: var(--track-lg); margin: 0 0 var(--s-1); }
+  .part > h2 .k { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: var(--s-2); border-radius: var(--r-pill);
+    background: var(--ink); color: var(--paper); font-family: var(--font-num); font-size: var(--t-sm); vertical-align: 2px; }
+  .sub-h { font-size: var(--t-md); font-weight: 800; margin: 40px 0 var(--s-3); }
+  .stage { position: relative; display: flex; gap: 28px; align-items: flex-start; }
+  .col { width: 393px; flex: none; }
+  .col-h { display: flex; align-items: center; gap: var(--s-2); min-height: 28px; margin-bottom: var(--s-2); font-size: var(--t-md); font-weight: 800; }
+  .tag { font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); padding: 1px var(--s-2); border-radius: var(--r-pill);
+    background: var(--card); color: var(--ink-muted); }
+  .tag.new { background: var(--accent-soft); color: var(--accent); }
+  #stage-a .ctrl { min-height: 88px; }
+  .ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-height: 40px; margin-bottom: var(--s-3); }
+  .sw { display: inline-flex; padding: 2px; border-radius: var(--r-pill); background: var(--fill); }
+  .sw button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 var(--s-3); border: none; background: none;
+    border-radius: var(--r-pill); font-family: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--ink-muted); cursor: pointer;
+    transition: background-color var(--dur-base) var(--ease), color var(--dur-base) var(--ease); }
+  .sw button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
+  .sw button:focus-visible, .play-btn:focus-visible, .chk:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rec { font-size: var(--t-xs); font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 0 6px; border-radius: var(--r-pill); line-height: 18px; }
+  .play-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 var(--s-4) 0 var(--s-3); border: none; border-radius: var(--r-pill);
+    background: var(--ink); color: var(--paper); font-family: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer; }
+  .play-btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .play-btn:active { opacity: .6; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: var(--t-sm); color: var(--ink-muted); cursor: pointer; border-radius: var(--r-pill); padding: 0 var(--s-2); }
+  .chk input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+  .why { width: 300px; flex: none; padding-top: 88px; }
+  .why h3 { font-size: var(--t-md); font-weight: 800; margin: 0 0 var(--s-2); }
+  .why p { font-size: var(--t-base); color: var(--ink-muted); line-height: 1.75; margin: 0 0 var(--s-3); }
+  .why b { color: var(--ink); font-weight: 700; }
+
+  /* 手機框：transform 讓裡面的 position: fixed（sheet、遮罩）以手機框為準 */
+  .device { position: relative; width: 393px; height: 745px; overflow: hidden; border-radius: 28px; background: var(--paper);
+    box-shadow: var(--shadow-2); transform: translateZ(0); isolation: isolate; }
+  .device .screen { height: 100%; }
+  .device .edge-top { display: none; }
+
+  /* A 段的週列對齊線 */
+  .guide { position: absolute; left: -12px; width: calc(393px * 3 + 28px * 2 + 24px); height: 0; border-top: 1.5px dashed var(--over); z-index: 5; pointer-events: none; }
+  .guide span { position: absolute; left: 0; top: -22px; font-size: var(--t-xs); font-weight: 700; color: var(--over); background: var(--raised); padding: 0 var(--s-1); }
+
+  /* 只給樣張的元件條（C3）：不是整支手機 */
+  .strip { width: 393px; background: var(--paper); border-radius: 20px; box-shadow: var(--shadow-1); overflow: hidden; }
+  .strip.screen { height: auto; display: block; }
+  .strip-rest { padding: var(--s-5) 0; }
+  .strip .tr-rest { position: relative; left: auto; right: auto; bottom: auto; margin: 0 var(--s-5); }
+  .strip-sheet { padding-top: var(--s-4); background: color-mix(in srgb, var(--ink) 55%, var(--paper)); }
+  .mock-sheet { background: var(--card); border-radius: var(--r-btn) var(--r-btn) 0 0; box-shadow: var(--shadow-3); }
+  .mock-sheet .tr-sheet-body { padding-bottom: var(--s-5); }
+  .strip-sets { padding: var(--s-4) var(--s-5) var(--s-2); }
+  .c3-row { display: flex; gap: 28px; align-items: flex-start; margin-bottom: var(--s-6); }
+  .c3-lbl { width: 300px; flex: none; padding-top: var(--s-2); }
+  .c3-lbl b { display: block; font-size: var(--t-md); font-weight: 800; margin-bottom: var(--s-1); }
+  .c3-lbl span { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.7; }
+  .c3-cols { display: flex; gap: 28px; }
+
+  /* ═══ 改版元件（樣張實作；要進產品時照這裡的數字搬進 app.css） ═══ */
+
+  /* A｜訓練頁天空裡的主數字：骨架同今日頁 .gauge，主數字列與下一列的高度固定，換日期時天空不會變高變矮 */
+  .sky .gauge.tr-gauge { padding-bottom: 0; }
+  .tr-gauge .gauge-top > div { min-height: var(--row-num, 51px); }
+  .tr-gauge .gauge-num.is-word { font-family: var(--font-body); font-size: var(--t-hero); font-weight: 800; letter-spacing: var(--track-hero); line-height: 1; }
+  .tr-gauge.is-quiet .gauge-num { color: var(--ink-muted); }
+  .tr-gauge .gauge-meta { margin-top: 2px; min-height: 32px; gap: var(--s-3); }
+  .tr-gauge .tr-sub { font-size: var(--t-sm); color: var(--ink-muted); letter-spacing: var(--track-xs); white-space: nowrap; }
+  .tr-gauge .tr-sub .n { font-family: var(--font-num); }
+  .sky-go { position: relative; min-height: 32px; padding: 0 var(--s-4); border: none; border-radius: var(--r-pill);
+    background: var(--accent); color: var(--on-accent); font-family: inherit; font-size: var(--t-sm); font-weight: 700; letter-spacing: var(--track-xs);
+    box-shadow: var(--shadow-2); cursor: pointer; -webkit-appearance: none; appearance: none; transition: transform var(--dur-base) var(--ease); }
+  .sky-go::before { content: ''; position: absolute; inset: -6px 0; }
+  .sky-go:active { transform: translateY(1px); }
+  .sky-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .sky-acts { display: flex; align-items: center; }
+  .sky-acts .tr-ib { color: var(--ink); }
+  .tr-body { padding: var(--s-3) var(--s-5) 0; }
+  .tr-body > .tr-sec:first-child { margin-top: var(--s-1); }
+
+  /* B1｜照課表開始 */
+  .start-list { list-style: none; margin: 0; padding: 0; }
+  .rec-tag { display: inline-block; margin-left: var(--s-2); padding: 0 6px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent);
+    font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); line-height: 18px; vertical-align: 1px; }
+  .go-ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent); }
+  .go-ic svg { width: 14px; height: 14px; }
+  .go-ic .tri { fill: currentColor; stroke: none; }
+  .tr-row.is-blank .nm { color: var(--accent); }
+  .tr-row.is-blank .go-ic { background: var(--fill); }
+
+  /* B1｜子頁（課表、分析）：從右邊滑進來 */
+  .subpage { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; background: var(--paper);
+    transform: translateX(100%); visibility: hidden;
+    transition: transform var(--dur-mid) var(--ease-sheet), visibility 0s linear var(--dur-mid); }
+  .subpage.is-open { transform: none; visibility: visible; transition: transform 452ms var(--spring-open), visibility 0s; }
+  .subpage .tr-scroll { padding-top: var(--s-2); }
+
+  .prog-note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.6; margin: var(--s-1) 0 0; }
+
+  /* A｜今天還沒練：六個肌群恢復了沒。高度＝主數字列＋下一列，換日期時天空不變高；寬度讓出右邊的月亮 */
+  .tr-gauge .rec-box { height: calc(var(--row-num, 51px) + 34px); display: flex; flex-direction: column; justify-content: space-between; padding: 2px 0 var(--s-1); }
+  .rec-head { display: flex; align-items: baseline; gap: var(--s-2); }
+  .rec-cap { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .rec-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 84px); gap: 6px var(--s-3); }
+  .rec-grid .rn { font-size: var(--t-xs); font-weight: 700; color: var(--ink); letter-spacing: var(--track-xs); white-space: nowrap; }
+  .rec-grid .rt { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); white-space: nowrap; }
+  .rec-grid.is-bar li { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 3px; }
+  .rec-grid.is-bar .rb { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--sky-track); overflow: hidden; }
+  .rec-grid.is-bar .rb i { display: block; height: 100%; border-radius: 2px; background: var(--rule-field); transform-origin: left center; }
+  .rec-grid.is-bar li.is-ok .rb i { background: var(--accent); }
+  .rec-grid.is-bar li.is-ok .rt { color: var(--ink); font-weight: 600; }
+  .rec-grid.is-pill li { display: flex; align-items: center; justify-content: center; gap: 4px; height: 26px; border-radius: var(--r-pill); }
+  .rec-grid.is-pill li.is-ok { background: var(--card); box-shadow: var(--shadow-1); }
+  .rec-grid.is-pill li:not(.is-ok) { border: 1.5px dashed var(--rule-field); }
+  .rec-grid.is-pill li:not(.is-ok) .rn { color: var(--ink-muted); font-weight: 600; }
+  .screen .rec-grid.is-pill svg { width: 12px; height: 12px; color: var(--accent); stroke-width: 2.8; }
+
+  /* B｜開始訓練 sheet */
+  .start-sheet .tr-sheet-body { padding-top: var(--s-1); }
+  .sheet-note { margin: 0 0 var(--s-3); font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .tr-row .sub .wait { color: var(--ink); }
+
+  /* C4｜勾完一組就知道破紀錄 */
+  .c4 .set { position: relative; }
+  .c4 .tr-check { position: relative; overflow: visible; }
+  .pr-tag { position: absolute; top: 0; right: calc(52px + var(--s-2) + var(--s-1)); z-index: 2; display: inline-flex; align-items: center; gap: 3px;
+    height: 16px; padding: 0 6px 0 5px; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: 0 0 0 1.5px var(--card);
+    font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); line-height: 1; pointer-events: none;
+    animation: pr-tag-in 452ms var(--spring-open) both; }
+  .screen .pr-tag svg { width: 8px; height: 11px; stroke: none; }
+  .pr-tag .pole { fill: var(--paper); }
+  .pr-tag .cloth, .ex-head .sub .cloth { fill: var(--clay); }
+  @keyframes pr-tag-in { from { opacity: 0; transform: translateY(4px) scale(.9); } }
+  .ex-head .sub.is-pr { color: var(--ink); gap: 4px; }
+  .ex-head .sub.is-pr b { font-weight: 800; }
+  .screen .ex-head .sub svg { width: 8px; height: 11px; stroke: none; }
+  .ex-head .sub .pole { fill: var(--ink); }
+  .pr-burst { position: absolute; inset: 0; pointer-events: none; }
+  .pr-burst .ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 3px var(--accent); animation: pr-ring 520ms cubic-bezier(.23, 1, .32, 1) both; }
+  .pr-burst .spark { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--clay);
+    animation: pr-spark 560ms cubic-bezier(.23, 1, .32, 1) both; }
+  .pr-burst .spark:nth-child(odd) { background: var(--accent); }
+  .tr-check.pr-pop { animation: pr-pop 420ms var(--spring-pop) both; }
+  @keyframes pr-ring { from { transform: scale(.9); opacity: .6; } to { transform: scale(1.75); opacity: 0; } }
+  @keyframes pr-spark { 0% { transform: rotate(var(--a)) translateY(-16px) scale(.5); opacity: 0; } 25% { opacity: 1; } 100% { transform: rotate(var(--a)) translateY(-40px) scale(1); opacity: 0; } }
+  @keyframes pr-pop { from { transform: scale(.86); } }
+  /* 減少動態：不放光暈與星點，勾只換一下顏色 */
+  .set.done .tr-check.pr-flash { background: var(--ink); transition: background-color var(--dur-base) var(--ease); }
+
+  /* C1｜確認 sheet（樣張自己開關；產品走 SpringSheet） */
+  .demo-scrim { opacity: 0; pointer-events: none; transition: opacity var(--dur-fast) linear; }
+  .demo-scrim.is-open { opacity: 1; pointer-events: auto; transition: opacity var(--dur-sheet) var(--ease-sheet); }
+  .demo-sheet { transform: translateY(105%); visibility: hidden;
+    transition: transform 564ms var(--spring-close), visibility 0s linear 564ms; }
+  .demo-sheet.is-open { transform: none; visibility: visible; transition: transform 452ms var(--spring-open), visibility 0s; }
+  .confirm-line { margin: 0 0 var(--s-5); font-size: var(--t-base); color: var(--ink-muted); line-height: 1.6; }
+  .confirm-line b { color: var(--ink); font-family: var(--font-num); }
+  .confirm-acts { display: flex; gap: var(--s-2); }
+  .confirm-acts > * { flex: 1; justify-content: center; height: 52px; min-height: 52px; }
+
+  /* C2｜離開訓練中之後，每個分頁底部列上方的「訓練中」小條（深色 pill，同休息條與復原提示的語言） */
+  .screen.has-live .main.has-floating-bar .timeline { padding-bottom: calc(var(--bar-h) + 44px + var(--s-2) + var(--s-4)); }
+  .screen.has-live .fog { height: calc(var(--fog-h) + 44px + var(--s-2)); }
+  .live-bar { position: absolute; left: var(--s-5); right: var(--s-5); bottom: calc(var(--bar-h) + var(--s-1)); z-index: 3;
+    display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-3) 0 6px; border: none; border-radius: var(--r-pill);
+    background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2); font-family: inherit; text-align: left; cursor: pointer;
+    -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+  .live-bar:active { opacity: .7; }
+  .live-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .live-bar .ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); }
+  .screen .live-bar .ic svg { width: 18px; height: 18px; stroke-width: 2; }
+  .live-bar .nm { font-size: var(--t-base); font-weight: 700; }
+  .live-bar .lbl { font-size: var(--t-base); font-weight: 600; opacity: .7; }
+  .live-bar .t { margin-left: auto; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-md); font-weight: 700; }
+  .screen .live-bar .chev { width: 14px; height: 14px; opacity: .7; }
+
+  /* C3｜組列小標改成字：比數字寬，往左長 */
+  .rpe-badge.is-word { font-family: var(--font-body); padding: 0 4px; }
+
+  /* D1｜完成畫面 */
+  .d1 { background: var(--paper); }
+  .d1-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  .d1-art { display: block; width: 100%; height: auto; aspect-ratio: 393 / 196; }
+  .d1-body { padding: 0 var(--s-5) var(--s-4); text-align: center; }
+  .d1-eyebrow { margin: 0; font-size: var(--t-sm); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .d1-total { margin-top: var(--s-2); display: flex; align-items: baseline; justify-content: center; gap: var(--s-1); }
+  .d1-num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-display); font-weight: 900; letter-spacing: var(--track-display); line-height: .9; }
+  .d1-unit { font-size: var(--t-lg); font-weight: 700; letter-spacing: var(--track-lg); }
+  .d1-cap { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .d1-stats { list-style: none; margin: var(--s-3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .d1-stats li { display: flex; flex-direction: column; align-items: center; gap: 2px; border-left: 1px solid var(--rule); }
+  .d1-stats li:first-child { border-left: none; }
+  .d1-stats b { font-family: var(--font-num); font-size: var(--t-lg); font-weight: 800; letter-spacing: var(--track-lg); line-height: 1.2; }
+  .d1-stats span { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .d1-sec { margin: var(--s-4) 0 var(--s-2); text-align: left; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+  .d1-hl { list-style: none; margin: 0; padding: 0; text-align: left; }
+  .d1-hl .tr-row { min-height: 48px; }
+  .d1-hl .nm { white-space: normal; }
+  .d1-ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--plate); color: var(--accent); }
+  .screen .d1-ic svg { width: 16px; height: 16px; stroke-width: 2; }
+  .d1-ic .flag-cloth { fill: var(--clay); stroke: none; }
+  .d1-up { flex: none; font-family: var(--font-num); font-size: var(--t-xs); font-weight: 700; color: var(--accent); background: var(--accent-soft);
+    padding: 2px var(--s-2); border-radius: var(--r-pill); letter-spacing: var(--track-xs); }
+  .d1-tags { display: flex; gap: var(--s-2); }
+  .d1-tags span { min-width: 40px; padding: var(--s-1) var(--s-3); border-radius: var(--r-pill); background: var(--raised); font-size: var(--t-sm); font-weight: 600; }
+
+  /* D1 進場：山坡升起 → 太陽升到山頂後面 → 旗桿立起、小旗升上去，全長 1.2 秒；數字由 JS 從 0 數上來 */
+  .d1 .d1-far, .d1 .d1-mid, .d1 .d1-sun, .d1 .d1-pole, .d1 .d1-cloth, .d1 .rise { will-change: transform; }
+  .d1 .d1-pole { transform-box: fill-box; transform-origin: 50% 100%; }
+  .d1.is-play .d1-art { animation: d1-fade 200ms ease-out both; }
+  .d1.is-play .d1-mid  { animation: d1-up 520ms cubic-bezier(.23, 1, .32, 1) both; --from: 64px; }
+  .d1.is-play .d1-far  { animation: d1-up 600ms cubic-bezier(.23, 1, .32, 1) 60ms both; --from: 96px; }
+  .d1.is-play .d1-sun  { animation: d1-up 640ms cubic-bezier(.2, .8, .2, 1) 300ms both; --from: 84px; }
+  .d1.is-play .d1-pole { animation: d1-pole 200ms cubic-bezier(.23, 1, .32, 1) 620ms both; }
+  .d1.is-play .d1-cloth { animation: d1-flag 400ms var(--spring-pop) 800ms both; }
+  .d1.is-play .rise { animation: d1-rise 260ms cubic-bezier(.23, 1, .32, 1) both; animation-delay: var(--d, 0ms); }
+  @keyframes d1-up { from { transform: translateY(var(--from)); } }
+  @keyframes d1-pole { from { transform: scaleY(0); } }
+  @keyframes d1-flag { from { transform: translateY(22px); opacity: 0; } 30% { opacity: 1; } }
+  @keyframes d1-rise { from { opacity: 0; transform: translateY(8px); } }
+  @keyframes d1-fade { from { opacity: 0; } }
+  /* 減少動態：不位移不縮放，整頁 120ms 淡入（DESIGN「互動與動效」REDUCED_FADE_MAX_MS） */
+  .d1.is-reduced.is-play :is(.d1-art, .d1-mid, .d1-far, .d1-sun, .d1-pole, .d1-cloth) { animation: none; }
+  .d1.is-reduced.is-play .d1-scroll { animation: d1-fade 120ms ease-out both; }
+  .d1.is-reduced.is-play .rise { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .d1.is-play :is(.d1-art, .d1-mid, .d1-far, .d1-sun, .d1-pole, .d1-cloth, .rise) { animation: none; }
+    .d1.is-play .d1-scroll { animation: d1-fade 120ms ease-out both; }
+    .demo-sheet, .demo-sheet.is-open, .subpage, .subpage.is-open { transition-duration: 10ms; }
+    .meal-toast { animation: d1-fade 120ms ease-out both !important; }
+    .pr-tag, .ex-head .sub { animation: none !important; }
+    .day-done { animation: d1-fade 120ms ease-out both !important; }
+  }
+
+  /* D2｜記完一餐：底部浮出一句（深色 pill，同復原提示），約 2 秒後淡出 */
+  .meal-toast { position: absolute; left: 0; right: 0; bottom: calc(var(--bar-h) + var(--s-2)); z-index: 3; display: flex; justify-content: center; pointer-events: none;
+    animation: toast-in 452ms var(--spring-open) both; }
+  .meal-toast.is-out { animation: toast-out var(--dur-mid) var(--ease) both; }
+  .meal-toast span { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-4); border-radius: var(--r-pill);
+    background: var(--ink); color: var(--paper); font-size: var(--t-base); font-weight: 600; box-shadow: var(--shadow-2); }
+  .meal-toast b { font-family: var(--font-num); font-weight: 800; margin: 0 .25em; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(12px); } }
+  @keyframes toast-out { to { opacity: 0; } }
+  .item.is-new { animation: d1-rise 260ms cubic-bezier(.23, 1, .32, 1) both; }
+  /* D2-b｜一天的收尾：主數字下面一行，疊在山坡帶上緣、不推動版面 */
+  .day-done { position: absolute; left: var(--s-5); top: calc(100% - var(--s-1)); z-index: 2; margin: 0; display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px var(--s-3) 2px var(--s-2); border-radius: var(--r-pill); background: var(--sky-track);
+    font-size: var(--t-sm); font-weight: 600; color: var(--ink); letter-spacing: var(--track-xs);
+    animation: toast-in 452ms var(--spring-open) both; }
+  .day-done b { font-family: var(--font-num); font-weight: 800; }
+  .screen .day-done svg { width: 14px; height: 14px; color: var(--accent); stroke-width: 2.4; }
+
+  :root {
+    /* sheet 開＝SPRING_SHEET_OPEN（k439／c33.5，452ms）、關＝SPRING_SHEET_CLOSE（k300／c34.6）、彈一下＝k400／c24（ζ .6）；數值是解彈簧方程取樣成 linear() */
+    --spring-open: linear(0, 0.0659, 0.2093, 0.3724, 0.5335, 0.6726, 0.7814, 0.8658, 0.9258, 0.9652, 0.9907, 1.0049, 1.0121, 1.0145, 1.0141, 1.0122, 1.0098, 1.0075, 1.0054, 1.0036, 1.0023, 1.0013, 1.0007, 1.0002, 1);
+    --spring-close: linear(0, 0.0674, 0.202, 0.351, 0.4896, 0.6081, 0.7043, 0.7799, 0.838, 0.8818, 0.9144, 0.9383, 0.9558, 0.9685, 0.9776, 0.9842, 0.9888, 0.9921, 0.9945, 0.9961, 0.9973, 0.9981, 0.9987, 0.9991, 1);
+    --spring-pop: linear(0, 0.121, 0.374, 0.64, 0.855, 0.997, 1.071, 1.094, 1.086, 1.063, 1.037, 1.016, 1.002, 0.994, 0.991, 0.992, 0.994, 0.996, 0.998, 1);
+  }
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <h1>訓練分頁改版：樣張</h1>
+  <p>比四件事：<b>A</b> 訓練頁頂端跟飲食頁長一樣、<b>B</b> 訓練首頁只放這一天、<b>C</b> 訓練中（結束前先問一次、吃力程度一種講法、破紀錄當下就看得到）、<b>D</b> 練完和記完一餐的回饋。</p>
+  <p>每段左邊是現在、右邊是改版；切換鈕上標「建議」的是我推薦的。手機畫面可以點、可以捲。</p>
+  <p>還要你選的：<b>A 的肌群恢復怎麼畫（量尺或膠囊）</b>、<b>C4 破紀錄在動作卡上停多久（一下或一直在）</b>、<b>D2-a、D2-b 或飲食不動</b>。其他看過沒意見就照做。</p>
+</header>
+
+<!-- ═══════════ A ═══════════ -->
+<section class="part" id="part-a">
+  <h2><span class="k">A</span>頂端統一</h2>
+  <div class="stage" id="stage-a">
+    <div class="col">
+      <div class="col-h">飲食頁 <span class="tag">現在・當基準</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-today" data-ref="today"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">訓練頁 <span class="tag">現在</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-train"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">訓練頁 <span class="tag new">改版</span></div>
+      <div class="ctrl">
+        <div class="sw" role="group" aria-label="這天的狀態" data-seg="a-state">
+          <button type="button" aria-pressed="true" data-val="live">進行中</button>
+          <button type="button" aria-pressed="false" data-val="done">練過</button>
+          <button type="button" aria-pressed="false" data-val="todo">今天沒練</button>
+          <button type="button" aria-pressed="false" data-val="past">過去沒練</button>
+        </div>
+        <div class="sw" role="group" aria-label="肌群恢復的畫法" data-seg="a-rec">
+          <button type="button" aria-pressed="true" data-val="bar">恢復：量尺 <span class="rec">建議</span></button>
+          <button type="button" aria-pressed="false" data-val="pill">恢復：膠囊</button>
+        </div>
+      </div>
+      <div class="device" data-train="live" id="train-a"></div>
+    </div>
+    <div class="why">
+      <h3>週列對齊、天空裡一行大字</h3>
+      <p>現在訓練頁的日期列掉在天空下面，跟飲食頁差一截，切分頁時會跳。</p>
+      <p>改版把它放回天空裡，跟飲食頁<b>同一個高度</b>（紅色虛線）。天空裡多一行大字，一眼看出這天：在練、練了多少，或沒練。</p>
+      <p><b>今天還沒練</b>時，那一行換成六個肌群恢復了沒，挑課表前先看一眼。兩種畫法：<b>量尺</b>跟飲食頁的營養素同一種長相，看得出還差多少；<b>膠囊</b>只分好了沒。</p>
+      <p>上面切換這天的情況。右上兩顆小圖示是課表與分析的入口，可以點。</p>
+    </div>
+    <div class="guide" id="guide-a" hidden><span>週列</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ B ═══════════ -->
+<section class="part" id="part-b">
+  <h2><span class="k">B</span>首頁只放這一天</h2>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">訓練頁 <span class="tag">現在</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-train"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">首頁・今天還沒練 <span class="tag new">改版</span></div>
+      <div class="ctrl"></div>
+      <div class="device" id="dev-b1" data-train="todo"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">按右下角 ＋ <span class="tag new">改版</span></div>
+      <div class="ctrl"></div>
+      <div class="device" id="dev-b-sheet" data-train="todo" data-sheet-open></div>
+    </div>
+    <div class="why">
+      <h3>這天的事放首頁，跨日的事收起來</h3>
+      <p>現在首頁把這天的訓練、課表、分析排在一起，換日期時只有最上面會變。</p>
+      <p>改版首頁只放這一天：沒練時上面看恢復，下面就是課表，點一下照它開始。</p>
+      <p><b>建議</b>的那份＝最久沒做、而且練到的肌群都恢復了。首頁清單和右下角 ＋ 打開的「開始訓練」標的是同一份。</p>
+      <p>課表的新增、編輯和訓練分析，收進天空右上兩顆鈕（點得進去）。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ C ═══════════ -->
+<section class="part" id="part-c">
+  <h2><span class="k">C</span>訓練中</h2>
+
+  <h3 class="sub-h">C1　結束前先問一次</h3>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">訓練中 <span class="tag">現在</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-session"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">訓練中 <span class="tag new">改版</span></div>
+      <div class="ctrl"></div>
+      <div class="device" id="dev-c1" data-tpl="tpl-session-new"></div>
+    </div>
+    <div class="why">
+      <h3>結束前先問一次</h3>
+      <p>現在「完成訓練」一按就結束，出來的表標題還寫「訓練完成」，誤按了也看不出來。</p>
+      <p>改版：鈕的位置和樣子不變，按下去先問「結束這次訓練？」，還有沒勾的組會講清楚。按「結束」才真的結束，接著進 D1 的完成畫面。</p>
+      <p>右邊那支按「完成訓練」試試。</p>
+    </div>
+  </div>
+
+  <h3 class="sub-h">C2　離開訓練中，別的分頁也看得到</h3>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">飲食頁・訓練中 <span class="tag new">改版</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-today" data-live="run"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">飲食頁・休息中 <span class="tag new">改版</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-today" data-live="rest"></div>
+    </div>
+    <div class="why">
+      <h3>底部列上方一條</h3>
+      <p>現在離開訓練中，飲食頁、設定頁都看不出還在練（同 A 段第一支）。</p>
+      <p>改版：每個分頁的底部列上方多一條，寫課表名和時間；休息時改成休息倒數。點一下回到訓練中。</p>
+      <p>App 關掉再開也還在。</p>
+    </div>
+  </div>
+
+  <h3 class="sub-h">C3　「還能再做幾下」只用一種講法</h3>
+  <div class="c3-cols" style="margin-bottom: var(--s-2)">
+    <div class="c3-lbl"></div>
+    <div class="col"><div class="col-h">現在 <span class="tag">三處三種講法</span></div></div>
+    <div class="col"><div class="col-h">改版 <span class="tag new">一種講法</span></div></div>
+  </div>
+  <div class="c3-row">
+    <div class="c3-lbl"><b>① 休息條上的問題</b><span>一個動作最後一組勾完時問一次，時機不變。按鈕順序改成從力竭排起。</span></div>
+    <div class="strip screen strip-rest" data-rest="old"></div>
+    <div class="strip screen strip-rest" data-rest="new"></div>
+  </div>
+  <div class="c3-row">
+    <div class="c3-lbl"><b>② 編輯一組</b><span>不再要人填 6 到 10 再看提示換算，直接選「剩幾下」。存的資料不變。</span></div>
+    <div class="strip screen strip-sheet" data-sheet="old"></div>
+    <div class="strip screen strip-sheet" data-sheet="new"></div>
+  </div>
+  <div class="c3-row">
+    <div class="c3-lbl"><b>③ 組號旁的小標</b><span>休息條點「剩 1」，列上就寫「剩1」，不會變成看不懂的 9。力竭寫「竭」。</span></div>
+    <div class="strip screen strip-sets" data-sets="old"></div>
+    <div class="strip screen strip-sets" data-sets="new"></div>
+  </div>
+</section>
+
+<section class="part" id="part-c4" style="margin-top: 0">
+  <h3 class="sub-h">C4　勾完一組就知道破紀錄</h3>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">勾第 3 組 <span class="tag new">改版</span></div>
+      <div class="ctrl">
+        <div class="sw" role="group" aria-label="第 3 組的重量" data-seg="c4-weight">
+          <button type="button" aria-pressed="true" data-val="62.5">62.5 kg × 8</button>
+          <button type="button" aria-pressed="false" data-val="65">65 kg × 8</button>
+        </div>
+      </div>
+      <div class="device" id="dev-c4a" data-tpl="tpl-session" data-c4="flash"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">同一下，卡頭一直留著 <span class="tag new">改版</span></div>
+      <div class="ctrl">
+        <button class="play-btn" type="button" data-act="c4-reset"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>兩支都重來</button>
+      </div>
+      <div class="device" id="dev-c4b" data-tpl="tpl-session" data-c4="stay"></div>
+    </div>
+    <div class="why">
+      <h3>破紀錄當下就看得到</h3>
+      <p>現在勾完一組沒有任何提示，破了紀錄也要等練完才知道。</p>
+      <p>改版：勾完的那一組如果推估極限比這個動作以前最好的高，勾會亮一下，那一列出「新紀錄」，卡頭第二行寫「新高 +3.3」。一個動作只標這次最好的那一組。</p>
+      <p>臥推以前最好 79 kg。點<b>第 3 組的勾</b>試試；上面可以把重量換成 65 看差多少。</p>
+      <p>卡頭那行兩種：<b>左</b>亮 2.5 秒後換回「胸部」，<b>右</b>一直留著。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ D ═══════════ -->
+<section class="part" id="part-d">
+  <h2><span class="k">D</span>完成的回饋</h2>
+
+  <h3 class="sub-h">D1　練完的畫面</h3>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">完成 <span class="tag">現在</span></div>
+      <div class="ctrl"></div>
+      <div class="device" data-tpl="tpl-finish"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">完成 <span class="tag new">改版</span></div>
+      <div class="ctrl">
+        <button class="play-btn" type="button" data-act="d1-replay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>重播</button>
+        <label class="chk"><input type="checkbox" data-act="d1-reduced" />模擬「減少動態」</label>
+      </div>
+      <div class="device" id="dev-d1"></div>
+    </div>
+    <div class="why">
+      <h3>登頂，再告訴你這次哪裡不一樣</h3>
+      <p>現在練完只跳出一張清單，按完成就回去，很平淡。</p>
+      <p>改版：整頁的登頂畫面，山坡升起、小旗升上去、總重量從 0 數上來，接著列出<b>這次的亮點</b>：新紀錄、比上次同一份課表多多少、第一次做的動作。沒有亮點就不出那段，不硬湊。</p>
+      <p>勾「減少動態」看只淡入的樣子。</p>
+    </div>
+  </div>
+
+  <h3 class="sub-h">D2　記完一餐</h3>
+  <div class="stage">
+    <div class="col">
+      <div class="col-h">記完晚餐 <span class="tag">現在</span></div>
+      <div class="ctrl">
+        <button class="play-btn" type="button" data-act="d2-play" data-target="dev-d2-old"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>播放</button>
+      </div>
+      <div class="device" id="dev-d2-old" data-tpl="tpl-today" data-d2="old"></div>
+    </div>
+    <div class="col">
+      <div class="col-h">記完晚餐 <span class="tag new">改版</span></div>
+      <div class="ctrl">
+        <div class="sw" role="group" aria-label="方案" data-seg="d2-variant">
+          <button type="button" aria-pressed="false" data-val="a">D2-a</button>
+          <button type="button" aria-pressed="true" data-val="b">D2-b <span class="rec">建議</span></button>
+        </div>
+        <button class="play-btn" type="button" data-act="d2-play" data-target="dev-d2-new"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>播放</button>
+      </div>
+      <div class="device" id="dev-d2-new" data-tpl="tpl-today" data-d2="b"></div>
+    </div>
+    <div class="why">
+      <h3>記完有一句話，記滿一天有收尾</h3>
+      <p>現在記完一餐，只有圓點和踏腳石亮一下。</p>
+      <p><b>D2-a</b>：再從底部浮出一句結果，約 2 秒後消失。</p>
+      <p><b>D2-b</b>：再加一天的收尾——三餐都記了的那一刻，大數字下面多一行「今天記完了」和連續記錄天數（點心不算必要）。</p>
+      <p>慶祝的是<b>有記</b>，不是吃了多少：不用綠色，不說「達標」。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 現況畫面（從產品 build 實際渲染出來的 DOM） ═══════════ -->
+<template id="tpl-today"><div class="screen"><main class="main has-floating-bar"><div class="main" data-screen="today"><div class="timeline"><div class="sky"><div class="scene" aria-hidden="true"><svg class="scene-clouds" viewBox="0 0 120 40" preserveAspectRatio="xMidYMid meet"><g fill="var(--snow)" opacity=".9"><ellipse cx="22" cy="24" rx="20" ry="8.5"></ellipse><ellipse cx="38" cy="17" rx="15" ry="10"></ellipse><ellipse cx="54" cy="25" rx="17" ry="7"></ellipse><ellipse cx="96" cy="24" rx="12" ry="5.5"></ellipse><ellipse cx="105" cy="20.5" rx="8.5" ry="6"></ellipse></g></svg><svg class="scene-moon" viewBox="-30 -30 60 60"><defs><radialGradient id="_r_3_"><stop offset=".5" stop-color="var(--moon)" stop-opacity=".7"></stop><stop offset="1" stop-color="var(--moon)" stop-opacity="0"></stop></radialGradient></defs><circle r="28" fill="url(#_r_3_)"></circle><path d="M3.6-15.8a16 16 0 1 0 9.6 26.4 13 13 0 0 1-9.6-26.4z" fill="var(--snow)"></path></svg><svg class="scene-hills" viewBox="0 28 393 48"><path d="M0 31 C 90 30, 180 30, 240 28 S 326 -10, 393 -4 V76 H0Z" fill="var(--hill-far)"></path><path d="M0 37 C 90 33, 180 33, 250 30 S 350 16, 393 22 V76 H0Z" fill="var(--hill-mid)"></path><g transform="translate(286 20)"><rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--tree)"></rect><circle cx="0" cy="2" r="11" fill="var(--tree)"></circle></g><path d="M0 42 C 90 32, 200 35, 290 42 S 370 39, 393 41 V76 H0Z" fill="var(--paper)"></path><path d="M36 60 C 90 52, 120 66, 168 58 S 230 53, 262 60 S 330 67, 358 59" fill="none" stroke="var(--ink-faint)" stroke-opacity=".7" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round"></path><g class="stone is-done" transform="translate(36 60)"><g class="stone-mark"><circle r="9" fill="var(--accent)"></circle><path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g><text x="14" y="4.5" class="stone-label">早餐</text></g><g class="stone is-done" transform="translate(132 59)"><g class="stone-mark"><circle r="9" fill="var(--accent)"></circle><path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g><text x="14" y="4.5" class="stone-label">午餐</text></g><g class="stone is-next" transform="translate(232 55)"><circle r="13" fill="var(--paper)"></circle><circle class="stone-pulse" r="13" fill="none" stroke="var(--accent)" stroke-width="1.5"></circle><circle r="8" fill="none" stroke="var(--accent)" stroke-width="2.4"></circle><text x="23" y="4.5" class="stone-label">晚餐</text></g><g class="stone is-todo" transform="translate(326 63)"><circle r="6" fill="var(--paper)" stroke="var(--ink-faint)" stroke-width="2"></circle><text x="14" y="4.5" class="stone-label">點心</text></g></svg><button type="button" class="stone-hit" tabindex="-1" data-meal="breakfast" style="--x: 36; --y: 60;"></button><button type="button" class="stone-hit" tabindex="-1" data-meal="lunch" style="--x: 132; --y: 59;"></button><button type="button" class="stone-hit" tabindex="-1" data-meal="dinner" style="--x: 232; --y: 55;"></button><button type="button" class="stone-hit" tabindex="-1" data-meal="snack" style="--x: 326; --y: 63;"></button></div><header class="topbar"><div class="datectl" tabindex="-1"><div class="datectl-head"><h1 class="date-title"><button type="button" class="datectl-title" aria-expanded="false">週一 11/23<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button></h1></div><div class="datectl-panel" style="height: auto; opacity: 1;"><div class="datectl-grid datectl-week" role="group" aria-label="這一週"><button type="button" class="datectl-day is-today is-marked" data-date="2026-11-23" aria-pressed="true" aria-label="11月23日 週一，今天，有紀錄" style="--r: 0;"><span class="dw">一</span><span class="n">23</span></button><button type="button" class="datectl-day" data-date="2026-11-24" aria-pressed="false" aria-label="11月24日 週二" style="--r: 0;"><span class="dw">二</span><span class="n">24</span></button><button type="button" class="datectl-day" data-date="2026-11-25" aria-pressed="false" aria-label="11月25日 週三" disabled="" style="--r: 0;"><span class="dw">三</span><span class="n">25</span></button><button type="button" class="datectl-day" data-date="2026-11-26" aria-pressed="false" aria-label="11月26日 週四" disabled="" style="--r: 0;"><span class="dw">四</span><span class="n">26</span></button><button type="button" class="datectl-day" data-date="2026-11-27" aria-pressed="false" aria-label="11月27日 週五" disabled="" style="--r: 0;"><span class="dw">五</span><span class="n">27</span></button><button type="button" class="datectl-day" data-date="2026-11-28" aria-pressed="false" aria-label="11月28日 週六" disabled="" style="--r: 0;"><span class="dw">六</span><span class="n">28</span></button><button type="button" class="datectl-day" data-date="2026-11-29" aria-pressed="false" aria-label="11月29日 週日" disabled="" style="--r: 0;"><span class="dw">日</span><span class="n">29</span></button></div></div></div></header><section class="gauge" aria-label="週一 11/23 熱量"><div class="gauge-top"><div><div class="gauge-lead">還能吃</div><div aria-live="polite"><span class="gauge-num">1238</span><span class="gauge-unit">卡</span></div></div></div><div class="gauge-meta"><div class="bar" aria-hidden="true"><div class="fill" style="width: 30.367467%;"></div></div><div class="gauge-side pair" role="group" aria-label="已攝取 540 大卡，目標 1778 大卡"><span aria-hidden="true"><span class="cur">540</span><span class="sep">/</span><span class="tgt">1778</span></span></div></div></section></div><section class="macros" aria-label="三大營養素"><div class="macro is-protein"><div class="lbl">蛋白質</div><div class="track-box" aria-hidden="true"><div class="track"><div class="fill" style="width: 50.471802%;"></div></div></div><div class="val pair" role="group" aria-label="蛋白質 69.0 克，目標 137 克，還差 68 克"><span aria-hidden="true"><span class="cur">69.0</span><span class="sep">/</span><span class="tgt">137</span><span class="gap">差 68</span></span></div></div><div class="macro"><div class="lbl">脂肪</div><div class="track-box" aria-hidden="true"><div class="track"><div class="fill" style="width: 20.91159%;"></div></div></div><div class="val pair" role="group" aria-label="脂肪 13.5 克，目標 65 克，還差 52 克"><span aria-hidden="true"><span class="cur">13.5</span><span class="sep">/</span><span class="tgt">65</span><span class="gap">差 52</span></span></div></div><div class="macro"><div class="lbl">碳水</div><div class="track-box" aria-hidden="true"><div class="track"><div class="fill" style="width: 19.681369%;"></div></div></div><div class="val pair" role="group" aria-label="碳水 32.0 克，目標 163 克，還差 131 克"><span aria-hidden="true"><span class="cur">32.0</span><span class="sep">/</span><span class="tgt">163</span><span class="gap">差 131</span></span></div></div></section><div class="meals"><div class="node is-done"><span class="node-dot" aria-hidden="true"><svg viewBox="0 0 18 18"><path d="M5 9.2l2.6 2.6 5.4-5.6"></path></svg></span><div class="node-body"><button class="node-head" type="button"><span class="node-name">早餐</span><span class="ci-stack" aria-hidden="true"><span class="ci is-sm" data-category="未分類" aria-hidden="true" style="--s: 24px;"><svg class="ci-art" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M10 31.5C10 22.6 16.3 16.4 24 16.4s14 6.2 14 15.1" fill="none" stroke="var(--hill-mid)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.1 4.6"></path><circle cx="24" cy="14.2" r="2.2" fill="var(--hill-mid)"></circle><rect x="6" y="31" width="36" height="3.8" rx="1.9" fill="var(--hill-far)"></rect></svg></span></span><span class="node-kcal">120</span></button><ul class="items"><li class="item" data-row="101" style="opacity: 1; transform: none;"><div class="item-row"><div class="item-main"><button class="item-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除 乳清（1匙） 這一筆"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="item-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><button class="item-content" type="button" aria-expanded="false"><span class="nm-wrap"><span class="nm">乳清（1匙）</span></span><span class="kc">120</span></button></div></div></div></li></ul></div></div><div class="node is-done"><span class="node-dot" aria-hidden="true"><svg viewBox="0 0 18 18"><path d="M5 9.2l2.6 2.6 5.4-5.6"></path></svg></span><div class="node-body"><button class="node-head" type="button"><span class="node-name">午餐</span><span class="ci-stack" aria-hidden="true"><span class="ci is-sm" data-category="未分類" aria-hidden="true" style="--s: 24px;"><svg class="ci-art" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M10 31.5C10 22.6 16.3 16.4 24 16.4s14 6.2 14 15.1" fill="none" stroke="var(--hill-mid)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.1 4.6"></path><circle cx="24" cy="14.2" r="2.2" fill="var(--hill-mid)"></circle><rect x="6" y="31" width="36" height="3.8" rx="1.9" fill="var(--hill-far)"></rect></svg></span></span><span class="node-kcal">420</span></button><ul class="items"><li class="item" data-row="102" style="opacity: 1; transform: none;"><div class="item-row"><div class="item-main"><button class="item-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除 雞胸餐盒 這一筆"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="item-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><button class="item-content" type="button" aria-expanded="false"><span class="nm-wrap"><span class="nm">雞胸餐盒</span></span><span class="kc">420</span></button></div></div></div></li></ul></div></div><div class="node"><span class="node-dot" aria-hidden="true"></span><div class="node-body is-todo"><button class="todo-row" type="button"><span class="lb">晚餐</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></span></button></div></div><div class="node"><span class="node-dot" aria-hidden="true"></span><div class="node-body is-todo"><button class="todo-row" type="button"><span class="lb">點心</span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></span></button></div></div></div></div></div></main><div class="fog" aria-hidden="true"></div><div class="bottom-bar is-floating"><nav class="tabbar" aria-label="主要導覽"><button class="tab" type="button" aria-current="page" aria-label="飲食"><span class="tab-indicator" aria-hidden="true" style="transform: none; transform-origin: 50% 50%; opacity: 1;"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21"></path><path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3"></path></svg></button><button class="tab" type="button" aria-label="訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"></path></svg></button><button class="tab" type="button" aria-label="設定"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></nav><button class="cta" type="button" aria-label="記一筆"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button></div></div></template>
+<template id="tpl-train"><div class="screen"><main class="main"><div class="main" data-screen="training"><div class="sky-band"><svg class="art band-art" viewBox="0 0 393 96" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><rect width="393" height="96" fill="var(--sky)"></rect><circle cx="262" cy="38" r="24" fill="var(--sun-pale)" opacity=".6"></circle><circle cx="262" cy="38" r="15" fill="var(--sun)"></circle><g fill="var(--snow)" opacity=".9"><g transform="translate(160 22)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><g transform="translate(292 12) scale(.567)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g></g><path d="M0 64C70 44 130 48 190 60S300 42 393 54V96H0z" fill="var(--hill-far)"></path><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"></path><g transform="translate(168 70) rotate(-8)"><rect x="-13" y="-1.6" width="26" height="3.2" rx="1.6" fill="var(--ink)"></rect><rect x="-18" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"></rect><rect x="12.4" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"></rect><rect x="-21.4" y="-4" width="3.6" height="8" rx="1.8" fill="var(--ink)"></rect><rect x="17.8" y="-4" width="3.6" height="8" rx="1.8" fill="var(--ink)"></rect></g><g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g><path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"></path></svg><header class="topbar"><div class="datectl" tabindex="-1"><div class="datectl-head"><h1 class="date-title"><button type="button" class="datectl-title" aria-expanded="false">週一 11/23<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button></h1></div><div class="datectl-panel" style="height: auto; opacity: 1;"><div class="datectl-grid datectl-week" role="group" aria-label="這一週"><button type="button" class="datectl-day is-today is-marked" data-date="2026-11-23" aria-pressed="true" aria-label="11月23日 週一，今天，有紀錄" style="--r: 0;"><span class="dw">一</span><span class="n">23</span></button><button type="button" class="datectl-day" data-date="2026-11-24" aria-pressed="false" aria-label="11月24日 週二" style="--r: 0;"><span class="dw">二</span><span class="n">24</span></button><button type="button" class="datectl-day" data-date="2026-11-25" aria-pressed="false" aria-label="11月25日 週三" disabled="" style="--r: 0;"><span class="dw">三</span><span class="n">25</span></button><button type="button" class="datectl-day" data-date="2026-11-26" aria-pressed="false" aria-label="11月26日 週四" disabled="" style="--r: 0;"><span class="dw">四</span><span class="n">26</span></button><button type="button" class="datectl-day" data-date="2026-11-27" aria-pressed="false" aria-label="11月27日 週五" disabled="" style="--r: 0;"><span class="dw">五</span><span class="n">27</span></button><button type="button" class="datectl-day" data-date="2026-11-28" aria-pressed="false" aria-label="11月28日 週六" disabled="" style="--r: 0;"><span class="dw">六</span><span class="n">28</span></button><button type="button" class="datectl-day" data-date="2026-11-29" aria-pressed="false" aria-label="11月29日 週日" disabled="" style="--r: 0;"><span class="dw">日</span><span class="n">29</span></button></div></div></div></header></div><div class="tr-status-wrap" role="status" aria-live="polite"></div><div class="tr-scroll"><div class="tr-sec">進行中</div><div class="tr-card is-timeline" data-node="current"><button class="tr-row" type="button" data-workout-id="w-1"><span class="grow"><span class="nm">3 個動作</span><span class="sub">2/6 組 · 總重量 960 kg · 38 分</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div><div class="tr-sec tr-sec-act">課表<button class="tr-text-btn" type="button" data-action="new-routine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新課表</button></div><div class="tr-card" data-section="routines"><button class="tr-row" type="button" data-routine-id="r-a"><span class="grow"><span class="nm">推日</span><span class="sub">1 個動作 · 上次 11/23</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-row" type="button" data-routine-id="r-b"><span class="grow"><span class="nm">拉日</span><span class="sub">1 個動作</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-row" type="button" data-routine-id="r-c"><span class="grow"><span class="nm">腿日</span><span class="sub">1 個動作</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div><div class="tr-card tr-entry"><button class="tr-row" type="button" data-action="open-analysis"><svg class="lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-8"></path></svg><span class="grow"><span class="nm">訓練分析</span><span class="sub">1 個動作有進度 · 推估極限</span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button></div></div></div></main><div class="bottom-bar"><nav class="tabbar" aria-label="主要導覽"><button class="tab" type="button" aria-label="飲食"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21"></path><path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3"></path></svg></button><button class="tab" type="button" aria-label="訓練" aria-current="page"><span class="tab-indicator" aria-hidden="true" style="transform: none; transform-origin: 50% 50%;"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"></path></svg></button><button class="tab" type="button" aria-label="設定"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></nav><button class="cta" type="button" aria-label="開始訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button></div></div></template>
+<template id="tpl-session"><div class="screen"><main class="main"><div class="main" data-screen="training-session" data-workout-id="w-1"><div class="tr-sky"><svg class="art tr-sky-sun" viewBox="0 0 120 52" aria-hidden="true"><g fill="var(--snow)" opacity=".9" transform="translate(0 12) scale(.8)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><circle cx="94" cy="26" r="22" fill="var(--sun-pale)" opacity=".6"></circle><circle cx="94" cy="26" r="14" fill="var(--sun)"></circle></svg><svg class="art tr-sky-hills" viewBox="0 52 393 44" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><path d="M0 70C80 58 150 60 210 66S320 56 393 62V96H0z" fill="var(--hill-far)"></path><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"></path><g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g><path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"></path></svg><header class="tr-top"><button class="tr-ib" type="button" aria-label="返回（訓練繼續進行）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button><h1>訓練中</h1><button class="tr-ib is-danger" type="button" aria-label="刪除這次訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></header><div class="tr-stats" aria-live="polite"><div class="tr-stat"><span class="v" data-stat="time">38:03</span><span class="l">時長</span></div><div class="tr-stat"><span class="v" data-stat="volume"><span class="flip" style="opacity: 1; transform: none;">960</span></span><span class="l">總重量 kg</span></div><div class="tr-stat"><span class="v" data-stat="sets"><span class="flip" style="opacity: 1; transform: none;">2/6</span></span><span class="l">完成組數</span></div></div></div><div class="tr-scroll"><div class="tr-cards"><div class="ex-tl" data-node="current"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex" aria-label="槓鈴臥推" data-entry-id="we-1"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：槓鈴臥推" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="true"><span class="ex-thumb is-glyph" aria-hidden="true">胸</span><span class="grow"><span class="nm">槓鈴臥推</span><span class="sub">胸部</span></span><svg class="chev is-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="槓鈴臥推：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="槓鈴臥推：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div><div class="ex-body" style="overflow: hidden; height: auto; opacity: 1;"><button class="ex-tips is-empty" type="button" aria-label="槓鈴臥推：加要點">加要點</button><div class="set-head"><span aria-hidden="true">組</span><span aria-hidden="true">重量 kg</span><span aria-hidden="true">次數</span><button class="tr-all" type="button" aria-pressed="false" aria-label="全部完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5"></path></svg></button></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 1 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-1"><span class="no">1</span><button class="tr-val w" type="button" aria-label="第 1 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 1 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 2 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-2"><span class="no">2</span><button class="tr-val w" type="button" aria-label="第 2 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 2 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 3 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set" data-set-id="s-3"><span class="no">3</span><button class="tr-val w" type="button" aria-label="第 3 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 3 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="false" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><button class="tr-addset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新增一組</button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="滑輪下拉" data-entry-id="we-2"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：滑輪下拉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">背</span><span class="grow"><span class="nm">滑輪下拉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 2 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i><i class="dot"></i></span><span>下一組 45 kg × 10</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="滑輪下拉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="滑輪下拉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="腿推舉" data-entry-id="we-3"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：腿推舉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">腿</span><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 1 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i></span><span>下一組 120 kg × 12</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="腿推舉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="腿推舉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div></div></div><div class="tr-bottom"><button class="tr-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>加動作</button><button class="action-btn" type="button">完成訓練</button></div></div></main></div></template>
+<template id="tpl-session-new"><div class="screen"><main class="main"><div class="main" data-screen="training-session" data-workout-id="w-1"><div class="tr-sky"><svg class="art tr-sky-sun" viewBox="0 0 120 52" aria-hidden="true"><g fill="var(--snow)" opacity=".9" transform="translate(0 12) scale(.8)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><circle cx="94" cy="26" r="22" fill="var(--sun-pale)" opacity=".6"></circle><circle cx="94" cy="26" r="14" fill="var(--sun)"></circle></svg><svg class="art tr-sky-hills" viewBox="0 52 393 44" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><path d="M0 70C80 58 150 60 210 66S320 56 393 62V96H0z" fill="var(--hill-far)"></path><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"></path><g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g><path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"></path></svg><header class="tr-top"><button class="tr-ib" type="button" aria-label="返回（訓練繼續進行）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button><h1>訓練中</h1><button class="tr-ib is-danger" type="button" aria-label="刪除這次訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></header><div class="tr-stats" aria-live="polite"><div class="tr-stat"><span class="v" data-stat="time" data-clock="up">38:03</span><span class="l">時長</span></div><div class="tr-stat"><span class="v" data-stat="volume"><span class="flip" style="opacity: 1; transform: none;">960</span></span><span class="l">總重量 kg</span></div><div class="tr-stat"><span class="v" data-stat="sets"><span class="flip" style="opacity: 1; transform: none;">2/6</span></span><span class="l">完成組數</span></div></div></div><div class="tr-scroll"><div class="tr-cards"><div class="ex-tl" data-node="current"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex" aria-label="槓鈴臥推" data-entry-id="we-1"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：槓鈴臥推" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="true"><span class="ex-thumb is-glyph" aria-hidden="true">胸</span><span class="grow"><span class="nm">槓鈴臥推</span><span class="sub">胸部</span></span><svg class="chev is-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="槓鈴臥推：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="槓鈴臥推：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div><div class="ex-body" style="overflow: hidden; height: auto; opacity: 1;"><button class="ex-tips is-empty" type="button" aria-label="槓鈴臥推：加要點">加要點</button><div class="set-head"><span aria-hidden="true">組</span><span aria-hidden="true">重量 kg</span><span aria-hidden="true">次數</span><button class="tr-all" type="button" aria-pressed="false" aria-label="全部完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5"></path></svg></button></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 1 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-1"><span class="no">1</span><button class="tr-val w" type="button" aria-label="第 1 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 1 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 2 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-2"><span class="no">2</span><button class="tr-val w" type="button" aria-label="第 2 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 2 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 3 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set" data-set-id="s-3"><span class="no">3</span><button class="tr-val w" type="button" aria-label="第 3 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 3 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="false" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><button class="tr-addset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新增一組</button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="滑輪下拉" data-entry-id="we-2"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：滑輪下拉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">背</span><span class="grow"><span class="nm">滑輪下拉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 2 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i><i class="dot"></i></span><span>下一組 45 kg × 10</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="滑輪下拉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="滑輪下拉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="腿推舉" data-entry-id="we-3"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：腿推舉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">腿</span><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 1 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i></span><span>下一組 120 kg × 12</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="腿推舉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="腿推舉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div></div></div><div class="tr-bottom"><button class="tr-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>加動作</button><button class="action-btn" type="button" data-act="end">完成訓練</button></div></div></main></div>
+  <div class="scrim demo-scrim" aria-hidden="true" data-close></div>
+  <div class="sheet spring-sheet sheet-fit demo-sheet" role="dialog" aria-modal="true" aria-labelledby="end-title">
+    <div class="sheet-grab"><div class="handle"></div>
+      <div class="sheet-head"><h2 id="end-title" class="sheet-title">結束這次訓練？</h2></div>
+    </div>
+    <div class="tr-sheet-body">
+      <p class="confirm-line">還有 <b>4</b> 組沒勾，沒勾的不算進紀錄</p>
+      <div class="confirm-acts">
+        <button class="tr-secondary" type="button" data-close>繼續練</button>
+        <button class="action-btn" type="button" data-act="end-confirm">結束</button>
+      </div>
+    </div>
+  </div>
+</template>
+<template id="tpl-finish"><div class="screen"><main class="main"><div class="main" data-screen="training-session" data-workout-id="w-1"><div class="tr-sky"><svg class="art tr-sky-sun" viewBox="0 0 120 52" aria-hidden="true"><g fill="var(--snow)" opacity=".9" transform="translate(0 12) scale(.8)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><circle cx="94" cy="26" r="22" fill="var(--sun-pale)" opacity=".6"></circle><circle cx="94" cy="26" r="14" fill="var(--sun)"></circle></svg><svg class="art tr-sky-hills" viewBox="0 52 393 44" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><path d="M0 70C80 58 150 60 210 66S320 56 393 62V96H0z" fill="var(--hill-far)"></path><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"></path><g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g><path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"></path></svg><header class="tr-top" aria-hidden="true"><button class="tr-ib" type="button" aria-label="返回（訓練繼續進行）"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button><h1>訓練中</h1><button class="tr-ib is-danger" type="button" aria-label="刪除這次訓練"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></header><div class="tr-stats" aria-live="polite"><div class="tr-stat"><span class="v" data-stat="time">38:03</span><span class="l">時長</span></div><div class="tr-stat"><span class="v" data-stat="volume"><span class="flip" style="opacity: 1; transform: none;">960</span></span><span class="l">總重量 kg</span></div><div class="tr-stat"><span class="v" data-stat="sets"><span class="flip" style="opacity: 1; transform: none;">2/6</span></span><span class="l">完成組數</span></div></div></div><div class="tr-scroll" aria-hidden="true"><div class="tr-cards"><div class="ex-tl" data-node="current"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex" aria-label="槓鈴臥推" data-entry-id="we-1"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：槓鈴臥推" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="true"><span class="ex-thumb is-glyph" aria-hidden="true">胸</span><span class="grow"><span class="nm">槓鈴臥推</span><span class="sub">胸部</span></span><svg class="chev is-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="槓鈴臥推：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="槓鈴臥推：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div><div class="ex-body" style="overflow: hidden; height: auto; opacity: 1;"><button class="ex-tips is-empty" type="button" aria-label="槓鈴臥推：加要點">加要點</button><div class="set-head"><span aria-hidden="true">組</span><span aria-hidden="true">重量 kg</span><span aria-hidden="true">次數</span><button class="tr-all" type="button" aria-pressed="false" aria-label="全部完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5"></path></svg></button></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 1 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-1"><span class="no">1</span><button class="tr-val w" type="button" aria-label="第 1 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 1 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 1 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 2 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set done" data-set-id="s-2"><span class="no">2</span><button class="tr-val w" type="button" aria-label="第 2 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 2 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="true" aria-label="第 2 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><div class="set-slot" style="opacity: 1; transform: none;"><div class="swipe-row"><button class="swipe-delete" type="button" tabindex="-1" aria-hidden="true" aria-label="刪除第 3 組"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg></button><div class="swipe-slide" draggable="false" style="transform: none; -webkit-user-select: none; touch-action: pan-y;"><div class="set" data-set-id="s-3"><span class="no">3</span><button class="tr-val w" type="button" aria-label="第 3 組重量 60 公斤，調整">60</button><button class="tr-val r" type="button" aria-label="第 3 組次數 8，調整">8</button><button class="tr-check" type="button" aria-pressed="false" aria-label="第 3 組完成"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></button></div></div></div></div><button class="tr-addset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新增一組</button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="滑輪下拉" data-entry-id="we-2"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：滑輪下拉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">背</span><span class="grow"><span class="nm">滑輪下拉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 2 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i><i class="dot"></i></span><span>下一組 45 kg × 10</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="滑輪下拉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="滑輪下拉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div><div class="ex-tl" data-node="todo"><span class="ex-node" aria-hidden="true"></span><section class="tr-card ex collapsed is-flat" aria-label="腿推舉" data-entry-id="we-3"><div class="ex-head"><button class="tr-grip" type="button" aria-label="拖曳排序：腿推舉" tabindex="0" aria-roledescription="draggable" aria-pressed="false" aria-grabbed="false" aria-disabled="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg></button><button class="ex-toggle" type="button" aria-expanded="false"><span class="ex-thumb is-glyph" aria-hidden="true">腿</span><span class="grow"><span class="nm">腿推舉</span><span class="sub"><span class="prog"><span class="sr-only">已完成 0 組，共 1 組。</span><span class="dots" aria-hidden="true"><i class="dot"></i></span><span>下一組 120 kg × 12</span></span></span></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="tr-ib ex-swap" type="button" aria-label="腿推舉：替換動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg></button><button class="tr-ib is-danger ex-remove" type="button" aria-haspopup="dialog" aria-label="腿推舉：移除動作"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg></button></div></section></div></div></div><div class="tr-bottom" aria-hidden="true"><button class="tr-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>加動作</button><button class="action-btn" type="button">完成訓練</button></div></div></main></div><div data-open="" role="presentation" class="scrim" aria-hidden="true" style="-webkit-user-select: none; opacity: 1;"></div><div data-open="" id="_r_1c_" role="dialog" tabindex="-1" data-screen="finish-sheet" class="sheet spring-sheet sheet-fit" aria-labelledby="base-ui-_r_1e_" style="--nested-dialogs: 0; transform: none;"><div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h2 id="base-ui-_r_1e_" class="sheet-title">訓練完成</h2><button type="button" tabindex="0" aria-label="關閉" class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div></div><div class="tr-sheet-body tr-sheet-scroll"><svg class="art tr-summit" viewBox="0 0 393 112" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><rect width="393" height="112" fill="var(--sky)"></rect><circle cx="196" cy="52" r="38" fill="var(--sun-pale)" opacity=".7"></circle><circle cx="196" cy="52" r="23" fill="var(--sun)"></circle><g fill="var(--snow)" opacity=".9" transform="translate(40 18) scale(.75)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><path d="M0 90C80 66 140 70 196 42S320 72 393 82V112H0z" fill="var(--hill-far)"></path><path d="M0 102C90 88 170 92 240 98S350 90 393 94V112H0z" fill="var(--hill-mid)"></path><g transform="translate(196 42)"><rect x="-1.2" y="-28" width="2.4" height="28" rx="1.2" fill="var(--ink)"></rect><path d="M1.2 -28l17 5.5-17 5.5z" fill="var(--clay)"></path></g><path d="M0 108C90 102 200 104 290 108S370 107 393 107V112H0z" fill="var(--card)"></path></svg><div class="tr-summary"><span class="big" data-testid="finish-volume">960<span class="u">kg</span></span><span class="l">總重量（重量×次數） · 38 分 · 2 / 6 組</span></div><div class="tr-card"><div class="tr-row tr-row-compact"><span class="grow"><span class="nm">槓鈴臥推</span><span class="sub">60 × 8 · 60 × 8</span></span></div><div class="tr-row tr-row-compact"><span class="grow"><span class="nm">滑輪下拉</span><span class="sub">沒有打勾的組</span></span></div><div class="tr-row tr-row-compact"><span class="grow"><span class="nm">腿推舉</span><span class="sub">沒有打勾的組</span></span></div></div><button class="action-btn" type="button">完成</button></div></div></template>
+
+
+<script>
+/* 樣張互動：複製現況畫面、改版畫面的狀態切換、按住結束、完成畫面重播、記完一餐的播放 */
+(() => {
+  const $ = (s, r = document) => r.querySelector(s)
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+  const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)')
+  let uid = 0
+
+  /* 同一份畫面複製好幾次：id 與 url(#id) 加後綴，漸層才不會互相指錯 */
+  function cloneTpl(id) {
+    const n = ++uid
+    return document.getElementById(id).innerHTML.replace(/(\sid="|url\(#|aria-labelledby=")([^")]+)/g, (_, p, v) => `${p}${v}-${n}`)
+  }
+  function mount(dev, html) {
+    dev.innerHTML = html
+  }
+
+  /* ── 共用的小圖示與插圖 ── */
+  const ICON = {
+    chev: '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>',
+    down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>',
+    back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>',
+    plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>',
+    list: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"></path></svg>',
+    chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16"></path><path d="M5 15l4-5 4 3 6-8"></path></svg>',
+    play: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="tri" d="M5 3.2v9.6l7.6-4.8z"></path></svg>',
+    dumbbell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"></path></svg>',
+    fork: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7M4.5 3v4.5a2.5 2.5 0 0 0 5 0V3M7 10.5V21"></path><path d="M17.5 21V3c-2.4 1.6-3.5 4.2-3.5 7 0 1.8 1.2 3 3.5 3"></path></svg>',
+    gear: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>',
+    trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"></path></svg>',
+    swap: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"></path></svg>',
+    grip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg>',
+    close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>',
+    all: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12.5l4 4M7.5 16.5L16.5 7.5M12 16.5l1 1L22 8.5"></path></svg>',
+  }
+  const CLOUDS = '<svg class="scene-clouds" viewBox="0 0 120 40" preserveAspectRatio="xMidYMid meet"><g fill="var(--snow)" opacity=".9"><ellipse cx="22" cy="24" rx="20" ry="8.5"></ellipse><ellipse cx="38" cy="17" rx="15" ry="10"></ellipse><ellipse cx="54" cy="25" rx="17" ry="7"></ellipse><ellipse cx="96" cy="24" rx="12" ry="5.5"></ellipse><ellipse cx="105" cy="20.5" rx="8.5" ry="6"></ellipse></g></svg>'
+  const moon = (id) =>
+    `<svg class="scene-moon" viewBox="-30 -30 60 60"><defs><radialGradient id="${id}"><stop offset=".5" stop-color="var(--moon)" stop-opacity=".7"></stop><stop offset="1" stop-color="var(--moon)" stop-opacity="0"></stop></radialGradient></defs><circle r="28" fill="url(#${id})"></circle><path d="M3.6-15.8a16 16 0 1 0 9.6 26.4 13 13 0 0 1-9.6-26.4z" fill="var(--snow)"></path></svg>`
+  /* 今日頁那幅山坡，踏腳石與小徑換成草地上一支啞鈴（同 SkyBand 的啞鈴） */
+  const HILLS_TRAIN = `<svg class="scene-hills" viewBox="0 28 393 48">
+      <path d="M0 31 C 90 30, 180 30, 240 28 S 326 -10, 393 -4 V76 H0Z" fill="var(--hill-far)"></path>
+      <path d="M0 37 C 90 33, 180 33, 250 30 S 350 16, 393 22 V76 H0Z" fill="var(--hill-mid)"></path>
+      <g transform="translate(366 16)"><rect x="-2" y="6" width="4" height="14" rx="2" fill="var(--tree)"></rect><circle cx="0" cy="2" r="11" fill="var(--tree)"></circle></g>
+      <path d="M0 42 C 90 32, 200 35, 290 42 S 370 39, 393 41 V76 H0Z" fill="var(--paper)"></path>
+      <g transform="translate(316 56) rotate(-8)">
+        <rect x="-13" y="-1.6" width="26" height="3.2" rx="1.6" fill="var(--ink)"></rect>
+        <rect x="-18" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"></rect>
+        <rect x="12.4" y="-7" width="5.6" height="14" rx="2.8" fill="var(--accent)"></rect>
+        <rect x="-21.4" y="-4" width="3.6" height="8" rx="1.8" fill="var(--ink)"></rect>
+        <rect x="17.8" y="-4" width="3.6" height="8" rx="1.8" fill="var(--ink)"></rect>
+      </g>
+    </svg>`
+  const BAND_TREE = `<svg class="art band-art" viewBox="0 0 393 96" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><rect width="393" height="96" fill="var(--sky)"></rect><circle cx="262" cy="38" r="24" fill="var(--sun-pale)" opacity=".6"></circle><circle cx="262" cy="38" r="15" fill="var(--sun)"></circle><g fill="var(--snow)" opacity=".9"><g transform="translate(160 22)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g><g transform="translate(292 12) scale(.567)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g></g><path d="M0 64C70 44 130 48 190 60S300 42 393 54V96H0z" fill="var(--hill-far)"></path><path d="M0 77C80 61 170 65 240 75S350 63 393 69V96H0z" fill="var(--hill-mid)"></path><g transform="translate(120 70)"><rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="6" fill="var(--tree)"></circle></g><g transform="translate(300 65)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g><path d="M0 91C90 82 200 85 290 91S370 89 393 89V96H0z" fill="var(--paper)"></path></svg>`
+
+  const tab = (label, icon, on) =>
+    `<button class="tab" type="button" aria-label="${label}"${on ? ' aria-current="page"' : ''}>${on ? '<span class="tab-indicator" aria-hidden="true"></span>' : ''}${icon}</button>`
+  const tabbar = (cur, four = false) =>
+    `<nav class="tabbar" aria-label="主要導覽">${tab('飲食', ICON.fork, cur === '飲食')}${tab('訓練', ICON.dumbbell, cur === '訓練')}${four ? tab('進度', ICON.chart, cur === '進度') : ''}${tab('設定', ICON.gear, cur === '設定')}</nav>`
+
+  /* ── 週列 ── */
+  const DW = '一二三四五六日'
+  function weekHTML({ start, sel, today, last, marked }) {
+    let h = '<div class="datectl-panel"><div class="datectl-grid datectl-week" role="group" aria-label="這一週">'
+    for (let i = 0; i < 7; i++) {
+      const d = start + i
+      const cls = `datectl-day${d === today ? ' is-today' : ''}${marked.includes(d) ? ' is-marked' : ''}`
+      h += `<button type="button" class="${cls}" aria-pressed="${d === sel}" aria-label="11月${d}日 週${DW[i]}"${d > last ? ' disabled' : ''}><span class="dw">${DW[i]}</span><span class="n">${d}</span></button>`
+    }
+    return h + '</div></div>'
+  }
+
+  /* ── A／B1：改版的訓練頁 ── */
+  const STATE = {
+    live: { lead: '訓練中', num: '38:03', clock: true, sub: '推日 · <span class="n">2/6</span> 組', go: '繼續', week: 'this', marked: true },
+    done: { lead: '練了', num: '960', unit: 'kg', sub: '<span class="n">38</span> 分 · <span class="n">6</span> 組', week: 'this', marked: true },
+    todo: { recovery: true, week: 'this' },
+    past: { num: '這天沒練', word: true, quiet: true, sub: '要補記，按右下角 ＋', week: 'last' },
+  }
+  /* 六個肌群：推日 11/22（胸、肩、手臂）、腿日 11/20、拉日 11/18；下半身約 2–3 天、其他約 1–2 天恢復（同訓練分析的規則） */
+  const RECOVERY = [
+    ['胸部', 0.5, '約 1 天'], ['背部', 1, '已恢復'], ['下半身', 1, '已恢復'],
+    ['肩膀', 0.5, '約 1 天'], ['手臂', 0.6, '約 1 天'], ['腹肌', 1, '已恢復'],
+  ]
+  let recStyle = 'bar'
+  function recoveryHTML() {
+    const cells = RECOVERY.map(([n, p, t]) =>
+      recStyle === 'bar'
+        ? `<li class="${p >= 1 ? 'is-ok' : ''}"><span class="rn">${n}</span><span class="rt">${t}</span><span class="rb" aria-hidden="true"><i style="transform: scaleX(${p})"></i></span></li>`
+        : `<li class="${p >= 1 ? 'is-ok' : ''}" aria-label="${n}${t}"><span class="rn">${n}</span>${p >= 1 ? ICON.check : `<span class="rt">${t.replace('約 ', '')}</span>`}</li>`,
+    ).join('')
+    return `<div class="rec-box"><div class="rec-head"><span class="gauge-lead">今天還沒練</span><span class="rec-cap">肌群恢復</span></div><ul class="rec-grid is-${recStyle}" aria-label="肌群恢復">${cells}</ul></div>`
+  }
+  function startRows() {
+    const row = (nm, sub, rec) =>
+      `<li><button class="tr-row" type="button"><span class="grow"><span class="nm">${nm}${rec ? '<span class="rec-tag">建議</span>' : ''}</span><span class="sub">${sub}</span></span><span class="go-ic">${ICON.play}</span></button></li>`
+    return `<ul class="tr-card start-list">
+        ${row('拉日', '背部 · 上次 11/18', true)}${row('腿日', '下半身 · 上次 11/20')}${row('推日', '<span class="wait">胸部、肩膀還要約 1 天</span> · 上次 11/22')}
+        <li><button class="tr-row is-blank" type="button"><span class="go-ic">${ICON.plus}</span><span class="grow"><span class="nm">空白開始</span></span></button></li></ul>`
+  }
+  function startSheetHTML() {
+    return `<div class="scrim demo-scrim" aria-hidden="true" data-close></div>
+      <div class="sheet spring-sheet sheet-fit demo-sheet start-sheet" role="dialog" aria-modal="true" aria-label="開始訓練">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h2 class="sheet-title">開始訓練</h2><button class="icon-btn" type="button" aria-label="關閉" data-close>${ICON.close}</button></div></div>
+        <div class="tr-sheet-body"><p class="sheet-note">建議：最久沒練、練到的肌群都恢復了</p>${startRows()}</div>
+      </div>`
+  }
+  function bodyHTML(state) {
+    if (state === 'live' || state === 'done') {
+      const node = state === 'live' ? 'current' : 'done'
+      const sub = state === 'live' ? '2/6 組 · 總重量 960 kg · 38 分' : '6/6 組 · 總重量 960 kg · 38 分'
+      return `<div class="tr-card is-timeline" data-node="${node}"><button class="tr-row" type="button"><span class="grow"><span class="nm">推日</span><span class="sub">${sub}</span></span>${ICON.chev}</button></div>`
+    }
+    if (state === 'todo') return `<div class="tr-sec">照課表開始</div>${startRows()}`
+    return ''
+  }
+  function trainHTML(state) {
+    const s = STATE[state]
+    const past = s.week === 'last'
+    const week = past
+      ? weekHTML({ start: 16, sel: 22, today: 0, last: 22, marked: [16, 18, 20] })
+      : weekHTML({ start: 23, sel: 23, today: 23, last: 24, marked: s.marked ? [23] : [] })
+    const title = past ? '週日 11/22' : '週一 11/23'
+    const n = ++uid
+    return `<div class="screen"><main class="main has-floating-bar"><div class="main" data-screen="training"><div class="timeline">
+      <div class="sky">
+        <div class="scene" aria-hidden="true">${CLOUDS}${moon('tm' + n)}${HILLS_TRAIN}</div>
+        <header class="topbar"><div class="datectl" tabindex="-1">
+          <div class="datectl-head">
+            <h1 class="date-title"><button type="button" class="datectl-title" aria-expanded="false">${title}${ICON.down}</button></h1>
+            <div class="sky-acts">${past ? '<button type="button" class="date-today-btn">回今天</button>' : ''}
+              <button class="tr-ib" type="button" aria-label="課表" data-sub="routines">${ICON.list}</button>
+              <button class="tr-ib" type="button" aria-label="訓練分析" data-sub="analysis">${ICON.chart}</button>
+            </div>
+          </div>${week}
+        </div></header>
+        <section class="gauge tr-gauge${s.quiet ? ' is-quiet' : ''}" aria-label="${title} 訓練">
+          ${s.recovery ? recoveryHTML() : `<div class="gauge-top"><div>${s.lead ? `<div class="gauge-lead">${s.lead}</div>` : ''}<div aria-live="polite"><span class="gauge-num${s.word ? ' is-word' : ''}"${s.clock ? ' data-clock="up"' : ''}>${s.num}</span>${s.unit ? `<span class="gauge-unit">${s.unit}</span>` : ''}</div></div></div>
+          <div class="gauge-meta"><span class="tr-sub">${s.sub}</span>${s.go ? `<button class="sky-go" type="button">${s.go}</button>` : ''}</div>`}
+        </section>
+      </div>
+      <div class="tr-body">${bodyHTML(state)}</div>
+    </div></div></main>
+    <div class="fog" aria-hidden="true"></div>
+    <div class="bottom-bar is-floating">${tabbar('訓練')}<button class="cta" type="button" aria-label="開始訓練" data-act="start">${ICON.plus}</button></div>
+    ${subpagesHTML()}</div>${startSheetHTML()}`
+  }
+  function subpagesHTML() {
+    const r = (nm, sub) => `<button class="tr-row" type="button"><span class="grow"><span class="nm">${nm}</span><span class="sub">${sub}</span></span>${ICON.chev}</button>`
+    return `<div class="subpage" data-page="routines" aria-hidden="true">
+        <header class="tr-top"><button class="tr-ib" type="button" aria-label="返回" data-back>${ICON.back}</button><h1>課表</h1><button class="tr-text-btn" type="button">${ICON.plus}新課表</button></header>
+        <div class="tr-scroll"><div class="tr-card">${r('推日', '3 個動作 · 上次 11/22')}${r('拉日', '3 個動作 · 上次 11/18')}${r('腿日', '4 個動作 · 上次 11/20')}</div>
+        <p class="prog-note">子頁就是現在首頁上的課表清單，搬進來而已。</p></div></div>
+      <div class="subpage" data-page="analysis" aria-hidden="true">
+        <header class="tr-top"><button class="tr-ib" type="button" aria-label="返回" data-back>${ICON.back}</button><h1>訓練分析</h1></header>
+        <div class="tr-scroll"><div class="tr-card">${r('槓鈴臥推', '推估極限 82 kg · 近 30 天 +3')}${r('腿推舉', '推估極限 160 kg · 近 30 天 +5')}${r('滑輪下拉', '這次第一次做')}</div>
+        <p class="prog-note">子頁就是現在的訓練分析，內容不動。</p></div></div>`
+  }
+  function renderTrain(dev, state) {
+    dev.dataset.train = state
+    mount(dev, trainHTML(state))
+    if ('sheetOpen' in dev.dataset) openSheet(dev, true, false)
+  }
+
+  /* ── C3：休息條、組編輯、組列小標 ── */
+  function restHTML(labels) {
+    return `<div class="tr-rest has-ask"><div class="rest-ask"><span class="q">這個動作做完了，最後一組還能再做幾下？</span>
+      <div class="rpe-chips" role="group" aria-label="還能再做幾下">${labels.map((l) => `<button class="rpe-chip" type="button" aria-pressed="false">${l}</button>`).join('')}</div></div>
+      <div class="rest-row"><span class="grow"><span class="lbl">休息</span><span class="time" data-clock="rest">1:12</span></span>
+      <button class="tr-rest-btn" type="button" aria-label="減 15 秒">−15</button><button class="tr-rest-btn" type="button" aria-label="加 15 秒">＋15</button><button class="tr-rest-btn" type="button">略過</button></div></div>`
+  }
+  function stepLine(deltas, val) {
+    const b = (d) => `<button class="step-b" type="button">${d > 0 ? '+' : '−'}${Math.abs(d)}</button>`
+    return `<div class="step-line">${b(deltas[0])}${b(deltas[1])}<button class="step-num" type="button">${val}</button>${b(deltas[2])}${b(deltas[3])}</div>`
+  }
+  function sheetHTML(isNew) {
+    const opts = isNew ? ['力竭', '剩 1', '剩 2', '剩 3', '剩 4+'] : ['6', '7', '8', '9', '10']
+    const cur = isNew ? 1 : 3
+    const head = isNew
+      ? '<div class="set-sec-row"><span class="set-sec">還能再做幾下</span></div>'
+      : '<div class="set-sec-row"><span class="set-sec">吃力程度</span><span class="rpe-hint">9＝還能再做 1 下，10＝力竭</span></div>'
+    return `<div class="mock-sheet"><div class="handle"></div>
+      <div class="sheet-head"><h2 class="sheet-title">槓鈴臥推 · 第 2 組</h2><button class="icon-btn" type="button" aria-label="關閉">${ICON.close}</button></div>
+      <div class="tr-sheet-body set-sheet-body">
+        <div class="step-block"><span class="set-sec">重量 kg</span>${stepLine([-5, -2.5, 2.5, 5], '60')}</div>
+        <div class="step-block"><span class="set-sec">次數</span>${stepLine([-5, -1, 1, 5], '8')}</div>
+        <div class="step-block" data-section="rpe">${head}
+          <div class="rpe-row" role="group" aria-label="還能再做幾下">${opts.map((o, i) => `<button class="rpe-opt${i === cur ? ' is-current' : ''}" type="button" aria-pressed="${i === cur}">${o}</button>`).join('')}</div>
+        </div>
+      </div></div>`
+  }
+  function setsHTML(isNew) {
+    const badge = (no, old, word) =>
+      isNew ? `<button class="rpe-badge is-word" type="button" aria-label="第 ${no} 組剩幾下：${word}，調整">${word}</button>` : `<button class="rpe-badge" type="button" aria-label="第 ${no} 組 RPE ${old}，調整">${old}</button>`
+    const set = (no, done, b) =>
+      `<div class="set-slot"><div class="swipe-row"><div class="swipe-slide"><div class="set${done ? ' done' : ''}"><span class="no">${no}${b || ''}</span><button class="tr-val w" type="button">60</button><button class="tr-val r" type="button">8</button><button class="tr-check" type="button" aria-pressed="${done}" aria-label="第 ${no} 組完成">${ICON.check}</button></div></div></div></div>`
+    return `<div class="tr-cards"><div class="ex-tl" data-node="current"><span class="ex-node" aria-hidden="true"></span>
+      <section class="tr-card ex" aria-label="槓鈴臥推"><div class="ex-head">
+        <button class="tr-grip" type="button" aria-label="拖曳排序：槓鈴臥推">${ICON.grip}</button>
+        <button class="ex-toggle" type="button" aria-expanded="true"><span class="ex-thumb is-glyph" aria-hidden="true">胸</span><span class="grow"><span class="nm">槓鈴臥推</span><span class="sub">胸部</span></span><svg class="chev is-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+        <button class="tr-ib ex-swap" type="button" aria-label="替換動作">${ICON.swap}</button><button class="tr-ib is-danger ex-remove" type="button" aria-label="移除動作">${ICON.trash}</button></div>
+        <div class="ex-body"><div class="set-head"><span aria-hidden="true">組</span><span aria-hidden="true">重量 kg</span><span aria-hidden="true">次數</span><button class="tr-all" type="button" aria-pressed="false" aria-label="全部完成">${ICON.all}</button></div>
+        ${set(1, true, badge(1, 10, '竭'))}${set(2, true, badge(2, 9, '剩1'))}${set(3, false)}</div>
+      </section></div></div>`
+  }
+
+  /* ── D1：完成畫面 ── */
+  function d1HTML() {
+    const r = (d) => `class="rise" style="--d:${d}ms"`
+    return `<div class="screen d1" data-screen="finish">
+      <div class="d1-scroll">
+        <svg class="art d1-art" viewBox="0 32 393 196" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+          <rect width="393" height="228" fill="var(--sky)"></rect>
+          <g fill="var(--snow)" opacity=".9" transform="translate(36 34) scale(.85)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g>
+          <g fill="var(--snow)" opacity=".9" transform="translate(300 54) scale(.55)"><ellipse cx="22" cy="17" rx="19" ry="8"></ellipse><ellipse cx="34" cy="11" rx="13" ry="9"></ellipse><ellipse cx="46" cy="17" rx="13" ry="7"></ellipse></g>
+          <g class="d1-sun"><circle cx="214" cy="104" r="50" fill="var(--sun-pale)" opacity=".8"></circle><circle cx="214" cy="104" r="30" fill="var(--sun)"></circle></g>
+          <g class="d1-far">
+            <path d="M0 178C70 160 130 150 170 128S204 106 214 106S262 120 300 146S360 168 393 172V228H0z" fill="var(--hill-far)"></path>
+            <path d="M118 228C140 200 170 184 186 160S206 124 212 110" fill="none" stroke="var(--crumb)" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 10"></path>
+            <g transform="translate(214 106)">
+              <rect class="d1-pole" x="-1.5" y="-36" width="3" height="36" rx="1.5" fill="var(--ink)"></rect>
+              <path class="d1-cloth" d="M1.5 -36l22 7-22 7z" fill="var(--clay)"></path>
+            </g>
+          </g>
+          <g class="d1-mid">
+            <path d="M0 196C80 180 150 188 220 200S340 186 393 190V228H0z" fill="var(--hill-mid)"></path>
+            <g transform="translate(62 186)"><rect x="-1.6" y="4" width="3.2" height="11" rx="1.6" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="8.5" fill="var(--tree)"></circle></g>
+            <g transform="translate(334 182)"><rect x="-1.2" y="3" width="2.4" height="8" rx="1.2" fill="var(--hill-near)"></rect><circle cx="0" cy="1" r="6" fill="var(--tree)"></circle></g>
+          </g>
+          <path d="M0 220C90 210 200 214 290 220S370 218 393 218V228H0z" fill="var(--paper)"></path>
+        </svg>
+        <div class="d1-body">
+          <p ${r(120)} class="d1-eyebrow rise">推日 · 練完了</p>
+          <h1 class="d1-total rise" style="--d:160ms" aria-label="總重量 960 公斤"><span class="d1-num" data-count="960">960</span><span class="d1-unit">kg</span></h1>
+          <p class="d1-cap rise" style="--d:200ms">總重量</p>
+          <ul class="d1-stats rise" style="--d:600ms">
+            <li><b>38</b><span>分鐘</span></li><li><b>6</b><span>組</span></li><li><b>第 3 次</b><span>本週</span></li>
+          </ul>
+          <h2 class="d1-sec rise" style="--d:660ms">這次的亮點</h2>
+          <ul class="tr-card d1-hl rise" style="--d:700ms">
+            <li class="tr-row rise" style="--d:720ms"><span class="d1-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21V4"></path><path class="flag-cloth" d="M7.5 4.5l11 3.5-11 3.5z"></path></svg></span><span class="grow"><span class="nm">臥推 推估極限 82 kg</span></span><span class="d1-up">新高 +3</span></li>
+            <li class="tr-row rise" style="--d:780ms"><span class="d1-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6 4 4 6-7"></path><path d="M15 8h5v5"></path></svg></span><span class="grow"><span class="nm">比上次推日多 12%</span></span></li>
+            <li class="tr-row rise" style="--d:840ms"><span class="d1-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21v-9"></path><path d="M12 12c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6z"></path><path d="M12 14c0-3-2-5-5-5 0 3 2 5 5 5z"></path></svg></span><span class="grow"><span class="nm">第一次做 滑輪下拉</span></span></li>
+          </ul>
+          <h2 class="d1-sec rise" style="--d:900ms">練到的</h2>
+          <div class="d1-tags rise" style="--d:940ms"><span>胸</span><span>背</span><span>腿</span></div>
+        </div>
+      </div>
+      <div class="tr-bottom"><button class="action-btn" type="button">好</button></div>
+    </div>`
+  }
+  let countRaf = 0
+  function playD1() {
+    const dev = $('#dev-d1')
+    const scr = $('.d1', dev)
+    const reduced = dev.classList.contains('sim-reduced') || reducedMQ.matches
+    scr.classList.toggle('is-reduced', reduced)
+    scr.classList.remove('is-play')
+    void scr.offsetWidth
+    scr.classList.add('is-play')
+    $('.d1-scroll', scr).scrollTop = 0
+    const num = $('[data-count]', scr)
+    const to = Number(num.dataset.count)
+    cancelAnimationFrame(countRaf)
+    if (reduced) {
+      num.textContent = to
+      return
+    }
+    num.textContent = '0'
+    const t0 = performance.now() + 250
+    const step = (now) => {
+      const p = Math.min(1, Math.max(0, (now - t0) / 850))
+      num.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) countRaf = requestAnimationFrame(step)
+    }
+    countRaf = requestAnimationFrame(step)
+  }
+
+  /* ── D2：記完晚餐 ── */
+  const DINNER_DONE = `<div class="node is-done"><span class="node-dot just-done" aria-hidden="true"><svg viewBox="0 0 18 18"><path d="M5 9.2l2.6 2.6 5.4-5.6"></path></svg></span>
+    <div class="node-body"><button class="node-head" type="button"><span class="node-name">晚餐</span><span class="node-kcal">818</span></button>
+    <ul class="items"><li class="item is-new"><div class="item-row"><div class="item-main"><div class="item-slide"><button class="item-content" type="button" aria-expanded="false"><span class="nm-wrap"><span class="nm">牛肉麵</span></span><span class="kc">818</span></button></div></div></div></li></ul></div></div>`
+  const STONE_DONE = '<g class="stone is-done just-lit" transform="translate(232 55)"><g class="stone-mark"><circle r="9" fill="var(--accent)"></circle><path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></g><text x="14" y="4.5" class="stone-label">晚餐</text></g>'
+  const d2Timers = new Map()
+  function tween(el, from, to, ms) {
+    const t0 = performance.now()
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / ms)
+      el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+  function playD2(dev) {
+    ;(d2Timers.get(dev) || []).forEach(clearTimeout)
+    const timers = []
+    d2Timers.set(dev, timers)
+    mount(dev, cloneTpl('tpl-today'))
+    const variant = dev.dataset.d2
+    timers.push(setTimeout(() => {
+      const scr = $('.screen', dev)
+      const svgHills = $('.scene-hills', scr)
+      const next = $('.stone.is-next', svgHills)
+      next.insertAdjacentHTML('afterend', STONE_DONE)
+      next.remove()
+      const dinner = $$('.meals > .node', scr)[2]
+      dinner.insertAdjacentHTML('afterend', DINNER_DONE)
+      dinner.remove()
+      $('.gauge .fill', scr).style.width = `${(1358 / 1778) * 100}%`
+      tween($('.gauge-num', scr), 1238, 420, 500)
+      tween($('.gauge-side .cur', scr), 540, 1358, 500)
+      if (variant === 'old') return
+      timers.push(setTimeout(() => {
+        scr.insertAdjacentHTML('beforeend', '<div class="meal-toast" role="status"><span>晚餐記好了 · 還能吃<b>420</b>卡</span></div>')
+        const toast = $('.meal-toast', scr)
+        timers.push(setTimeout(() => toast.classList.add('is-out'), 2000))
+        timers.push(setTimeout(() => toast.remove(), 2250))
+      }, 150))
+      if (variant === 'b')
+        timers.push(setTimeout(() => {
+          $('.sky > .gauge', scr).insertAdjacentHTML('beforeend', `<p class="day-done" role="status">${ICON.check}今天記完了 · 連續記錄 <b>12</b> 天</p>`)
+        }, 650))
+    }, 450))
+  }
+
+  /* ── 時鐘：訓練中往上數、休息往下數 ── */
+  const t0 = Date.now()
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  function tick() {
+    const e = Math.floor((Date.now() - t0) / 1000)
+    $$('[data-clock="up"]').forEach((el) => (el.textContent = fmt(38 * 60 + 3 + e)))
+    $$('[data-clock="rest"]').forEach((el) => (el.textContent = fmt(72 - (e % 73))))
+  }
+
+  function openSheet(dev, open, focus = true) {
+    $('.demo-scrim', dev).classList.toggle('is-open', open)
+    const sh = $('.demo-sheet', dev)
+    sh.classList.toggle('is-open', open)
+    if (open && focus) setTimeout(() => $('[data-close]', sh).focus({ preventScroll: true }), 60)
+  }
+
+  /* ── C4：勾完一組就知道破紀錄（e1RM＝重量×(1＋次數/30)，10 下以內才算） ── */
+  const PREV_BEST = 79
+  const e1rm = (w, r) => (r <= 10 ? w * (1 + r / 30) : 0)
+  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '')
+  const FLAG = '<svg viewBox="0 0 8 11" aria-hidden="true"><rect class="pole" x="0" y="0" width="1.4" height="11" rx=".7"></rect><path class="cloth" d="M1.4 .5l6.2 2.2-6.2 2.2z"></path></svg>'
+  let c4Weight = 62.5
+  function setupC4(dev) {
+    clearTimeout(Number(dev.dataset.subTimer || 0))
+    mount(dev, cloneTpl('tpl-session'))
+    const scr = $('.screen', dev)
+    scr.classList.add('c4')
+    scr.insertAdjacentHTML('beforeend', '<p class="sr-only" role="status" data-pr-live></p>')
+    const w3 = $('.set[data-set-id="s-3"] .tr-val.w', scr)
+    w3.textContent = f1(c4Weight)
+    w3.setAttribute('aria-label', `第 3 組重量 ${f1(c4Weight)} 公斤，調整`)
+  }
+  function setSub(dev, html, isPr) {
+    const old = $('section[data-entry-id="we-1"] .ex-head .sub', dev)
+    const el = document.createElement('span')
+    el.className = `sub${isPr ? ' is-pr' : ''}`
+    el.innerHTML = html
+    old.replaceWith(el)
+  }
+  function evalC4(dev, justSet) {
+    const scr = $('.screen', dev)
+    const card = $('section[data-entry-id="we-1"]', scr)
+    let best = null
+    let bestV = 0
+    let vol = 0
+    $$('.set', card).forEach((st) => {
+      if (!st.classList.contains('done')) return
+      const w = Number($('.tr-val.w', st).textContent)
+      const r = Number($('.tr-val.r', st).textContent)
+      vol += w * r
+      const v = e1rm(w, r)
+      if (v > bestV) {
+        bestV = v
+        best = st
+      }
+    })
+    $('[data-stat="volume"] .flip', scr).textContent = f1(vol)
+    $('[data-stat="sets"] .flip', scr).textContent = `${$$('.set.done', scr).length}/6`
+    $$('.pr-tag', card).forEach((x) => x.remove())
+    const isPr = best !== null && bestV > PREV_BEST
+    const prText = `${FLAG}<span class="sr-only">推估極限 ${f1(bestV)} 公斤，</span><b>新高 +${f1(bestV - PREV_BEST)}</b>`
+    if (isPr) best.insertAdjacentHTML('beforeend', `<span class="pr-tag" aria-hidden="true">${FLAG}新紀錄</span>`)
+    const fresh = isPr && best === justSet
+    if (fresh) {
+      $('[data-pr-live]', scr).textContent = `槓鈴臥推新紀錄，推估極限 ${f1(bestV)} 公斤`
+      const chk = $('.tr-check', best)
+      if (reducedMQ.matches) {
+        chk.classList.add('pr-flash')
+        setTimeout(() => chk.classList.remove('pr-flash'), 600)
+      } else {
+        chk.classList.remove('pr-pop')
+        void chk.offsetWidth
+        chk.classList.add('pr-pop')
+        const sparks = [0, 60, 120, 180, 240, 300].map((a) => `<i class="spark" style="--a:${a}deg"></i>`).join('')
+        chk.insertAdjacentHTML('beforeend', `<span class="pr-burst" aria-hidden="true"><i class="ring"></i>${sparks}</span>`)
+        setTimeout(() => $('.pr-burst', chk)?.remove(), 650)
+      }
+    }
+    clearTimeout(Number(dev.dataset.subTimer || 0))
+    if (dev.dataset.c4 === 'stay') {
+      setSub(dev, isPr ? prText : '胸部', isPr)
+    } else if (fresh) {
+      setSub(dev, prText, true)
+      dev.dataset.subTimer = setTimeout(() => setSub(dev, '胸部', false), 2500)
+    } else if ($('section[data-entry-id="we-1"] .ex-head .sub.is-pr', dev)) {
+      setSub(dev, '胸部', false)
+    }
+  }
+
+  /* ── 掛上所有畫面 ── */
+  $$('[data-tpl]').forEach((dev) => mount(dev, cloneTpl(dev.dataset.tpl)))
+  $$('[data-train]').forEach((dev) => renderTrain(dev, dev.dataset.train))
+  $$('[data-c4]').forEach(setupC4)
+  mount($('#dev-d1'), d1HTML())
+  $$('[data-rest]').forEach((el) => mount(el, restHTML(el.dataset.rest === 'new' ? ['力竭', '剩 1', '剩 2', '剩 3+'] : ['3 下以上', '2 下', '1 下', '力竭'])))
+  $$('[data-sheet]').forEach((el) => mount(el, sheetHTML(el.dataset.sheet === 'new')))
+  $$('[data-sets]').forEach((el) => mount(el, setsHTML(el.dataset.sets === 'new')))
+  $$('[data-live]').forEach((dev) => {
+    const scr = $('.screen', dev)
+    scr.classList.add('has-live')
+    const rest = dev.dataset.live === 'rest'
+    scr.insertAdjacentHTML(
+      'beforeend',
+      `<button class="live-bar" type="button" aria-label="回到訓練中"><span class="ic">${ICON.dumbbell}</span>${rest ? '<span class="lbl">休息</span>' : '<span class="nm">推日</span>'}<span class="t" data-clock="${rest ? 'rest' : 'up'}">${rest ? '1:12' : '38:03'}</span>${ICON.chev}</button>`,
+    )
+  })
+  setInterval(tick, 1000)
+
+  /* ── 切換鈕 ── */
+  $$('[data-seg]').forEach((seg) =>
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button')
+      if (!b) return
+      $$('button', seg).forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+      const v = b.dataset.val
+      switch (seg.dataset.seg) {
+        case 'a-state':
+          renderTrain($('#train-a'), v)
+          tick()
+          break
+        case 'a-rec':
+          recStyle = v
+          $$('[data-train="todo"]').forEach((d) => renderTrain(d, 'todo'))
+          if ($('#train-a').dataset.train !== 'todo') {
+            $$('[data-seg="a-state"] button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.val === 'todo')))
+            renderTrain($('#train-a'), 'todo')
+          }
+          break
+        case 'c4-weight':
+          c4Weight = Number(v)
+          $$('[data-c4]').forEach(setupC4)
+          break
+        case 'd2-variant':
+          $('#dev-d2-new').dataset.d2 = v
+          playD2($('#dev-d2-new'))
+          break
+      }
+    }),
+  )
+
+  /* ── 點擊（委派） ── */
+  document.addEventListener('click', (e) => {
+    const t = e.target
+    const sub = t.closest('[data-sub]')
+    if (sub) {
+      const pg = $(`.subpage[data-page="${sub.dataset.sub}"]`, sub.closest('.screen'))
+      pg.classList.add('is-open')
+      pg.setAttribute('aria-hidden', 'false')
+      return
+    }
+    const back = t.closest('[data-back]')
+    if (back) {
+      const pg = back.closest('.subpage')
+      pg.classList.remove('is-open')
+      pg.setAttribute('aria-hidden', 'true')
+      return
+    }
+    const chk = t.closest('.c4 .tr-check')
+    if (chk) {
+      const st = chk.closest('.set')
+      const done = !st.classList.contains('done')
+      st.classList.toggle('done', done)
+      chk.setAttribute('aria-pressed', String(done))
+      evalC4(chk.closest('.device'), done ? st : null)
+      return
+    }
+    const chip = t.closest('.rpe-chip, .rpe-opt')
+    if (chip) {
+      const grp = chip.parentElement
+      $$('button', grp).forEach((x) => {
+        x.setAttribute('aria-pressed', String(x === chip))
+        x.classList.toggle('is-on', x === chip && x.classList.contains('rpe-chip'))
+        x.classList.toggle('is-current', x === chip && x.classList.contains('rpe-opt'))
+      })
+      return
+    }
+    const act = t.closest('[data-act]')
+    const dev = t.closest('.device')
+    if (t.closest('[data-close]') && dev) return openSheet(dev, false)
+    if (!act) return
+    switch (act.dataset.act) {
+      case 'end':
+        openSheet(dev, true)
+        break
+      case 'start':
+        openSheet(dev, true)
+        break
+      case 'c4-reset':
+        $$('[data-c4]').forEach(setupC4)
+        break
+      case 'end-confirm':
+        openSheet(dev, false)
+        setTimeout(() => {
+          $('#dev-d1').scrollIntoView({ behavior: reducedMQ.matches ? 'auto' : 'smooth', block: 'center' })
+          setTimeout(playD1, reducedMQ.matches ? 0 : 500)
+        }, 300)
+        break
+      case 'd1-replay':
+        playD1()
+        break
+      case 'd2-play':
+        playD2(document.getElementById(act.dataset.target))
+        break
+    }
+  })
+  $('[data-act="d1-reduced"]').addEventListener('change', (e) => {
+    $('#dev-d1').classList.toggle('sim-reduced', e.target.checked)
+    playD1()
+  })
+
+  /* D1 捲到眼前時自己播一次 */
+  new IntersectionObserver((ents, io) => {
+    if (ents.some((x) => x.isIntersecting)) {
+      playD1()
+      io.disconnect()
+    }
+  }, { threshold: 0.4 }).observe($('#dev-d1'))
+
+  /* A：飲食頁的週列高度畫一條線，三支手機對著看 */
+  function placeGuide() {
+    const stage = $('#stage-a')
+    const ref = $('[data-ref="today"] .datectl-week')
+    const g = $('#guide-a')
+    if (!ref) return
+    g.hidden = false
+    g.style.top = `${ref.getBoundingClientRect().top - stage.getBoundingClientRect().top}px`
+  }
+  document.fonts.ready.then(placeGuide)
+  addEventListener('resize', placeGuide)
+})()
+</script>
+</body>
+</html>

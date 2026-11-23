@@ -79,6 +79,10 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
   --r-btn: 16px; --r-tab: 12px; --r-pill: 999px;
   --ease: cubic-bezier(.4, 0, .2, 1);
+  /* 彈一下（過衝約 10%）：只給一次性的小慶祝（完成畫面的小旗）。手勢與開關走 durations.ts 的 spring，不用這條 */
+  --ease-pop: cubic-bezier(.34, 1.56, .64, 1);
+  /* 升起（完成畫面的山坡與太陽）：一開始快、很早就煞車 */
+  --ease-rise: cubic-bezier(.2, .8, .2, 1);
   /* 四級時長階梯（DESIGN.md v2.0）。--dur 與 --dur-base 原本同值並存、新舊規則各用各的，
      已全站統一成 --dur-base，舊名不再定義，免得日後改一邊漏另一邊。
      sheet 進出場是唯一的例外規格：160ms/(0.4,0,0.2,1) 是按鈕級的，套在 650px
@@ -94,6 +98,8 @@
   /* 欄位聚焦的主藍光暈（3px） */
   --accent-ring: rgba(46, 94, 147, .18);
   --bar-h: calc(72px + env(safe-area-inset-bottom, 0px));
+  /* 「訓練中」小條（訓練分頁改版 C2）：底部列多一列的高度＝條高 44＋列距 --s-2 */
+  --live-h: 52px;
   /* 霧化邊緣（scroll-edge）只蓋底部列後面那一段（v2.124）：原本 168px，是底部列的兩倍多、淡到底是實心紙色，
      真機上整個畫面下面三分之一都霧掉（使用者 2026-11-11）。浮起交給膠囊與 CTA 自己的 --shadow-2，霧化只負責
      別讓字跟按鈕疊在一起。模糊量樣張實測含蓄，真機看了可調到 12–14px */
@@ -191,10 +197,7 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .settings > .sky-band { margin: 0 calc(var(--s-5) * -1); } /* 下方距離由第一個 h2 的 margin-top（--s-5）給；左右負值要跟 .settings 的左右內距同步 */
 .sky-band .today { margin: 0; padding: var(--s-2) var(--s-5) 0; font-size: var(--t-lg); font-weight: 700;
   letter-spacing: var(--track-lg); line-height: 44px; }
-/* 訓練頁：日期元件整個放進橫幅（DateStrip 不拆）。標題列撐到橫幅底＋--s-1，週列與展開的月曆就落在紙上 */
 .sky-band > .topbar { padding-top: var(--s-2); }
-.sky-band .datectl-head { --ink-muted: var(--ink-sky); align-items: flex-start;
-  min-height: calc(var(--band-h) - var(--s-2) + var(--s-1)); }
 /* bottom -1px：天空高度常帶小數，山坡圖的底緣會差不到 1px、露出一絲天空色的橫線（440 寬實測）；多畫 1px 被 .scene 切掉 */
 .scene-hills { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: auto; }
 /* 雲坐在山坡帶上方（數字見下一條）：山坡帶高＝寬度的 48/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
@@ -608,6 +611,39 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
   /* scrollIntoView（展開最後一列、換餐別）對齊的是捲動區邊緣，padding 不算——scroll-padding 才算 */
   scroll-padding-bottom: calc(var(--bar-h) + var(--s-4)); }
 .main.has-floating-bar .undo-bar { bottom: calc(var(--bar-h) + var(--s-2)); }
+/* 記完一餐的那句話（訓練分頁改版 D2-b）：頂端置中的深色膠囊（同復原條、休息條的語言），約 2.2 秒自己淡出；不攔點擊。
+   放頂端不放底部：底部是復原條的位置。進退場只動 opacity／transform；減少動態只淡入淡出 */
+.log-toast-wrap { position: absolute; top: calc(env(safe-area-inset-top, 0px) + var(--s-2)); left: 0; right: 0; z-index: 5;
+  display: flex; justify-content: center; pointer-events: none; }
+.log-toast { max-width: calc(100% - var(--s-5) * 2); padding: var(--s-2) var(--s-4); border-radius: var(--r-pill);
+  background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2); font-size: var(--t-sm); font-weight: 700;
+  letter-spacing: var(--track-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: log-toast var(--log-toast-ms, 2200ms) var(--ease) both; }
+@keyframes log-toast {
+  0% { opacity: 0; transform: translateY(-8px); }
+  10%, 85% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 2200ms 的 5%＝110ms，淡入淡出都在 REDUCED_FADE_MAX_MS（120）以內 */
+  @keyframes log-toast { 0% { opacity: 0; } 5%, 95% { opacity: 1; } 100% { opacity: 0; } }
+}
+/* 「訓練中」小條（spec「訓練分頁改版」C2）：底部列的第一列、佔滿整寬，分頁 pill 與 CTA 換到第二列。同休息條的深色 pill 語言——
+   它不是內容的一部分，是「有件事還在進行」。飲食分頁的底部列是浮的，時間軸底部多留一條的高度。 */
+.bottom-bar.has-live { flex-wrap: wrap; row-gap: var(--s-2); }
+.main.has-floating-bar.has-live .timeline { padding-bottom: calc(var(--bar-h) + var(--live-h) + var(--s-4));
+  scroll-padding-bottom: calc(var(--bar-h) + var(--live-h) + var(--s-4)); }
+.main.has-floating-bar.has-live .undo-bar { bottom: calc(var(--bar-h) + var(--live-h) + var(--s-2)); }
+.live-bar { flex: 1 0 100%; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-3) 0 var(--s-4);
+  border: none; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); box-shadow: var(--shadow-2);
+  font-family: inherit; font-size: var(--t-sm); font-weight: 700; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.live-bar:active { opacity: .85; }
+.live-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sun); flex: none; }
+.live-ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.live-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-time { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.live-bar .chev { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
 .fog { position: absolute; left: 0; right: 0; bottom: 0; height: var(--fog-h); z-index: 1; pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--paper) 88%);
   -webkit-backdrop-filter: blur(var(--fog-blur)); backdrop-filter: blur(var(--fog-blur));
@@ -1204,6 +1240,13 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   letter-spacing: var(--track-xs); cursor: pointer; white-space: nowrap; -webkit-appearance: none; appearance: none;
   transition: opacity var(--dur-base) var(--ease); }
 .date-today-btn:active { opacity: .6; }
+/* 標題列右邊的按鈕群（「回今天」＋訓練頁的「課表」「分析」，訓練分頁改版 B1） */
+.datectl-acts { display: flex; align-items: center; }
+.sky-ib { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0;
+  border: none; background: none; color: var(--ink); border-radius: var(--r-pill); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.sky-ib svg { width: 22px; height: 22px; }
+.sky-ib:active { opacity: .6; }
+.sky-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .datectl-title:focus-visible, .datectl-day:focus-visible, .datectl-mnav:focus-visible, .date-today-btn:focus-visible {
   outline: 2px solid var(--accent); outline-offset: -2px; }
 .datectl-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
@@ -2036,6 +2079,30 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .tr-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-1) var(--s-5) var(--s-4);
   transition: padding-bottom var(--dur-base) var(--ease); }
 .tr-scroll::-webkit-scrollbar { display: none; }
+/* 訓練首頁（訓練分頁改版 A）：同今日頁，天空在捲動區裡、跟著內容一起捲；捲動區不留左右內距（天空要貼邊），內容在 .tr-home-body 裡 */
+.tr-home { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.tr-home::-webkit-scrollbar { display: none; }
+.tr-home-body { padding: var(--s-1) var(--s-5) var(--s-4); }
+.tr-home-body .tr-sec:first-child { margin-top: var(--s-3); }
+/* 天空裡那一行：四種狀態同一個高度＝今日頁「還能吃」那塊（393 寬實測 .sky .gauge 84.6px），兩頁天空一樣高、切日期時下面不跳。
+   高度寫死而不是跟著內容：「繼續」鈕比今日頁的量尺高，讓它撐的話訓練頁天空會多 14px。內容超出一點（中文大字）落在山坡帶上緣，不另撐 */
+.tr-hero { height: 84.6px; box-sizing: border-box; }
+.tr-hero-title { font-size: var(--t-hero); font-weight: 900; letter-spacing: var(--track-hero); line-height: .9; color: var(--ink); }
+/* 沒練的那幾態：上面一行小字（「今天適合練」），大字換到下一行，不跟它並排——中文大字比數字寬，並排會壓到右邊的太陽／月亮 */
+.sky .tr-hero:not([data-hero="live"]):not([data-hero="done"]) .gauge-top > div { flex-direction: column; align-items: flex-start; gap: 2px; }
+.tr-hero-go { display: inline-flex; align-items: center; gap: 2px; min-height: 26px; padding: 0 var(--s-2) 0 var(--s-3); position: relative;
+  border: none; border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-family: inherit;
+  font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.tr-hero-go::before { content: ''; position: absolute; inset: -9px 0; }
+.tr-hero-go svg { width: 16px; height: 16px; }
+.tr-hero-go:active { opacity: .7; }
+.tr-hero-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* 開始選項：建議標籤與右邊的開始鈕 */
+.tr-suggest { display: inline-block; margin-left: var(--s-2); padding: 1px var(--s-2); border-radius: var(--r-pill); vertical-align: 2px;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); }
+.tr-go { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); }
+.tr-go svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
 .tr-scroll .muted { color: var(--ink-muted); margin: var(--s-4) 0 0; }
 /* 空狀態小插圖（v2.132，樣張方向 B）：這天沒有訓練＝一張小景置中、字在下面；還沒有課表＝圓盤裡一本筆記本、字在右邊 */
 .tr-empty-day { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 var(--s-1); }
@@ -2215,13 +2282,19 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ex-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--s-1); }
 .ex-toggle .grow { flex: 1; min-width: 0; }
 .ex-head .nm { display: block; font-size: var(--t-md); font-weight: 600; letter-spacing: var(--track-md); line-height: 1.2; }
-/* 第二行：展開＝肌群、收合＝進度。換內容時整段下移 35% 淡入（元件用 key 重掛） */
+/* 第二行：展開＝推估極限（沒有紀錄的退回肌群）、收合＝進度。換內容時整段下移 35% 淡入（元件用 key 重掛） */
 .ex-head .sub { display: flex; align-items: center; min-height: 18px; margin-top: 3px; font-size: var(--t-xs);
   color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums;
   letter-spacing: var(--track-xs); animation: sub-in var(--dur-base) var(--ease) both; }
 @keyframes sub-in { from { opacity: 0; transform: translateY(35%); } }
 /* 有縮圖之後名稱欄少了約 60px：圓點多、下一組又長時要截斷「下一組…」，不能把箭頭與 ⓘ 擠出卡片 */
 .ex-head .sub, .ex-head .prog { min-width: 0; max-width: 100%; }
+/* 展開時第二行＝推估極限（訓練分頁改版，使用者 2026-11-23）：「1RM 80 kg」；破紀錄換成「82 kg」接主色「+2.3 kg」。
+   名稱欄只有約 86px（393 寬實測），「1RM 82.3 kg +2.3 kg」要 126px，所以取整數、破紀錄時拿掉「1RM」；還是放不下（三位數＋兩位數增加量）就截斷 */
+.ex-head .sub:has(.ex-rm) { overflow: hidden; }
+.ex-head .sub .ex-rm { white-space: nowrap; }
+.ex-head .sub .ex-rm-up { margin-left: var(--s-1); color: var(--accent); font-weight: 700; white-space: nowrap; }
+.ex-head .sub.is-record .ex-rm { color: var(--ink); }
 .ex-head .prog { display: inline-flex; align-items: center; gap: var(--s-2); }
 .ex-head .prog > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-head .dots { display: inline-flex; flex-shrink: 0; gap: var(--s-1); }
@@ -2421,7 +2494,7 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .step-num.is-input { background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); cursor: text; }
 .step-num.is-input:focus { outline: none; }
 .set-acts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); }
-/* 組編輯 sheet 的 RPE 區：五格（6–10）填色膠囊；選中＝淡藍底（--accent-soft）。欄位名稱右側接一行淡色說明（v2.104，原本在五格下面） */
+/* 組編輯 sheet 的「還能再做幾下」：五格填色膠囊（剩 4+／剩 3／剩 2／剩 1／力竭，存 6–10）；選中＝淡藍底（--accent-soft）。v2.160 起字就是意思，拿掉 v2.104 的「9＝還能再做 1 下」說明 */
 .rpe-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-2); }
 .rpe-opt { min-height: 48px; border: none; border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
   font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 600; cursor: pointer;
@@ -2431,7 +2504,6 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .rpe-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .set-sec-row { display: flex; align-items: baseline; gap: var(--s-2); margin-bottom: var(--s-2); }
 .set-sec-row .set-sec { margin-bottom: 0; }
-.rpe-hint { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
 /* 要壓過 `.tr-sheet-body .action-btn` 的 margin-top（同權重、排在後面）：三顆鈕才會在同一條線上 */
 .tr-sheet-body .set-acts .action-btn { flex: 1; margin-top: 0; }
 .set-acts .set-sync { flex: 1.3; justify-content: center; padding: 0 var(--s-2); }
@@ -2481,15 +2553,73 @@ button.tr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   font-size: var(--t-md); color: var(--ink); outline: none; }
 /* placeholder 也是文字，要過 4.5:1（同 .search-box） */
 .tr-search input::placeholder { color: var(--ink-muted); }
-.tr-summary { text-align: center; padding: var(--s-2) 0 var(--s-3); }
-.tr-summary .big { display: block; font-family: var(--font-num); font-variant-numeric: tabular-nums;
-  font-size: var(--t-hero); font-weight: 900; letter-spacing: var(--track-hero); line-height: .95; }
-/* 完成 sheet 頂端的登頂小景（訓練換皮 C，FinishSheet 的 SummitArt）：推到 sheet 兩邊（負邊距＝.tr-sheet-body 的左右內距 --s-5，改一處要改兩處）；
-   .sheet svg 預設畫線條圖示，插圖要關掉描邊 */
-.sheet svg.tr-summit { display: block; width: calc(100% + var(--s-5) * 2); height: auto; aspect-ratio: 393 / 112; margin: 0 calc(var(--s-5) * -1);
-  stroke: none; stroke-width: 1; }
-.tr-summary .u { font-size: var(--t-sm); color: var(--ink-muted); margin-left: var(--s-1); }
-.tr-summary .l { display: block; font-size: var(--t-sm); color: var(--ink-muted); margin-top: var(--s-2); }
+/* 結束確認 sheet（訓練分頁改版 C1）：一行提醒＋「繼續練」「結束」並排；繼續練是次要、結束是主鈕（按了才真的結束） */
+.tr-finish-note { margin: var(--s-1) 0 var(--s-3); font-size: var(--t-base); color: var(--ink); line-height: 1.5; }
+.tr-finish-acts { display: flex; align-items: stretch; gap: var(--s-3); margin-top: var(--s-3); }
+.tr-finish-acts > * { margin: 0; }
+.tr-finish-acts .tr-secondary { flex: 0 0 auto; min-width: 112px; justify-content: center; }
+.tr-finish-acts .action-btn { flex: 1; }
+
+/* 訓練完成畫面（訓練分頁改版 D1，FinishCelebration）：整頁、紙色底；上面登頂小景、下面數字與亮點，底部一顆「好」。
+   進場（最晚 1.2 秒）：山坡 0–660ms 升起 → 太陽 300–940ms 升到山頂後 → 旗桿 620–820ms 立起 → 小旗 800–1200ms 展開（彈一下）；
+   數字 0→總重量 850ms（useCountUp）；下面各段依序淡入。只動 transform／opacity。 */
+.fc { background: var(--paper); }
+.fc-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.fc-scroll::-webkit-scrollbar { display: none; }
+.screen svg.fc-art { width: 100%; height: auto; aspect-ratio: 393 / 200; overflow: hidden; }
+.fc-art .fc-hill-far, .fc-art .fc-hill-mid { transform-box: view-box; animation: fc-rise 660ms var(--ease-rise) both; }
+.fc-art .fc-hill-mid { animation-delay: 80ms; }
+.fc-art .fc-sun { animation: fc-sun 640ms var(--ease-rise) 300ms both; }
+.fc-art .fc-pole { transform-box: fill-box; transform-origin: 50% 100%; animation: fc-pole 200ms ease-out 620ms both; }
+.fc-art .fc-flag { transform-box: fill-box; transform-origin: 0% 50%; animation: fc-flag 400ms var(--ease-pop) 800ms both; }
+.fc-art .fc-cloud { animation: fc-fade 600ms ease-out 200ms both; }
+@keyframes fc-rise { from { transform: translateY(60px); } }
+@keyframes fc-sun { from { transform: translateY(70px); opacity: 0; } }
+@keyframes fc-pole { from { transform: scaleY(0); } }
+@keyframes fc-flag { from { transform: scaleX(0); opacity: 0; } }
+@keyframes fc-fade { from { opacity: 0; } }
+.fc-body { padding: 0 var(--s-5) var(--s-5); text-align: center; }
+.fc-body > * { animation: fc-up 360ms var(--ease) both; }
+.fc-body > :nth-child(1) { animation-delay: 300ms; }
+.fc-body > :nth-child(2), .fc-body > :nth-child(3) { animation-delay: 250ms; }
+.fc-body > :nth-child(4) { animation-delay: 700ms; }
+.fc-body > :nth-child(5) { animation-delay: 900ms; }
+.fc-body > :nth-child(n + 6) { animation-delay: 1050ms; }
+@keyframes fc-up { from { opacity: 0; transform: translateY(8px); } }
+.fc-title { margin: var(--s-2) 0 0; font-size: var(--t-md); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-md); }
+.fc-big { display: flex; align-items: baseline; justify-content: center; gap: var(--s-1); margin-top: var(--s-2); }
+.fc-big .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-display); font-weight: 900;
+  letter-spacing: var(--track-display); line-height: 1; color: var(--ink); }
+.fc-big .u { font-size: var(--t-lg); font-weight: 700; color: var(--ink); }
+.fc-big-l { margin-top: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); }
+.fc-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: var(--s-5) 0 0; }
+.fc-stats > div { display: flex; flex-direction: column; gap: 2px; }
+.fc-stats > div + div { border-left: 1px solid var(--rule); }
+.fc-stats .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-lg); font-weight: 800; color: var(--ink); }
+.fc-stats .l { font-size: var(--t-xs); color: var(--ink-muted); }
+.fc-sec { margin-top: var(--s-5); text-align: left; }
+.fc-sec h2 { margin: 0 0 var(--s-2); font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.fc-hl { list-style: none; margin: 0; padding: 0; }
+.fc-hl-row { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; padding: 0 var(--s-4);
+  animation: fc-up 320ms var(--ease) both; animation-delay: calc(760ms + var(--i, 0) * 120ms); }
+.fc-hl-row + .fc-hl-row { border-top: 1px solid var(--rule); }
+.fc-hl-row .grow { flex: 1; min-width: 0; font-size: var(--t-base); font-weight: 600; color: var(--ink); }
+.fc-hl-ic { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); }
+.fc-hl-ic svg { width: 18px; height: 18px; }
+.fc-hl-tag { flex-shrink: 0; padding: 2px var(--s-2); border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent);
+  font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
+.fc-groups { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.fc-group { padding: var(--s-1) var(--s-3); border-radius: var(--r-pill); background: var(--fill); color: var(--ink);
+  font-size: var(--t-sm); font-weight: 600; }
+.fc-foot { flex-shrink: 0; padding: var(--s-2) var(--s-5) calc(var(--s-2) + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule);
+  background: var(--paper); }
+.fc-foot .action-btn { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  /* 減少動態：位移、縮放都關，整頁只留 ≤120ms 的淡入（REDUCED_FADE_MAX_MS） */
+  .fc-art *, .fc-body > *, .fc-hl-row { animation: none !important; }
+  .fc { animation: fc-fade 120ms ease-out both; }
+}
 .tr-field { display: block; margin: var(--s-3) 0; }
 .tr-field .lb { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted);
   letter-spacing: var(--track-xs); margin-bottom: var(--s-1); }

@@ -12,7 +12,9 @@ import {
   parseWorkoutMinutes,
   MUSCLE_GROUPS,
   RPE_CHIPS,
-  RPE_SHEET_VALUES,
+  RPE_SHEET_OPTIONS,
+  effortBadge,
+  effortSpoken,
   completesExercise,
   withPendingDone,
   lastSetRpe,
@@ -1394,11 +1396,18 @@ describe('formatRoutineTarget', () => {
 })
 
 describe('RPE（spec.md「階段 4 乙」）', () => {
-  it('休息條四檔：3 下以上＝7、2 下＝8、1 下＝9、力竭＝10', () => {
-    expect(RPE_CHIPS.map((c) => [c.label, c.rpe])).toEqual([['3 下以上', 7], ['2 下', 8], ['1 下', 9], ['力竭', 10]])
+  it('休息條四檔：剩 3+＝7、剩 2＝8、剩 1＝9、力竭＝10', () => {
+    expect(RPE_CHIPS.map((c) => [c.label, c.rpe])).toEqual([['剩 3+', 7], ['剩 2', 8], ['剩 1', 9], ['力竭', 10]])
   })
   it('組編輯 sheet 五格 6–10，都落在 DDL 的 5–10 之內', () => {
-    expect([...RPE_SHEET_VALUES]).toEqual([6, 7, 8, 9, 10])
+    expect(RPE_SHEET_OPTIONS.map((o) => [o.label, o.rpe])).toEqual([['剩 4+', 6], ['剩 3', 7], ['剩 2', 8], ['剩 1', 9], ['力竭', 10]])
+  })
+  it('組列小標與讀法講同一件事；範圍外回 null', () => {
+    expect([10, 9, 8, 7, 6].map(effortBadge)).toEqual(['0', '1', '2', '3', '4'])
+    expect([10, 9, 7, 6].map(effortSpoken)).toEqual(['力竭', '還能再做 1 下', '還能再做 3 下', '還能再做 4 下以上'])
+    expect(effortBadge(5)).toBe('4') // 舊資料的 5 也當剩 4+，小標不能不見
+    expect(effortBadge(4)).toBeNull()
+    expect(effortSpoken(11)).toBeNull()
   })
   it('completesExercise：其餘組都已完成才算這個動作做完；自己不用先打勾；沒有未完成的別組才成立', () => {
     const set = (id: string, done: boolean): Row => ({ id, done })

@@ -289,7 +289,8 @@ test('被拒絕的訓練又按了完成訓練：放棄新增訓練時，那條 u
   // 回到進行中的那次訓練、完成它：workouts 多一條 update（排在被拒絕的 insert 後面，同一列，送不出去）
   await page.locator('.tr-sec:has-text("進行中") + .tr-card .tr-row').click()
   await page.getByRole('button', { name: '完成訓練' }).click()
-  await page.locator('[data-screen="finish-sheet"]').getByRole('button', { name: '完成', exact: true }).click()
+  await page.locator('[data-screen="finish-sheet"]').getByRole('button', { name: '結束', exact: true }).click()
+  await page.locator('[data-screen="finish"] [data-action="finish-done"]').click() // v2.160：確認 → 完成畫面 → 好
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
   await expect
     .poll(async () => (await queueEntries(page)).filter((e) => e.table === 'workouts').map((e) => e.op))

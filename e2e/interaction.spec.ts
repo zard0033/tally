@@ -1163,6 +1163,19 @@ test('狀態列色條：天空頂著時染天空色，捲走、進子頁面就�
   await page.locator('.tab[aria-label="訓練"]').click()
   await expect(page.locator('[data-screen="training"]')).toBeVisible()
   await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  // v2.160 起訓練頁用今日頁同一副 .sky（跟著 .tr-home 一起捲）：捲走回紙色、捲回天空色；進課表子頁回紙色
+  await page.locator('.tr-home').evaluate((el) => {
+    const pad = document.createElement('div')
+    pad.style.height = '1200px'
+    el.appendChild(pad)
+    el.scrollTop = (el.querySelector('.sky') as HTMLElement).offsetHeight + 40
+  })
+  await expect.poll(state).toEqual({ edge: null, bg: PAPER })
+  await page.locator('.tr-home').evaluate((el) => (el.scrollTop = 0))
+  await expect.poll(state).toEqual({ edge: 'sky', bg: SKY })
+  await page.locator('[data-action="open-routines"]').click()
+  await expect(page.locator('[data-screen="routines"]')).toBeVisible()
+  await expect.poll(state).toEqual({ edge: null, bg: PAPER })
 })
 
 test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，不被蓋住', async ({ page }) => {

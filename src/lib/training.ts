@@ -572,16 +572,39 @@ export function removeSetOps(detail: WorkoutDetail, setId: string): RowOp[] {
 
 /* ═══════════ RPE（spec.md「階段 4 乙」） ═══════════ */
 
-/** 休息條問「最後一組還能再做幾下」的四檔，對應 RPE ＝ 10 − 剩餘下數（3 下以上全歸 7）。 */
+/* 訓練分頁改版（2026-11-23，使用者裁決 C3）：畫面上不再出現「RPE」與 6–10 的數字，三處（休息條、組編輯、組列小標）一律講
+   「還能再做幾下」。DB 仍存 RPE ＝ 10 − 剩餘下數，欄位與 check（5–10）不動。 */
+
+/** 休息條的四檔（3 下以上全歸 7）。 */
 export const RPE_CHIPS = [
-  { rpe: 7, label: '3 下以上' },
-  { rpe: 8, label: '2 下' },
-  { rpe: 9, label: '1 下' },
+  { rpe: 7, label: '剩 3+' },
+  { rpe: 8, label: '剩 2' },
+  { rpe: 9, label: '剩 1' },
   { rpe: 10, label: '力竭' },
 ] as const
 
-/** 組編輯 sheet 的五格；6 只有這裡有（休息條只問有沒有逼近極限）。DDL 的 check 是 5–10。 */
-export const RPE_SHEET_VALUES = [6, 7, 8, 9, 10] as const
+/** 組編輯 sheet 的五格；「剩 4+」（6）只有這裡有（休息條只問有沒有逼近極限）。 */
+export const RPE_SHEET_OPTIONS = [
+  { rpe: 6, label: '剩 4+' },
+  { rpe: 7, label: '剩 3' },
+  { rpe: 8, label: '剩 2' },
+  { rpe: 9, label: '剩 1' },
+  { rpe: 10, label: '力竭' },
+] as const
+
+/** 組列小標：只寫一個數字＝還剩幾下（力竭 0、剩 4+ 寫 4；使用者 2026-11-23 選，保留舊標籤一個字的長相）。
+ *  DDL 允許的 5（介面寫不出來，只可能是舊資料）也當剩 4+——小標是改吃力程度的入口，不能不見；範圍外 → null。 */
+export function effortBadge(rpe: number): string | null {
+  if (rpe === 5) return '4'
+  return rpe >= 6 && rpe <= 10 ? String(10 - rpe) : null
+}
+
+/** 完整讀法（aria-label 用）；不在 6–10 → null。 */
+export function effortSpoken(rpe: number): string | null {
+  if (rpe === 10) return '力竭'
+  if (rpe === 6 || rpe === 5) return '還能再做 4 下以上'
+  return rpe >= 7 && rpe <= 9 ? `還能再做 ${10 - rpe} 下` : null
+}
 
 /** 把「已送出、畫面還沒反映」的勾套到這一份 sets 上。寫入要先 await 存檔才重繪（不是樂觀更新），
  *  連續快速打勾時，後一下的判斷若只看畫面上的 sets，會把前一下還在路上的那組當成沒做。 */

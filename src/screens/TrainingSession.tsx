@@ -10,7 +10,7 @@
    沒有組列、全部完成、新增一組，勾組才會觸發的休息條與重量建議也就碰不到。握把、替換、移除與其他卡相同。
    有氧動作卻有組的卡退回重訓的畫法（`isCardioCard`）。
    寫入全部走 onWrite（排進離線佇列、立刻反映在畫面上）。詳見 spec.md「訓練中畫面改版」。 */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { move } from '@dnd-kit/helpers'
@@ -28,18 +28,16 @@ import { CASCADE_STEP_MS, DUR, RPE_ASK_CLOSE_MS } from '@/lib/durations'
 import CardioSheet from './CardioSheet'
 import ExerciseCard from './ExerciseCard'
 import ExercisePicker from './ExercisePicker'
-import FinishSheet, { type FinishLine } from './FinishSheet'
+import FinishCelebration from './FinishCelebration'
+import FinishSheet from './FinishSheet'
 import SetSheet, { type SetTarget } from './SetSheet'
 import {
   addExerciseOps,
   addSetOps,
   cardioLastMinutes,
-  cardioSummary,
   completesExercise,
   entryHasRecord,
-  exerciseDisplayName,
   finishWorkoutOps,
-  formatKg,
   isBackfilled,
   isCardioCard,
   isCardioExercise,
@@ -61,6 +59,7 @@ import {
   type WorkoutDetail,
   type WorkoutExerciseDetail,
 } from '@/lib/training'
+import { exerciseBests } from '@/lib/trainingHome'
 
 interface TrainingSessionProps {
   detail: WorkoutDetail
@@ -167,6 +166,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
   // 分鐘欄的「上次 N」：開 sheet 當下取一次（排除這次訓練），sheet 開著時不隨寫入變
   const [cardioLast, setCardioLast] = useState<number | null>(null)
   const [finish, setFinish] = useState(false)
+  // 按「結束」寫入成功後換成整頁的完成畫面（訓練分頁改版 D1）；「好」才回訓練頁
+  const [celebrate, setCelebrate] = useState(false)
   const [askDelete, setAskDelete] = useState(false)
   const [askRemove, setAskRemove] = useState<string | null>(null)
   // 移除確認的內文跟著問的當下記住：關閉時 askRemove 先清掉，照 removing 算的話收起途中會跳成重訓的文案
@@ -284,7 +285,8 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     }
     if (await run(ops)) {
       setFinish(false)
-      onBack()
+      rest.skip() // 練完了，休息條不再跟到完成畫面或別的分頁
+      setCelebrate(true)
     }
   }
 
@@ -332,17 +334,11 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     cascadeTimer.current = setTimeout(() => setCascade([]), DUR.base + 200 + ops.length * CASCADE_STEP_MS)
   }
 
-  const finishLines: FinishLine[] = exercises.map((item) => ({
-    name: exerciseDisplayName(item.exercise),
-    // 有氧卡沒有組：列有氧摘要；沒填分鐘時給「還沒填」，不落到 FinishSheet 的「沒有打勾的組」
-    text: isCardioCard(item)
-      ? cardioSummary(item.entry) || '還沒填'
-      : item.sets
-          .filter((s) => s.done === true)
-          .map((s) => `${formatKg(Number(s.weight_kg))} × ${Number(s.reps)}`)
-          .join(' · '),
-  }))
+  // 還沒勾的組（有氧卡沒有組，不算）：確認結束時講一聲，沒勾的不算進紀錄
+  const undoneSets = exercises.filter((e) => !isCardioCard(e)).reduce((n, e) => n + e.sets.filter((x) => x.done !== true).length, 0)
 
+  // 卡頭第二行的推估極限：每記一組 db 就換一份，跟著重算（一次訓練幾十組，全庫掃一遍不貴）
+  const bests = useMemo(() => exerciseBests(db, workout.id), [db, workout.id])
   const pickable = db.exercises.filter((e) => e.archived !== true)
   // 替換時清單不放目前這個動作（換成自己沒有意義）
   const replacePickable = replacing ? pickable.filter((e) => e.id !== replacingExercise) : pickable
@@ -354,6 +350,25 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
     setRemoveCardio(cardio)
     setRemoveRecorded(entryHasRecord(item))
     setAskRemove(item.entry.id)
+  }
+
+  if (celebrate) {
+    const routine = typeof workout.routine_id === 'string' ? db.routines.find((r) => r.id === workout.routine_id) : undefined
+    return (
+      <FinishCelebration
+        db={db}
+        workoutId={workout.id}
+        routineName={routine ? String(routine.name) : null}
+        volume={summary.volume}
+        minutes={backfilled && summary.minutes === 0 ? null : summary.minutes}
+        doneSets={summary.doneSets}
+        canSaveRoutine={workout.routine_id == null && exercises.length > 0}
+        busy={busy}
+        error={error}
+        onSaveRoutine={saveRoutine}
+        onDone={onBack}
+      />
+    )
   }
 
   return (
@@ -424,6 +439,7 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
                 key={item.entry.id}
                 item={item}
                 index={index}
+                best={bests.get(String(item.entry.exercise_id))}
                 open={openEx === item.entry.id}
                 sorting={sorting}
                 swipeId={swipeId}
@@ -552,18 +568,12 @@ export default function TrainingSession({ detail, db, onWrite, onBack }: Trainin
 
       <FinishSheet
         open={finish}
-        volume={summary.volume}
-        minutes={backfilled ? null : summary.minutes}
-        doneSets={summary.doneSets}
-        totalSets={summary.totalSets}
-        lines={finishLines}
+        undoneSets={undoneSets}
         backfill={backfilled}
-        canSaveRoutine={workout.routine_id == null && exercises.length > 0}
         busy={busy}
         error={error}
         onClose={() => setFinish(false)}
         onFinish={(m) => void finishNow(m)}
-        onSaveRoutine={saveRoutine}
       />
 
       <ConfirmDialog

@@ -82,9 +82,11 @@ interface DateStripProps {
   onSelect: (iso: string) => void
   /** 目前畫面（週列涵蓋的月份或月曆翻到的月份）需要哪個月的小點資料。 */
   onViewMonth: (key: MonthKey) => void
+  /** 標題列右邊的額外按鈕（訓練頁的「課表」「分析」；訓練分頁改版 B1）。今日頁不給。 */
+  actions?: ReactNode
 }
 
-export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateStripProps) {
+export default function DateStrip({ date, marked, onSelect, onViewMonth, actions }: DateStripProps) {
   const today = localDate()
   const max = maxPlanDate()
   const panelId = useId()
@@ -207,10 +209,15 @@ export default function DateStrip({ date, marked, onSelect, onViewMonth }: DateS
             </svg>
           </button>
         </h1>
-        {date !== today && (
-          <button type="button" className="date-today-btn" onClick={goToday}>
-            回今天
-          </button>
+        {(date !== today || actions) && (
+          <div className="datectl-acts">
+            {date !== today && (
+              <button type="button" className="date-today-btn" onClick={goToday}>
+                回今天
+              </button>
+            )}
+            {actions}
+          </div>
         )}
       </div>
 

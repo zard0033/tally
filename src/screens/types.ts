@@ -43,6 +43,8 @@ export interface TodayProps {
   onDeleteIntake: (id: number) => void
   /** 剛加入成功的 intake id，用來做「短暫高亮後淡出」；App 會在約 1.3s 後自動清空這個集合。 */
   justAddedIds: ReadonlySet<number>
+  /** 最後一次加入的那幾筆（記完一餐的提示用；不會被閃爍計時清掉，網路慢、重撈晚到也接得上）。 */
+  lastAddedIds: ReadonlySet<number>
   /** 改單筆份量（點按品項展開的就地編輯區用）。失敗 rejects，Today 自己接住顯示「存不進去：」，
    *  跟 LogSheet 的 onCreateIntake／onCreateFood 是同一套失敗處理慣例。 */
   onUpdateIntakeQty: (id: number, qty: number) => Promise<void>

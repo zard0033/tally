@@ -1,4 +1,4 @@
-/* 開始訓練 sheet（樣張 ②）：課表（最上面）與空白開始。封存的課表不進這張選單。
+/* 開始訓練 sheet（樣張 ②）：課表（最上面，建議的那份排第一並標「建議」）與空白開始。封存的課表不進這張選單。
    沒有「記一筆有氧」：有氧是動作（spec「有氧併入動作」D4），單獨記一筆也是空白開始→加有氧動作。
    走 SpringSheet（沒有輸入欄、貼合內容高度）。 */
 import RoutineRow from '@/components/RoutineRow'
@@ -15,6 +15,10 @@ interface StartSheetProps {
   error: string | null
   /** 使用中的課表（已排除封存），依建立順序。 */
   routines: readonly RoutineCard[]
+  /** 每份課表的說明（routineStartNotes）；排第一的那份（suggestRoutine，最久沒做）；標「建議」的那份（同一份且練到的肌群都恢復了，否則 null）。 */
+  notes: ReadonlyMap<string, string>
+  firstId: string | null
+  suggestedId: string | null
   onClose: () => void
   onBlank: () => void
   onRoutine: (routineId: string) => void
@@ -27,6 +31,9 @@ export default function StartSheet({
   busy,
   error,
   routines,
+  notes,
+  firstId,
+  suggestedId,
   onClose,
   onBlank,
   onRoutine,
@@ -35,9 +42,19 @@ export default function StartSheet({
     <SpringSheet open={open} onClose={onClose} title="開始訓練" screen="start-sheet" fit>
       <div className="tr-sheet-body">
         <div className="tr-card">
-          {routines.map((card) => (
-            <RoutineRow key={card.routine.id} card={card} disabled={busy} onOpen={() => onRoutine(card.routine.id)} />
-          ))}
+          {/* 建議的那份排最上面（訓練分頁改版：首頁不放建議，開始時才給；兩處同一份） */}
+          {[...routines]
+            .sort((a, b) => Number(b.routine.id === firstId) - Number(a.routine.id === firstId))
+            .map((card) => (
+              <RoutineRow
+                key={card.routine.id}
+                card={card}
+                disabled={busy}
+                note={notes.get(card.routine.id) ?? ''}
+                suggested={card.routine.id === suggestedId}
+                onOpen={() => onRoutine(card.routine.id)}
+              />
+            ))}
           <button className="tr-row" type="button" disabled={busy} onClick={onBlank} data-action="start-blank">
             <span className="grow">
               <span className="nm">空白開始</span>

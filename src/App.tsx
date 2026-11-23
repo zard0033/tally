@@ -51,6 +51,8 @@ import Training from '@/screens/Training'
 import BootScreen, { type BootStatus } from '@/screens/BootScreen'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TabBar, { type Tab } from '@/screens/TabBar'
+import LiveBar from '@/components/LiveBar'
+import { liveWorkout } from '@/lib/trainingHome'
 import { useMonthMarks } from '@/useMonthMarks'
 import { useRepeatHistory } from '@/useRepeatHistory'
 import { useFoodCategories } from '@/useFoodCategories'
@@ -114,6 +116,8 @@ export default function App() {
   const [trainingDate, setTrainingDate] = useState<string>(() => localDate())
   const [trainingStartOpen, setTrainingStartOpen] = useState(false)
   const [trainingFullPage, setTrainingFullPage] = useState(false)
+  // 開著的訓練中整頁：放在 App 而不是 Training，換分頁回來、或從「訓練中」小條點回來都接得上（訓練分頁改版 C2）
+  const [trainingSessionId, setTrainingSessionId] = useState<string | null>(null)
   /** 登出前佇列非空：這裡放條數，非 null 就顯示確認對話框（樣張 ⑨）。 */
   const [signOutAsk, setSignOutAsk] = useState<number | null>(null)
 
@@ -171,6 +175,8 @@ export default function App() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetMeal, setSheetMeal] = useState<MealKey | null>(null)
   const [justAddedIds, setJustAddedIds] = useState<Set<number>>(new Set())
+  // 最後一次加入的那幾筆（不會被閃爍計時清掉）：今日頁「記完一餐」的提示要等重撈回來才判斷，網路慢時 justAddedIds 早就清空了
+  const [lastAddedIds, setLastAddedIds] = useState<ReadonlySet<number>>(new Set())
   const flashTimer = useRef<number | undefined>(undefined)
 
   /* 刪除的 undo 窗（v2.1）：按下刪除後**先不打 DELETE**，只把該列從畫面樂觀移除，
@@ -747,6 +753,7 @@ export default function App() {
 
   const flashAdded = useCallback((ids: number[]) => {
     setJustAddedIds(new Set(ids))
+    setLastAddedIds(new Set(ids))
     if (flashTimer.current !== undefined) window.clearTimeout(flashTimer.current)
     flashTimer.current = window.setTimeout(() => setJustAddedIds(new Set()), 1300)
   }, [])
@@ -1110,12 +1117,16 @@ export default function App() {
   // 全站精緻度 B1a：飲食分頁的底部列浮在內容上、內容經過時霧化；訓練與設定等各自批次再接
   const barShown = !settingsSubView && !trainingFullPage
   const floatingBar = barShown && tab === 'today'
+  // 「訓練中」小條：底部列在的時候（訓練中整頁開著時底部列本來就收起）才有。訓練分頁正看著那一天時不出：
+  // 天空那一行已經是「訓練中 38:01 繼續」，再一條是重複（其他分頁、或訓練分頁看別天時照出）
+  const liveRow = barShown && training.view ? liveWorkout(training.view.db) : null
+  const live = liveRow && !(tab === 'training' && trainingDate === liveRow.performed_on) ? liveRow : null
 
   return (
     <div className="screen" id="view-app">
       {/* Safari 26 從這條取狀態列的顏色（見 app.css .edge-top）；要是真的元素，::before 不會被取樣 */}
       <div className="edge-top" aria-hidden="true" />
-      <main className={floatingBar ? 'main has-floating-bar' : 'main'}>
+      <main className={`main${floatingBar ? ' has-floating-bar' : ''}${live ? ' has-live' : ''}`}>
         {tab === 'training' ? (
           <Training
             view={training.view}
@@ -1129,6 +1140,8 @@ export default function App() {
             onDiscard={training.discard}
             discardImpact={training.discardImpact}
             onRetry={training.retry}
+            sessionId={trainingSessionId}
+            onSessionChange={setTrainingSessionId}
           />
         ) : notice ? (
           /* 整頁錯誤與開機、登入同一幅畫（v2.135）；.notice 是給 e2e 與其他地方認「整頁換成錯誤」的 */
@@ -1159,6 +1172,7 @@ export default function App() {
             onOpenSheet={openSheet}
             onDeleteIntake={handleDeleteIntake}
             justAddedIds={justAddedIds}
+            lastAddedIds={lastAddedIds}
             onUpdateIntakeQty={handleUpdateIntakeQty}
             onUpdateIntakeMeal={handleUpdateIntakeMeal}
             onUpdateIntakeDetail={handleUpdateIntakeDetail}
@@ -1261,7 +1275,19 @@ export default function App() {
           會撿到一個不切換頁面的東西（review 抓到的語意錯置）。 */}
       {floatingBar && <div className="fog" aria-hidden="true" />}
       {barShown && (
-      <div className={floatingBar ? 'bottom-bar is-floating' : 'bottom-bar'}>
+      <div className={`bottom-bar${floatingBar ? ' is-floating' : ''}${live ? ' has-live' : ''}`}>
+        {live && training.view && (
+          <LiveBar
+            key={live.id}
+            db={training.view.db}
+            workout={live}
+            onOpen={() => {
+              setTrainingDate(String(live.performed_on))
+              setTrainingSessionId(live.id)
+              setTab('training')
+            }}
+          />
+        )}
         <TabBar tab={tab} onChange={setTab} settingsDot={advice?.kind === 'ask'} />
         {/* !notice 不可少：ready 只看 profile/targets/weight/foods，初次載入成功之後才發生的失敗
             （loadDay 掛掉、刪除送不出去）不會讓 ready 轉 false。CTA 搬出 Today 之前是跟著

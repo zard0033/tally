@@ -281,6 +281,7 @@ test('有輸入欄的 sheet（新課表）：開啟後焦點直接落在名稱�
   await openApp(page)
   await page.locator('.tab[aria-label="訓練"]').click()
   await page.waitForSelector('[data-screen="training"]')
+  await page.locator('[data-action="open-routines"]').click() // v2.160 起新課表在課表子頁
   await page.locator('[data-action="new-routine"]').click()
   const nameSheet = page.locator('[data-screen="routine-name"]')
   await expect(nameSheet).toBeVisible()

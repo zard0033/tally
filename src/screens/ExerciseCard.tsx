@@ -10,6 +10,8 @@ import {
   allSetsDone,
   cardioRecorded,
   cardioSummary,
+  effortBadge,
+  effortSpoken,
   exerciseDisplayName,
   exerciseProgress,
   formatKg,
@@ -17,6 +19,7 @@ import {
   type Row,
   type WorkoutExerciseDetail,
 } from '@/lib/training'
+import { recordOf, type ExerciseBest } from '@/lib/trainingHome'
 
 /** 收合列的第二行：小圓點一組一顆（做完的實心）加下一組；超過 8 組圓點省略、補「d/n 組」。不顯示分數。 */
 const MAX_DOTS = 8
@@ -75,16 +78,17 @@ function SetRow({ set, no, canDelete, swipeOpen, flashIndex, cascadeIndex, onSwi
       >
         <span className="no">
           {no}
-          {/* 有填 RPE 的組在組號格右上角掛一顆小標籤（v2.105，樣張 rpe-badge A：只有數字、不分強度；v2.106 起用強調色）；沒填的不變。
-              RPE 只在打勾的組有意義，同組編輯 sheet。v2.107 起它是按鈕：點了開那一組的組編輯 sheet（RPE 唯一能改的地方）。 */}
-          {done && set.rpe != null && (
+          {/* 有填吃力程度的組在組號格右上角掛一顆小標籤（v2.105；v2.106 起用強調色）；沒填的不變。只在打勾的組有意義，同組編輯 sheet。
+              v2.107 起它是按鈕：點了開那一組的組編輯 sheet（唯一能改的地方）。v2.160 起數字改成「還剩幾下」（力竭 0；訓練分頁改版 C3），不再是 RPE。 */}
+          {done && set.rpe != null && effortBadge(Number(set.rpe)) !== null && (
             <button
               className="rpe-badge"
               type="button"
-              aria-label={`第 ${no} 組 RPE ${Number(set.rpe)}，調整`}
+              data-rpe={Number(set.rpe)}
+              aria-label={`第 ${no} 組${effortSpoken(Number(set.rpe))}，調整`}
               onClick={(e) => onEdit(e.currentTarget)}
             >
-              {Number(set.rpe)}
+              {effortBadge(Number(set.rpe))}
             </button>
           )}
         </span>
@@ -242,6 +246,8 @@ interface ExerciseCardProps {
   onEditSet: (setId: string, opener: HTMLElement) => void
   onToggleSet: (set: Row) => void
   onDeleteSet: (setId: string) => void
+  /** 這個動作的推估極限（這次之前的最佳、這次目前最好的一組）；沒有任何有效組＝undefined，第二行退回肌群。 */
+  best?: ExerciseBest
 }
 
 export default function ExerciseCard(p: ExerciseCardProps) {
@@ -251,6 +257,9 @@ export default function ExerciseCard(p: ExerciseCardProps) {
   const allPress = usePressed()
   const name = exerciseDisplayName(exercise)
   const group = exercise ? muscleGroupLabel(exercise.muscle_group) : ''
+  // 展開時第二行＝推估極限（使用者 2026-11-23：取代肌群；破紀錄就換成新數字＋「+N kg」）。兩邊都沒有就退回肌群
+  const record = p.best ? recordOf(p.best) : null
+  const rm = p.best ? Math.max(p.best.prior ?? 0, p.best.current?.e1rm ?? 0) : 0
   // 有圖的動作（目錄裡有圖的預設動作，含有氧的坡度健走；由 exerciseCatalog.test 鎖住）縮圖是獨立的放大鈕；沒圖的（自建、已刪除、
   // 資料集沒有對應的三個預設動作）肌群單字或類型圖示留在 ex-toggle 裡，點它仍是名稱鈕的動作，不留點不到的死區
   const photo = exercise != null && hasCatalogImage(exercise)
@@ -327,8 +336,20 @@ export default function ExerciseCard(p: ExerciseCardProps) {
               <span className="grow">
                 <span className="nm">{name}</span>
                 {/* key 隨展開狀態換：第二行換內容時整段重新淡入（下移 35%） */}
-                <span className="sub" key={open ? 'group' : 'progress'}>
-                  {open ? group : <Progress sets={sets} />}
+                {/* key 也隨數字換：破紀錄、數字更新時同一套淡入再播一次，就是「更新了」的訊號 */}
+                <span className={`sub${open && record ? ' is-record' : ''}`} key={open ? (rm > 0 ? `rm-${rm}` : 'group') : 'progress'}
+                  aria-label={open && rm > 0 ? (record ? `推估極限 ${formatKg(rm)} 公斤，新高，多 ${formatKg(record.delta)} 公斤` : `推估極限 ${formatKg(rm)} 公斤`) : undefined}>
+                  {!open ? (
+                    <Progress sets={sets} />
+                  ) : rm > 0 ? (
+                    // 名稱欄只有約 86px：數字取整數（估算值，小數沒有意義）；破紀錄時「1RM」讓位給增加量，增加量 10 以內留一位小數（+0.2 不能捨成 0）
+                    <>
+                      <span className="ex-rm">{record ? `${Math.round(rm)} kg` : `1RM ${Math.round(rm)} kg`}</span>
+                      {record && <span className="ex-rm-up">+{record.delta < 10 ? formatKg(record.delta) : Math.round(record.delta)} kg</span>}
+                    </>
+                  ) : (
+                    group
+                  )}
                 </span>
               </span>
               <svg className={`chev${open ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">

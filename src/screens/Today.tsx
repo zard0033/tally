@@ -3,16 +3,17 @@
    左滑刪除自 v2.1 改用 motion drag 手刻（取代 react-swipeable-list——那個套件拖曳中
    每一幀改 trailing actions 的 width，等於每幀觸發版面重排，真機體感與 iOS 有明顯落差；
    motion 這條是純 transform，走合成層）。計算全部交給 src/lib/formulas.ts。 */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, type PanInfo } from 'motion/react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import DateStrip from '@/components/DateStrip'
+import { useCountUp } from '@/components/useCountUp'
 import { Skel, SkelBlock } from '@/components/Skeleton'
 import { useSkyEdge } from '@/components/useSkyEdge'
 import { DeleteIcon } from '@/components/DeleteIcon'
 import { iconStack, leadCategory } from '@/lib/categories'
-import { isPlannable, weekdayDate } from '@/lib/dates'
+import { isPlannable, localDate, weekdayDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
@@ -49,6 +50,7 @@ export default function Today(props: TodayProps) {
     onOpenSheet,
     onDeleteIntake,
     justAddedIds,
+    lastAddedIds,
     onUpdateIntakeQty,
     onUpdateIntakeMeal,
     onUpdateIntakeDetail,
@@ -168,8 +170,53 @@ export default function Today(props: TodayProps) {
 
   const edge = useSkyEdge()
 
+  /* 記完一餐的那句話（訓練分頁改版 D2-b，使用者 2026-11-23 選）：某一餐從「沒記」變成「記了」的那一下（只看剛加入的那幾筆，
+     載入、換日期、編輯都不算），頂端浮出「晚餐記好了 · 還能吃 420 卡」約 2 秒；今天的早、午、晚三餐因此都記了（點心不算必要），
+     改成「三餐都記了 · 這個月記了 N 天」。慶祝的是「有記」：超出時只說記好了，不講吃了多少；沒有綠色、不提連續天數（斷了會變壓力）。
+     放頂端不放底部：底部是刪除與一鍵加入的復原條，兩條會疊在一起。 */
+  const [toast, setToast] = useState<{ seq: number; text: string } | null>(null)
+  // 加入的 id 先到、重撈的 rows 後到：等 rows 裡真的有這幾筆才判斷，同一批只判一次。
+  // 「上一批」記在 state（React 的「記住上一次的值」寫法），render 被重跑也不會吞掉提示
+  const [seenAdded, setSeenAdded] = useState(lastAddedIds)
+  if (lastAddedIds !== seenAdded && lastAddedIds.size > 0 && rows?.some((r) => lastAddedIds.has(r.id))) {
+    setSeenAdded(lastAddedIds)
+    const newly = MEALS.filter((m) => {
+      const rs = rows.filter((r) => r.meal === m.key)
+      return rs.length > 0 && rs.every((r) => lastAddedIds.has(r.id))
+    })
+    if (newly.length > 0) {
+      const logged = new Set(rows.map((r) => r.meal))
+      const today = localDate()
+      const mains: MealKey[] = ['breakfast', 'lunch', 'dinner']
+      const dayDone = currentDate === today && mains.every((k) => logged.has(k)) && newly.some((m) => mains.includes(m.key))
+      let text: string
+      if (dayDone) {
+        const month = today.slice(0, 7)
+        const days = new Set([...markedDates].filter((d) => d.startsWith(month) && d <= today))
+        days.add(today)
+        text = `三餐都記了 · 這個月記了 ${days.size} 天`
+      } else {
+        const left = eatenKcal === null || isPast || over ? null : targetKcal - eatenKcal
+        text = `${newly[newly.length - 1].label}記好了${left !== null ? ` · 還能吃 ${left} 卡` : ''}`
+      }
+      setToast({ seq: (toast?.seq ?? 0) + 1, text })
+    }
+  }
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), LOG_TOAST_MS)
+    return () => window.clearTimeout(t)
+  }, [toast])
+
   return (
     <div className={`main${over ? ' is-over' : ''}`} data-screen="today">
+      <div className="log-toast-wrap" role="status" aria-live="polite">
+        {toast && (
+          <div key={toast.seq} className="log-toast" data-testid="log-toast" style={{ '--log-toast-ms': `${LOG_TOAST_MS}ms` } as CSSProperties}>
+            {toast.text}
+          </div>
+        )}
+      </div>
       {/* v2.122：天空與三大營養素跟著時間軸一起捲（.timeline 是整頁唯一的捲動區）。插圖把頂端撐高了約 70px，
           固定不動的話 393×745 下時間軸只剩不到 300px，展開最後一列的編輯區（約 322px）整塊放不進去。 */}
       <div className="timeline" ref={edge.ref} onScroll={edge.sync}>
@@ -614,6 +661,7 @@ function MealNode({
     if (!prevHasItems && hasItems) setJustDone(true)
   }
   const done = hasItems || lingering
+  // 小計「滾上去」（v2.141「加進來」）：變大時從舊值滾到新值（480ms、先快後慢）；變小、第一次、減少動態直接到位
   const kcal = useCountUp(Math.round(sumIntake(items).kcal))
   /* 剛加入的那幾筆依序落下（間隔 70ms）；只看 justAdded，載入、換日期、編輯都不會動 */
   const addedOrder = items.filter((r) => h.justAddedIds.has(r.id)).map((r) => r.id)
@@ -721,32 +769,8 @@ function MealNode({
   )
 }
 
-/** 小計「滾上去」（v2.141「加進來」）：數字變大時從舊值滾到新值（480ms、先快後慢）；變小（刪除）、第一次、減少動態都直接到位。
- *  數字用 Nunito 等寬（.node-kcal），滾動時寬度不跳。 */
-function useCountUp(target: number): number {
-  const [shown, setShown] = useState(target)
-  /* 起點是畫面上正在顯示的數字，不是上一次的目標：滾到一半目標又變大（連按份量），從上一個目標起跳會先跳一下（review） */
-  const showing = useRef(target)
-  useEffect(() => {
-    const start = showing.current
-    if (target <= start || reduceMotion()) {
-      showing.current = target
-      setShown(target)
-      return
-    }
-    let raf = 0
-    const t0 = performance.now()
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / 480)
-      showing.current = Math.round(start + (target - start) * (1 - (1 - p) ** 3))
-      setShown(showing.current)
-      if (p < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target])
-  return shown
-}
+/** 記完一餐那句話停多久（含進退場）。 */
+const LOG_TOAST_MS = 2200
 
 const SOURCE_LABEL: Record<SuggestSource, string> = { gap: '建議', frequent: '常吃', last: '上次' }
 

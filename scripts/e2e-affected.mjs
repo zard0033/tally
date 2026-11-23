@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
-const TRAIN = ['training', 'rest-timer', 'spring-sheet', 'sync-sheet', 'weight-suggest']
+const TRAIN = ['training', 'training-home', 'rest-timer', 'spring-sheet', 'sync-sheet', 'weight-suggest']
 const ANALYSIS = ['analysis', 'recovery-foreground']
 const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
@@ -31,13 +31,15 @@ const SHEETS = ['spring-sheet', 'sync-sheet']
 /* 動作庫／食品庫的入口列在設定頁，settings-nav 守「三個入口都進得去」，所以兩個庫多帶它 */
 const SCREENS = {
   TrainingSession: TRAIN, ExerciseCard: TRAIN, SetSheet: TRAIN, CardioSheet: TRAIN, ExercisePicker: TRAIN,
-  ExerciseEditSheet: TRAIN, ExerciseLibrary: [...TRAIN, 'settings-nav'], FinishSheet: TRAIN,
+  ExerciseEditSheet: TRAIN, ExerciseLibrary: [...TRAIN, 'settings-nav'], FinishSheet: TRAIN, FinishCelebration: TRAIN,
   StartSheet: TRAIN, SyncSheet: TRAIN, RoutineEditor: TRAIN, RoutineNameSheet: TRAIN,
   RoutineTargetSheet: TRAIN,
-  Training: [...TRAIN, ...ANALYSIS], // 訓練分析的入口列在訓練頁
+  Training: [...TRAIN, ...ANALYSIS, 'interaction'], // 訓練分析的入口在訓練頁天空；interaction 守訓練頁的狀態列色條（v2.160 起訓練頁用 .sky）
+  TodayScene: [...FOOD, 'training-home'], // 今日頁與訓練頁共用的天空插圖
   Analysis: ANALYSIS,
   // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
-  Today: [...FOOD, ...SHEETS], ItemEditor: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
+  Today: [...FOOD, ...SHEETS, 'training-home'], // 記完一餐的頂端提示在 training-home 守
+  ItemEditor: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
   // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
   Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS, WeeklyCompare: SETTINGS,
   Login: ['interaction'],
@@ -58,6 +60,7 @@ const FILES = {
   'src/lib/restTimer.ts': TRAIN,
   'src/lib/recovery.ts': ANALYSIS,
   'src/lib/strength.ts': [...TRAIN, ...ANALYSIS],
+  'src/lib/trainingHome.ts': [...TRAIN, ...ANALYSIS], // 訓練首頁天空、開始選項、完成畫面亮點、卡頭 1RM
   'src/lib/weightTrend.ts': [...ANALYSIS, 'settings-nav', 'weight-trend', 'weekly-compare'],
   'src/lib/weeklyCompare.ts': ['settings-nav', 'weight-trend', 'weekly-compare'],
   'src/lib/baseline.ts': SETTINGS,

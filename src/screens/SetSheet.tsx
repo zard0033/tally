@@ -15,7 +15,7 @@ import { NUMBER_FLIP_MS } from '@/lib/durations'
 import { catalogKey, muscleGroupLabel, weightStep } from '@/lib/exerciseCatalog'
 import { suggestWeight, type WeightSuggestion } from '@/lib/strength'
 import {
-  RPE_SHEET_VALUES,
+  RPE_SHEET_OPTIONS,
   clampSetReps,
   clampSetWeight,
   exerciseDisplayName,
@@ -305,20 +305,19 @@ export default function SetSheet({ open, onClose, target, detail, db, run, final
           {done && (
             <div className="step-block" data-section="rpe">
               <div className="set-sec-row">
-                <span className="set-sec">吃力程度</span>
-                <span className="rpe-hint">9＝還能再做 1 下，10＝力竭</span>
+                <span className="set-sec">還能再做幾下</span>
               </div>
-              <div className="rpe-row" role="group" aria-label="吃力程度">
-                {RPE_SHEET_VALUES.map((v) => (
+              <div className="rpe-row" role="group" aria-label="還能再做幾下">
+                {RPE_SHEET_OPTIONS.map(({ rpe: v, label }) => (
                   <button
                     key={v}
                     className={`rpe-opt${rpe === v ? ' is-current' : ''}`}
                     type="button"
+                    data-rpe={v}
                     aria-pressed={rpe === v}
-                    aria-label={`RPE ${v}`}
                     onClick={() => patch({ rpe: rpe === v ? null : v }, false)}
                   >
-                    {v}
+                    {label}
                   </button>
                 ))}
               </div>
