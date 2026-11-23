@@ -15,7 +15,7 @@ export interface ModTarget {
   category: string | null
 }
 
-type Group = 'cup' | 'sweet' | 'top' | 'rice' | 'noodle' | 'skin'
+type Group = 'cup' | 'sweet' | 'top' | 'rice' | 'noodle' | 'main' | 'skin'
 
 interface ModDef {
   code: string
@@ -63,6 +63,18 @@ const NOODLE: { code: string; label: string; frac: number }[] = [
   { code: 'noodle:more', label: '加麵', frac: 1 / 2 },
 ]
 
+/** 健康餐盒加主菜一份（spec「健康餐盒加主菜」，使用者 2026-11-23 核可）：食藥署每 100 g × 一份克數。
+    份量照源食健康餐盒公開的生重（雞胸 100、雞腿 150、牛 100、豬 100、鮭 120）；鯛魚 100 g 熟重與蛋一顆是假設。 */
+const MAINS: { code: string; label: string; m: Macros }[] = [
+  { code: 'main:chicken', label: '雞胸', m: { kcal: 117, protein: 23.3, fat: 1.9, carb: 0.6 } }, // I0402402 生 100 g
+  { code: 'main:thigh', label: '雞腿', m: { kcal: 247.5, protein: 29.7, fat: 13.35, carb: 0 } }, // I0404501 生 150 g
+  { code: 'main:beef', label: '牛肉', m: { kcal: 139, protein: 19.8, fat: 6, carb: 0 } }, // 牛腱 I0108301 生 100 g
+  { code: 'main:pork', label: '豬肉', m: { kcal: 139, protein: 21.1, fat: 5.4, carb: 0 } }, // 小里肌 I0306101 生 100 g
+  { code: 'main:salmon', label: '鮭魚', m: { kcal: 208.8, protein: 24.84, fat: 11.4, carb: 0 } }, // J0402402 生 120 g
+  { code: 'main:fish', label: '鯛魚', m: { kcal: 130, protein: 23.4, fat: 3.3, carb: 1.3 } }, // J0412101 水煮 100 g
+  { code: 'main:egg', label: '蛋', m: { kcal: 79, protein: 7.7, fat: 5.1, carb: 0.9 } }, // 水煮蛋 K0111101 一顆 55 g
+]
+
 /** 去皮：雞腿帶皮與去皮的差（推算，假設）。 */
 const SKIN_OFF: Macros = { kcal: -80, protein: -1.5, fat: -8, carb: 0 }
 
@@ -72,6 +84,7 @@ const DEFS: ModDef[] = [
   ...TOPPINGS.map((t) => ({ code: t.code, group: 'top' as const, label: t.label })),
   ...RICE.map((r) => ({ code: r.code, group: 'rice' as const, label: r.label })),
   ...NOODLE.map((n) => ({ code: n.code, group: 'noodle' as const, label: n.label })),
+  ...MAINS.map((m) => ({ code: m.code, group: 'main' as const, label: m.label })),
   { code: 'skin:off', group: 'skin', label: '去皮' },
 ]
 const DEF = new Map(DEFS.map((d) => [d.code, d]))
@@ -90,6 +103,8 @@ export function groupsFor(f: ModTarget): Group[] {
   if (f.category !== null && RICE_CATEGORIES.includes(f.category) && !NO_RICE_RE.test(f.name)) out.push('rice')
   // 麵量只給品名有「麵」的：餃類併進麵食後，水餃鍋貼不該出麵量
   if (f.category === '麵食' && f.name.includes('麵')) out.push('noodle')
+  // 加主菜整類都出、不看品名（使用者 2026-11-23：加的主菜不固定，會混搭）
+  if (f.category === '健康餐盒') out.push('main')
   if (SKIN_RE.test(f.name)) out.push('skin')
   return out
 }
@@ -101,7 +116,7 @@ export function optionsOf(group: Group): { code: string; label: string }[] {
   return DEFS.filter((d) => d.group === group).map(({ code, label }) => ({ code, label }))
 }
 
-/** 單選的組：同組只留最後一個。配料可複選；去皮是開關。 */
+/** 單選的組：同組只留最後一個。配料與加主菜可複選；去皮是開關。 */
 const SINGLE: Group[] = ['cup', 'sweet', 'rice', 'noodle', 'skin']
 
 /** 清掉不認得的、這樣食物不適用的、重複的；單選組只留最後一個；照固定順序排（存進 DB 的順序穩定，比對才準）。 */
@@ -158,7 +173,7 @@ export interface ModStep {
   sugarG?: number
 }
 
-/** 套用微調：順序固定——杯型（整筆乘）→ 甜度（加糖）→ 配料（加，不縮）→ 飯量 → 麵量 → 去皮。結果不低於 0、取到一位小數。 */
+/** 套用微調：順序固定——杯型（整筆乘）→ 甜度（加糖）→ 配料（加，不縮）→ 飯量 → 麵量 → 加主菜 → 去皮。結果不低於 0、取到一位小數。 */
 export function applyMods(base: Macros, codes: readonly string[], f: ModTarget): { result: Macros; steps: ModStep[] } {
   const mods = normalizeMods(codes, f)
   let v: Macros = { ...base }
@@ -191,6 +206,11 @@ export function applyMods(base: Macros, codes: readonly string[], f: ModTarget):
     v = add(v, NOODLE_PER_100, g / 100)
     steps.push({ label: n.label, kind: 'add', value: (g * NOODLE_PER_100.kcal) / 100 })
   }
+  for (const m of MAINS) {
+    if (!mods.includes(m.code)) continue
+    v = add(v, m.m)
+    steps.push({ label: m.label, kind: 'add', value: m.m.kcal })
+  }
   if (mods.includes('skin:off')) {
     v = add(v, SKIN_OFF)
     steps.push({ label: '去皮', kind: 'add', value: SKIN_OFF.kcal })
@@ -208,6 +228,7 @@ export function summaryOf(codes: readonly string[], f: ModTarget): string {
     if (g === 'cup') parts.push(inGroup.length ? label(inGroup[0]) : '大杯')
     else if (g === 'sweet') parts.push(inGroup.length ? label(inGroup[0]) : '無糖')
     else if (g === 'top') parts.push(...inGroup.map((c) => `＋${label(c)}`))
+    else if (g === 'main') parts.push(...(inGroup.length ? inGroup.map((c) => `＋${label(c)}`) : ['沒加主菜']))
     else if (g === 'rice') parts.push(inGroup.length ? label(inGroup[0]) : '正常飯量')
     else if (g === 'noodle') parts.push(inGroup.length ? label(inGroup[0]) : '正常麵量')
     else if (g === 'skin' && inGroup.length) parts.push('去皮')
@@ -220,7 +241,8 @@ export function suffixOf(codes: readonly string[], f: ModTarget): string {
   const mods = normalizeMods(codes, f)
   if (!mods.length) return ''
   const label = (c: string) => DEF.get(c)!.label
-  return `（${mods.map((c) => (DEF.get(c)!.group === 'top' ? `＋${label(c)}` : label(c))).join('・')}）`
+  const plus = (c: string) => DEF.get(c)!.group === 'top' || DEF.get(c)!.group === 'main'
+  return `（${mods.map((c) => (plus(c) ? `＋${label(c)}` : label(c))).join('・')}）`
 }
 
 /** 展開後最下面的算式：「165 × 0.7 ＋ 微糖 11 g ＝ 160 卡」。沒調就 null。 */

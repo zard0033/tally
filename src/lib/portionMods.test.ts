@@ -15,7 +15,9 @@ describe('groupsFor', () => {
     expect(groupsFor({ name: '水餃（10顆）', category: '麵食' })).toEqual([])
     expect(groupsFor({ name: '滷雞腿便當', category: '便當' })).toEqual(['rice', 'skin'])
     expect(groupsFor({ name: '燒鴨腿便當', category: '便當' })).toEqual(['rice', 'skin'])
-    expect(groupsFor({ name: '雞胸餐盒', category: '健康餐盒' })).toEqual([])
+    // 健康餐盒整類出加主菜；品名含雞腿的同時出去皮
+    expect(groupsFor({ name: '雞胸餐盒', category: '健康餐盒' })).toEqual(['main'])
+    expect(groupsFor({ name: '雞腿餐盒', category: '健康餐盒' })).toEqual(['main', 'skin'])
     // review：鴨血不是帶皮的部位；壽司歸丼飯類但沒有可減的白飯
     expect(groupsFor({ name: '麻辣鴨血臭豆腐', category: '其他正餐' })).toEqual([])
     expect(groupsFor({ name: '鴨肉飯', category: '丼飯類' })).toEqual(['rice', 'skin'])
@@ -74,6 +76,40 @@ describe('applyMods', () => {
   })
   it('沒按任何鈕＝原值', () => {
     expect(applyMods(bentoM, [], bento).result).toEqual(bentoM)
+  })
+})
+
+describe('健康餐盒加主菜', () => {
+  const box = { name: '雞胸餐盒', category: '健康餐盒' }
+  const boxM = { kcal: 610, protein: 45, fat: 14, carb: 78 }
+  it('AC1：壯壯雞胸餐盒＋雞胸＝727／68.3／15.9／78.6，後綴（＋雞胸）', () => {
+    expect(applyMods(boxM, ['main:chicken'], box).result).toEqual({ kcal: 727, protein: 68.3, fat: 15.9, carb: 78.6 })
+    expect(suffixOf(['main:chicken'], box)).toBe('（＋雞胸）')
+  })
+  it('AC2：可複選，牛肉＋鯛魚兩份都加；同一顆不重複', () => {
+    expect(normalizeMods(['main:fish', 'main:beef', 'main:beef'], box)).toEqual(['main:beef', 'main:fish'])
+    expect(applyMods(boxM, ['main:beef', 'main:fish'], box).result).toEqual({ kcal: 879, protein: 88.2, fat: 23.3, carb: 79.3 })
+    expect(toggleMod(['main:beef'], 'main:fish', box)).toEqual(['main:beef', 'main:fish'])
+    expect(toggleMod(['main:beef', 'main:fish'], 'main:beef', box)).toEqual(['main:fish'])
+  })
+  it('AC3：非健康餐盒不出、存了也清掉', () => {
+    expect(normalizeMods(['main:chicken'], bento)).toEqual([])
+    expect(normalizeMods(['main:egg'], drink)).toEqual([])
+  })
+  it('雞腿 150 g、鮭魚 120 g、蛋一顆、豬用小里肌', () => {
+    const z = { kcal: 0, protein: 0, fat: 0, carb: 0 }
+    expect(applyMods(z, ['main:thigh'], box).result).toEqual({ kcal: 247.5, protein: 29.7, fat: 13.4, carb: 0 })
+    expect(applyMods(z, ['main:salmon'], box).result).toEqual({ kcal: 208.8, protein: 24.8, fat: 11.4, carb: 0 })
+    expect(applyMods(z, ['main:egg'], box).result).toEqual({ kcal: 79, protein: 7.7, fat: 5.1, carb: 0.9 })
+    expect(applyMods(z, ['main:pork'], box).result).toEqual({ kcal: 139, protein: 21.1, fat: 5.4, carb: 0 })
+  })
+  it('摘要與算式；跟去皮並存', () => {
+    expect(summaryOf([], box)).toBe('沒加主菜')
+    expect(summaryOf(['main:chicken', 'main:egg'], box)).toBe('＋雞胸・＋蛋')
+    expect(calcLineOf(boxM, ['main:chicken'], box)).toBe('610 ＋ 雞胸 117 ＝ 727 卡')
+    const thighBox = { name: '雞腿餐盒', category: '健康餐盒' }
+    expect(summaryOf(['skin:off'], thighBox)).toBe('沒加主菜・去皮')
+    expect(suffixOf(['main:beef', 'skin:off'], thighBox)).toBe('（＋牛肉・去皮）')
   })
 })
 

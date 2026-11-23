@@ -27,7 +27,7 @@ interface PortionModsProps {
 const NONE = 'none'
 
 const SINGLE_DEFAULT: Record<string, string> = { cup: '大杯', sweet: '無糖', rice: '正常', noodle: '正常', skin: '帶皮' }
-const GROUP_LABEL: Record<string, string> = { cup: '杯型', sweet: '甜度', top: '加配料', rice: '飯量', noodle: '麵量', skin: '雞皮' }
+const GROUP_LABEL: Record<string, string> = { cup: '杯型', sweet: '甜度', top: '加配料', rice: '飯量', noodle: '麵量', main: '加主菜', skin: '雞皮' }
 /** 甜度六格放得下：選項字縮成一個字（「微糖」→「微」）。 */
 const short = (group: string, label: string) => (group === 'sweet' ? label.replace('糖', '') : label)
 
@@ -58,7 +58,8 @@ export default function PortionMods({ target, base, mods, open, onToggleOpen, on
         <div className="pmods-panel" id={panelId}>
           {groups.map((g) => {
             const opts = optionsOf(g)
-            if (g === 'top') {
+            // 可複選的組（配料、加主菜）用膠囊；其餘單選用分段鈕
+            if (g === 'top' || g === 'main') {
               return (
                 <div key={g} className="pmods-grp">
                   <p className="pmods-lbl" aria-hidden="true">{GROUP_LABEL[g]}</p>

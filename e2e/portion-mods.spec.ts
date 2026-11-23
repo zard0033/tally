@@ -117,12 +117,36 @@ test('記一筆：照上次——便當上次半飯，勾起來預設半飯、�
   expect((await intakeRows(page))[0]).toMatchObject({ food_id: 41, kcal: 629.3, carb: 68.3, mods: ['rice:half'] })
 })
 
-test('記一筆：沒有適用微調的食物（健康餐盒、蛋白質補充）不出摘要行', async ({ page }) => {
+test('記一筆：健康餐盒加主菜可複選（＋雞胸＋蛋），寫入加上去的單份與 mods；沒有適用微調的（蛋白質補充）不出摘要行', async ({ page }) => {
   await openApp(page, {}, MODS_FIX)
   await openDinner(page)
   await search(page, '雞胸')
   await page.locator('.food-row', { has: page.locator('.sub', { hasText: '健康盒' }) }).click()
-  await expect(pickedRow(page, '雞胸餐盒').locator('.pmods')).toHaveCount(0)
+  const row = pickedRow(page, '雞胸餐盒')
+  const sum = row.locator('.pmods-sum')
+  await expect(sum).toHaveText(/沒加主菜/)
+  await sum.click()
+  const chips = row.locator('.pmods-chips[aria-label^="加主菜"]')
+  await expect(chips.locator('.pmods-chip')).toHaveText(['雞胸', '雞腿', '牛肉', '豬肉', '鮭魚', '鯛魚', '蛋'])
+  await chips.locator('.pmods-chip', { hasText: '雞胸' }).click()
+  await chips.locator('.pmods-chip', { hasText: '蛋' }).click()
+  await expect(chips.locator('.pmods-chip', { hasText: '雞胸' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(sum).toHaveText(/＋雞胸・＋蛋/)
+  await expect(row.locator('.pmods-calc')).toHaveText('420 ＋ 雞胸 117 ＋ 蛋 79 ＝ 616 卡')
+  await page.locator('.pick-bar-btn', { hasText: '加入' }).click()
+  await expect.poll(async () => (await intakeRows(page)).length).toBe(1)
+  // 420／45／12／30 ＋ 雞胸 117／23.3／1.9／0.6 ＋ 蛋 79／7.7／5.1／0.9
+  expect((await intakeRows(page))[0]).toMatchObject({ food_id: 11, kcal: 616, protein: 76, fat: 19, carb: 31.5, mods: ['main:chicken', 'main:egg'], name: null })
+  expect(await writes(page, 'foods', 'PATCH'), '食品庫被動到了').toHaveLength(0)
+})
+
+test('記一筆：沒有適用微調的食物（蛋白質補充）不出摘要行', async ({ page }) => {
+  await openApp(page, {}, MODS_FIX)
+  await openDinner(page)
+  await search(page, '乳清')
+  await page.locator('.food-row', { has: page.locator('.nm', { hasText: '乳清（1匙）' }) }).click()
+  await expect(pickedRow(page, '乳清（1匙）')).toHaveCount(1)
+  await expect(pickedRow(page, '乳清（1匙）').locator('.pmods')).toHaveCount(0)
 })
 
 test('今日頁：調過的紀錄品名後接「（半飯）」；就地編輯改回正常飯量，用食品庫現在的數字重算、一次送 mods 與四個值', async ({ page }) => {
