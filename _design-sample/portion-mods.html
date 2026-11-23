@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>份量微調＋來源小標＋對到別名：樣張</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 40px 0 6px; }
+  .note { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 20px; max-width: 1240px; line-height: 1.7; }
+  .note b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .grid.two { grid-template-columns: repeat(2, 393px); }
+  .gh { font-size: var(--t-md); font-weight: 800; margin-bottom: 4px; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 70px; margin-bottom: 10px; }
+  .gd b { color: var(--ink); }
+
+  /* 手機畫面殼 */
+  .phone { background: var(--card); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-1); padding: 12px 0 16px; }
+  .sect { font-size: var(--t-xs); color: var(--ink-muted); font-weight: 700; padding: 8px 20px 4px; letter-spacing: var(--track-xs); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; }
+  .chk { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+  .chk svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .nmw { flex: 1; min-width: 0; }
+  .nm { font-size: var(--t-base); font-weight: 600; }
+  .sub { font-size: var(--t-xs); color: var(--ink-muted); }
+  .kc { font-family: var(--font-num); font-weight: 700; font-size: var(--t-sm); color: var(--ink-muted); min-width: 40px; text-align: right; }
+  .step { display: flex; align-items: center; background: var(--fill); border-radius: 12px; height: 36px; }
+  .step span { width: 30px; text-align: center; color: var(--accent); font-weight: 700; }
+  .step i { font-style: normal; width: 24px; text-align: center; font-family: var(--font-num); font-weight: 700; }
+  .divider { height: 1px; background: var(--rule-subtle); margin: 4px 20px; }
+
+  /* A：列下一排膠囊 */
+  .mods { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 10px 54px; }
+  .mchip { border: 1.5px solid var(--rule-field); background: var(--card); color: var(--ink); border-radius: var(--r-pill); font: inherit; font-size: var(--t-sm); min-height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 4px; }
+  .mchip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .mchip.add { color: var(--accent); font-weight: 700; }
+  .mchip svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  .pop { margin: 0 20px 10px 54px; background: var(--card); border-radius: 14px; box-shadow: var(--shadow-2); padding: 8px; }
+  .pop .ttl { font-size: var(--t-xs); color: var(--ink-muted); margin: 2px 4px 6px; }
+  .seg6 { display: flex; background: var(--fill); padding: 2px; border-radius: 12px; }
+  .seg6 span { flex: 1; min-height: 36px; display: grid; place-items: center; font-size: var(--t-sm); color: var(--ink-muted); border-radius: 10px; }
+  .seg6 span.on { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-1); }
+  .last { font-size: var(--t-xs); color: var(--accent); padding: 0 20px 6px 54px; display: flex; align-items: center; gap: 4px; }
+  .last svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+  /* B：摘要列，點了展開 */
+  .sumrow { display: flex; align-items: center; gap: 6px; margin: -6px 20px 8px 54px; min-height: 36px; border: none; background: none; font: inherit; padding: 0; color: var(--accent); font-size: var(--t-sm); font-weight: 700; }
+  .sumrow .tag { color: var(--ink-muted); font-weight: 400; }
+  .sumrow svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .panel { margin: 0 20px 10px 54px; border-left: 2px solid var(--accent-soft); padding: 4px 0 4px 12px; }
+  .plbl { font-size: var(--t-xs); color: var(--ink-muted); margin: 6px 0 4px; }
+  .seg2 { display: flex; background: var(--fill); padding: 2px; border-radius: 12px; }
+  .seg2 span { flex: 1; min-height: 36px; display: grid; place-items: center; font-size: var(--t-sm); color: var(--ink-muted); border-radius: 10px; }
+  .seg2 span.on { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: var(--shadow-1); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .delta { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 8px; }
+  .delta b { color: var(--ink); font-family: var(--font-num); }
+
+  /* C：獨立的微調畫面（同估一筆的子畫面走法） */
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 20px 8px; }
+  .sheet-head b { font-size: var(--t-lg); font-weight: 800; }
+  .back { color: var(--accent); font-weight: 700; font-size: var(--t-sm); padding: 0 20px 8px; display: flex; align-items: center; gap: 4px; }
+  .back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .hero { padding: 6px 20px 12px; }
+  .hero .big { font-family: var(--font-num); font-size: 40px; font-weight: 800; line-height: 1; }
+  .hero .big small { font-size: var(--t-sm); color: var(--ink-muted); margin-left: 4px; font-weight: 600; }
+  .hero .calc { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 6px; }
+  .blk { padding: 0 20px 12px; }
+  .bar { margin: 6px 20px 0; height: 48px; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 800; }
+  .rowlink { color: var(--accent); }
+
+  /* 來源小標 */
+  .lib { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); }
+  .lrow { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 16px; border-top: 1px solid var(--rule-subtle); }
+  .lrow:first-child { border-top: none; }
+  .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--plate); flex-shrink: 0; }
+  .lk { font-family: var(--font-num); font-weight: 700; }
+  .lk small { font-size: var(--t-xs); color: var(--ink-muted); margin-left: 2px; }
+  .t-rough { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); font-size: var(--t-xs); }
+  .t-off1 { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-dark); font-size: var(--t-xs); font-weight: 700; }
+  .t-off2 { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; color: var(--accent); font-size: var(--t-xs); font-weight: 700; }
+  .t-off2 svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .glabel { font-size: var(--t-sm); color: var(--ink-muted); font-weight: 700; margin: 14px 4px 6px; }
+
+  /* 對到別名 */
+  .hit { color: var(--accent-dark); font-weight: 700; }
+  mark { background: none; color: var(--accent-dark); font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>份量微調：三個方向（記一筆的「已選」）</h1>
+<p class="note">
+  情境：晚餐選了「手搖飲（無糖純茶＋珍珠，大杯）」與「排骨便當（滷）」。飲料這次點<b>中杯、微糖</b>；便當<b>半飯</b>，上次也是半飯（記住上次）。<br>
+  規則在 spec「份量微調」：飲料＝中杯／甜度／加配料；便當、丼飯類＝飯量；品名有麵的麵食＝麵量；雞腿、雞排、鴨、鵝＝去皮。今日頁就地編輯用<b>同一組控件</b>，所以這裡只畫記一筆。
+</p>
+
+<div class="grid">
+  <div>
+    <div class="gh">A　列下一排膠囊</div>
+    <div class="gd">已選的每一列下面直接一排膠囊，按一下就切；甜度六段點「甜度」才彈出。<b>最快</b>（一次點完）；缺點是已選有好幾樣時，清單會變很長、整片都是膠囊。</div>
+    <div class="phone">
+      <div class="sect">已選</div>
+      <div class="row">
+        <span class="chk"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span>
+        <div class="nmw"><div class="nm">手搖飲（無糖純茶＋珍珠，大杯）</div><div class="sub">中杯・微糖</div></div>
+        <span class="kc">160</span>
+      </div>
+      <div class="mods">
+        <button class="mchip on">中杯</button>
+        <button class="mchip on">微糖 <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="mchip add">＋配料</button>
+      </div>
+      <div class="pop">
+        <div class="ttl">甜度</div>
+        <div class="seg6"><span>無糖</span><span>一分</span><span class="on">微</span><span>半</span><span>少</span><span>全</span></div>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <span class="chk"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span>
+        <div class="nmw"><div class="nm">排骨便當（滷）</div><div class="sub">半飯</div></div>
+        <span class="kc">629</span>
+      </div>
+      <div class="last"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>照上次</div>
+      <div class="mods">
+        <button class="mchip">少飯</button>
+        <button class="mchip on">半飯</button>
+        <button class="mchip">不要飯</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="gh">B　摘要一行，點了才展開（推薦）</div>
+    <div class="gd">列下面一行藍字寫現在的狀態「中杯・微糖 ›」，點了在那一列下面展開控件。<b>平常不佔位</b>，沒改的列只有一行；跟食品庫「來源、別名」那條可點開的列同一個語言。</div>
+    <div class="phone">
+      <div class="sect">已選</div>
+      <div class="row">
+        <span class="chk"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span>
+        <div class="nmw"><div class="nm">手搖飲（無糖純茶＋珍珠，大杯）</div><div class="sub">165 卡 · 基準大杯無糖</div></div>
+        <span class="kc">160</span>
+      </div>
+      <button class="sumrow">中杯・微糖 <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="panel">
+        <div class="plbl">杯型</div>
+        <div class="seg2"><span>大杯</span><span class="on">中杯</span></div>
+        <div class="plbl">甜度</div>
+        <div class="seg6"><span>無糖</span><span>一分</span><span class="on">微</span><span>半</span><span>少</span><span>全</span></div>
+        <div class="plbl">加配料</div>
+        <div class="chips"><button class="mchip">珍珠</button><button class="mchip">寒天</button><button class="mchip">白玉</button><button class="mchip">椰果</button><button class="mchip">仙草</button><button class="mchip">愛玉</button></div>
+        <div class="delta">165 × 0.7 ＋ 微糖 11 g ＝ <b>160</b> 卡</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <span class="chk"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span>
+        <div class="nmw"><div class="nm">排骨便當（滷）</div><div class="sub">858 卡</div></div>
+        <span class="kc">629</span>
+      </div>
+      <button class="sumrow">半飯 <span class="tag">· 照上次</span> <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+
+  <div>
+    <div class="gh">C　獨立的微調畫面</div>
+    <div class="gd">點列上「微調」進一個子畫面（同估一筆的走法：標題列＋返回），上面大數字即時算，下面每組控件，按「好」回清單。<b>最清楚、算式看得到</b>；缺點是每次要多進出一層。</div>
+    <div class="phone">
+      <div class="sheet-head"><b>微調</b><span class="sub">✕</span></div>
+      <div class="back"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>晚餐</div>
+      <div class="hero">
+        <div class="sub">手搖飲（無糖純茶＋珍珠，大杯）</div>
+        <div class="big">160<small>卡</small></div>
+        <div class="calc">基準 165 × 中杯 0.7 ＋ 微糖 11 g（44 卡）</div>
+      </div>
+      <div class="blk">
+        <div class="plbl">杯型</div>
+        <div class="seg2"><span>大杯</span><span class="on">中杯</span></div>
+        <div class="plbl">甜度</div>
+        <div class="seg6"><span>無糖</span><span>一分</span><span class="on">微</span><span>半</span><span>少</span><span>全</span></div>
+        <div class="plbl">加配料</div>
+        <div class="chips"><button class="mchip">珍珠</button><button class="mchip">寒天</button><button class="mchip">白玉</button><button class="mchip">椰果</button><button class="mchip">仙草</button><button class="mchip">愛玉</button></div>
+      </div>
+      <div class="bar">好</div>
+    </div>
+  </div>
+</div>
+
+<h2>來源小標：兩邊都標</h2>
+<p class="note">現在只有粗估有灰色小標。兩邊都標、輕重不同；兩個方向差在官方標示要「一顆淡藍膠囊」還是「一個打勾＋字」。</p>
+<div class="grid">
+  <div>
+    <div class="gh">現在（v2.155）</div>
+    <div class="glabel">通用（不分店家）</div>
+    <div class="lib">
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">手搖飲（無糖純茶＋寒天，大杯）</div><div class="sub">飲料</div></div><span class="lk">60<small>卡</small></span></div>
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">排骨便當（滷）</div><div class="sub">便當<span class="t-rough">粗估</span></div></div><span class="lk">858<small>卡</small></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">甲　淡藍膠囊「官方標示」</div>
+    <div class="glabel">通用（不分店家）</div>
+    <div class="lib">
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">手搖飲（無糖純茶＋寒天，大杯）</div><div class="sub">飲料<span class="t-off1">官方標示</span></div></div><span class="lk">60<small>卡</small></span></div>
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">排骨便當（滷）</div><div class="sub">便當<span class="t-rough">粗估</span></div></div><span class="lk">858<small>卡</small></span></div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">乙　打勾＋「官方」（推薦）</div>
+    <div class="glabel">通用（不分店家）</div>
+    <div class="lib">
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">手搖飲（無糖純茶＋寒天，大杯）</div><div class="sub">飲料<span class="t-off2"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>官方</span></div></div><span class="lk">60<small>卡</small></span></div>
+      <div class="lrow"><span class="ico"></span><div class="nmw"><div class="nm">排骨便當（滷）</div><div class="sub">便當<span class="t-rough">粗估</span></div></div><span class="lk">858<small>卡</small></span></div>
+    </div>
+    <div class="gd" style="margin-top:8px">比甲安靜：沒有底色，一整排官方的不會變成一片藍；粗估仍是灰底，兩種一眼分得出。</div>
+  </div>
+</div>
+
+<h2>記一筆搜到通用食物時：對到哪個別名</h2>
+<p class="note">打「麻古」，列出來的是通用品名，看不出它就是你點的紅萱波波。副標換成「對到：麻古 紅萱波波」，對上的字標藍。</p>
+<div class="grid two">
+  <div>
+    <div class="gh">現在</div>
+    <div class="phone">
+      <div class="sect">搜尋「麻古」</div>
+      <div class="row"><span class="chk" style="background:none;border:2px solid var(--rule-field)"></span><div class="nmw"><div class="nm">手搖飲（無糖純茶＋寒天，大杯）</div><div class="sub">飲料</div></div><span class="kc">60</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">改成</div>
+    <div class="phone">
+      <div class="sect">搜尋「麻古」</div>
+      <div class="row"><span class="chk" style="background:none;border:2px solid var(--rule-field)"></span><div class="nmw"><div class="nm">手搖飲（無糖純茶＋寒天，大杯）</div><div class="sub">對到：<mark>麻古</mark> 紅萱波波</div></div><span class="kc">60</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
