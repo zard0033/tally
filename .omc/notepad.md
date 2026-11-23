@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-23）：v2.155 推送中（CI 全量待確認）＝來源併成官方標示／粗估（DB 新欄 verified 已上、已對應）、拿掉一份幾克、展開卡按鈕區 B（來源別名可點開的列＋膠囊）；連鎖店查證已寫（麥味登、麥當勞、Subway、必勝客→官方標示；小木屋 626 粗估）。
+現況（2026-11-23）：v2.155 已部署（CI 608 過，run 45105775952）＝來源併成官方標示／粗估（DB 新欄 verified 已上、已對應）、拿掉一份幾克、展開卡按鈕區 B（來源別名可點開的列＋膠囊）；連鎖店查證已寫（麥味登、麥當勞、Subway、必勝客→官方標示；小木屋 626 粗估）。
 下一步：①CI 綠部署後，等使用者確認手機（iOS PWA）已是新版 → 補對應只限 created_at > 2026-11-23T02:00Z（SQL 在 schema.sql）→ drop serving_g、source（備份 D:\Temp\tally-backup）②真機看新按鈕區 ③MANUAL 的 v2.154 LOW。
 
 ## Working Memory

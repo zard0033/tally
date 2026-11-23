@@ -43,6 +43,8 @@ schemaVersion: 1
 
 ## 歷次跑測紀錄
 
+2026-11-23 v2.155 來源併兩種＋按鈕區 B：第一次 CI（`cdf0a68`，run 45104459213）shard 2 **5 條真紅**（4 條食品庫類型斷言讀整段 `.sub`、多了粗估小標；1 條估一筆期望「食品庫」），沒部署；本機同樣紅了但 `| tail` 吃掉 exit code、只讀到 passed 行而漏看。修（類型名包 `.lib-cat-name`、期望改「食品庫・粗估」）後 CI（`3ab11e8`，run 45105775952）：**8 份 608 過、0 flaky**，已部署。本機 push 前：vitest 1249、smoke 55、food-library＋estimate 74 過；mutation（手打預設改粗估）→ 紅。
+
 2026-11-22 v2.150 用詞＋v2.151 估一筆修正 CI（`ce6bb45`，run 45026166726）：**8 份 591 過＋1 flaky＝592**（＝585＋estimate 新 7 條）、已部署；flaky 是 shard 6 第 15 條 `tally.spec:37` 回歸（偶發清單復原條一族）。函式 read-label 先部署（`--use-api --no-verify-jwt --yes`，未登入打 estimate-fix 回 401 確認上線）再推前端。
 
 2026-11-22 量 `openApp` 各段耗時（notepad 待辦 10，臨時 spec 序列跑 10 次、1 worker，本機）：中位數 **313 ms**＝裝 stub 5＋goto 121＋等外殼 132＋等首頁數字 56。以 2026-11-02 全量 415 條／14.4 分／2 worker 換算每條約 4.2 秒，openApp 只佔 7–8%，**不是瓶頸、不值得優化，待辦結案**；慢在各條本體（動畫落定、離線重試退避 7 秒等）。另：v2.150／v2.151 本機 push 前 smoke 55 過、estimate 20 過、vitest 1210 過；「慢態有出口」整套與單跑都紅（偶發清單：本機幾乎必紅、基線一樣），判與本批無關。
