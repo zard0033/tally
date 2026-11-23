@@ -3,7 +3,7 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-23）：v2.158（記一筆勾了留原位＋已選膠囊＋建議段微調）push 中、CI 全量待確認；v2.156 已部署＝份量微調、類型 17→13（DB 已轉換，備份在 D:\Temp\tally-backup）、通用組名、官方小標、對到別名。
+現況（2026-11-23）：v2.158（記一筆勾了留原位＋已選膠囊＋建議段微調）第一次 push CI 紅（打開就勾時補捲動失效，真 bug，已修，見 wiki lesson-pin-scroll），重推中；v2.156 已部署＝份量微調、類型 17→13（DB 已轉換，備份在 D:\Temp\tally-backup）、通用組名、官方小標、對到別名。
 下一步：①真機用份量微調（飲料中杯微糖、便當半飯、照上次）②手機換 v2.156 後：補 verified 對應（created_at>2026-11-23T02:00Z）→ drop foods.source／serving_g ③真機看 v2.158 記一筆（往下捲勾、點膠囊、建議段飲料照上次）④「每一餐記店家」spec＋樣張。v2.157 設定頁底部有版本號。
 
 ## Working Memory

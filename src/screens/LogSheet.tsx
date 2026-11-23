@@ -6,7 +6,7 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import PortionMods from '@/components/PortionMods'
@@ -302,6 +302,15 @@ export default function LogSheet(props: LogSheetProps) {
   const chipsRef = useRef<HTMLDivElement | null>(null)
   /** 膠囊列上一輪在不在、多高、跟著哪個捲動區：出現／消失時補 scrollTop 用 */
   const pinPrevRef = useRef<{ shown: boolean; h: number; scroller: HTMLDivElement | null }>({ shown: false, h: 0, scroller: null })
+  /* 捲動區一掛上就記進 pinPrevRef（當下膠囊列在不在、多高）。不能等 useLayoutEffect：sheet 內容是 SpringSheet 之後才掛上的，
+     那一輪 LogSheet 自己沒有 re-render，useLayoutEffect 不會跑，記住的還是「沒有捲動區」；接著「捲動→勾第一樣」（捲動不 re-render）
+     就被當成捲動區換了而不補（v2.158 CI 抓到，本機測試先換了餐別多一次 render 才遮住）。膠囊列在 DOM 上排在捲動區前面，ref 先接上，這裡讀得到。 */
+  const setListScroll = useCallback((el: HTMLDivElement | null) => {
+    listScrollRef.current = el
+    if (!el) return
+    const pin = pinRef.current
+    pinPrevRef.current = { shown: !!pin, h: pin ? pin.offsetHeight : pinPrevRef.current.h, scroller: el }
+  }, [])
 
   const libById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
   const foodById = (id: number): Food | undefined => suggestSnaps.get(id)?.food ?? libById.get(id)
@@ -353,7 +362,9 @@ export default function LogSheet(props: LogSheetProps) {
     setLastPicked(null)
     setJump(null)
     setFlash(null)
-    pinPrevRef.current = { shown: false, h: 0, scroller: null }
+    /* pinPrevRef 刻意不在這裡重置：這個 effect 跑在補償的 useLayoutEffect 之後，而這裡的 setState 多半跟原值一樣、不會再 render，
+       清掉（或在這時讀捲動區，此時常常還沒掛上）都會讓「打開→捲動→勾第一樣」（捲動不 re-render）判成捲動區換了而不補（v2.158 CI 抓到）。
+       「捲動區換了就不補」由 useLayoutEffect 自己比對捲動區處理；關到一半又打開、清掉 picks 時往回補一行，SpringSheet 會把捲動歸零，看不出來。 */
     estReqRef.current++
     setEstText('')
     setEstStatus('idle')
@@ -1165,7 +1176,7 @@ export default function LogSheet(props: LogSheetProps) {
           )}
 
           {/* key 分開：清單與估一筆的捲動區不能被 React 當成同一個 DOM 重用，否則帶回清單時停在估一筆捲到的位置 */}
-          <div className="food-scroll" key="list-scroll" ref={listScrollRef}>
+          <div className="food-scroll" key="list-scroll" ref={setListScroll}>
             {!trimmedQuery && meal && (
               <button className="est-entry" type="button" disabled={busy} onClick={() => openEstimate('')}>
                 <span className="est-entry-ic" aria-hidden="true">

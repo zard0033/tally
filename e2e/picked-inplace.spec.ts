@@ -1,7 +1,7 @@
 /* 記一筆：勾了留在原位＋搜尋框下的「已選」膠囊列（v2.158，樣張 _design-sample/picked-inplace.html C），
    以及建議段勾的也出份量微調（沒動照搬來源快照、動了從食品庫重算）。各條都自己 openApp、不共用狀態。 */
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { openApp, openAppAt } from './harness'
+import { openApp, openAppAt, springSettled } from './harness'
 import { FIX } from './fixtures'
 
 test.describe.configure({ mode: 'parallel' })
@@ -163,9 +163,16 @@ test('膠囊捲到看不到的列：被搜尋濾掉就清掉搜尋、在收合�
   await expect.poll(() => inView(scroller, box)).toBe(true)
 })
 
+/* 打開 sheet 之後除了捲動（不會 re-render）什麼都沒做就勾第一樣：v2.158 第一版的補償在這裡失效——開啟時的重置把記住的捲動區清成 null，
+   要等下一次 re-render 才補回來。本機原本走 openBreakfast 換餐別，多一次 render 剛好遮住；CI 在 UTC 早上開 sheet 本來就是早餐才露出來。
+   所以這裡釘早上 9 點（開 sheet 就是早餐）、不點任何東西。 */
 test('第一次勾、膠囊列出現：手指底下那一列不動（補 scrollTop）；取消到一樣都沒勾、膠囊列消失也不動', async ({ page }) => {
-  await openApp(page, {}, LONG_FIX)
-  await openBreakfast(page)
+  await openAppAt(page, '2026-11-02', {}, LONG_FIX)
+  await page.click('button.cta')
+  await expect(sheetOf(page)).toBeVisible()
+  await expect(sheetOf(page).locator('.chip', { hasText: '早餐' }), '早上 9 點開 sheet 要直接是早餐，這條才驗得到「開了就勾」').toHaveAttribute('aria-pressed', 'true')
+  // 沒有換餐別那一下墊著，sheet 還在彈上來就量會量到動畫的位移
+  await springSettled(sheetOf(page))
   const sheet = sheetOf(page)
   const scroller = scrollerOf(page)
   await scroller.evaluate((el) => (el.scrollTop = 300))
