@@ -511,7 +511,8 @@ test('① 每一段都在食品庫：不叫 AI、份數可調、加入時直接�
   await expect(page.locator('.est-lib-sum')).toHaveText('2 樣都在食品庫，沒叫 AI')
   await expect(page.locator('.est-body > [role="status"]')).toHaveText('2 樣都在食品庫，沒叫 AI')
   await expect(lib.nth(0).locator('.est-lib-name')).toHaveText('減醣廚房溫泉蛋')
-  await expect(lib.nth(0).locator('.est-lib-tag')).toHaveText('食品庫')
+  // 減醣廚房溫泉蛋在 fixture 沒有 verified，算粗估（v2.155 起只標粗估）
+  await expect(lib.nth(0).locator('.est-lib-tag')).toHaveText('食品庫・粗估')
   await expect(lib.nth(1).locator('.est-lib-kc')).toContainText('105')
   // 份數 ＋ 一次：熱量跟著變
   await lib.nth(1).locator('.qty-btn').nth(1).click()

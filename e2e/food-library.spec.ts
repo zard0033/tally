@@ -869,7 +869,7 @@ const UNCLASSIFIED_FIX = {
 const AI_CATS = { 地瓜: '主食', 拿鐵: '飲料', 測試便當: '便當' }
 
 const classifyCalls = (page: Page) => page.evaluate(() => (window as unknown as ClassifyWindow).__classifyCalls)
-const tagOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-row-hit .sub')
+const tagOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-row-hit .lib-cat-name')
 const iconOf = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat .ci')
 const catSelect = (page: Page, name: string) => rows(page).filter({ hasText: name }).locator('.lib-cat select')
 

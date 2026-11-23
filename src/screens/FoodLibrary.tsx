@@ -370,7 +370,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         <span className="nm-wrap">
                           <span className="nm">{f.name}</span>
                           <span className="sub">
-                            {cat ?? '未分類'}
+                            {/* 類型名自己一個 span：副標後面可能接「近 90 天」與粗估小標，測試與讀屏都要能單獨拿到類型 */}
+                            <span className="lib-cat-name">{cat ?? '未分類'}</span>
                             {unverifiedOn && eatenMap.has(f.id) && <> · 近 90 天 {Math.round(eatenMap.get(f.id)!).toLocaleString()} 卡</>}
                             {sourceTag(f.verified) && <span className="src-tag">{sourceTag(f.verified)}</span>}
                           </span>
