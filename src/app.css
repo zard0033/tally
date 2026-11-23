@@ -761,6 +761,7 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 .settings .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* 第三方素材致謝（動作示意圖 © Gym visual，著作權人要求每次使用都附標示） */
 .settings-credit { margin: var(--s-6) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; line-height: 1.5; }
+.settings-version { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); text-align: center; font-variant-numeric: tabular-nums; letter-spacing: var(--track-xs); }
 
 /* ═══════════ 設定頁入口列表（v2.22，取代第一版唯讀 dl） ═══════════ */
 .entry-list { border-radius: var(--r-tab); overflow: clip;

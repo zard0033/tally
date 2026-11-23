@@ -150,6 +150,13 @@ test('設定頁底部有動作示意圖的著作權標示', async ({ page }) => 
   await expect(page.locator('.settings-credit')).toHaveText('動作示意圖 © Gym visual — https://gymvisual.com/')
 })
 
+/* v2.157：版本號由 build 從 DESIGN.md 版本紀錄＋git commit 注入，回報說「vX 已部署」時拿來對手機上是不是新版 */
+test('設定頁底部顯示版本號與 commit', async ({ page }) => {
+  await openApp(page)
+  await openSettings(page)
+  await expect(page.locator('.settings-version')).toHaveText(/^Tally v\d+\.\d+ · [0-9a-f]{7,}$/)
+})
+
 test('更新身體數據時斷網：顯示看得懂的錯誤，不是原始錯誤', async ({ page }) => {
   await openApp(page)
   await openSettings(page)

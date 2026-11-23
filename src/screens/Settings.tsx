@@ -305,6 +305,10 @@ export default function Settings(props: SettingsProps) {
           登出
         </button>
         <GymVisualCredit className="settings-credit" prefix="動作示意圖 " />
+        {/* v2.157：跟回報裡說的版本對得上，才知道手機是不是已經換成新版 */}
+        <p className="settings-version">
+          Tally v{__APP_VERSION__} · {__APP_COMMIT__}
+        </p>
       </div>
 
       {bodyUpdateSheet}

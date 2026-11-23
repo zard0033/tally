@@ -1,4 +1,6 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -35,10 +37,40 @@ function selfDestroyingSw(): Plugin {
   }
 }
 
+/* 設定頁底部的版本號（v2.157）：取 DESIGN.md 版本紀錄裡最大的版本＋build 當下的 commit。
+   回報「v2.156 已部署」用的就是這個數字，所以直接從同一處讀、不另維護一份（package.json 的 version 一直是 0.0.0）。
+   版本紀錄的格式變了就讓 build 失敗，不要靜默顯示錯的號碼。 */
+function designVersion(): string {
+  const md = readFileSync(path.resolve(__dirname, 'DESIGN.md'), 'utf8')
+  const found = [...md.matchAll(/^- \*\*v(\d+(?:\.\d+)*) · /gm)].map((m) => m[1])
+  if (found.length === 0) throw new Error('DESIGN.md 版本紀錄找不到「- **vX.Y · 」格式的條目，設定頁的版本號無從取得')
+  const cmp = (a: string, b: string) => {
+    const pa = a.split('.').map(Number)
+    const pb = b.split('.').map(Number)
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pa[i] ?? 0) - (pb[i] ?? 0)
+      if (d !== 0) return d
+    }
+    return 0
+  }
+  return found.reduce((max, v) => (cmp(v, max) > 0 ? v : max))
+}
+/* CI 先用 GITHUB_SHA：e2e 與 diag job 跑在 Playwright 容器裡，工作目錄擁有者跟執行者不同，
+   git 會以 dubious ownership 拒絕（burn-in job 為此另設 safe.directory）。本機才問 git；拿不到就讓 build 失敗。 */
+function gitCommit(): string {
+  const sha = process.env.GITHUB_SHA
+  if (sha) return sha.slice(0, 7)
+  return execSync('git rev-parse --short HEAD', { encoding: 'utf8', cwd: __dirname }).trim()
+}
+
 // base：GitHub Pages 掛在 /tally/ 子路徑
 // port 5500：Supabase OAuth redirect 白名單綁死，不可換
 export default defineConfig({
   base: '/tally/',
+  define: {
+    __APP_VERSION__: JSON.stringify(designVersion()),
+    __APP_COMMIT__: JSON.stringify(gitCommit()),
+  },
   plugins: [
     react(),
     tailwindcss(),
