@@ -134,7 +134,8 @@ test('軟性排序——凍結：勾選一筆之後，清單順序不會跟著�
   await expect(page.locator('.food-row[aria-pressed="true"]', { hasText: firstName })).toHaveCount(1)
 
   const after = await restList.locator('.food-row .nm').allTextContents()
-  expect(after, '勾選後剩餘品項的相對順序應該跟勾選前一樣（凍結排序）').toEqual(before.slice(1))
+  // v2.158 起勾了留在原位：整份清單（含剛勾的那一列）都跟勾選前一模一樣
+  expect(after, '勾選後清單順序應該跟勾選前一樣（凍結排序、勾的留在原位）').toEqual(before)
 })
 
 test('軟性排序——常吃：只淡化不重排，維持原本的常吃順序', async ({ page }) => {

@@ -451,7 +451,8 @@ test('加入窗內切分頁：復原條收起、回到今日頁不再出現，�
 const sheetOf = (page: Page) => page.locator('[data-screen="log-sheet"]')
 const sectNames = (page: Page, sect: string) => sheetOf(page).locator(`${sect} + .food-list .nm`)
 const suggestNames = (page: Page) => sectNames(page, '.sect-suggest')
-const pickedNames = (page: Page) => sectNames(page, '.sect-lb:has-text("已選")')
+/** 勾了哪些：v2.158 起列留在原位，總覽是搜尋框下的膠囊列 */
+const pickedNames = (page: Page) => sheetOf(page).locator('.pick-pin .pick-chip')
 
 const openMealSheet = async (page: Page, label: string) => {
   await nodeOf(page, label).locator('.todo-row').click()
@@ -956,7 +957,7 @@ test('加入窗內切到背景：復原條收起，列留著、不打 DELETE', a
   expect(await intakeWrites(page, 'DELETE')).toEqual([])
 })
 
-test('sheet：不預設選中，點一項進已選並移出建議段、份量取建議量、取消後回來', async ({ page }) => {
+test('sheet：不預設選中，點一項就地勾起來（留在建議段）、份量取建議量、取消後膠囊與確認列收掉', async ({ page }) => {
   await openAppAt(page, MON, {}, fixWith(WEEKDAY_SRC))
   await openMealSheet(page, '早餐')
   const sheet = sheetOf(page)
@@ -970,11 +971,14 @@ test('sheet：不預設選中，點一項進已選並移出建議段、份量取
   await expect(pickedNames(page)).toHaveText(['乳清（1匙）'])
   await expect(sheet.locator('.qty-value'), '常吃紀錄的份量是 1，這裡要取建議量').toHaveValue('2')
   await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 240 卡')
-  await expect(suggestNames(page)).toHaveText(['無糖豆漿'])
+  await expect(suggestNames(page), '勾了留在建議段原位').toHaveText(['乳清（1匙）', '無糖豆漿'])
+  await expect(sheet.locator('.sect-suggest + .food-list .food-row[aria-pressed="true"]')).toHaveText(/乳清/)
+  await expect(sheet.locator('.sect-act'), '還有一樣沒勾，全選留著').toHaveAttribute('aria-label', '全選建議的 1 樣')
 
   await sheet.locator('.food-row[aria-pressed="true"]').click()
   await expect(pickedNames(page)).toHaveCount(0)
   await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
+  await expect(sheet.locator('.sect-suggest + .food-list .food-row[aria-pressed="true"]')).toHaveCount(0)
   await expect(sheet.locator('.pick-bar')).toHaveCount(0)
 })
 
@@ -992,7 +996,7 @@ test('sheet：超標預告用建議量試算，跟勾下去的份量同源', asy
   await expect(sheetOf(page).locator('.macro-line .over')).toContainText('脂 3/2')
 })
 
-test('sheet 全選：全部進已選、段消失、(+N) 正確、焦點接到已選第一列、按加入才寫入一次', async ({ page }) => {
+test('sheet 全選：全部就地勾起來、全選鈕收起、(+N) 正確、焦點接到建議段第一列、按加入才寫入一次', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await openMealSheet(page, '早餐')
   const sheet = sheetOf(page)
@@ -1002,11 +1006,12 @@ test('sheet 全選：全部進已選、段消失、(+N) 正確、焦點接到已
   await expect(pickedNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
   await expect(sheet.locator('.qty-value').nth(0)).toHaveValue('2')
   await expect(sheet.locator('.qty-value').nth(1)).toHaveValue('1')
-  await expect(sheet.locator('.sect-suggest')).toHaveCount(0)
+  await expect(suggestNames(page), '段留著，兩列都在原位').toHaveText(['乳清（1匙）', '無糖豆漿'])
+  await expect(sheet.locator('.sect-act'), '都勾了，全選收起來').toHaveCount(0)
   await expect(sheet.locator('.pick-line .sub')).toHaveText('2 樣 · 330 卡')
   // 蛋白 24×2＋8、脂 1.5×2＋4、碳 2×2＋5
   await expect(sheet.locator('.macro-line .add')).toHaveText(['(+56)', '(+7)', '(+9)'])
-  await expect(sheet.locator('.food-row[aria-pressed="true"]').first(), '全選鈕消失了，焦點要接到已選第一列').toBeFocused()
+  await expect(sheet.locator('.sect-suggest + .food-list .food-row').first(), '全選鈕消失了，焦點要接到建議段第一列').toBeFocused()
   expect(await intakeWrites(page, 'POST'), '全選只是勾起來').toEqual([])
 
   await sheet.locator('.pick-bar-btn').click()
@@ -1015,7 +1020,7 @@ test('sheet 全選：全部進已選、段消失、(+N) 正確、焦點接到已
   expect((await intakeWrites(page, 'POST')).map((w) => w.body)).toEqual([WEEKDAY_POST_BODY])
 })
 
-test('sheet 的段落順序：已選→建議→常吃→全部', async ({ page }) => {
+test('sheet 的段落順序：建議→常吃→全部；勾了不多出「已選」段，膠囊列在捲動區外', async ({ page }) => {
   const history = [11, 12, 13].map((food_id) => ({ meal: 'breakfast', food_id, qty: 1 }))
   await openAppAt(page, MON, {}, { ...fixWith(WEEKDAY_SRC), history } as unknown as typeof FIX)
   await openMealSheet(page, '早餐')
@@ -1023,7 +1028,9 @@ test('sheet 的段落順序：已選→建議→常吃→全部', async ({ page 
   await expect(sheet.locator('.sect-lb')).toHaveText([/^建議/, '早餐常吃', '全部食物'])
 
   await sheet.locator('.sect-suggest + .food-list .food-row', { hasText: '無糖豆漿' }).click()
-  await expect(sheet.locator('.sect-lb')).toHaveText(['已選', /^建議/, '早餐常吃', '全部食物'])
+  await expect(pickedNames(page)).toHaveText(['無糖豆漿'])
+  await expect(sheet.locator('.sect-lb')).toHaveText([/^建議/, '早餐常吃', '全部食物'])
+  await expect(sheet.locator('.food-scroll .pick-pin'), '膠囊列不能跟著捲走').toHaveCount(0)
 })
 
 test('sheet「加入」連按只寫入一次', async ({ page }) => {
@@ -1165,6 +1172,9 @@ test('封存食物：一鍵照搬；sheet 可選、確認列計入、切餐別�
   await sheet.locator('.chip', { hasText: '晚餐' }).click()
   await expect(sheet.locator('.chip', { hasText: '晚餐' })).toHaveAttribute('aria-pressed', 'true')
   await expect(pickedNames(page), '切餐別後建議段換了，已選不能跟著消失').toHaveText(['舊款便當'])
+  // 哪一段都沒有它（封存、建議段換了）：收在上面「別的餐勾的」，列還看得到、能改份量；封存的沒有食品庫基準，不出微調
+  await expect(sectNames(page, '.sect-lb:has-text("別的餐勾的")')).toHaveText(['舊款便當'])
+  await expect(sheet.locator('.food-item.selected .pmods')).toHaveCount(0)
   await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 600 卡')
 
   await sheet.locator('.pick-bar-btn').click()

@@ -1,5 +1,5 @@
 /* 「估一筆」（spec.md A 節 2026-11-13 版，AC 7–16）。樣張 _design-sample/estimate-entry.html B、ai-flair.html 光暈 A。
-   流程（使用者 2026-11-13）：估一筆的草稿「帶回清單」放進已選打勾，跟清單勾的食物一起按「加入」。
+   流程（使用者 2026-11-13）：估一筆的草稿「帶回清單」放進清單最上面的「估一筆」段打勾（v2.158 前是「已選」段），跟清單勾的食物一起按「加入」。
    read-label 的估算模式由 stub 的 __estimate 控制（預設 null＝502）；寫入看 __writes。各條都自己 openApp、不共用狀態。 */
 import { test, expect, type Page } from '@playwright/test'
 import { openApp, shiftIso } from './harness'
@@ -120,9 +120,11 @@ test('AI 估算：等待插圖 → 草稿逐樣出現，帶回清單前後都不
   await drafts.nth(1).locator('.est-del').click()
   await drafts.nth(1).locator('.est-name').fill('夜市地瓜球')
   await page.locator('.pick-bar-btn', { hasText: '帶回清單' }).click()
-  // 回到清單：草稿在已選段打勾，還沒有任何寫入
+  // 回到清單：草稿在「估一筆」段打勾、搜尋框下的膠囊列也有，還沒有任何寫入
   const picked = page.locator('.food-row.est-picked')
   await expect(picked).toHaveCount(2)
+  await expect(page.locator('.sect-lb:has-text("估一筆") + .food-list .food-row.est-picked')).toHaveCount(2)
+  await expect(page.locator('.pick-pin .pick-chip')).toHaveText(['螺獅粉', '夜市地瓜球'])
   await expect(picked.nth(0).locator('.nm')).toHaveText('螺獅粉')
   await expect(picked.nth(1).locator('.nm')).toHaveText('夜市地瓜球')
   await expect(page.locator('.pick-line')).toContainText('2 樣 · 850 卡')
@@ -158,12 +160,17 @@ test('清單勾的食物跟估一筆帶回來的一次加入（先勾無糖豆�
   await page.locator('.est-go').click()
   await expect(page.locator('.est-draft')).toHaveCount(1)
   await page.locator('.pick-bar-btn', { hasText: '帶回清單' }).click()
-  // 已選段：豆漿與螺獅粉都打勾，確認列 2 樣
+  // 豆漿在原位打勾、螺獅粉在「估一筆」段，膠囊列兩顆，確認列 2 樣
   await expect(page.locator('.food-row[aria-pressed="true"]', { hasText: '無糖豆漿' })).toBeVisible()
   await expect(page.locator('.food-row.est-picked', { hasText: '螺獅粉' })).toBeVisible()
   await expect(page.locator('.pick-line')).toContainText('2 樣')
-  // 點已選的估算列回估一筆修改
+  await expect(page.locator('.pick-pin .pick-chip')).toHaveText(['無糖豆漿', '螺獅粉'])
+  // 點估算列回估一筆修改
   await page.locator('.food-row.est-picked').click()
+  await expect(page.locator('.est-draft .est-name')).toHaveValue('螺獅粉')
+  await page.locator('.back-btn').click()
+  // 點估算的膠囊也一樣回估一筆
+  await page.getByRole('button', { name: '螺獅粉，估一筆，點了回估一筆修改' }).click()
   await expect(page.locator('.est-draft .est-name')).toHaveValue('螺獅粉')
   await page.locator('.back-btn').click()
   await page.locator('.pick-bar-btn', { hasText: '加入' }).click()

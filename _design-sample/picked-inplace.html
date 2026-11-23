@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>記一筆：勾了留在原位：樣張</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 40px 0 6px; }
+  .note { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 20px; max-width: 1240px; line-height: 1.7; }
+  .note b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(4, 393px); column-gap: 28px; align-items: start; }
+  .gh { font-size: var(--t-md); font-weight: 800; margin-bottom: 4px; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 118px; margin-bottom: 10px; }
+  .gd b { color: var(--ink); }
+  .gd .bad { color: var(--over); font-weight: 700; }
+
+  /* 手機畫面殼：sheet 已捲到中段 */
+  .phone { position: relative; height: 745px; background: var(--card); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-1); overflow: hidden; display: flex; flex-direction: column; }
+  .top { padding: 14px 20px 8px; border-bottom: 1px solid var(--rule-subtle); }
+  .meals { display: flex; gap: 8px; margin-bottom: 10px; }
+  .meals span { padding: 0 14px; min-height: 36px; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); font-weight: 700; }
+  .meals span.on { background: var(--ink); color: var(--card); }
+  .search { height: 40px; border-radius: 12px; background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); display: flex; align-items: center; padding: 0 12px; }
+  .scroll { flex: 1; overflow: hidden; padding: 4px 0; }
+  .sect { font-size: var(--t-xs); color: var(--ink-muted); font-weight: 700; padding: 12px 20px 4px; letter-spacing: var(--track-xs); }
+  .grp { display: flex; align-items: center; gap: 10px; padding: 10px 20px 2px; font-weight: 800; font-size: var(--t-sm); }
+  .grp i { width: 28px; height: 28px; border-radius: 50%; background: var(--plate); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; }
+  .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-muted); flex-shrink: 0; box-sizing: border-box; }
+  .ck.on { border: none; background: var(--accent); display: grid; place-items: center; }
+  .ck.on svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .row.picked { background: var(--accent-soft); }
+  .nm { flex: 1; min-width: 0; font-size: var(--t-base); }
+  .nm small { color: var(--ink-muted); font-size: var(--t-xs); margin-left: 4px; }
+  .kc { font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-sm); }
+  .step { display: flex; align-items: center; background: var(--card); border-radius: 12px; height: 32px; box-shadow: var(--shadow-1); }
+  .step span { width: 28px; text-align: center; color: var(--accent); font-weight: 700; }
+  .step b { width: 20px; text-align: center; font-family: var(--font-num); }
+  .sum { margin: 6px 20px 6px 54px; color: var(--accent); font-size: var(--t-sm); font-weight: 700; }
+  .sum span { color: var(--ink-muted); font-weight: 400; }
+  .gone { margin: 0 20px; min-height: 40px; display: flex; align-items: center; justify-content: center; color: var(--ink-muted); font-size: var(--t-xs); border: 1.5px dashed var(--rule-field); border-radius: 10px; }
+  .gone b { color: var(--over); }
+
+  /* 確認列 */
+  .cf { border-top: 1px solid var(--rule-subtle); padding: 12px 20px 16px; background: var(--card); }
+  .cf-line { display: flex; justify-content: space-between; align-items: center; font-weight: 800; }
+  .cf-line .left { display: flex; align-items: center; gap: 4px; }
+  .cf-line .left.btn { color: var(--accent); }
+  .cf-line .left svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  .cf-line .rem { color: var(--ink-muted); font-weight: 600; }
+  .cf-mac { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--ink-muted); margin: 4px 0 10px; }
+  .cf-btn { height: 48px; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 800; }
+  .cf-list { margin: 8px 0 10px; border-radius: 12px; background: var(--raised); padding: 4px 0; }
+  .cf-list div { display: flex; justify-content: space-between; padding: 8px 12px; font-size: var(--t-sm); }
+  .cf-list div span:last-child { font-family: var(--font-num); color: var(--ink-muted); }
+
+  /* B：底部托盤 chips */
+  .tray { display: flex; gap: 6px; overflow: hidden; margin: 0 0 10px; }
+  .tchip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 12px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-dark); font-size: var(--t-sm); font-weight: 700; }
+  .tchip.new { box-shadow: 0 0 0 2px var(--accent); }
+  .tchip svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+
+  /* C：頂部固定已選列 */
+  .pin { display: flex; align-items: center; gap: 6px; padding: 8px 20px; background: var(--raised); border-bottom: 1px solid var(--rule-subtle); font-size: var(--t-sm); }
+  .pin b { color: var(--ink-muted); font-weight: 700; font-size: var(--t-xs); flex-shrink: 0; }
+  .pin .tchip { min-height: 28px; }
+
+  .inset { margin-top: 14px; }
+  .inset .cap { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 0 6px; }
+  .mini { background: var(--card); border-radius: 16px; box-shadow: var(--shadow-1); }
+</style>
+</head>
+<body>
+<h1>記一筆：勾了不再跳走</h1>
+<p class="note">
+  情境：午餐，建議段已勾「雞胸餐盒」，然後往下捲到「全部食物」，<b>勾了「溫泉蛋」</b>。每支手機都是「剛勾完那一刻」的畫面。<br>
+  三個方向都是：<b>勾了留在原位、打勾＋淡底</b>，份量 stepper 與份量微調直接在那一列（所以建議段也有微調，見最下面）；頂端的「已選」整段拿掉。差別只在「我到底勾了哪些」放哪裡看。估一筆帶回來的草稿不在清單裡，三個方向都放進那個總覽。
+</p>
+
+<div class="grid">
+  <!-- 現況 -->
+  <div>
+    <div class="gh">現況（v2.157）</div>
+    <div class="gd">勾了的那一列從原位消失、搬到頂端「已選」。捲到下面時已選在畫面外，<span class="bad">整組「配菜」不見、下面的列往上跳</span>，只剩確認列的「2 樣」看得到。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">搜尋品名或店家</div></div>
+      <div class="scroll">
+        <div class="sect">全部食物</div>
+        <div class="grp"><i></i>健康餐盒</div>
+        <div class="row"><span class="ck"></span><span class="nm">雞胸便當<small>減醣廚房</small></span><span class="kc">420</span></div>
+        <div class="gone"><b>配菜整組消失</b>（溫泉蛋搬到最上面了）</div>
+        <div class="grp"><i></i>主食</div>
+        <div class="row"><span class="ck"></span><span class="nm">地瓜</span><span class="kc">130</span></div>
+        <div class="grp"><i></i>點心</div>
+        <div class="row"><span class="ck"></span><span class="nm">香蕉</span><span class="kc">105</span></div>
+        <div class="row"><span class="ck"></span><span class="nm">茶葉蛋<small>7-11</small></span><span class="kc">75</span></div>
+      </div>
+      <div class="cf">
+        <div class="cf-line"><span class="left">2 樣・460 卡</span><span class="rem">剩 1318</span></div>
+        <div class="cf-mac"><span>蛋白 44/137</span><span>脂 13/65</span><span>碳 26/163</span></div>
+        <div class="cf-btn">加入</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A -->
+  <div>
+    <div class="gh">A　確認列可展開（推薦）</div>
+    <div class="gd">清單完全不動。確認列的「2 樣・460 卡」變成可點的鈕，點了往上展開已選清單（每樣品名、份量、卡數，點品名捲回那一列）。<b>最安靜</b>、不多佔一格；缺點是要點一下才看得到名字。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">搜尋品名或店家</div></div>
+      <div class="scroll">
+        <div class="sect">全部食物</div>
+        <div class="grp"><i></i>健康餐盒</div>
+        <div class="row"><span class="ck"></span><span class="nm">雞胸便當<small>減醣廚房</small></span><span class="kc">420</span></div>
+        <div class="grp"><i></i>配菜</div>
+        <div class="row picked"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">溫泉蛋<small>減醣廚房</small></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="grp"><i></i>主食</div>
+        <div class="row"><span class="ck"></span><span class="nm">地瓜</span><span class="kc">130</span></div>
+        <div class="grp"><i></i>點心</div>
+        <div class="row"><span class="ck"></span><span class="nm">香蕉</span><span class="kc">105</span></div>
+      </div>
+      <div class="cf">
+        <div class="cf-line"><span class="left btn">2 樣・460 卡 <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></span><span class="rem">剩 1318</span></div>
+        <div class="cf-mac"><span>蛋白 44/137</span><span>脂 13/65</span><span>碳 26/163</span></div>
+        <div class="cf-btn">加入</div>
+      </div>
+    </div>
+    <div class="inset">
+      <p class="cap">點「2 樣・460 卡」之後：</p>
+      <div class="mini cf">
+        <div class="cf-line"><span class="left btn">2 樣・460 卡 <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span><span class="rem">剩 1318</span></div>
+        <div class="cf-list"><div><span>雞胸餐盒 ×1</span><span>380</span></div><div><span>溫泉蛋 ×1</span><span>80</span></div></div>
+        <div class="cf-btn">加入</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div>
+    <div class="gh">B　底部一排已選膠囊</div>
+    <div class="gd">確認列上面常駐一排膠囊，每樣一顆，剛勾的那顆描邊亮一下；點膠囊捲回那一列，✕ 取消。<b>不用點就看得到名字</b>；缺點是多佔約 42px，勾多了要橫向捲。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">搜尋品名或店家</div></div>
+      <div class="scroll">
+        <div class="sect">全部食物</div>
+        <div class="grp"><i></i>健康餐盒</div>
+        <div class="row"><span class="ck"></span><span class="nm">雞胸便當<small>減醣廚房</small></span><span class="kc">420</span></div>
+        <div class="grp"><i></i>配菜</div>
+        <div class="row picked"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">溫泉蛋<small>減醣廚房</small></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="grp"><i></i>主食</div>
+        <div class="row"><span class="ck"></span><span class="nm">地瓜</span><span class="kc">130</span></div>
+      </div>
+      <div class="cf">
+        <div class="tray"><span class="tchip">雞胸餐盒 <svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></span><span class="tchip new">溫泉蛋 <svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></span></div>
+        <div class="cf-line"><span class="left">2 樣・460 卡</span><span class="rem">剩 1318</span></div>
+        <div class="cf-mac"><span>蛋白 44/137</span><span>脂 13/65</span><span>碳 26/163</span></div>
+        <div class="cf-btn">加入</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div>
+    <div class="gh">C　搜尋框下固定一行已選</div>
+    <div class="gd">搜尋框下面釘一行「已選」膠囊，跟著頂端不捲走；有勾才出現。<b>視線在上方時最順</b>（搜尋、切餐別都在上面）；缺點是有勾的瞬間整個清單往下推一行，又是一次跳動。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">搜尋品名或店家</div></div>
+      <div class="pin"><b>已選</b><span class="tchip">雞胸餐盒</span><span class="tchip new">溫泉蛋</span></div>
+      <div class="scroll">
+        <div class="sect">全部食物</div>
+        <div class="grp"><i></i>健康餐盒</div>
+        <div class="row"><span class="ck"></span><span class="nm">雞胸便當<small>減醣廚房</small></span><span class="kc">420</span></div>
+        <div class="grp"><i></i>配菜</div>
+        <div class="row picked"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">溫泉蛋<small>減醣廚房</small></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="grp"><i></i>主食</div>
+        <div class="row"><span class="ck"></span><span class="nm">地瓜</span><span class="kc">130</span></div>
+        <div class="grp"><i></i>點心</div>
+        <div class="row"><span class="ck"></span><span class="nm">香蕉</span><span class="kc">105</span></div>
+      </div>
+      <div class="cf">
+        <div class="cf-line"><span class="left">2 樣・460 卡</span><span class="rem">剩 1318</span></div>
+        <div class="cf-mac"><span>蛋白 44/137</span><span>脂 13/65</span><span>碳 26/163</span></div>
+        <div class="cf-btn">加入</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>三個方向共通：建議段勾了也有份量微調</h2>
+<p class="note">
+  現在從建議段勾的不出微調（怕那份數字已經調過、再調會疊兩次）。改成：<b>帶入上次按的微調</b>（例如「大杯・微糖 · 照上次」），沒動就照上次那份數字記；動了才從食品庫的基準重算。食物已經封存的（食品庫沒有基準）照舊不出。
+</p>
+<div class="grid" style="grid-template-columns: 393px">
+  <div class="mini" style="padding: 4px 0 8px">
+    <div class="sect">建議</div>
+    <div class="row picked"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">雞胸餐盒<small>減醣廚房</small></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+    <div class="row picked"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">無糖拿鐵（茶＋鮮奶，大杯）</span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+    <div class="sum">大杯・微糖 › <span>· 照上次</span></div>
+  </div>
+</div>
+</body>
+</html>

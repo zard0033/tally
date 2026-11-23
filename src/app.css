@@ -1454,11 +1454,41 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    **這個 class 唯一的消費者是 e2e 測試的排序/分組斷言（`quota-warning.spec.ts`）**——
    下一輪清理看到這裡沒有對應規則，不要當成殘留死碼刪掉。 */
 
-/* 選取態不鋪底色：訊號是勾選圖示變實心＋右側長出加減鈕（三列連排鋪 --accent-soft 會變成一大片色塊）。
+/* 選取態（v2.158 起勾了留在原位，樣張 picked-inplace.html C）：勾選圖示變實心＋右側長出加減鈕＋整列鋪 --accent-soft。
+   以前列會搬到頂端「已選」段、連排三列鋪底會成一大片色塊所以不鋪；現在勾的列散在清單各處，捲過去時要一眼認得出來。
+   底色用負邊距撐滿整列寬（清單左右各有 --s-5 內距）。
    input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
+.food-item { position: relative; isolation: isolate; }
+.food-item.selected { margin: 0 calc(var(--s-5) * -1); padding: 0 var(--s-5); background: var(--accent-soft); }
 .food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
   padding: var(--s-1) 0; }
 .food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
+/* 點已選膠囊捲過來那一列閃一下：疊一層 --accent 只動透明度（減少動態照播，見 DESIGN「減少動態」：純透明度不暈）。
+   z-index -1 落在列底色之上、字之下（.food-item 是 isolation: isolate） */
+.row-flash { position: absolute; inset: 0; z-index: -1; background: var(--accent); opacity: 0; pointer-events: none;
+  animation: row-flash 700ms var(--ease) forwards; }
+@keyframes row-flash { 0% { opacity: 0; } 15% { opacity: .22; } 100% { opacity: 0; } }
+
+/* 已選膠囊列（v2.158）：釘在搜尋框下、不跟著捲，有勾才出現。一行放不下就橫向捲。
+   膠囊 28px 高、上下各 --s-2 內距撐到 44px，命中區用 ::before 撐滿這 44px（再往外會被橫向捲動裁掉）。 */
+.pick-pin { display: flex; align-items: center; gap: var(--s-1); flex-shrink: 0; padding: 0 var(--s-5);
+  background: var(--raised); border-bottom: 1px solid var(--rule-subtle); }
+.pick-pin-lb { flex-shrink: 0; font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.pick-chips { position: relative; display: flex; gap: var(--s-2); flex: 1; min-width: 0; overflow-x: auto;
+  padding: var(--s-2) var(--s-1); scrollbar-width: none; overscroll-behavior-x: contain; }
+.pick-chips::-webkit-scrollbar { display: none; }
+.pick-chip { position: relative; flex-shrink: 0; min-height: 28px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--accent-dark); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
+  white-space: nowrap; cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: box-shadow var(--dur-base) var(--ease), opacity var(--dur-base) var(--ease); }
+/* 長名截斷放在內層：膠囊本身 overflow: hidden 會把 ::before 撐出的命中區裁回 28px */
+.pick-chip-tx { display: block; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+.pick-chip::before { content: ""; position: absolute; inset: calc(var(--s-2) * -1) -2px; }
+/* 最近勾的那顆描 2px 主色，到下一次勾為止 */
+.pick-chip.is-new { box-shadow: 0 0 0 2px var(--accent); }
+.pick-chip:active { opacity: .6; }
+.pick-chip:disabled { cursor: default; opacity: .6; }
+.pick-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 份量微調（spec「份量微調」，樣張 portion-mods.html B）：已選那一列下面一行主色字寫現在的狀態，點了展開。
    左緣對齊品名（勾 20px＋間距）。記一筆與今日頁就地編輯共用；就地編輯裡沒有勾，左緣歸零、上下交給容器的 gap。 */
@@ -1474,6 +1504,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .pmods-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
 .pmods-last { font-weight: 400; color: var(--ink-muted); }
 .pmods-panel { border-left: 2px solid var(--accent-soft); padding: var(--s-1) 0 var(--s-1) var(--s-3); margin-top: var(--s-1); }
+.food-item.selected .pmods-panel { border-left-color: var(--card); } /* v2.158：勾起來的列鋪了 --accent-soft 底，同色直線會看不見 */
 .pmods-grp + .pmods-grp { margin-top: var(--s-2); }
 .pmods-lbl { margin: 0 0 var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .pmods-panel .seg { flex: none; }

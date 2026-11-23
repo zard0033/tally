@@ -19,6 +19,8 @@ interface PortionModsProps {
   disabled?: boolean
   /** 展開後算式上面的一句說明（今日頁：用食品庫現在的數字重算） */
   note?: string
+  /** 不出算式：要記的不是這個算式的結果時（記一筆從建議段勾、還沒改的那一列記的是來源快照），由 note 說明 */
+  hideCalc?: boolean
 }
 
 /** 單選組的「沒按」那一格：用一個不在代碼表裡的 key，SegmentedControl 才有東西可以按下。 */
@@ -29,12 +31,12 @@ const GROUP_LABEL: Record<string, string> = { cup: '杯型', sweet: '甜度', to
 /** 甜度六格放得下：選項字縮成一個字（「微糖」→「微」）。 */
 const short = (group: string, label: string) => (group === 'sweet' ? label.replace('糖', '') : label)
 
-export default function PortionMods({ target, base, mods, open, onToggleOpen, onChange, fromLast, disabled, note }: PortionModsProps) {
+export default function PortionMods({ target, base, mods, open, onToggleOpen, onChange, fromLast, disabled, note, hideCalc }: PortionModsProps) {
   const panelId = useId()
   const groups = groupsFor(target)
   if (!groups.length) return null
   const summary = summaryOf(mods, target)
-  const calc = calcLineOf(base, mods, target)
+  const calc = hideCalc ? null : calcLineOf(base, mods, target)
   return (
     <div className="pmods">
       <button

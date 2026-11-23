@@ -6,7 +6,7 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import PortionMods from '@/components/PortionMods'
@@ -87,18 +87,26 @@ interface FoodRowHandlers {
      （見 app.css 同名 class 旁的註解）——不是死碼，刪掉會讓排序分組與既有測試斷言
      一起失效。 */
   overAmounts: Map<number, OverDelta>
-  /* 份量微調（spec「份量微調」）：已選的每一列各自按了哪些、哪一列展開、哪幾列是「照上次」帶的。
-     從建議段勾的（snapIds）不出微調：那份快照可能已是調過的數字，再調會疊兩次。 */
+  /* 份量微調（spec「份量微調」）：勾起來的每一列各自按了哪些、哪一列展開、哪幾列是「照上次」帶的。
+     modsBase：微調的基準＝食品庫那一筆；查不到（封存）就不出微調。建議段勾的也出（v2.158），基準一樣是食品庫。 */
   mods: Map<number, string[]>
   modsOpen: number | null
-  fromLast: Set<number>
-  snapIds: Set<number>
+  /** 標「照上次」：一般勾選看 fromLast 狀態（自己按過就拿掉）；建議段勾的看現在跟來源那組一不一樣 */
+  isFromLast: (id: number) => boolean
+  /** 建議段勾的、微調沒動：展開後不出算式（那是食品庫現值，跟要記的快照數字對不上），改寫這一句 */
+  modsNote: (id: number) => string | undefined
+  modsBase: (id: number) => Food | undefined
+  /** 勾起來那一列顯示的食物（建議段勾的是來源快照） */
+  pickedFood: (id: number) => Food | undefined
   onToggleModsOpen: (id: number) => void
   onMods: (id: number, mods: string[]) => void
   /** 搜尋字：只靠別名對上的列，副標寫「對到：別名」。 */
   query: string
   /** 寫入中：微調鎖住（寫入途中改了會被靜默丟掉）。 */
   busy: boolean
+  /** 點已選膠囊捲過來的那一列閃一下；seq 讓連點同一顆也重播 */
+  flash: { id: number; seq: number } | null
+  onFlashEnd: () => void
 }
 
 /** 「對到：麻古 紅萱波波」，對上的那幾個字標主色。 */
@@ -117,13 +125,18 @@ function renderAliasHit(alias: string, q: string): ReactNode {
 
 /* 一般函式、不是元件——用 fn(f) 呼叫而非 <Fn/>，React 才不會把它當成每次 render
    都換了身分的新元件型別重新掛載（那樣份量輸入框每打一個字就會失焦）。 */
-function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers, withIcon = false) {
+function renderFoodRow(listed: Food, h: FoodRowHandlers, withIcon = false) {
+  /* 勾了留在原位（v2.158）：同一個 li 換成勾選的樣子，不搬到別段 */
+  const picked = h.picks.has(listed.id)
+  const f = (picked && h.pickedFood(listed.id)) || listed
   const qty = h.picks.get(f.id) ?? 1
   const draft = h.qtyDrafts.get(f.id) ?? String(qty)
   const overQuota = !picked && h.overAmounts.has(f.id)
+  const lib = picked ? h.modsBase(f.id) : undefined
   return (
     <li key={f.id}>
-      <div className={picked ? 'food-item selected' : overQuota ? 'food-item over-quota' : 'food-item'}>
+      <div className={picked ? 'food-item selected' : overQuota ? 'food-item over-quota' : 'food-item'} data-food-id={f.id}>
+        {h.flash?.id === f.id && <span className="row-flash" key={h.flash.seq} aria-hidden="true" onAnimationEnd={h.onFlashEnd} />}
         {picked ? (
           <>
           <div className="food-line">
@@ -146,13 +159,15 @@ function renderFoodRow(f: Food, picked: boolean, h: FoodRowHandlers, withIcon = 
               onBlur={(raw) => h.onQtyBlur(f.id, raw)}
             />
           </div>
-          {!h.snapIds.has(f.id) && (
+          {lib && (
             <PortionMods
-              target={f}
-              base={{ kcal: num(f.kcal), protein: num(f.protein), fat: num(f.fat), carb: num(f.carb) }}
+              target={lib}
+              base={{ kcal: num(lib.kcal), protein: num(lib.protein), fat: num(lib.fat), carb: num(lib.carb) }}
               mods={h.mods.get(f.id) ?? []}
               open={h.modsOpen === f.id}
-              fromLast={h.fromLast.has(f.id)}
+              fromLast={h.isFromLast(f.id)}
+              note={h.modsNote(f.id)}
+              hideCalc={h.modsNote(f.id) !== undefined}
               onToggleOpen={() => h.onToggleModsOpen(f.id)}
               onChange={(m) => h.onMods(f.id, m)}
               disabled={h.busy}
@@ -272,12 +287,24 @@ export default function LogSheet(props: LogSheetProps) {
   const recentFetchedRef = useRef(false)
 
   /* 從建議段勾起來的品項留一份快照：封存的食物 foods 查不到，切餐別後建議段也換了，
-     沒有這份就會從已選、小計、寫入靜默消失。取消勾選就清掉。 */
+     沒有這份就會從小計、寫入靜默消失。取消勾選就清掉。 */
   const [suggestSnaps, setSuggestSnaps] = useState<Map<number, { food: Food; name: string | null; mods: string[] }>>(new Map())
-  const pickedListRef = useRef<HTMLUListElement | null>(null)
-  const focusPickedRef = useRef(false)
+  /** 「全選」按完會消失：焦點接到建議段第一列（列留在原位，下一個能按的就是它） */
+  const focusSuggestRef = useRef(false)
+  /** 勾／取消勾那一列換了一棵 DOM，按下去的那顆鈕被拔掉；焦點接回同一列的新鈕 */
+  const refocusRef = useRef<number | null>(null)
+  /** 搜尋框下的「已選」膠囊列（v2.158）：最近勾的那顆描邊；點膠囊捲到那一列、閃一下 */
+  const [lastPicked, setLastPicked] = useState<number | null>(null)
+  const [jump, setJump] = useState<{ id: number; seq: number } | null>(null)
+  const [flash, setFlash] = useState<{ id: number; seq: number } | null>(null)
+  const listScrollRef = useRef<HTMLDivElement | null>(null)
+  const pinRef = useRef<HTMLDivElement | null>(null)
+  const chipsRef = useRef<HTMLDivElement | null>(null)
+  /** 膠囊列上一輪在不在、多高、跟著哪個捲動區：出現／消失時補 scrollTop 用 */
+  const pinPrevRef = useRef<{ shown: boolean; h: number; scroller: HTMLDivElement | null }>({ shown: false, h: 0, scroller: null })
 
-  const foodById = (id: number): Food | undefined => suggestSnaps.get(id)?.food ?? foods.find((f) => f.id === id)
+  const libById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
+  const foodById = (id: number): Food | undefined => suggestSnaps.get(id)?.food ?? libById.get(id)
 
   /* 「估一筆」（spec A 2026-11-13 版）：草稿跟著 sheet 走，回清單再進來還在；關掉 sheet 才清。
      estReqRef：每次送出遞增，晚到的舊回應（已經重送或關掉了）一律丟掉。 */
@@ -323,6 +350,10 @@ export default function LogSheet(props: LogSheetProps) {
     setErr(null)
     setFoodForm(BLANK_FOOD_FORM)
     setElsewhereOpen(false)
+    setLastPicked(null)
+    setJump(null)
+    setFlash(null)
+    pinPrevRef.current = { shown: false, h: 0, scroller: null }
     estReqRef.current++
     setEstText('')
     setEstStatus('idle')
@@ -333,12 +364,69 @@ export default function LogSheet(props: LogSheetProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  /* 「全選」那顆鈕會隨建議段一起消失，焦點要接到已選段，否則鍵盤使用者原地迷路。 */
+  /* 焦點接手：「全選」那顆鈕勾完全部就消失，接到建議段第一列；勾／取消勾那一列換了一棵 DOM，接回同一列。
+     只在焦點真的掉了（落在 body）時接，不搶使用者已經移走的焦點。refocusRef 每一輪都先取出清掉：
+     全選那一輪留下的值會在之後按加減時把焦點搶到建議段最後一列。 */
   useEffect(() => {
-    if (!focusPickedRef.current) return
-    focusPickedRef.current = false
-    pickedListRef.current?.querySelector('button')?.focus()
+    const sc = listScrollRef.current
+    const id = refocusRef.current
+    refocusRef.current = null
+    if (focusSuggestRef.current) {
+      focusSuggestRef.current = false
+      sc?.querySelector<HTMLElement>('.sect-suggest + .food-list .food-row')?.focus({ preventScroll: true })
+      return
+    }
+    if (id === null || document.activeElement !== document.body) return
+    /* 取消勾之後那一列可能整列不見（「別的餐勾的」、估一筆對到的那樣）：退回膠囊列第一顆，膠囊列也收了就回搜尋框 */
+    const target =
+      sc?.querySelector<HTMLElement>(`[data-food-id="${id}"] .food-row`) ??
+      pinRef.current?.querySelector<HTMLElement>('.pick-chip') ??
+      sheetRef.current?.querySelector<HTMLElement>('input[aria-label="搜尋食物"]')
+    target?.focus({ preventScroll: true })
   }, [picks])
+
+  /* 膠囊列有勾才出現：出現那一刻把捲動區往下推一行，同一幀把 scrollTop 補回來，手指底下的列不動（消失時反過來）。
+     捲動區換了一個（從估一筆回來、重新打開）就不補——新的捲動區本來就從頂端開始。 */
+  useLayoutEffect(() => {
+    const el = pinRef.current
+    const sc = listScrollRef.current
+    const prev = pinPrevRef.current
+    const shown = !!el
+    // 平常的 render 什麼都沒翻轉，不讀版面（offsetHeight 會逼一次排版）
+    if (shown === prev.shown && sc === prev.scroller) return
+    const h = el ? el.offsetHeight : prev.h
+    if (sc && sc === prev.scroller) sc.scrollTop += shown ? h : -h
+    pinPrevRef.current = { shown, h, scroller: sc }
+  })
+
+  /* 最近勾的那顆膠囊捲進膠囊列看得到的範圍（只動膠囊列自己的 scrollLeft，不用 scrollIntoView——那會連 sheet 一起捲） */
+  useLayoutEffect(() => {
+    const row = chipsRef.current
+    const chip = lastPicked === null ? null : row?.querySelector<HTMLElement>(`[data-chip="${lastPicked}"]`)
+    if (!row || !chip) return
+    // .pick-chips 是 position: relative，offsetLeft 直接是膠囊在列裡的位置；左右留內距那麼寬，描邊才不會被切掉
+    const pad = parseFloat(getComputedStyle(row).paddingLeft) || 0
+    const left = chip.offsetLeft - pad
+    const right = chip.offsetLeft + chip.offsetWidth + pad
+    if (left < row.scrollLeft) row.scrollLeft = left
+    else if (right > row.scrollLeft + row.clientWidth) row.scrollLeft = right - row.clientWidth
+    // view：從估一筆回來膠囊列是新的一份，要重捲
+  }, [lastPicked, view])
+
+  /* 點膠囊：那一列捲到捲動區中間（減少動態就直接跳），閃一下在 jumpTo 就排好了。看不到的列（收合的「其他餐的」、被搜尋濾掉）
+     在 jumpTo 已經先展開／清掉搜尋，這裡是它們畫出來之後的那一輪。 */
+  useEffect(() => {
+    if (!jump) return
+    const sc = listScrollRef.current
+    const el = sc?.querySelector<HTMLElement>(`[data-food-id="${jump.id}"]`)
+    if (!sc || !el) return
+    const cr = sc.getBoundingClientRect()
+    const er = el.getBoundingClientRect()
+    const top = sc.scrollTop + er.top - cr.top - Math.max(0, (cr.height - er.height) / 2)
+    sc.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    // 焦點跟著到那一列（鍵盤、讀屏才接得下去）；preventScroll，不跟上面的 smooth 捲動搶
+    el.querySelector<HTMLElement>('.food-row')?.focus({ preventScroll: true })
+  }, [jump])
 
   useEffect(() => {
     /* 每次打開都重撈一次（v2.156 review）：「照上次」要看最近一筆，同一次開 app 裡午餐剛記的中杯微糖，晚餐再開就要帶得到。
@@ -371,6 +459,7 @@ export default function LogSheet(props: LogSheetProps) {
 
   function togglePick(id: number) {
     setErr(null)
+    refocusRef.current = id
     setPicks((prev) => {
       const next = new Map(prev)
       if (next.has(id)) {
@@ -396,7 +485,9 @@ export default function LogSheet(props: LogSheetProps) {
           return nl2
         })
         setModsOpen((o) => (o === id ? null : o))
+        setLastPicked((l) => (l === id ? null : l))
       } else {
+        setLastPicked(id)
         const q = defaultQty(lastQty, meal, id)
         next.set(id, q)
         setQtyDrafts((d) => new Map(d).set(id, String(q)))
@@ -412,11 +503,31 @@ export default function LogSheet(props: LogSheetProps) {
     })
   }
 
+  /* 建議段勾起來（v2.158 起也出微調）：微調預設帶來源那一筆按的、標「照上次」。沒動就照來源的快照數字記；
+     動了（跟來源那組不一樣）才從食品庫的基準重算，見 pickedRow。 */
   function pickSuggested(item: RepeatItem) {
+    const id = item.food_id
     setErr(null)
-    setPicks((prev) => new Map(prev).set(item.food_id, item.qty))
-    setQtyDrafts((prev) => new Map(prev).set(item.food_id, String(item.qty)))
-    setSuggestSnaps((prev) => new Map(prev).set(item.food_id, { food: suggestedFood(item), name: item.name, mods: item.mods }))
+    refocusRef.current = id
+    setLastPicked(id)
+    setPicks((prev) => new Map(prev).set(id, item.qty))
+    setQtyDrafts((prev) => new Map(prev).set(id, String(item.qty)))
+    setSuggestSnaps((prev) => new Map(prev).set(id, { food: suggestedFood(item), name: item.name, mods: item.mods }))
+    const lib = libById.get(id)
+    const m = lib ? normalizeMods(item.mods, lib) : []
+    setMods((prev) => {
+      const next = new Map(prev)
+      if (m.length) next.set(id, m)
+      else next.delete(id)
+      return next
+    })
+    // 「照上次」不存狀態：render 時看現在按的跟來源那組一不一樣（snapSame），改了再改回原樣會重新出現
+    setFromLast((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   function stepQty(id: number, dir: 1 | -1) {
@@ -451,12 +562,35 @@ export default function LogSheet(props: LogSheetProps) {
     })
   }
 
-  /** 已選那一筆實際要記的單份值：食品庫基準套上微調（建議段的快照不套）。 */
-  function pickedValues(f: Food): Food {
-    if (suggestSnaps.has(f.id)) return f
-    const m = mods.get(f.id) ?? []
-    if (!m.length) return f
-    return { ...f, ...applyMods({ kcal: num(f.kcal), protein: num(f.protein), fat: num(f.fat), carb: num(f.carb) }, m, f).result }
+  /** 勾起來那一列的微調基準：食品庫那一筆；封存的（foods 查不到）沒有基準，不出微調。 */
+  const modsBase = (id: number): Food | undefined => libById.get(id)
+
+  /** 勾起來那一列顯示的食物：建議段勾的是來源快照；出微調時品名不接「（中杯・微糖）」——微調的狀態寫在下面那一行，改了才不會對不上。 */
+  function pickedFood(id: number): Food | undefined {
+    const snap = suggestSnaps.get(id)
+    const lib = libById.get(id)
+    if (!snap) return lib
+    return lib ? { ...snap.food, name: snap.name ?? lib.name } : snap.food
+  }
+
+  /* 勾起來那一筆實際要記的單份值與 mods。建議段勾的：微調跟來源那組一樣（沒動）就照搬快照數字與 mods，不重算；
+     動了就跟一般勾選一樣，從食品庫的基準套上這次按的。 */
+  /** 建議段勾的那一列，微調跟來源那一筆一不一樣（不是建議段勾的＝undefined）。封存的沒有微調可改，永遠算一樣。 */
+  function snapSame(id: number): boolean | undefined {
+    const snap = suggestSnaps.get(id)
+    if (!snap) return undefined
+    const lib = libById.get(id)
+    return !lib || normalizeMods(snap.mods, lib).join() === normalizeMods(mods.get(id) ?? [], lib).join()
+  }
+
+  function pickedRow(id: number): { food: Food; mods: string[] } | undefined {
+    const snap = suggestSnaps.get(id)
+    const lib = libById.get(id)
+    if (snap && snapSame(id)) return { food: snap.food, mods: snap.mods }
+    if (!lib) return undefined
+    const m = normalizeMods(mods.get(id) ?? [], lib)
+    if (!m.length) return { food: lib, mods: m }
+    return { food: { ...lib, ...applyMods({ kcal: num(lib.kcal), protein: num(lib.protein), fat: num(lib.fat), carb: num(lib.carb) }, m, lib).result }, mods: m }
   }
 
   /* 搜尋框是受控 input（value 一直等於 query，顯示不會被打斷）；filterQuery 才是拿去
@@ -594,11 +728,9 @@ export default function LogSheet(props: LogSheetProps) {
     setErr(null)
     const rows: NewIntake[] = []
     for (const [id, qty] of picks) {
-      const base = foodById(id)
-      if (!base) continue
-      const f = pickedValues(base)
-      // 建議段的快照：數字已是調過的，微調原樣照搬（不重算）；其餘用這次按的
-      const m = suggestSnaps.get(id)?.mods ?? normalizeMods(mods.get(id) ?? [], base)
+      const row = pickedRow(id)
+      if (!row) continue
+      const { food: f, mods: m } = row
       // 沒調就不帶 mods（DB 預設空陣列）：跟一鍵加入、估一筆的寫入同一個形狀
       rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null, ...(m.length ? { mods: m } : {}) })
     }
@@ -641,6 +773,7 @@ export default function LogSheet(props: LogSheetProps) {
   function pickExisting(id: number) {
     setPicks((prev) => (prev.has(id) ? prev : new Map(prev).set(id, 1)))
     setQtyDrafts((prev) => (prev.has(id) ? prev : new Map(prev).set(id, '1')))
+    setLastPicked(id)
     setView('list')
     setQuery('')
     setFilterQuery('')
@@ -661,6 +794,7 @@ export default function LogSheet(props: LogSheetProps) {
          真正記進 intake 仍要按「加入」，兩件事分開才不會以為記完就關掉 app */
       setPicks((prev) => new Map(prev).set(created.id, 1))
       setQtyDrafts((prev) => new Map(prev).set(created.id, '1'))
+      setLastPicked(created.id)
       setView('list')
       setQuery('')
       setFilterQuery('')
@@ -676,10 +810,7 @@ export default function LogSheet(props: LogSheetProps) {
      判斷收在 dates.ts 共用，不在這裡再維護一份（第一版就是各維護一份才漏改）。 */
   const plannable = isPlannable(dayData.date)
   const eaten = sumIntake(dayData.rows ?? [])
-  const totals = pickTotals(picks, (id) => {
-    const f = foodById(id)
-    return f && pickedValues(f)
-  })
+  const totals = pickTotals(picks, (id) => pickedRow(id)?.food)
   const addOn = (t: IntakeTotals): IntakeTotals => ({
     kcal: eaten.kcal + t.kcal,
     protein: eaten.protein + t.protein,
@@ -763,8 +894,6 @@ export default function LogSheet(props: LogSheetProps) {
   const vendorOptions = useMemo(() => vendorOptionsOf(foods), [foods])
   const catById = useMemo(() => new Map(foods.map((f) => [f.id, categoryOf(f.category)])), [foods])
   const trimmedQuery = filterQuery.trim()
-  const pickedFoods = [...picks.keys()].map(foodById).filter((f): f is Food => !!f)
-
   const handlers: FoodRowHandlers = {
     picks,
     qtyDrafts,
@@ -778,26 +907,84 @@ export default function LogSheet(props: LogSheetProps) {
     overAmounts,
     mods,
     modsOpen,
-    fromLast,
-    snapIds: new Set(suggestSnaps.keys()),
+    isFromLast: (id) => {
+      const same = snapSame(id)
+      if (same === undefined) return fromLast.has(id)
+      return same && (mods.get(id) ?? []).length > 0
+    },
+    modsNote: (id) => {
+      const snap = suggestSnaps.get(id)
+      return snap && snapSame(id) ? `沒改就照上次記的每份 ${Math.round(num(snap.food.kcal))} 卡；改了用食品庫現在的數字重算` : undefined
+    },
+    modsBase,
+    pickedFood,
     onToggleModsOpen: (id) => setModsOpen((o) => (o === id ? null : id)),
     onMods: setRowMods,
     query: filterQuery,
     busy,
+    flash,
+    onFlashEnd: () => setFlash(null),
   }
 
-  /* 估一筆已經對上的食品庫食物也算「已選」：不然清單還會把它列成沒勾，再勾一次就寫兩筆同一樣（v2.154 review M1） */
-  const taken = new Set<number>([...picks.keys(), ...drafts.flatMap((d) => (d.lib ? [d.lib.food.id] : []))])
+  /* 估一筆已經對上的食品庫食物不列成可勾的列：再勾一次就寫兩筆同一樣（v2.154 review M1）。已經勾著的照舊留在原位。
+     勾了的不再從清單拿掉（v2.158）：列留在原位，所以同一食物不重複出現的規則只剩「建議段先、常吃再、全部最後」。 */
+  const hidden = new Set<number>(drafts.flatMap((d) => (d.lib && !picks.has(d.lib.food.id) ? [d.lib.food.id] : [])))
+
+  /* 建議段：該餐已有紀錄或沒有來源時 repeatByMeal 就沒有這一餐。同一食物不同時出現在建議與常吃／全部，所以兩段都要先濾再取。
+     搜尋時也照算：點膠囊捲過去要知道那一列在不在收合的「其他餐的」裡。 */
+  const suggestion = meal ? repeatByMeal[meal] : undefined
+  const suggestItems = suggestion ? mergeByFood(suggestion.items).filter((i) => !hidden.has(i.food_id)) : []
+  const suggestIds = new Set(suggestItems.map((i) => i.food_id))
+  const suggestLeft = suggestItems.filter((i) => !picks.has(i.food_id))
+  /* 預覽（逐筆超標）與勾下去的份量同源，都是建議量，不是「該餐上次的份量」。勾著的再點一下就是取消。 */
+  const suggestHandlers: FoodRowHandlers = {
+    ...handlers,
+    onToggle: (id) => {
+      if (picks.has(id)) return togglePick(id)
+      const item = suggestItems.find((i) => i.food_id === id)
+      if (item) pickSuggested(item)
+    },
+    defaultQty: (id) => suggestItems.find((i) => i.food_id === id)?.qty ?? 1,
+  }
+  const recentIds = (meal ? recent?.get(meal) : undefined) ?? []
+  const recentFoods = recentIds
+    .filter((id) => !hidden.has(id) && !suggestIds.has(id))
+    .map((id) => libById.get(id))
+    .filter((f): f is Food => !!f)
+    .slice(0, 5)
+  const restFoods = byQuotaFit(sortedFoods.filter((f) => !hidden.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
+  /* 依類型分組：組序看這一餐吃過幾次（常吃那份歷史），組內沿用軟性排序；只在其他餐吃過的類型收在最底。
+     次數要用整個食品庫查類型，不能只看 restFoods——已勾、常吃那幾樣也是這一類吃過的次數。 */
+  const grouped = groupByCategory(restFoods, meal, mealCounts, (id) => catById.get(id))
+  const elsewhereIds = new Set(grouped.elsewhere.flatMap((g) => g.foods.map((f) => f.id)))
+  /* 勾著、但哪一段都沒有它的：建議段勾的封存食物，切了餐別之後。不收進任何一段就會從畫面上消失，放在上面單獨一段 */
+  const listedIds = new Set([...suggestIds, ...recentFoods.map((f) => f.id), ...restFoods.map((f) => f.id)])
+  const strays = [...picks.keys()].filter((id) => !listedIds.has(id)).map(pickedFood).filter((f): f is Food => !!f)
+
+  /* 點膠囊：那一列現在沒畫出來（被搜尋濾掉、在收合的「其他餐的」裡）就先清掉搜尋／展開，下一輪畫出來再捲過去 */
+  function jumpTo(id: number) {
+    const seq = (jump?.seq ?? 0) + 1
+    if (!listScrollRef.current?.querySelector(`[data-food-id="${id}"]`)) {
+      if (query) {
+        setQuery('')
+        setFilterQuery('')
+      }
+      if (elsewhereIds.has(id)) setElsewhereOpen(true)
+    }
+    setJump({ id, seq })
+    setFlash({ id, seq })
+  }
 
   let browseBody: ReactNode = null
   if (trimmedQuery) {
-    const hits = byQuotaFit(sortedFoods.filter((f) => !taken.has(f.id) && foodMatches(f, trimmedQuery)), overAmounts)
+    const hits = byQuotaFit(sortedFoods.filter((f) => !hidden.has(f.id) && foodMatches(f, trimmedQuery)), overAmounts)
     browseBody = (
       <>
         <div className="sect-lb">搜尋結果</div>
         {hits.length === 0 && <p className="search-empty-msg">找不到「{trimmedQuery}」</p>}
         <ul className="food-list">
-          {hits.map((f) => renderFoodRow(f, false, handlers))}
+          {/* 建議段有的食物從搜尋勾，跟從建議段勾一樣（建議量、來源快照） */}
+          {hits.map((f) => renderFoodRow(f, suggestIds.has(f.id) ? suggestHandlers : handlers))}
           {meal && (
             <li>
               <button className="est-row" type="button" onClick={() => openEstimate(trimmedQuery)}>
@@ -821,59 +1008,44 @@ export default function LogSheet(props: LogSheetProps) {
       </>
     )
   } else {
-    /* 建議段：該餐已有紀錄或沒有來源時 repeatByMeal 就沒有這一餐。沒有「已選用」狀態：勾了進已選、
-       取消回來，全靠這裡每次重算。同一食物不同時出現在建議與常吃／全部，所以兩段都要先濾再取。 */
-    const suggestion = meal ? repeatByMeal[meal] : undefined
-    const suggestItems = suggestion ? mergeByFood(suggestion.items).filter((i) => !taken.has(i.food_id)) : []
-    const suggestIds = new Set(suggestItems.map((i) => i.food_id))
-    /* 預覽（逐筆超標）與勾下去的份量同源，都是建議量，不是「該餐上次的份量」。 */
-    const suggestHandlers: FoodRowHandlers = {
-      ...handlers,
-      onToggle: (id) => {
-        const item = suggestItems.find((i) => i.food_id === id)
-        if (item) pickSuggested(item)
-      },
-      defaultQty: (id) => suggestItems.find((i) => i.food_id === id)?.qty ?? 1,
-    }
-    const recentIds = (meal ? recent?.get(meal) : undefined) ?? []
-    const recentFoods = recentIds
-      .filter((id) => !taken.has(id) && !suggestIds.has(id))
-      .map(foodById)
-      .filter((f): f is Food => !!f)
-      .slice(0, 5)
-    const restFoods = byQuotaFit(sortedFoods.filter((f) => !taken.has(f.id) && !suggestIds.has(f.id) && !recentFoods.includes(f)), overAmounts)
-    /* 依類型分組：組序看這一餐吃過幾次（常吃那份歷史），組內沿用軟性排序；只在其他餐吃過的類型收在最底。
-       次數要用整個食品庫查類型，不能只看 restFoods——已勾、常吃那幾樣也是這一類吃過的次數。 */
-    const grouped = groupByCategory(restFoods, meal, mealCounts, (id) => catById.get(id))
     const seen = meal ? seenByMeal[meal] : undefined
     const seenOf = (g: FoodGroup) => (g.category ? seen?.get(g.category) : undefined)
-    const row = (f: Food) => renderFoodRow(f, false, handlers)
+    const row = (f: Food) => renderFoodRow(f, handlers)
     const elsewhereNames = grouped.elsewhere.map((g) => g.category ?? '未分類')
     browseBody = (
       <>
+        {strays.length > 0 && (
+          <>
+            <div className="sect-lb">別的餐勾的</div>
+            <ul className="food-list">{strays.map(row)}</ul>
+          </>
+        )}
         {suggestItems.length > 0 && (
           <>
             <div className="sect-lb sect-suggest">
               <span>建議</span>
-              <button
-                className="sect-act"
-                type="button"
-                aria-label={`全選建議的 ${suggestItems.length} 樣`}
-                onClick={() => {
-                  focusPickedRef.current = true
-                  suggestItems.forEach(pickSuggested)
-                }}
-              >
-                全選
-              </button>
+              {/* 全選只勾還沒勾的；都勾了就收起來，焦點接到建議段第一列 */}
+              {suggestLeft.length > 0 && (
+                <button
+                  className="sect-act"
+                  type="button"
+                  aria-label={`全選建議的 ${suggestLeft.length} 樣`}
+                  onClick={() => {
+                    focusSuggestRef.current = true
+                    suggestLeft.forEach(pickSuggested)
+                  }}
+                >
+                  全選
+                </button>
+              )}
             </div>
-            <ul className="food-list">{suggestItems.map((i) => renderFoodRow(suggestedFood(i), false, suggestHandlers, true))}</ul>
+            <ul className="food-list">{suggestItems.map((i) => renderFoodRow(suggestedFood(i), suggestHandlers, true))}</ul>
           </>
         )}
         {recentFoods.length > 0 && (
           <>
             <div className="sect-lb">{meal ? mealLabel(meal) : ''}常吃</div>
-            <ul className="food-list">{recentFoods.map((f) => renderFoodRow(f, false, handlers))}</ul>
+            <ul className="food-list">{recentFoods.map(row)}</ul>
           </>
         )}
         {restFoods.length > 0 && (
@@ -899,7 +1071,7 @@ export default function LogSheet(props: LogSheetProps) {
             </div>
           </>
         )}
-        {suggestItems.length === 0 && recentFoods.length === 0 && restFoods.length === 0 && (
+        {suggestItems.length === 0 && recentFoods.length === 0 && restFoods.length === 0 && strays.length === 0 && (
           <p className="muted">食品庫還是空的。在上面搜尋框輸入品名就能新增第一筆。</p>
         )}
       </>
@@ -967,8 +1139,33 @@ export default function LogSheet(props: LogSheetProps) {
             </div>
           </div>
 
+          {/* 已選膠囊列（v2.158，樣張 picked-inplace.html C）：釘在搜尋框下、不跟著捲走，有勾才出現。
+              勾了的列留在原位，這一行是「我勾了哪些」的總覽；點膠囊捲到那一列，取消勾在列上做（膠囊沒有 ✕）。 */}
+          {(picks.size > 0 || drafts.length > 0) && (
+            <div className="pick-pin" role="group" aria-label="已選的食物" ref={pinRef}>
+              <span className="pick-pin-lb" aria-hidden="true">已選</span>
+              <div className="pick-chips" ref={chipsRef}>
+                {[...picks.keys()].map((id) => {
+                  const f = pickedFood(id)
+                  if (!f) return null
+                  return (
+                    <button key={id} className={id === lastPicked ? 'pick-chip is-new' : 'pick-chip'} type="button" data-chip={id} aria-label={`捲到 ${f.name}`} onClick={() => jumpTo(id)}>
+                      <span className="pick-chip-tx">{f.name}</span>
+                    </button>
+                  )
+                })}
+                {meal &&
+                  drafts.map((d) => (
+                    <button key={d.key} className="pick-chip" type="button" aria-label={`${draftName(d, meal)}，估一筆，點了回估一筆修改`} disabled={busy} onClick={() => openEstimate('')}>
+                      <span className="pick-chip-tx">{draftName(d, meal)}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* key 分開：清單與估一筆的捲動區不能被 React 當成同一個 DOM 重用，否則帶回清單時停在估一筆捲到的位置 */}
-          <div className="food-scroll" key="list-scroll">
+          <div className="food-scroll" key="list-scroll" ref={listScrollRef}>
             {!trimmedQuery && meal && (
               <button className="est-entry" type="button" disabled={busy} onClick={() => openEstimate('')}>
                 <span className="est-entry-ic" aria-hidden="true">
@@ -986,13 +1183,12 @@ export default function LogSheet(props: LogSheetProps) {
                 </svg>
               </button>
             )}
-            {(picks.size > 0 || drafts.length > 0) && (
+            {meal && drafts.length > 0 && (
               <>
-                <div className="sect-lb">已選</div>
-                <ul className="food-list" ref={pickedListRef}>
-                  {pickedFoods.map((f) => renderFoodRow(f, true, handlers))}
-                  {/* 估一筆帶回來的草稿：跟勾的食物排在一起；點了回估一筆改（熱量、品名、刪掉都在那裡） */}
-                  {meal &&
+                <div className="sect-lb">估一筆</div>
+                <ul className="food-list">
+                  {/* 估一筆帶回來的草稿：打勾的樣子排在清單最上面；點了回估一筆改（熱量、品名、刪掉都在那裡） */}
+                  {
                     drafts.map((d) => (
                       <li key={d.key}>
                         <div className="food-item selected">

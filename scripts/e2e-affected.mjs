@@ -23,6 +23,7 @@ const ANALYSIS = ['analysis', 'recovery-foreground']
 const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
   'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest', 'portion-mods',
+  'picked-inplace', 'estimate',
 ]
 const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend', 'weekly-compare']
 const SHEETS = ['spring-sheet', 'sync-sheet']
