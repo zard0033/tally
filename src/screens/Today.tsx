@@ -21,6 +21,7 @@ import { macroExceeds, macroGap, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import { suffixOf, type Macros, type ModTarget } from '@/lib/portionMods'
 import { suggestLabel, type RepeatByMeal, type RepeatSuggestion, type SuggestSource } from '@/lib/mealSuggest'
+import { rowVendor } from '@/lib/mealVendor'
 import ItemEditor from './ItemEditor'
 import TodayScene from './TodayScene'
 import type { TodayProps } from './types'
@@ -55,6 +56,7 @@ export default function Today(props: TodayProps) {
     onUpdateIntakeMeal,
     onUpdateIntakeDetail,
     foodById,
+    vendorOptions,
     repeatByMeal,
     repeatBusyKey,
     repeatErr,
@@ -327,6 +329,7 @@ export default function Today(props: TodayProps) {
               handleChangeMeal,
               handleChangeDetail,
               modBaseOf,
+              vendorOptions,
               editErr,
               repeatByMeal,
               onAddRepeat,
@@ -353,6 +356,7 @@ interface TimelineHelpers {
   handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
   handleChangeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   modBaseOf: (r: IntakeRow) => { target: ModTarget; base: Macros } | null
+  vendorOptions: string[]
   editErr: { id: number; msg: string } | null
   repeatByMeal: RepeatByMeal
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
@@ -388,6 +392,7 @@ function SwipeRow({
   onDetail,
   err,
   modBase,
+  vendorOptions,
 }: {
   row: IntakeRow
   name: string
@@ -407,6 +412,7 @@ function SwipeRow({
   onDetail: (patch: IntakeDetailPatch) => Promise<void>
   err: string | null
   modBase: { target: ModTarget; base: Macros } | null
+  vendorOptions: string[]
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLButtonElement>(null)
@@ -535,13 +541,16 @@ function SwipeRow({
                 的就是份量標記——正好是這輪核心功能唯一的畫面回饋。照 .kc 的做法給
                 flex-shrink:0 保護（hallmark 抓到；v2.19 才剛為了同一個抱怨把 .qty 改成
                 --ink 加粗，長品名上等於原封不動地回來）。 */}
-            <span className="nm-wrap">
-              <span className="nm">
-                {name}
-                {suffix}
-                {vendor && <span className="vendor"> {vendor}</span>}
+            {/* 店家在品名下一行（spec「每一餐記店家」T-A）：有店家的列都寫，通用食物寫這一餐記的那家 */}
+            <span className="nm-col">
+              <span className="nm-wrap">
+                <span className="nm">
+                  {name}
+                  {suffix}
+                </span>
+                {qty !== 1 && <span className="qty">×{qty}</span>}
               </span>
-              {qty !== 1 && <span className="qty">×{qty}</span>}
+              {vendor && <span className="vendor">{vendor}</span>}
             </span>
             <span className="kc">{Math.round(num(row.kcal) * qty)}</span>
           </button>
@@ -581,6 +590,7 @@ function SwipeRow({
               onDelete={onDelete}
               err={err}
               modBase={modBase}
+              vendorOptions={vendorOptions}
             />
           </motion.div>
         )}
@@ -593,16 +603,6 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
   const byMeal = new Map<MealKey, IntakeRow[]>(MEALS.map((m) => [m.key, []]))
   for (const r of rows) byMeal.get(r.meal)?.push(r)
 
-  /* 三筆完全同名的「雞胸餐盒」只靠店家區分。今日頁常態不顯示店家，
-     同一天出現兩筆同名時才非顯示不可，否則回頭核對或刪除都是盲的。
-     **數的是有效品名**（改過名的那筆算它自己的新名字）——不然「雞排便當」與
-     「雞排便當（去皮）」會被當成兩筆同名而雙雙掛上店家。 */
-  const nameCount = new Map<string, number>()
-  for (const r of rows) {
-    const n = r.name ?? r.foods?.name
-    if (n) nameCount.set(n, (nameCount.get(n) ?? 0) + 1)
-  }
-
   return (
     <>
       {MEALS.map((meal) => {
@@ -613,7 +613,6 @@ function renderTimeline(rows: IntakeRow[], date: string, h: TimelineHelpers) {
             meal={meal}
             date={date}
             items={items}
-            nameCount={nameCount}
             h={h}
           />
         )
@@ -641,13 +640,11 @@ function MealNode({
   meal,
   date,
   items,
-  nameCount,
   h,
 }: {
   meal: Meal
   date: string
   items: IntakeRow[]
-  nameCount: Map<string, number>
   h: TimelineHelpers
 }) {
   const hasItems = items.length > 0
@@ -698,7 +695,6 @@ function MealNode({
                   /* intake 自己的品名快照優先於 foods 的：改過名的那筆從此與食品庫脫鉤，
                      食品庫日後改品名不回頭改寫它（與 kcal/protein/fat/carb 同一套語意）。 */
                   const baseName = r.name ?? r.foods?.name ?? '（食物已刪除）'
-                  const dup = (nameCount.get(baseName) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
                   // 份量微調接在品名後（中杯・微糖）；判斷適用與否看食品庫那一筆的品名與類型
                   const suffix = r.foods ? suffixOf(r.mods, { name: r.foods.name, category: r.foods.category }) : ''
                   return (
@@ -720,7 +716,7 @@ function MealNode({
                         row={r}
                         name={baseName}
                         suffix={suffix}
-                        vendor={dup}
+                        vendor={rowVendor(r)}
                         qty={num(r.qty)}
                         open={h.active?.id === r.id && h.active.mode === 'swipe'}
                         editing={h.active?.id === r.id && h.active.mode === 'edit'}
@@ -734,6 +730,7 @@ function MealNode({
                         onDetail={(p) => h.handleChangeDetail(r.id, p)}
                         err={h.editErr?.id === r.id ? h.editErr.msg : null}
                         modBase={h.modBaseOf(r)}
+                        vendorOptions={h.vendorOptions}
                       />
                     </motion.li>
                   )

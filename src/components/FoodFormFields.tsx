@@ -12,7 +12,7 @@
    會落在 sheet 的疊層之外；掛進 sheet 裡，stacking 才跟著 sheet（見 DESIGN.md「店家欄位」條）。
    **放在 sheet 裡用就一定要傳**；不在 sheet 裡（食品庫的就地編輯）留空走預設即可。 */
 import { useEffect, useRef, useState } from 'react'
-import { Autocomplete } from '@base-ui/react/autocomplete'
+import VendorField from '@/components/VendorField'
 import { addAliases, readingToForm, type FoodForm, type LabelReading } from '@/lib/foodForm'
 import { SOURCE_CHOICES } from '@/lib/foodSource'
 import { compressToDataUri } from './compressImage'
@@ -271,35 +271,14 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
       )}
       <div className="field-row">
         {renderField({ id: id('name'), label: '品名', required: true, value: form.name, onChange: (v) => set({ name: v }) })}
-        <div className="field-float">
-          {/* 可自由輸入的 Autocomplete，不是受限 Combobox——使用者常打錯店家名，這裡讓既有
-              店家可選，但打一個清單外的新名字一樣送得出去。Autocomplete.Root 不渲染自己的
-              元素，input 與 label 是 `.field-float` 的直接子節點，版面與一般欄位一致。IME 組字：底層共用 combobox 的 AriaCombobox，composition 期間
-              本來就不會把中間態送進 onValueChange，不需要另做 query/filterQuery 雙 state。 */}
-          <Autocomplete.Root
-            items={vendorOptions}
-            value={form.vendor}
-            onValueChange={(v) => set({ vendor: v })}
-            openOnInputClick
-          >
-            <Autocomplete.Input id={id('vendor')} placeholder=" " ref={vendorInputRef} />
-            <label htmlFor={id('vendor')}>店家</label>
-            <Autocomplete.Portal container={portalContainer}>
-              <Autocomplete.Positioner sideOffset={4}>
-                <Autocomplete.Popup className="vendor-popup">
-                  <Autocomplete.Empty className="vendor-empty">沒有符合的店家，直接送出就會新增</Autocomplete.Empty>
-                  <Autocomplete.List className="vendor-list">
-                    {(vendor: string) => (
-                      <Autocomplete.Item key={vendor} value={vendor} className="vendor-item">
-                        {vendor}
-                      </Autocomplete.Item>
-                    )}
-                  </Autocomplete.List>
-                </Autocomplete.Popup>
-              </Autocomplete.Positioner>
-            </Autocomplete.Portal>
-          </Autocomplete.Root>
-        </div>
+        <VendorField
+          id={id('vendor')}
+          value={form.vendor}
+          options={vendorOptions}
+          onChange={(v) => set({ vendor: v })}
+          portalContainer={portalContainer}
+          inputRef={vendorInputRef}
+        />
       </div>
       {renderField({ id: id('kcal'), label: '熱量（卡）', required: true, numeric: true, value: form.kcal, onChange: (v) => set({ kcal: v }) })}
       {/* `form-macros` 是給填入動效的 stagger 用的穩定掛勾。原本寫 `.field-row:nth-of-type(2)`
@@ -352,6 +331,8 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
             />
             <label htmlFor={id('alias')}>別名（按 Enter 或打頓號加入）</label>
           </div>
+          {/* spec「別名收一次」：一個「店家 品名」同時搜得到店名與品名，不必兩個都存 */}
+          <p className="form-more-hint alias-hint">可寫「店家 品名」，搜店名也找得到</p>
           {form.aliases.length > 0 && (
             <ul className="alias-chips" aria-label="別名">
               {form.aliases.map((a) => (

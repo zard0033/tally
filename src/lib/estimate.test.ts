@@ -115,6 +115,12 @@ describe('合計與寫入', () => {
       { eaten_on: '2026-11-13', meal: 'dinner', food_id: 42, qty: 1, kcal: 620, protein: 22, fat: 25, carb: 80, name: null },
     ])
   })
+  it('draftsToIntake：句子提到已知店家就寫進 vendor，沒提到不帶（spec「每一餐記店家」AC 7）', () => {
+    const [a, b] = draftsFromItems([item(), item({ name: '蛋餅' })], '在麻古買了紅萱波波和蛋餅').map((d, i) => ({ ...d, foodId: 42 + i }))
+    expect(draftsToIntake([a, b], 'lunch', '2026-11-23', ['麻古', '青山']).map((r) => r.vendor)).toEqual(['麻古', '麻古'])
+    const [c] = draftsFromItems([item()], '夜市臭豆腐').map((d) => ({ ...d, foodId: 44 }))
+    expect(draftsToIntake([c], 'lunch', '2026-11-23', ['麻古'])[0]).not.toHaveProperty('vendor')
+  })
   it('還沒建好 food 的列不能寫 intake', () => {
     expect(() => draftsToIntake(draftsFromItems([item()]), 'dinner', '2026-11-13')).toThrow()
   })

@@ -6,6 +6,7 @@
 import { MACRO_MAX } from './foodForm'
 import { exactMatch, nearMatch, normalizeKey, type MatchFood } from './foodMatch'
 import { mealLabel, type MealKey } from './meals'
+import { intakeVendor, vendorInSentence } from './mealVendor'
 import { normalizeQty } from './quantity'
 
 /** read-label 估算模式回來的一樣（形狀同 handler.ts 的 parseEstimate）。 */
@@ -277,14 +278,17 @@ export function draftToFood(d: EstimateDraft, meal: MealKey) {
 
 /** 寫 intake 用的列（份量 1、營養快照＝草稿當下的數字）。還沒建好 food 的列不該走到這裡，丟錯讓呼叫端知道順序錯了。
  *  食品庫的列不建新食物：直接用那一筆的 food_id、份數，營養快照是那筆的單份值（同清單勾選的寫法）。 */
-export function draftsToIntake(drafts: readonly EstimateDraft[], meal: MealKey, date: string) {
+export function draftsToIntake(drafts: readonly EstimateDraft[], meal: MealKey, date: string, knownVendors: readonly string[] = []) {
   return drafts.map((d) => {
+    // 句子裡提到已知店家（「在麻古買了…」）就記成這一餐的店家；食物本身有店家的不寫（spec「每一餐記店家」AC 7）
+    const said = d.sentence ? vendorInSentence(d.sentence, knownVendors) : null
     if (d.lib) {
       const f = d.lib.food
-      return { eaten_on: date, meal, food_id: f.id, qty: d.lib.qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: null }
+      const v = intakeVendor(f, said)
+      return { eaten_on: date, meal, food_id: f.id, qty: d.lib.qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: null, ...(v ? { vendor: v } : {}) }
     }
     if (d.foodId === null) throw new Error(`draft ${d.key} has no foodId yet`)
-    return { eaten_on: date, meal, food_id: d.foodId, qty: 1, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb, name: null }
+    return { eaten_on: date, meal, food_id: d.foodId, qty: 1, kcal: d.kcal, protein: d.protein, fat: d.fat, carb: d.carb, name: null, ...(said ? { vendor: intakeVendor({ vendor: null }, said) ?? undefined } : {}) }
   })
 }
 

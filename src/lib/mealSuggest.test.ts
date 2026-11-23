@@ -329,6 +329,7 @@ describe('mergeByFood', () => {
     label: '乳清（1匙）',
     mods: [],
     vendor: null,
+    intakeVendor: null,
     archived: false,
     category: null,
     ...over,
@@ -358,7 +359,7 @@ describe('suggestLabel', () => {
 
 describe('suggestMeals', () => {
   const rows = [row('2026-11-03'), row('2026-11-03', { meal: 'dinner', kcal: 400, protein: 40, fat: 5, carb: 20 })]
-  const dayRow = (meal: IntakeRow['meal'], kcal = 120): IntakeRow => ({ id: nextId++, meal, qty: 1, kcal, protein: 24, fat: 1.5, carb: 2, name: null, mods: [], food_id: 13, foods: null })
+  const dayRow = (meal: IntakeRow['meal'], kcal = 120): IntakeRow => ({ id: nextId++, meal, qty: 1, kcal, protein: 24, fat: 1.5, carb: 2, name: null, mods: [], vendor: null, food_id: 13, foods: null })
   const ctx: GapContext = { targets: { kcal: 1778, protein: 137, fat: 65, carb: 163 }, goal: 'cut' }
 
   it('該餐已有紀錄就不給，其他餐照給', () => {
@@ -451,6 +452,7 @@ describe('第三版：避開重複', () => {
     ...n,
     name: null,
     mods: [],
+    vendor: null,
     food_id: f.food_id,
     foods: { name: f.foods.name, vendor: f.foods.vendor, category: f.foods.category },
   })
@@ -477,6 +479,31 @@ describe('第三版：避開重複', () => {
       const r = recentMeals([], VIEW, [today('lunch', spaced), today('lunch', blank)], 'dinner')
       expect([...r.vendors]).toEqual(['漢堡店'])
       expect([...r.items]).toEqual([220])
+    })
+
+    it('通用食物看這一筆記的店家（spec「每一餐記店家」AC 6）', () => {
+      const GEN = food(230, '滷雞腿便當', null, '便當')
+      const r = recentMeals([], VIEW, [{ ...today('lunch', GEN), vendor: '日光食堂' }], 'dinner')
+      expect([...r.vendors]).toEqual(['日光食堂'])
+      expect([...r.items]).toEqual([230])
+      expect(recentMeals([], VIEW, [today('lunch', GEN)], 'dinner').vendors.size, '對照：沒記店家').toBe(0)
+    })
+
+    it('候選裡通用食物記的店家跟當天別餐同一家：整組拿掉；寫回照搬那一筆的店家', () => {
+      const GEN = food(230, '滷雞腿便當', null, '便當')
+      const FRIED = food(231, '炸雞', '日光食堂', '速食')
+      const at = (v: string | null) => ate('2026-10-30', 'dinner', [GEN]).map((r) => ({ ...r, vendor: v }))
+      const lunch = [today('lunch', FRIED)]
+      expect(suggestMeals(at('日光食堂'), VIEW, lunch, null).dinner).toBeUndefined()
+      const s = suggestMeals(at('楓之味'), VIEW, lunch, null).dinner![0]
+      expect(s.items[0]).toMatchObject({ vendor: '楓之味', intakeVendor: '楓之味' })
+      expect(repeatToIntake(s, VIEW)[0].vendor).toBe('楓之味')
+    })
+
+    it('食物本身有店家：intakeVendor 是 null，寫回不帶店家', () => {
+      const s = suggestMeals(ate('2026-10-30', 'dinner', [CHICKEN]).map((r) => ({ ...r, vendor: '亂填' })), VIEW, [], null).dinner![0]
+      expect(s.items[0]).toMatchObject({ vendor: '便當店', intakeVendor: null })
+      expect(repeatToIntake(s, VIEW)[0]).not.toHaveProperty('vendor')
     })
   })
 

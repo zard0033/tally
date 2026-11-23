@@ -1179,8 +1179,9 @@ test('封存食物：一鍵照搬；sheet 可選、確認列計入、切餐別�
 
   await sheet.locator('.pick-bar-btn').click()
   await expect(sheet).toHaveCount(0)
-  // 當天同名兩筆時時間軸會帶店家區分（既有規則）
-  await expect(nodeOf(page, '晚餐').locator('.item .nm')).toHaveText(['舊款便當 停賣店'])
+  // 有店家的列在品名下補一行店家（v2.161 T-A，取代「同名兩筆才補」）
+  await expect(nodeOf(page, '晚餐').locator('.item .nm')).toHaveText(['舊款便當'])
+  await expect(nodeOf(page, '晚餐').locator('.item .vendor')).toHaveText(['停賣店'])
   expect((await intakeWrites(page, 'POST'))[1].body).toEqual([{ ...snapshot, meal: 'dinner', qty: 2 }])
 })
 

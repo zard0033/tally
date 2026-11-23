@@ -55,6 +55,8 @@ export interface TodayProps {
   onUpdateIntakeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   /** 食品庫裡使用中的那一筆（份量微調重算的基準）；封存或刪掉的查不到。 */
   foodById: (id: number) => Food | undefined
+  /** 店家選項（食品庫的店家＋別名裡的店家）：就地編輯改「這一餐在哪買」用。 */
+  vendorOptions: string[]
   /** 這一天各餐的建議（該餐已有紀錄就沒有那一格）。沒資料或查詢失敗就是空物件。 */
   repeatByMeal: RepeatByMeal
   /** 進行中的一鍵操作：加入是「日期|餐別」，復原是別的值；非 null 時所有建議都不能按。 */

@@ -7,6 +7,7 @@ import SegmentedControl from '@/components/SegmentedControl'
 import { num } from '@/lib/formulas'
 import { MEALS, type MealKey } from '@/lib/meals'
 import { MACRO_MAX } from '@/lib/foodForm'
+import { clampVendor, needsVendor } from '@/lib/mealVendor'
 import { applyMods, normalizeMods, type Macros, type ModTarget } from '@/lib/portionMods'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 
@@ -36,6 +37,7 @@ export default function ItemEditor({
   onDelete,
   err,
   modBase,
+  vendorOptions,
 }: {
   id: string
   row: IntakeRow
@@ -49,6 +51,8 @@ export default function ItemEditor({
   err: string | null
   /** 份量微調的基準（食品庫現在那一筆）；查不到（已封存不在清單、已刪）就不出微調。 */
   modBase?: { target: ModTarget; base: Macros } | null
+  /** 店家選項：通用食物的「這一餐在哪買」用 */
+  vendorOptions: string[]
 }) {
   const [localQty, setLocalQty] = useState(qty)
   const [draft, setDraft] = useState(String(qty))
@@ -228,6 +232,31 @@ export default function ItemEditor({
     }
   }
 
+  /* 這一餐在哪買（spec「每一餐記店家」）：通用食物（食物本身沒店家、餐點類或飲料）出；估一筆從句子帶了店家的列也出（類型可能還沒分好），
+     不然寫了改不掉。從清單點選或離開欄位時存；空白＝清掉。 */
+  const askVendor = (!!row.foods && needsVendor(row.foods)) || (!!row.vendor && !row.foods?.vendor)
+  const [localVendor, setLocalVendor] = useState(row.vendor ?? '')
+  const savedVendor = useRef(row.vendor ?? '')
+  /* 一個接一個送：打了一半就點清單時，離開欄位（半截字）與點選（完整店名）會各存一次，並行送的話先後不保證 */
+  const vendorQueue = useRef<Promise<void>>(Promise.resolve())
+  function commitVendor(raw: string) {
+    vendorQueue.current = vendorQueue.current.then(() => saveVendor(raw))
+  }
+  async function saveVendor(raw: string) {
+    const v = clampVendor(raw)
+    if (v === savedVendor.current) return setLocalVendor(v)
+    const prev = savedVendor.current
+    savedVendor.current = v
+    setLocalVendor(v)
+    try {
+      await onDetail({ vendor: v || null })
+      setSaid(v ? `店家已改為 ${v}` : '店家已清掉')
+    } catch {
+      savedVendor.current = prev
+      setLocalVendor(prev)
+    }
+  }
+
   async function pickMeal(key: MealKey) {
     if (key === localMeal || busy) return
     const prev = localMeal
@@ -270,16 +299,22 @@ export default function ItemEditor({
           <DeleteIcon />
         </button>
       </div>
-      {modBase && (
+      {(modBase || askVendor) && (
         <PortionMods
-          target={modBase.target}
-          base={modBase.base}
+          // 食品庫查不到（封存的估一筆）就只有店家：類型給 null，不會長出任何微調組
+          target={modBase?.target ?? { name: '', category: null }}
+          base={modBase?.base ?? { kcal: 0, protein: 0, fat: 0, carb: 0 }}
           mods={localMods}
           open={modsOpen}
           onToggleOpen={() => setModsOpen((o) => !o)}
           onChange={(m) => void commitMods(m)}
           note="用食品庫現在的數字重算"
           disabled={modsBusy}
+          vendor={
+            askVendor
+              ? { value: localVendor, options: vendorOptions, onChange: setLocalVendor, onPick: commitVendor, onBlur: () => commitVendor(localVendor) }
+              : undefined
+          }
         />
       )}
       <div className="ed-line">
@@ -296,7 +331,7 @@ export default function ItemEditor({
       </div>
       {/* 品名與營養值。欄位版型照新增食物表單（DESIGN.md「新增食物表單欄位」）：品名整行、
           熱量整行、三大營養素三欄並排——同一組數字在兩個地方長得一樣，使用者不必重學。
-          **這裡沒有店家欄**：店家是食品庫的屬性，「今天這份去了皮」不會換一家店。 */}
+          店家不在這裡：通用食物的「這一餐在哪買」在上面份量微調那一行（spec「每一餐記店家」），有店家的食物店家是食品庫的屬性。 */}
       <div className="ed-line ed-detail">
         <div className="field-float">
           <input

@@ -365,6 +365,9 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .item-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
   border-radius: var(--s-1); }
 .item .vendor { color: var(--ink-muted); font-size: var(--t-xs); }
+/* 店家在品名下一行（spec「每一餐記店家」T-A）。店家不截斷（同食物清單列的規則），太長就折行 */
+.item .nm-col { display: flex; flex-direction: column; min-width: 0; }
+.item .nm-col > .vendor { line-height: 1.3; }
 /* v2.20：品名與份量拆成兩個 flex 子節點——只有品名該被 ellipsis 吃掉，份量不該。
    放同一個 span 時 ×N 是最後一個子節點，長品名一截斷第一個消失的就是它。 */
 .nm-wrap { display: flex; align-items: baseline; gap: var(--s-1); min-width: 0; }
@@ -1911,7 +1914,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .form-more-label { margin: 0 0 var(--s-2) var(--s-1); font-size: var(--t-sm); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .form-more .seg { flex: none; margin-bottom: var(--s-1); }
 .form-more-hint { margin: 0 0 var(--s-4) var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.form-more .alias-field { margin-bottom: var(--s-2); }
+.form-more .alias-field { margin-bottom: var(--s-1); }
+.form-more .alias-hint { margin-bottom: var(--s-2); }
 /* 別名的 chip：顯示用，✕ 拿掉。命中區 44px 由 ✕ 鈕自己撐，pill 本身只是字。 */
 .alias-chips { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); margin: 0 0 var(--s-4); padding: 0; list-style: none; }
 .alias-chips li { display: inline-flex; align-items: center; min-height: 36px; padding-left: var(--s-3); border-radius: var(--r-pill); background: var(--raised);

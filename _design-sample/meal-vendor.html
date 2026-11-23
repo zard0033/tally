@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>每一餐記店家：樣張</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 40px 0 6px; }
+  .note { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 20px; max-width: 1240px; line-height: 1.7; }
+  .note b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .gh { font-size: var(--t-md); font-weight: 800; margin-bottom: 4px; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 96px; margin-bottom: 10px; }
+  .gd b { color: var(--ink); }
+  .gd .bad { color: var(--over); font-weight: 700; }
+
+  .phone { position: relative; background: var(--card); border-radius: 22px; box-shadow: var(--shadow-1); overflow: hidden; padding-bottom: 8px; }
+  .top { padding: 14px 20px 8px; border-bottom: 1px solid var(--rule-subtle); }
+  .meals { display: flex; gap: 8px; margin-bottom: 10px; }
+  .meals span { padding: 0 14px; min-height: 36px; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); font-weight: 700; }
+  .meals span.on { background: var(--ink); color: var(--card); }
+  .search { height: 40px; border-radius: 12px; background: var(--fill); color: var(--ink); font-size: var(--t-sm); display: flex; align-items: center; padding: 0 12px; }
+  .grp { display: flex; align-items: center; gap: 10px; padding: 10px 20px 2px; font-weight: 800; font-size: var(--t-sm); }
+  .grp i { width: 28px; height: 28px; border-radius: 50%; background: var(--plate); }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; }
+  .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-muted); flex-shrink: 0; box-sizing: border-box; }
+  .ck.on { border: none; background: var(--accent); display: grid; place-items: center; }
+  .ck.on svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .picked { background: var(--accent-soft); padding-bottom: 8px; }
+  .nm { flex: 1; min-width: 0; font-size: var(--t-base); line-height: 1.35; }
+  .nm .sub { display: block; color: var(--ink-muted); font-size: var(--t-xs); }
+  .nm .sub em { font-style: normal; color: var(--accent); font-weight: 700; }
+  .kc { font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-sm); }
+  .step { display: flex; align-items: center; background: var(--card); border-radius: 12px; height: 32px; box-shadow: var(--shadow-1); }
+  .step span { width: 28px; text-align: center; color: var(--accent); font-weight: 700; }
+  .step b { width: 20px; text-align: center; font-family: var(--font-num); }
+  .sum { margin: 2px 20px 0 54px; color: var(--accent); font-size: var(--t-sm); font-weight: 700; }
+  .sum span { color: var(--ink-muted); font-weight: 400; }
+  .vline { margin: 4px 20px 0 54px; font-size: var(--t-sm); color: var(--ink-muted); }
+  .vline b { color: var(--accent); font-weight: 700; }
+  .vfield { margin: 8px 20px 0 54px; }
+  .vfield label { display: block; font-size: var(--t-xs); color: var(--ink-muted); font-weight: 700; margin-bottom: 4px; }
+  .vfield .in { height: 40px; border-radius: 10px; background: var(--card); border: 1.5px solid var(--accent); display: flex; align-items: center; padding: 0 10px; font-size: var(--t-base); }
+  .vfield .opts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .vfield .opts span { min-height: 30px; padding: 0 12px; border-radius: var(--r-pill); border: 1.5px solid var(--rule-field); display: grid; place-items: center; font-size: var(--t-sm); background: var(--card); }
+
+  /* 今日頁 */
+  .day { padding: 14px 20px 4px; font-weight: 800; }
+  .tl { position: relative; padding: 0 20px 0 44px; }
+  .tl::before { content: ''; position: absolute; left: 27px; top: 6px; bottom: 6px; width: 2px; background: var(--rule-subtle); }
+  .meal { position: relative; font-weight: 800; font-size: var(--t-sm); padding: 10px 0 4px; display: flex; justify-content: space-between; }
+  .meal::before { content: ''; position: absolute; left: -22px; top: 13px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .meal span { font-family: var(--font-num); color: var(--ink-muted); font-weight: 700; }
+  .it { display: flex; align-items: center; min-height: 44px; gap: 10px; font-size: var(--t-base); }
+  .it .nm small { color: var(--ink-muted); font-size: var(--t-xs); }
+  .it .q { color: var(--ink-muted); font-size: var(--t-sm); font-family: var(--font-num); }
+  .it .k { font-family: var(--font-num); min-width: 36px; text-align: right; }
+  .hl { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>每一餐記店家</h1>
+<p class="note">
+  通用食物（手搖飲、便當這類店家欄留空的）多了「這一餐在哪買」。<b>店家記在這一筆紀錄上、不改食品庫</b>；有店家的食物（壯壯餐盒 雞胸餐盒）照舊用食品庫的店家，不出這個欄位。<br>
+  <b>自動帶</b>：搜尋時對到「麻古 紅萱波波」這種別名，就帶「麻古」。<b>只在飲料與餐點類出</b>（白飯、乳清、蛋這種不出）。下面兩個問題各兩個方案，推薦的寫在標題。
+</p>
+
+<h2>問題一：記一筆勾起來那一列，店家放哪</h2>
+<div class="grid">
+  <div>
+    <div class="gh">S1　接在微調那行後面（推薦）</div>
+    <div class="gd">現在的狀態本來就寫在主色那行，店家接在最後「· 麻古」。點那行展開的面板最上面多一格店家。<b>不多佔一行</b>；沒對到店家時寫「· ＋店家」。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">麻古</div></div>
+      <div class="grp"><i></i>飲料</div>
+      <div class="picked">
+        <div class="row"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">手搖飲（無糖純茶＋寒天，大杯）<span class="sub">對到：<em>麻古</em> 紅萱波波</span></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="sum">大杯・無糖・麻古 ›</div>
+      </div>
+      <div class="row"><span class="ck"></span><span class="nm">麻古 芝芝葡萄果粒<span class="sub">麻古茶坊</span></span><span class="kc">320</span></div>
+    </div>
+    <p class="gd" style="margin-top:14px;min-height:0">展開後（面板最上面）：</p>
+    <div class="phone">
+      <div class="picked" style="padding-top:8px">
+        <div class="row"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">手搖飲（無糖純茶＋寒天，大杯）</span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="sum">大杯・無糖・麻古 ⌄</div>
+        <div class="vfield"><label>店家</label><div class="in">麻古</div><div class="opts"><span>麻古</span><span>青山</span><span>50嵐</span><span>可不可</span></div></div>
+        <div class="vline" style="margin-top:10px">杯型、甜度、配料照舊在下面…</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="gh">S2　獨立一行灰字</div>
+    <div class="gd">微調那行下面另起一行「在 麻古 ›」，點了原地變成輸入框。<b>店家跟份量分開、語意清楚</b>；缺點是勾起來的列再高 22px，而且便當這種沒調過的也多兩行字。</div>
+    <div class="phone">
+      <div class="top"><div class="meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="search">麻古</div></div>
+      <div class="grp"><i></i>飲料</div>
+      <div class="picked">
+        <div class="row"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">手搖飲（無糖純茶＋寒天，大杯）<span class="sub">對到：<em>麻古</em> 紅萱波波</span></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="sum">大杯・無糖 ›</div>
+        <div class="vline">在 <b>麻古</b> ›</div>
+      </div>
+      <div class="row"><span class="ck"></span><span class="nm">麻古 芝芝葡萄果粒<span class="sub">麻古茶坊</span></span><span class="kc">320</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="gh">沒對到店家時（兩案共通）</div>
+    <div class="gd">從類型分組直接勾、或搜「紅茶」對到品名：<b>不猜、留空</b>，S1 寫「· ＋店家」。不帶「照上次」的店家——同一種便當這次可能在別家買，猜錯比留空糟。</div>
+    <div class="phone">
+      <div class="grp"><i></i>便當</div>
+      <div class="picked">
+        <div class="row"><span class="ck on"><svg viewBox="0 0 22 22"><path d="M7 11.5l2.5 2.5L15 8.5"/></svg></span><span class="nm">滷雞腿便當<span class="sub">便當</span></span><span class="step"><span>−</span><b>1</b><span>＋</span></span></div>
+        <div class="sum">正常飯量・<span style="color:var(--accent)">＋店家</span> ›</div>
+      </div>
+      <div class="row"><span class="ck"></span><span class="nm">排骨便當（滷）<span class="sub">便當</span></span><span class="kc">812</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>問題二：今日頁看不看得到</h2>
+<div class="grid">
+  <div>
+    <div class="gh">現況</div>
+    <div class="gd">今日頁只有同一天出現兩個同名品項時才補店家。通用食物沒有店家，<span class="bad">看不出這天在哪買</span>。</div>
+    <div class="phone">
+      <div class="day">11月23日 週日</div>
+      <div class="tl">
+        <div class="meal">午餐<span>1045</span></div>
+        <div class="it"><span class="nm">滷雞腿便當</span><span class="q">×1</span><span class="k">885</span></div>
+        <div class="it"><span class="nm">手搖飲（無糖純茶＋寒天，大杯）</span><span class="q">×1</span><span class="k">60</span></div>
+        <div class="it"><span class="nm">茶葉蛋</span><span class="q">×1</span><span class="k">75</span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">T-A　有店家的列都補第二行（推薦）</div>
+    <div class="gd">照食物清單列的既有規則：店家在品名下面一行灰字。<b>有店家的食物也一起顯示</b>（不然通用的有、連鎖店的反而沒有），順帶解掉 DESIGN 待決「三個雞胸餐盒在今日頁一模一樣」。代價是這幾列高一點。</div>
+    <div class="phone">
+      <div class="day">11月23日 週日</div>
+      <div class="tl">
+        <div class="meal">午餐<span>1045</span></div>
+        <div class="it"><span class="nm">滷雞腿便當<br><small>日光食堂</small></span><span class="q">×1</span><span class="k">885</span></div>
+        <div class="it"><span class="nm">手搖飲（無糖純茶＋寒天，大杯）<br><small>麻古</small></span><span class="q">×1</span><span class="k">60</span></div>
+        <div class="it"><span class="nm">茶葉蛋<br><small>7-11</small></span><span class="q">×1</span><span class="k">75</span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">T-B　今日頁不顯示</div>
+    <div class="gd">只記不顯示：用在晚餐建議的「同天同店家排除」與之後的分析；要看得點進就地編輯。今日頁版面完全不動，但<b>「看不出那天在哪吃」只解一半</b>。</div>
+    <div class="phone">
+      <div class="day">11月23日 週日</div>
+      <div class="tl">
+        <div class="meal">午餐<span>1045</span></div>
+        <div class="it"><span class="nm">滷雞腿便當</span><span class="q">×1</span><span class="k">885</span></div>
+        <div class="it hl"><span class="nm">手搖飲（無糖純茶＋寒天，大杯）</span><span class="q">×1</span><span class="k">60</span></div>
+        <div class="sum" style="margin:2px 0 6px">點開就地編輯：大杯・無糖・麻古 ›</div>
+        <div class="it"><span class="nm">茶葉蛋</span><span class="q">×1</span><span class="k">75</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

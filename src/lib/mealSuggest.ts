@@ -8,6 +8,7 @@ import { isWeekend, shiftDate } from './dates'
 import { num, sumIntake, type Goal } from './formulas'
 import { MEALS, type MealKey } from './meals'
 import { suffixOf } from './portionMods'
+import { rowVendor } from './mealVendor'
 import { normalizeQty } from './quantity'
 
 /** 回看天數，含第 28 天（D-28 是同一個星期幾）。 */
@@ -31,6 +32,8 @@ export interface RepeatSourceRow {
   name: string | null
   /** 份量微調（v2.156）；舊 fixture 沒有這欄當沒調。快照數字已是調過的。 */
   mods?: string[]
+  /** 這一餐在哪買（只有食物本身沒店家時有值）；舊 fixture 沒有這欄當沒記。 */
+  vendor?: string | null
   created_at?: string
   foods: { name: string; vendor: string | null; archived: boolean; category: string | null } | null
 }
@@ -48,7 +51,10 @@ export interface RepeatItem {
   label: string
   /** 來源那一筆的份量微調：照搬時原樣寫回（數字已是調過的，不重算），之後再改微調才不會從錯的基準算。 */
   mods: string[]
+  /** 顯示與排除同店家用：foods.vendor ?? 來源那筆記的店家（rowVendor）。 */
   vendor: string | null
+  /** 寫入用：來源那筆自己記的店家（intake.vendor），照搬；食物本身有店家時是 null。 */
+  intakeVendor: string | null
   archived: boolean
   /** null＝還沒分類，不參與類型的重複判斷。 */
   category: FoodCategory | null
@@ -125,7 +131,8 @@ function combosOf(rows: RepeatSourceRow[], viewDate: string, meal: MealKey, same
         name: r.name,
         label: (r.name ?? r.foods.name) + suffixOf(r.mods ?? [], { name: r.foods.name, category: r.foods.category }),
         mods: r.mods ?? [],
-        vendor: r.foods.vendor,
+        vendor: rowVendor(r),
+        intakeVendor: r.foods.vendor ? null : r.vendor?.trim() || null,
         archived: r.foods.archived,
         category: categoryOf(r.foods.category),
       })
@@ -160,7 +167,7 @@ export const AVOID_REPEAT_MEALS: readonly MealKey[] = ['lunch', 'dinner']
 export interface RecentMeals {
   /** 檢視日其他餐＋前一天吃過的「餐點類型」（搭配類不收）。 */
   categories: Set<FoodCategory>
-  /** 同上範圍裡**有填店家**的 food_id：沒填店家的乳清、白飯、蛋天天吃，收進來幾乎每組都會重複。 */
+  /** 同上範圍裡**有店家**（食物本身的，或通用食物這一筆記的）的 food_id：沒填店家的乳清、白飯、蛋天天吃，收進來幾乎每組都會重複。 */
   items: Set<number>
   /** 檢視日其他餐出現過的店家（只看當天）：這一餐的候選有任一品項是這些店就整組拿掉。 */
   vendors: Set<string>
@@ -179,9 +186,9 @@ export function recentMeals(rows: RepeatSourceRow[], viewDate: string, dayRows: 
     if (!r.foods) continue
     const c = categoryOf(r.foods.category)
     if (c && isMealType(c)) categories.add(c)
-    if (vendorKey(r.foods.vendor)) items.add(r.food_id)
+    if (rowVendor(r)) items.add(r.food_id)
   }
-  const vendors = new Set(others.map((r) => vendorKey(r.foods?.vendor)).filter((v): v is string => v !== null))
+  const vendors = new Set(others.map(rowVendor).filter((v): v is string => v !== null))
   return { categories, items, vendors }
 }
 
@@ -336,6 +343,7 @@ export function repeatToIntake(s: RepeatSuggestion, date: string): NewIntake[] {
     name: i.name,
     // 照搬來源的微調；沒調就不帶（同其他寫入路徑的形狀）
     ...(i.mods.length ? { mods: i.mods } : {}),
+    ...(i.intakeVendor ? { vendor: i.intakeVendor } : {}),
   }))
 }
 

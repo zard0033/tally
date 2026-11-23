@@ -5,6 +5,8 @@
    「UI 留在各自的 screen」已作廢：那個分界撐不住，兩份 JSX 在它底下分岔過兩次
    （品名欄漏 inputMode、食品庫那份沒有店家 Autocomplete）。這個檔維持只放不沾 DOM 的
    邏輯，未來要原樣帶去 React Native。 */
+import { aliasIncludes } from './foodMatch'
+import { aliasVendors } from './mealVendor'
 
 export interface FoodForm {
   name: string
@@ -75,15 +77,15 @@ export function validateFoodForm(form: FoodForm): { food: ValidatedFood } | { er
   return { food: { name, vendor, kcal, protein, fat, carb, verified: form.verified, aliases } }
 }
 
-/** 店家 Autocomplete 的選項：食品庫裡出現過的 vendor 去重，按筆畫序排。
+/** 店家 Autocomplete 的選項：食品庫裡出現過的 vendor＋別名裡寫到的店家（「麻古 紅萱波波」的麻古），去重，按筆畫序排。
  *  排序 locale 明釘 `zh-Hant-u-co-stroke`——WebKit 目前的預設 collation 剛好就是筆畫序，
  *  但預設值不保證跨引擎/版本穩定（DESIGN.md v2.8）。
  *  **這段本來在 LogSheet 與 FoodLibrary 各有一份逐字相同的 useMemo**，v2.29 的
  *  precommit-review 抓到：那一輪的主旨正是消除兩份表單的分岔，卻在同一次改動裡
  *  製造了新的分岔源頭。兩處現在都呼叫這裡。 */
-export function vendorOptionsOf(foods: { vendor: string | null }[] | null): string[] {
+export function vendorOptionsOf(foods: { vendor: string | null; aliases?: readonly string[] }[] | null): string[] {
   if (!foods) return []
-  const set = new Set<string>()
+  const set = new Set<string>(aliasVendors(foods))
   for (const f of foods) if (f.vendor) set.add(f.vendor)
   return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant-u-co-stroke'))
 }
@@ -179,11 +181,11 @@ export function groupByVendor<F extends { name: string; vendor: string | null }>
 export function aliasHit(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): string | null {
   const s = q.trim().toLowerCase()
   if (!s || f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)) return null
-  return (f.aliases ?? []).find((a) => a.toLowerCase().includes(s)) ?? null
+  return (f.aliases ?? []).find((a) => aliasIncludes(a, q)) ?? null
 }
 
 export function foodMatches(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): boolean {
   const s = q.trim().toLowerCase()
   if (!s) return true
-  return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s) || (f.aliases ?? []).some((a) => a.toLowerCase().includes(s))
+  return f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s) || (f.aliases ?? []).some((a) => aliasIncludes(a, q))
 }

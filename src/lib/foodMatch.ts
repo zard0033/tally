@@ -25,9 +25,23 @@ export function splitSegments(text: string): string[] {
     .filter(Boolean)
 }
 
-/** 一筆食物的比對鍵：品名、店家＋品名、每個別名、店家＋別名（都正規化、去重）。 */
+/** 「麻古 紅萱波波」→ 店家「麻古」＋品名「紅萱波波」；沒有空白就只有品名。半形、全形空白都算（spec「別名收一次」）。 */
+export function splitAlias(alias: string): { vendor: string | null; item: string } {
+  const m = alias.trim().match(/^(\S+)\s+(\S.*)$/u)
+  return m ? { vendor: m[1], item: m[2] } : { vendor: null, item: alias.trim() }
+}
+
+/** 搜尋字是否在別名裡：原字串照比，或去空白後比（「麻古紅萱」對得到「麻古 紅萱波波」）。 */
+export function aliasIncludes(alias: string, q: string): boolean {
+  const s = q.trim().toLowerCase()
+  if (!s) return false
+  const k = normalizeKey(q)
+  return alias.toLowerCase().includes(s) || (k !== '' && normalizeKey(alias).includes(k))
+}
+
+/** 一筆食物的比對鍵：品名、店家＋品名、每個別名（「店家 品名」的別名另收品名那段）、店家＋別名（都正規化、去重）。 */
 export function keysOf(f: Pick<MatchFood, 'name' | 'vendor' | 'aliases'>): string[] {
-  const names = [f.name, ...f.aliases].map(normalizeKey).filter(Boolean)
+  const names = [f.name, ...f.aliases, ...f.aliases.flatMap((a) => (splitAlias(a).vendor ? [splitAlias(a).item] : []))].map(normalizeKey).filter(Boolean)
   const vendor = f.vendor ? normalizeKey(f.vendor) : ''
   return [...new Set([...names, ...(vendor ? names.map((n) => vendor + n) : [])])]
 }

@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-23 晚）：v2.160 訓練分頁改版（spec「訓練分頁改版」＋DESIGN v2.160）本機 commit 待 push——頂端同今日頁、首頁只放這天＋天空右上課表/分析、結束要確認、完成整頁動畫＋亮點、卡頭常駐 1RM、剩幾下三處統一、每分頁「訓練中」小條、飲食記完一餐頂端提示。CI 全量待確認。
-下一步：①使用者 push（autopilot guardrail 擋）→ gh run watch ②真機看 v2.160 整套（練一次：結束確認、完成畫面、小條、1RM）③v2.158／v2.159 真機項仍待看 ④AI 量身訂做課表（MANUAL）先訪談 ⑤「每一餐記店家」spec＋樣張。
+現況（2026-11-23 晚）：v2.160 訓練分頁改版已部署（commit 7a14fbe，CI run 45191257747 八份全綠）——頂端同今日頁、首頁只放這天＋天空右上課表/分析、結束要確認、完成整頁動畫＋亮點、卡頭常駐 1RM、剩幾下三處統一、每分頁「訓練中」小條、飲食記完一餐頂端提示。
+下一步：①（這行之後的 notepad 更新還沒 commit，下次 commit 一起帶）②真機看 v2.160 整套（練一次：結束確認、完成畫面、小條、1RM）③v2.158／v2.159 真機項仍待看 ④AI 量身訂做課表（MANUAL）先訪談 ⑤v2.161「每一餐記店家」使用者核可 S1＋T-A，DDL intake.vendor 已上 prod，實作＋vitest＋e2e meal-vendor 本機完成未 push；別名轉換已執行（刪 15 個，備份在 D:\Temp\tally-backup）。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->

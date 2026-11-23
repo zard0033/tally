@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 38 pages | Last updated: 2026-11-22T16:13:07.690Z
+> 42 pages | Last updated: 2026-11-23T15:04:53.896Z
 
 ## debugging
 
@@ -18,18 +18,20 @@
 - [lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）](lesson-b2-sort-and-mutation-b2-mutation-2026-10-17.md) — # lesson-b2-sort-and-mutation B2 排序與 mutation 的四條通則（2026-10-17）
 - [lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）](lesson-cardio-merge-2026-10-22.md) — # lesson-cardio-merge 有氧併入動作的四條通則（2026-10-22）
 - [lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）](lesson-chart-touch-2026-11-21.md) — # lesson-chart-touch 趨勢圖觸控讀數的四條通則（2026-11-21）
-- [lesson-pin-scroll 膠囊列補捲動的四條通則（2026-11-23）](lesson-pin-scroll-2026-11-23.md) — # lesson-pin-scroll 膠囊列補捲動的四條通則（2026-11-23）
 - [lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）](lesson-ci-linux-e2e-2026-11-11.md) — # lesson-ci-linux-e2e 全量 e2e 搬到 Linux CI 的五條通則（2026-11-11）
 - [lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）](lesson-cleanup-review-push-review-2026-11-02.md) — # lesson-cleanup-review 整體清理與 push 前 review 的四條通則（2026-11-02）
 - [lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）](lesson-daily-goal-2026-11-04.md) — # lesson-daily-goal 改了就存與確認才生效的五條通則（2026-11-04）
 - [lesson-exercise-images 動作示意圖的四條通則（2026-10-17）](lesson-exercise-images-2026-10-17.md) — # lesson-exercise-images 動作示意圖的四條通則（2026-10-17）
 - [lesson-field-controls 填色控件的三條通則（2026-10-16）](lesson-field-controls-2026-10-16.md) — # lesson-field-controls 填色控件的三條通則（2026-10-16）
+- [lesson-field-needs-reader 欄位與分類要先有讀取端（2026-11-23）](lesson-field-needs-reader-2026-11-23.md) — # lesson-field-needs-reader 欄位與分類要先有讀取端（2026-11-23）
 - [lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）](lesson-flaky-root-cause-2026-11-03.md) — # lesson-flaky-root-cause 把「偶發紅」查到底的七條通則（2026-11-03）
 - [lesson-food-library-redesign 食品庫改版的四條通則（2026-11-22）](lesson-food-library-redesign-2026-11-22.md) — # lesson-food-library-redesign 食品庫改版的四條通則（2026-11-22）
 - [lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）](lesson-grams-format-2026-11-22.md) — # lesson-grams-format 文字估算拆成克數×密度反而變差（2026-11-22）
 - [lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）](lesson-meal-suggest-2026-11-04.md) — # lesson-meal-suggest 一鍵多筆寫入與復原的四條通則（2026-11-04）
 - [lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）](lesson-meal-suggest-v2-2026-11-10.md) — # lesson-meal-suggest-v2 排序規則與 mutation 檢查的四條通則（2026-11-10）
+- [lesson-meal-vendor 每一餐記店家的三條通則（2026-11-23）](lesson-meal-vendor-2026-11-23.md) — # lesson-meal-vendor 每一餐記店家的三條通則（2026-11-23）
 - [lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）](lesson-overlay-and-mutation-mutation-2026-10-14.md) — # lesson-overlay-and-mutation 疊層元件與 mutation 的兩條通則（2026-10-14）
+- [lesson-pin-scroll 膠囊列補捲動的四條通則（2026-11-23）](lesson-pin-scroll-2026-11-23.md) — # lesson-pin-scroll 膠囊列補捲動的四條通則（2026-11-23）
 - [lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）](lesson-presence-animation-mutation-2026-10-27.md) — # lesson-presence-animation 退場動畫與 mutation 的四條通則（2026-10-27）
 - [lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）](lesson-recharts-small-multiples-recharts-3-2026-11-20.md) — # lesson-recharts-small-multiples recharts 3 多排小圖對齊的四條通則（2026-11-20）
 - [lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）](lesson-recharts-trend-chart-recharts-2026-10-20.md) — # lesson-recharts-trend-chart recharts 趨勢圖的三條通則（2026-10-20）
@@ -55,3 +57,4 @@
 - [phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）](phase2-round1-log-2-2026-10-13-14.md) — # phase2-round1-log 階段 2 訓練記錄第一輪施工紀錄（2026-10-13～14）
 - [Session Log 2026-11-11](session-log-2026-11-11-b5c81c69.md) — # Session Log 2026-11-11
 - [Session Log 2026-11-20](session-log-2026-11-20-be19c4b2.md) — # Session Log 2026-11-20
+- [Session Log 2026-11-23](session-log-2026-11-23-d9369400.md) — # Session Log 2026-11-23

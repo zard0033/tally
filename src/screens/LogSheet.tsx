@@ -6,7 +6,7 @@
    innerHTML 整塊換掉 DOM——React keyed 渲染天然不會這樣做（同一顆按鈕、同一個 input
    在 re-render 之間是同一個 DOM 節點，不會被拔掉重建），所以這裡不需要
    「清單走增量、搜尋框不動」的特殊處理，直接用一般的 controlled component 寫法即可。 */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CompositionEvent, type ReactNode, type RefObject } from 'react'
 import CategoryIcon, { CategoryStack } from '@/components/CategoryIcon'
 import FoodFormFields from '@/components/FoodFormFields'
 import PortionMods from '@/components/PortionMods'
@@ -52,6 +52,7 @@ const FIX_IDLE: FixState = { open: false, text: '', status: 'idle' }
 import { isPlannable } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { BLANK_FOOD_FORM, aliasHit, byFoodName, foodMatches, validateFoodForm, vendorOptionsOf, type FoodForm } from '@/lib/foodForm'
+import { intakeVendor, needsVendor, vendorFromQuery } from '@/lib/mealVendor'
 import { categoryOf } from '@/lib/categories'
 import { byQuotaFit, defaultQty, groupByCategory, overQuotaAmounts, pickTotals, recentStats, type FoodGroup } from '@/lib/foodPicks'
 import { formatOverAria, formatOverDelta, macroExceeds, num, pickBarRight, roundTo1, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from '@/lib/formulas'
@@ -100,6 +101,11 @@ interface FoodRowHandlers {
   pickedFood: (id: number) => Food | undefined
   onToggleModsOpen: (id: number) => void
   onMods: (id: number, mods: string[]) => void
+  /** 這一餐在哪買（通用食物）：值、選項、改值；選單掛在 sheet 裡 */
+  vendors: Map<number, string>
+  vendorOptions: string[]
+  onVendor: (id: number, v: string) => void
+  portal: RefObject<HTMLDivElement | null>
   /** 搜尋字：只靠別名對上的列，副標寫「對到：別名」。 */
   query: string
   /** 寫入中：微調鎖住（寫入途中改了會被靜默丟掉）。 */
@@ -133,6 +139,7 @@ function renderFoodRow(listed: Food, h: FoodRowHandlers, withIcon = false) {
   const draft = h.qtyDrafts.get(f.id) ?? String(qty)
   const overQuota = !picked && h.overAmounts.has(f.id)
   const lib = picked ? h.modsBase(f.id) : undefined
+  const askVendor = !!lib && needsVendor(lib)
   return (
     <li key={f.id}>
       <div className={picked ? 'food-item selected' : overQuota ? 'food-item over-quota' : 'food-item'} data-food-id={f.id}>
@@ -147,7 +154,7 @@ function renderFoodRow(listed: Food, h: FoodRowHandlers, withIcon = false) {
               </svg>
               <div className="nm-wrap">
                 <span className="nm">{f.name}</span>
-                {f.vendor && <span className="sub">{f.vendor}</span>}
+                {f.vendor && !askVendor && <span className="sub">{f.vendor}</span>}
               </div>
             </button>
             <QtyStepper
@@ -171,6 +178,11 @@ function renderFoodRow(listed: Food, h: FoodRowHandlers, withIcon = false) {
               onToggleOpen={() => h.onToggleModsOpen(f.id)}
               onChange={(m) => h.onMods(f.id, m)}
               disabled={h.busy}
+              vendor={
+                askVendor
+                  ? { value: h.vendors.get(f.id) ?? '', options: h.vendorOptions, onChange: (v) => h.onVendor(f.id, v), portalContainer: h.portal }
+                  : undefined
+              }
             />
           )}
           </>
@@ -218,7 +230,8 @@ function suggestedFood(item: RepeatItem): Food {
   return {
     id: item.food_id,
     name: item.label,
-    vendor: item.vendor,
+    // 食物本身的店家：通用食物這一筆記的店家（intakeVendor）走勾起來那一列的店家欄，不當成食物的店家
+    vendor: item.intakeVendor ? null : item.vendor,
     kcal: item.kcal,
     protein: item.protein,
     fat: item.fat,
@@ -282,6 +295,8 @@ export default function LogSheet(props: LogSheetProps) {
   const [mods, setMods] = useState<Map<number, string[]>>(new Map())
   const [modsOpen, setModsOpen] = useState<number | null>(null)
   const [fromLast, setFromLast] = useState<Set<number>>(new Set())
+  /** 這一餐在哪買（spec「每一餐記店家」）：只有通用食物會用到；搜尋對到「店家 品名」的別名時自動帶。 */
+  const [vendors, setVendors] = useState<Map<number, string>>(new Map())
   /** 「其他餐的」收合列展開了沒；每次打開 sheet 都收回去。 */
   const [elsewhereOpen, setElsewhereOpen] = useState(false)
   const recentFetchedRef = useRef(false)
@@ -353,6 +368,7 @@ export default function LogSheet(props: LogSheetProps) {
     setMods(new Map())
     setModsOpen(null)
     setFromLast(new Set())
+    setVendors(new Map())
     setQuery('')
     setFilterQuery('')
     setBusy(false)
@@ -495,6 +511,11 @@ export default function LogSheet(props: LogSheetProps) {
           nl2.delete(id)
           return nl2
         })
+        setVendors((v) => {
+          const nv = new Map(v)
+          nv.delete(id)
+          return nv
+        })
         setModsOpen((o) => (o === id ? null : o))
         setLastPicked((l) => (l === id ? null : l))
       } else {
@@ -504,6 +525,10 @@ export default function LogSheet(props: LogSheetProps) {
         setQtyDrafts((d) => new Map(d).set(id, String(q)))
         // 照上次：這樣食物最近一筆按過微調就預設帶上（清掉現在已不適用的代碼）
         const f = foodById(id)
+        // 搜尋對到「麻古 紅萱波波」就帶麻古；不帶「照上次」的店家——這次可能在別家買
+        // 只給會出店家欄的食物帶（看不到的欄位不偷寫）
+        const v = f && needsVendor(f) ? vendorFromQuery(f, filterQuery) : null
+        if (v) setVendors((m) => new Map(m).set(id, v))
         const prevMods = f ? normalizeMods(lastMods.get(id) ?? [], f) : []
         if (prevMods.length) {
           setMods((m) => new Map(m).set(id, prevMods))
@@ -524,6 +549,13 @@ export default function LogSheet(props: LogSheetProps) {
     setPicks((prev) => new Map(prev).set(id, item.qty))
     setQtyDrafts((prev) => new Map(prev).set(id, String(item.qty)))
     setSuggestSnaps((prev) => new Map(prev).set(id, { food: suggestedFood(item), name: item.name, mods: item.mods }))
+    // 店家照來源那一筆記的（同營養快照）
+    setVendors((prev) => {
+      const next = new Map(prev)
+      if (item.intakeVendor) next.set(id, item.intakeVendor)
+      else next.delete(id)
+      return next
+    })
     const lib = libById.get(id)
     const m = lib ? normalizeMods(item.mods, lib) : []
     setMods((prev) => {
@@ -743,7 +775,10 @@ export default function LogSheet(props: LogSheetProps) {
       if (!row) continue
       const { food: f, mods: m } = row
       // 沒調就不帶 mods（DB 預設空陣列）：跟一鍵加入、估一筆的寫入同一個形狀
-      rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null, ...(m.length ? { mods: m } : {}) })
+      // 店家只在食物本身沒有店家時寫（食品庫那筆為準；封存的看來源快照自己的店家）
+      const vf = libById.get(id) ?? f
+      const v = needsVendor(vf) ? intakeVendor(vf, vendors.get(id)) : null
+      rows.push({ eaten_on: dayData.date, meal, food_id: id, qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: suggestSnaps.get(id)?.name ?? null, ...(m.length ? { mods: m } : {}), ...(v ? { vendor: v } : {}) })
     }
     /* 勾了「存進食品庫」、但食品庫已有同名同店家的：不再存一筆（AC 13）。在估一筆那一列有「改用那筆」，這裡只擋下說原因 */
     const hit = drafts
@@ -768,7 +803,7 @@ export default function LogSheet(props: LogSheetProps) {
         done.push(withId)
         patchDraft(d.key, () => withId)
       }
-      await onCreateIntake([...rows, ...draftsToIntake(done, meal, dayData.date)])
+      await onCreateIntake([...rows, ...draftsToIntake(done, meal, dayData.date, vendorOptions)])
       /* 成功後 App 會把 open 翻成 false，交給 SpringSheet 播退場 spring；不在這裡手動 setBusy(false)——
          下次開啟時 open 的 reset effect 會處理 */
     } catch (e) {
@@ -931,6 +966,10 @@ export default function LogSheet(props: LogSheetProps) {
     pickedFood,
     onToggleModsOpen: (id) => setModsOpen((o) => (o === id ? null : id)),
     onMods: setRowMods,
+    vendors,
+    vendorOptions,
+    onVendor: (id, v) => setVendors((prev) => new Map(prev).set(id, v)),
+    portal: sheetRef,
     query: filterQuery,
     busy,
     flash,

@@ -237,3 +237,11 @@
 - **Pages:** session-log-2026-11-23-a77f3525.md
 - **Summary:** Auto-captured session log for 03a1443c-ad51-4e17-b1b4-d1d399cfeae5 (omc-wiki-capture:586a764235d57821f22ee9f9137838915d9a8a448824e84c333b96644156de1c)
 
+## [2026-11-23T14:29:10.698Z] ingest
+- **Pages:** session-log-2026-11-23-d9369400.md
+- **Summary:** Auto-captured session log for 14394c7c-3514-4397-8b3f-a77b9fa31387 (omc-wiki-capture:3154d4e26824e705522d8afcf1eb277a49e5697d67161acc3b27c880c149fa7f)
+
+## [2026-11-23T15:04:53.493Z] ingest
+- **Pages:** lesson-meal-vendor-2026-11-23.md
+- **Summary:** Created new page "lesson-meal-vendor 每一餐記店家的三條通則（2026-11-23）"
+

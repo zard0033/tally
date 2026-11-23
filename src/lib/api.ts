@@ -206,15 +206,18 @@ export interface IntakeRow {
   name: string | null
   /** 份量微調代碼（spec「份量微調」）；kcal 等快照已是調整後的值。沒調是空陣列。 */
   mods: string[]
+  /** 這一餐在哪買（spec「每一餐記店家」）：只有食物本身沒有店家時才寫；顯示與餐建議用 rowVendor 合併 foods.vendor。 */
+  vendor: string | null
   /** 餐建議避開重複用（同一天同店家、同品項）。 */
   food_id: number
   foods: { name: string; vendor: string | null; category: string | null } | null
 }
 
-/** 讀進來的 intake 列補 mods：e2e fixture 沒有這欄當沒調（同 DB 預設）。 */
-const withMods = <R extends object>(r: R): R & { mods: string[] } => {
+/** 讀進來的 intake 列補 mods 與 vendor：e2e fixture 沒有這兩欄當沒調、沒記店家（同 DB 預設）。 */
+const withMods = <R extends object>(r: R): R & { mods: string[]; vendor: string | null } => {
   const m = (r as { mods?: unknown }).mods
-  return { ...r, mods: Array.isArray(m) ? m.filter((x): x is string => typeof x === 'string') : [] }
+  const v = (r as { vendor?: unknown }).vendor
+  return { ...r, mods: Array.isArray(m) ? m.filter((x): x is string => typeof x === 'string') : [], vendor: typeof v === 'string' && v.trim() ? v : null }
 }
 
 /** 區間內每筆的 eaten_on／qty／kcal（單份快照），實測維持熱量用。只撈三欄、不 join foods。
@@ -282,8 +285,8 @@ export async function listIntake(date: string, { retry = false }: { retry?: bool
      推不出關聯基數，型別預設當作陣列——實際回傳仍是單一物件，用明確泛型覆寫成真實形狀 */
   return unwrap(await supabase
     .from('intake')
-    .select<'id,meal,qty,kcal,protein,fat,carb,name,mods,food_id,foods(name,vendor,category)', IntakeRow>(
-      'id,meal,qty,kcal,protein,fat,carb,name,mods,food_id,foods(name,vendor,category)',
+    .select<'id,meal,qty,kcal,protein,fat,carb,name,mods,vendor,food_id,foods(name,vendor,category)', IntakeRow>(
+      'id,meal,qty,kcal,protein,fat,carb,name,mods,vendor,food_id,foods(name,vendor,category)',
     )
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
@@ -297,8 +300,8 @@ export async function listIntake(date: string, { retry = false }: { retry?: bool
 export async function listIntakeForRepeat(from: string, to: string): Promise<RepeatSourceRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,created_at,foods(name,vendor,archived,category)', RepeatSourceRow>(
-      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,created_at,foods(name,vendor,archived,category)',
+    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,vendor,created_at,foods(name,vendor,archived,category)', RepeatSourceRow>(
+      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,vendor,created_at,foods(name,vendor,archived,category)',
     )
     .gte('eaten_on', from)
     .lte('eaten_on', to)
@@ -339,6 +342,8 @@ export interface NewIntake {
   name: string | null
   /** 份量微調代碼；不帶＝沒調（DB 預設空陣列）。 */
   mods?: string[]
+  /** 這一餐在哪買；不帶＝沒記（食物本身有店家時一律不帶，見 mealVendor.intakeVendor）。 */
+  vendor?: string
 }
 
 /** 存單份營養快照（不乘 qty）：改食物庫的營養值不該改寫過去的紀錄。 */
@@ -376,7 +381,7 @@ export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void>
  *  絕不碰 foods**——那正是這個功能存在的理由：調整當天實際吃的量，不污染食品庫的標準值。
  *  呼叫端一次只送一欄（編輯區各欄 blur 時各自 commit），與 updateIntakeQty/Meal 同慣例。
  *  name 送 null＝清掉快照、顯示退回 foods 的品名。 */
-export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb' | 'mods'>>
+export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb' | 'mods' | 'vendor'>>
 
 export async function updateIntakeDetail(id: number, patch: IntakeDetailPatch): Promise<void> {
   const { error } = await supabase.from('intake').update(patch).eq('id', id).abortSignal(dbSignal())
