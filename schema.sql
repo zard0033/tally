@@ -25,17 +25,20 @@ create table foods (
   -- 回滾：alter table foods drop column category_manual; alter table foods drop column category;
   category        text,
   category_manual boolean not null default false,
-  -- 來源、別名、一份幾克（2026-11-22，spec.md「食品庫改版」）。source 決定數字可不可信（標示／官方／AI 粗估／
-  -- 自己填／未標），舊資料一律 unknown 不硬猜；aliases 給記一筆搜尋與估一筆比對用；serving_g 知道才填。
-  -- 既有資料庫補這三欄：
-  --   alter table foods add column source text not null default 'unknown'
-  --     check (source in ('label','official','ai','manual','unknown'));
-  --   alter table foods add column aliases text[] not null default '{}' check (cardinality(aliases) <= 10);
-  --   alter table foods add column serving_g numeric(7,2) check (serving_g > 0 and serving_g <= 5000);
-  -- 回滾：alter table foods drop column serving_g; alter table foods drop column aliases; alter table foods drop column source;
-  source    text not null default 'unknown' check (source in ('label','official','ai','manual','unknown')),
+  -- 來源、別名（2026-11-22 起，spec.md「食品庫改版」）。verified＝來源只分兩種（2026-11-23 使用者定）：
+  -- true＝官方標示（照產品標示或官方資料打的）、false＝粗估（估一筆存的、舊資料沒標的）；aliases 給記一筆搜尋與估一筆比對用。
+  -- 2026-11-22 原本是 source（標示／官方／AI 粗估／自己填／未標五值）＋ serving_g（一份幾克），11-23 換掉：
+  -- 四種分太細、一份幾克沒有任何讀取端。換法（線上舊版還在讀舊欄，所以刪舊欄排在新前端部署之後）：
+  --   alter table foods add column verified boolean not null default false;
+  --   update foods set verified = source in ('label','official','manual');
+  --   -- 新前端部署、而且每台裝置（含 iOS 主畫面 PWA）都換到新版後——舊版會 select 這兩欄，先刪它就載不出食品庫：
+  --   update foods set verified = source in ('label','official','manual')
+  --     where not verified and created_at > '2026-11-23T02:00:00Z';  -- 只補加欄位後舊版新建的；新版不寫 source，不限時間會蓋掉部署後手動改成粗估的舊食物
+  --   alter table foods drop column serving_g; alter table foods drop column source;
+  -- 換之前每筆的 source／serving_g 備份在本機 D:\Temp\tally-backup（repo 是 public，不放這裡）。
+  -- 別名：alter table foods add column aliases text[] not null default '{}' check (cardinality(aliases) <= 10);
+  verified  boolean not null default false,
   aliases   text[] not null default '{}' check (cardinality(aliases) <= 10),
-  serving_g numeric(7,2) check (serving_g > 0 and serving_g <= 5000),
   created_at timestamptz not null default now()
 );
 

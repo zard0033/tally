@@ -79,7 +79,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     void listArchivedFoods().then(setArchived).catch(() => setArchived([]))
   }, [tab])
 
-  /* 「沒查證過」（v2.153，spec「食品庫改版」）：只在使用中分頁、只列 AI 粗估與未標，依近 90 天吃掉的熱量排。
+  /* 「粗估」篩選（v2.153 起；2026-11-23 起叫「粗估」，原「沒查證過」）：只在使用中分頁、只列粗估的，依近 90 天吃掉的熱量排。
      近 90 天的 intake 第一次打開才撈（約 300 列），不是每次進食品庫都撈。撈失敗就照品名排、講一句。 */
   const [unverified, setUnverified] = useState(false)
   const [eaten, setEaten] = useState<Map<number, number> | 'error' | null>(null)
@@ -90,7 +90,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     void listIntakeFoodKcal(shiftDate(localDate(), -90))
       .then((rows) => setEaten(kcalByFood(rows)))
       .catch(() => {
-        // 放掉旗標：關掉再打開「沒查證過」會再撈一次，不必離開畫面
+        // 放掉旗標：關掉再打開「粗估」會再撈一次，不必離開畫面
         eatenFetchedRef.current = false
         setEaten('error')
       })
@@ -194,9 +194,9 @@ export default function FoodLibrary(props: FoodLibraryProps) {
   const vendorOptions = useMemo(() => vendorOptionsOf(foods), [foods])
 
   function openAdd(prefill: Food | null) {
-    /* 以範本新增是一筆新的食物：來源不跟範本走（官方的範本改了數字就不再是官方），別名也不複製
+    /* 以範本新增是一筆新的食物：來源跟著範本（使用者 2026-11-23），別名不複製
        ——兩筆共用同一個別名，估一筆查食品庫時就對到兩筆（v2.153 review）。 */
-    setAddForm(prefill ? { ...foodToForm(prefill), source: 'manual', aliases: [] } : BLANK_FOOD_FORM)
+    setAddForm(prefill ? { ...foodToForm(prefill), aliases: [] } : BLANK_FOOD_FORM)
     setAddSourceName(prefill ? prefill.name : null)
     setAddErr(null)
     setAddOpen(true)
@@ -278,7 +278,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
     .filter((f) => foodMatches(f, query)) ?? null
   const unverifiedOn = unverified && tab === 'active'
   const eatenMap = eaten instanceof Map ? eaten : new Map<number, number>()
-  /* 沒查證過：不分店家，一張卡照「吃最多的在前」排——分組會把排序打散。90 天還在撈時先不出清單（骨架）。 */
+  /* 粗估：不分店家，一張卡照「吃最多的在前」排——分組會把排序打散。90 天還在撈時先不出清單（骨架）。 */
   const groups = !visible
     ? null
     : unverifiedOn
@@ -286,12 +286,10 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         ? null
         : (() => {
             const ranked = rankUnverified(visible, eatenMap)
-            return ranked.length ? [{ vendor: '沒查證過・近 90 天吃最多的在前', items: ranked }] : []
+            return ranked.length ? [{ vendor: '粗估・近 90 天吃最多的在前', items: ranked }] : []
           })()
       : groupByVendor(visible)
   const editorShown = visible?.some((f) => f.id === editingId) ?? false
-  /* 食藥署開放資料的出處標示（政府資料開放授權要求標示）：食品庫有官方數字才出現 */
-  const hasOfficial = foods.some((f) => f.source === 'official') || (archived?.some((f) => f.source === 'official') ?? false)
 
   return (
     <div className="main" data-screen="food-library" style={{ position: 'relative' }}>
@@ -313,7 +311,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
         <button className="chip" type="button" aria-pressed={tab === 'archived'} onClick={() => setTab('archived')}>已封存</button>
         {/* 不是第三個分頁：是使用中分頁上的開關（spec 決定，review B3），所以推到最右、只在使用中出現 */}
         {tab === 'active' && (
-          <button className="chip lib-unverified" type="button" aria-pressed={unverified} onClick={() => setUnverified((v) => !v)}>沒查證過</button>
+          <button className="chip lib-unverified" type="button" aria-pressed={unverified} onClick={() => setUnverified((v) => !v)}>粗估</button>
         )}
       </div>
       {unverifiedOn && eaten === 'error' && <p className="muted lib-unverified-note" role="status">近 90 天的紀錄沒撈到，先照品名排</p>}
@@ -334,7 +332,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
             </div>
           </SkelBlock>
         ) : groups.length === 0 && !query.trim() && unverifiedOn ? (
-          <p className="muted">每一樣都查證過了</p>
+          <p className="muted">沒有粗估的了，每一樣都是官方標示</p>
         ) : groups.length === 0 && !query.trim() && tab === 'active' ? (
           <EmptyNote art="bowl">食品庫還是空的</EmptyNote>
         ) : groups.length === 0 ? (
@@ -374,7 +372,7 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                           <span className="sub">
                             {cat ?? '未分類'}
                             {unverifiedOn && eatenMap.has(f.id) && <> · 近 90 天 {Math.round(eatenMap.get(f.id)!).toLocaleString()} 卡</>}
-                            {sourceTag(f.source) && <span className="src-tag">{sourceTag(f.source)}</span>}
+                            {sourceTag(f.verified) && <span className="src-tag">{sourceTag(f.verified)}</span>}
                           </span>
                         </span>
                         <span className="lib-kcal">{Math.round(f.kcal)}<small> 卡</small></span>
@@ -401,11 +399,18 @@ export default function FoodLibrary(props: FoodLibraryProps) {
                         {tab === 'active' && (
                           <div className="lib-edit-more">
                             {/* 用展開區裡正在編的值當範本（按鈕就在那些欄位下面，review）；草稿不合法就用存好的 */}
-                            <button className="lib-text-btn" type="button" aria-label={`以 ${f.name} 為範本新增`} onClick={() => {
+                            {/* 2026-11-23 樣張 food-edit-actions.html B：藍字改描邊膠囊，跟取消／儲存分得出輕重 */}
+                            <button className="row-pill" type="button" aria-label={`以 ${f.name} 為範本新增`} onClick={() => {
                               const draft = validateFoodForm(editForm)
                               openAdd('error' in draft ? f : { ...f, ...draft.food })
-                            }}>以此為範本新增</button>
-                            <button className="lib-text-btn" type="button" aria-label={`封存 ${f.name}`} onClick={() => void archive(f)}>封存</button>
+                            }}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>
+                              以此為範本新增
+                            </button>
+                            <button className="row-pill" type="button" aria-label={`封存 ${f.name}`} onClick={() => void archive(f)}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4" /></svg>
+                              封存
+                            </button>
                           </div>
                         )}
                         {renderDup(editDupOf(f))}
@@ -431,7 +436,8 @@ export default function FoodLibrary(props: FoodLibraryProps) {
             </div>
           ))
         )}
-        {hasOfficial && groups !== null && <p className="lib-attrib">官方數字部分取自衛福部食藥署食品營養成分資料庫（政府資料開放授權）</p>}
+        {/* 食藥署開放資料的出處標示（政府資料開放授權要求）：2026-11-23 來源併成兩種後分不出哪幾筆是匯入的，一律顯示 */}
+        {groups !== null && groups.length > 0 && <p className="lib-attrib">官方數字部分取自衛福部食藥署食品營養成分資料庫（政府資料開放授權）</p>}
       </div>
 
       {/* 編輯中隱藏：FAB 是 fixed 定位，展開的編輯區一長，操作列剛好捲到 FAB 那個

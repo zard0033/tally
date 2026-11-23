@@ -6,16 +6,6 @@
    （品名欄漏 inputMode、食品庫那份沒有店家 Autocomplete）。這個檔維持只放不沾 DOM 的
    邏輯，未來要原樣帶去 React Native。 */
 
-import type { FoodSource } from './api'
-
-/** 拍標示讀到的四個數字。只有拍照辨識會設它——存檔時任一個被改過，來源就從「標示」退成「自己填」。 */
-export interface LabelScan {
-  kcal: number
-  protein: number
-  fat: number
-  carb: number
-}
-
 export interface FoodForm {
   name: string
   vendor: string
@@ -23,21 +13,17 @@ export interface FoodForm {
   protein: string
   fat: string
   carb: string
-  /** 來源（spec「食品庫改版」）。新增預設「自己填」；編輯舊食物帶它原本的，改數字不自動變。 */
-  source: FoodSource
+  /** 來源：true＝官方標示、false＝粗估。新增預設官方標示（不是按 AI 估的，使用者都是照標示或官方資料打的）；
+   *  編輯舊食物帶它原本的，改數字不自動變。 */
+  verified: boolean
   aliases: string[]
-  /** 一份幾克，空字串＝不知道。 */
-  serving_g: string
-  labelScan: LabelScan | null
 }
 
-export const BLANK_FOOD_FORM: FoodForm = { name: '', vendor: '', kcal: '', protein: '', fat: '', carb: '', source: 'manual', aliases: [], serving_g: '', labelScan: null }
+export const BLANK_FOOD_FORM: FoodForm = { name: '', vendor: '', kcal: '', protein: '', fat: '', carb: '', verified: true, aliases: [] }
 
 /** 別名的界：對齊 DB check（cardinality ≤ 10），單個長度是表單自己的界。 */
 export const ALIAS_MAX = 10
 export const ALIAS_LEN_MAX = 40
-/** 一份幾克的上界，對齊 DB check（serving_g ≤ 5000）。 */
-export const SERVING_G_MAX = 5000
 
 /** 輸入框打的字 → 加進別名：照頓號、逗號切開，去空白、去重（也不跟已有的重複）、丟掉空的。
  *  超過 10 個或單個超過 40 字不在這裡擋——存檔時 validateFoodForm 講原因，使用者才知道哪裡不行。 */
@@ -66,9 +52,8 @@ export interface ValidatedFood {
   protein: number
   fat: number
   carb: number
-  source: FoodSource
+  verified: boolean
   aliases: string[]
-  serving_g: number | null
 }
 
 /** 品名／熱量必填，三大營養素留空當 0。錯誤訊息跟既有 LogSheet 新增食物表單逐字一致。 */
@@ -87,19 +72,7 @@ export function validateFoodForm(form: FoodForm): { food: ValidatedFood } | { er
   const aliases = addAliases([], form.aliases.join('、'))
   if (aliases.length > ALIAS_MAX) return { error: `別名最多 ${ALIAS_MAX} 個` }
   if (aliases.some((a) => [...a].length > ALIAS_LEN_MAX)) return { error: `每個別名最多 ${ALIAS_LEN_MAX} 個字` }
-  const raw = form.serving_g.trim() === '' ? null : Number(form.serving_g.trim())
-  // DB 是 numeric(7,2)：先四捨五入到兩位再驗，否則 0.001 過得了這裡、到 DB 變 0.00 被 check 擋成一句原文錯誤
-  const sg = raw === null || !Number.isFinite(raw) ? raw : Math.round(raw * 100) / 100
-  if (sg !== null && (!Number.isFinite(sg) || sg <= 0 || sg > SERVING_G_MAX)) return { error: `一份幾克要大於 0、最多 ${SERVING_G_MAX}，或留空` }
-  return { food: { name, vendor, kcal, protein, fat, carb, source: sourceAtSave(form, { kcal, protein, fat, carb }), aliases, serving_g: sg } }
-}
-
-/** 拍了標示又手改任一個數字 → 不再是標示上的數字，退成「自己填」。labelScan 只有拍照會設，
- *  所以編輯舊食物（沒拍）時來源照使用者選的，不因改數字自動變（spec「食品庫改版」）。 */
-function sourceAtSave(form: FoodForm, n: LabelScan): FoodSource {
-  const s = form.labelScan
-  if (form.source !== 'label' || !s) return form.source
-  return s.kcal === n.kcal && s.protein === n.protein && s.fat === n.fat && s.carb === n.carb ? 'label' : 'manual'
+  return { food: { name, vendor, kcal, protein, fat, carb, verified: form.verified, aliases } }
 }
 
 /** 店家 Autocomplete 的選項：食品庫裡出現過的 vendor 去重，按筆畫序排。
@@ -137,6 +110,7 @@ export interface LabelReading {
  * （`（每份 17g）`），使用者在前面補打即可；比整欄留白好用，因為括號那半已經填好了。
  */
 export function readingToForm(r: LabelReading): Omit<FoodForm, 'vendor' | 'aliases'> {
+  // 讀數裡的 serving_g 只用在品名後的括號；食物本身不再存「一份幾克」（2026-11-23 刪：沒有讀取端）
   const label =
     r.basis === 'per_100g'
       ? '（每100克）'
@@ -149,12 +123,7 @@ export function readingToForm(r: LabelReading): Omit<FoodForm, 'vendor' | 'alias
     protein: String(r.protein_g),
     fat: String(r.fat_g),
     carb: String(r.carb_g),
-    source: 'label',
-    // 每 100 克的標示：存下來的「一份」就是 100 克（review B4）；每份但讀不到重量就留空
-    // 讀錯的每份重量（0、負的、超過 5000）丟掉留空：那欄收在「更多」裡，帶進去會在看不到的欄位上存不了檔
-    serving_g:
-      r.basis === 'per_100g' ? '100' : r.serving_g === null || !(r.serving_g > 0 && r.serving_g <= SERVING_G_MAX) ? '' : String(r.serving_g),
-    labelScan: { kcal: r.kcal, protein: r.protein_g, fat: r.fat_g, carb: r.carb_g },
+    verified: true,
   }
 }
 
@@ -165,9 +134,8 @@ export function foodToForm(f: {
   protein: number
   fat: number
   carb: number
-  source: FoodSource
+  verified: boolean
   aliases: string[]
-  serving_g: number | null
 }): FoodForm {
   return {
     name: f.name,
@@ -176,10 +144,8 @@ export function foodToForm(f: {
     protein: String(f.protein),
     fat: String(f.fat),
     carb: String(f.carb),
-    source: f.source,
+    verified: f.verified,
     aliases: [...f.aliases],
-    serving_g: f.serving_g === null ? '' : String(f.serving_g),
-    labelScan: null,
   }
 }
 

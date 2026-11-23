@@ -1107,12 +1107,11 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .lib-cat:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 0; }
 .lib-cat-err { padding: 0 var(--s-3) var(--s-2); }
 .lib-row-main .icon-btn svg { width: 17px; height: 17px; }
-/* 展開區裡的次要動作（v2.147，原本是列上的兩顆圖示）：文字鈕，靠左；封存不跳確認（有 5 秒復原，同原本） */
-.lib-edit-more { display: flex; gap: var(--s-2); margin: 0 calc(var(--s-2) * -1) var(--s-1); }
-.lib-text-btn { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 600;
-  color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
-.lib-text-btn:active { opacity: .6; }
-.lib-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
+/* 展開區裡的次要動作（v2.147，原本是列上的兩顆圖示）：靠左；封存不跳確認（有 5 秒復原，同原本）。
+   2026-11-23 起是描邊膠囊（.row-pill，樣張 food-edit-actions.html B）——原本的藍字跟「更多」、取消長得一樣，分不出輕重。
+   膠囊視覺 32px、::before 撐命中區到 44px，上下各留 6px 不讓命中區疊到上面的「來源、別名」列 */
+.lib-edit-more { display: flex; gap: var(--s-2); padding: 6px 0; margin-bottom: var(--s-3); }
+.lib-edit-more .row-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 就地編輯展開態——同今日頁 v2.20 品項就地編輯語言：raised 底、圓角只留外緣 */
 /* 底用 --card 不用 --raised：欄位填色 --fill 對 --raised 只有 1.03:1 會隱形（與就地編輯區同一筆帳） */
@@ -1783,19 +1782,25 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
    `min-width: 0` 不可省：fieldset 的預設 min-content 寬度會把裡面的 flex 版面撐破。 */
 .form-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
 
-/* 「更多：來源、別名、一份幾克」（v2.153，spec「食品庫改版」第一步）：文字鈕同 .lib-text-btn 的語氣，
-   展開時箭頭轉下。收起是預設——新增食物照舊三行就能送出。 */
-.form-more-btn { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 44px; margin: calc(var(--s-2) * -1) 0 var(--s-2);
-  padding: 0 var(--s-1); border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--accent);
-  cursor: pointer; -webkit-appearance: none; appearance: none; }
-.form-more-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+/* 「來源、別名」（v2.153 起；2026-11-23 樣張 food-edit-actions.html B）：一條可點開的列，上下細線，
+   左邊標題、右邊寫現在的狀態（官方標示・沒有別名），箭頭是主色、展開轉下。原本是藍字「更多：…」，看起來像連結不像可點開的區塊。
+   收起是預設——新增食物照舊三行就能送出。展開時下緣細線移到內容底下。 */
+.form-more-btn { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 52px; margin: 0 0 var(--s-3);
+  padding: 0 var(--s-1); border: none; border-top: 1px solid var(--rule-subtle); border-bottom: 1px solid var(--rule-subtle); background: none;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.form-more-title { font-size: var(--t-base); font-weight: 600; }
+.form-more-sum { flex: 1; min-width: 0; text-align: right; font-size: var(--t-sm); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form-more-btn svg { flex-shrink: 0; width: 16px; height: 16px; margin-left: auto; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
   transition: transform var(--dur-base) var(--ease); }
+.form-more-sum + svg { margin-left: 0; }
+.form-more-btn[aria-expanded="true"] { border-bottom: none; margin-bottom: var(--s-2); }
 .form-more-btn[aria-expanded="true"] svg { transform: rotate(90deg); }
 .form-more-btn:active { opacity: .6; }
 .form-more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
-.form-more { display: flex; flex-direction: column; }
+.form-more { display: flex; flex-direction: column; border-bottom: 1px solid var(--rule-subtle); padding-bottom: var(--s-1); margin-bottom: var(--s-3); }
 .form-more-label { margin: 0 0 var(--s-2) var(--s-1); font-size: var(--t-sm); letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.form-more .seg { flex: none; margin-bottom: var(--s-4); }
+.form-more .seg { flex: none; margin-bottom: var(--s-1); }
+.form-more-hint { margin: 0 0 var(--s-4) var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .form-more .alias-field { margin-bottom: var(--s-2); }
 /* 別名的 chip：顯示用，✕ 拿掉。命中區 44px 由 ✕ 鈕自己撐，pill 本身只是字。 */
 .alias-chips { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); margin: 0 0 var(--s-4); padding: 0; list-style: none; }

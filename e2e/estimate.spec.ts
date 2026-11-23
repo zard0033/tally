@@ -132,8 +132,8 @@ test('AI 估算：等待插圖 → 草稿逐樣出現，帶回清單前後都不
   await page.locator('.pick-bar-btn', { hasText: '加入' }).click()
   await expect(page.locator('.sheet')).toHaveCount(0)
   expect(await writes(page, 'foods')).toEqual([
-    { name: '螺獅粉', vendor: null, kcal: 620, protein: 22, fat: 24, carb: 80, source: 'ai', archived: true },
-    { name: '夜市地瓜球', vendor: null, kcal: 230, protein: 2, fat: 10, carb: 32, source: 'ai', archived: true },
+    { name: '螺獅粉', vendor: null, kcal: 620, protein: 22, fat: 24, carb: 80, verified: false, archived: true },
+    { name: '夜市地瓜球', vendor: null, kcal: 230, protein: 2, fat: 10, carb: 32, verified: false, archived: true },
   ])
   expect(await writes(page, 'intake')).toEqual([
     [
@@ -186,7 +186,7 @@ test('勾「存進食品庫」的那列不封存；改熱量時營養素照比�
   await d.getByLabel('存進食品庫').check()
   await bringBackAndAdd(page)
   await expect(page.locator('.sheet')).toHaveCount(0)
-  expect(await writes(page, 'foods')).toEqual([{ name: '螺獅粉', vendor: null, kcal: 310, protein: 11, fat: 12, carb: 40, source: 'ai' }])
+  expect(await writes(page, 'foods')).toEqual([{ name: '螺獅粉', vendor: null, kcal: 310, protein: 11, fat: 12, carb: 40, verified: false }])
 })
 
 test('檔位：點「一般正餐」產生只估熱量的一列，不呼叫 AI；加入後封存、營養素記 0', async ({ page }) => {
@@ -201,7 +201,7 @@ test('檔位：點「一般正餐」產生只估熱量的一列，不呼叫 AI�
   expect(await estimateCalls(page)).toEqual([])
   await bringBackAndAdd(page)
   await expect(page.locator('.sheet')).toHaveCount(0)
-  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 0, fat: 0, carb: 0, source: 'ai', archived: true }])
+  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 0, fat: 0, carb: 0, verified: false, archived: true }])
 })
 
 /* v2.142：晚餐近三天都吃雞胸餐盒（380 卡、蛋白質 42、脂肪 9、碳水 28）→ 晚餐比例 P 168/380、F 81/380、C 112/380。
@@ -218,7 +218,7 @@ test('檔位：這一餐有歷史就照比例粗估三大，標「粗估」，�
   await expect(d).toContainText('三大營養素照你平常這一餐的比例')
   await bringBackAndAdd(page)
   await expect(page.locator('.sheet')).toHaveCount(0)
-  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 77.4, fat: 16.6, carb: 51.6, source: 'ai', archived: true }])
+  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐（一般正餐）', vendor: null, kcal: 700, protein: 77.4, fat: 16.6, carb: 51.6, verified: false, archived: true }])
 })
 
 test('粗估的檔位列在 AI 估算回來後還在（不被當成上一批 AI 的列換掉；v2.142 review）', async ({ page }) => {
@@ -247,7 +247,7 @@ test('自己打數字：加一列只估熱量的草稿，品名預設＝餐別�
   await expect(page.locator('#est-own-kcal')).toHaveValue('')
   await bringBackAndAdd(page)
   await expect(page.locator('.sheet')).toHaveCount(0)
-  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐', vendor: null, kcal: 523, protein: 0, fat: 0, carb: 0, source: 'ai', archived: true }])
+  expect(await writes(page, 'foods')).toEqual([{ name: '晚餐', vendor: null, kcal: 523, protein: 0, fat: 0, carb: 0, verified: false, archived: true }])
 })
 
 test('檔位的品名跟著加入時的餐別：回清單換成午餐再加入，寫的是「午餐（一般正餐）」與 lunch', async ({ page }) => {
@@ -490,9 +490,9 @@ const LIB_FIX = {
   ...FIX,
   foods: [
     ...FIX.foods,
-    { id: 31, name: '茶葉蛋', vendor: '7-11', kcal: 70, protein: 7, fat: 4.5, carb: 1, category: '配菜', category_manual: false, source: 'unknown', aliases: [], serving_g: null },
-    { id: 32, name: '茶葉蛋', vendor: null, kcal: 75, protein: 7.1, fat: 4.7, carb: 1.1, category: '配菜', category_manual: false, source: 'official', aliases: [], serving_g: 51.5 },
-    { id: 33, name: '全糖綠茶', vendor: '50嵐', kcal: 280, protein: 0, fat: 0, carb: 70, category: '飲料', category_manual: false, source: 'unknown', aliases: [], serving_g: null },
+    { id: 31, name: '茶葉蛋', vendor: '7-11', kcal: 70, protein: 7, fat: 4.5, carb: 1, category: '配菜', category_manual: false, verified: false, aliases: [] },
+    { id: 32, name: '茶葉蛋', vendor: null, kcal: 75, protein: 7.1, fat: 4.7, carb: 1.1, category: '配菜', category_manual: false, verified: true, aliases: [] },
+    { id: 33, name: '全糖綠茶', vendor: '50嵐', kcal: 280, protein: 0, fat: 0, carb: 70, category: '飲料', category_manual: false, verified: false, aliases: [] },
   ],
   history: [{ meal: 'breakfast', food_id: 31, qty: 1 }, ...FIX.history],
 } as unknown as typeof FIX

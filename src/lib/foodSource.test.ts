@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { FoodSource } from './api'
-import { isUnverified, kcalByFood, rankUnverified, sourceTag, SOURCE_CHOICES } from './foodSource'
+import { kcalByFood, rankUnverified, sourceTag, SOURCE_CHOICES } from './foodSource'
 
 describe('sourceTag', () => {
-  it('只標標示／官方／粗估；自己填與未標不標', () => {
-    expect(sourceTag('label')).toBe('標示')
-    expect(sourceTag('official')).toBe('官方')
-    expect(sourceTag('ai')).toBe('粗估')
-    expect(sourceTag('manual')).toBe(null)
-    expect(sourceTag('unknown')).toBe(null)
+  it('只標粗估；官方標示不標', () => {
+    expect(sourceTag(false)).toBe('粗估')
+    expect(sourceTag(true)).toBe(null)
   })
-  it('表單選項不含未標（未標＝沒選）', () => {
-    expect(SOURCE_CHOICES.map((c) => c.key)).toEqual(['label', 'official', 'ai', 'manual'])
+  it('表單只有兩格：官方標示、粗估', () => {
+    expect(SOURCE_CHOICES.map((c) => c.label)).toEqual(['官方標示', '粗估'])
   })
 })
 
@@ -29,17 +25,16 @@ describe('kcalByFood', () => {
 })
 
 describe('rankUnverified', () => {
-  const f = (id: number, name: string, source: FoodSource) => ({ id, name, source })
-  const foods = [f(1, '乙', 'ai'), f(2, '甲', 'unknown'), f(3, '丙', 'official'), f(4, '丁', 'unknown'), f(5, '戊', 'label'), f(6, '己', 'manual'), f(7, '庚', 'unknown')]
-  it('只留 AI 粗估與未標，吃最多的在前，沒吃過的排最後、照品名', () => {
+  const f = (id: number, name: string, verified: boolean) => ({ id, name, verified })
+  const foods = [f(1, '乙', false), f(2, '甲', false), f(3, '丙', true), f(4, '丁', false), f(5, '戊', true), f(6, '己', true), f(7, '庚', false)]
+  it('只留粗估，吃最多的在前，沒吃過的排最後、照品名', () => {
     const eaten = new Map([[1, 300], [4, 900], [3, 5000], [5, 9999]])
     expect(rankUnverified(foods, eaten).map((x) => x.id)).toEqual([4, 1, 2, 7])
   })
   it('一樣都沒吃過 → 全照品名', () => {
     expect(rankUnverified(foods, new Map()).map((x) => x.name)).toEqual(['乙', '甲', '丁', '庚'].sort((a, b) => a.localeCompare(b, 'zh-Hant')))
   })
-  it('isUnverified 與篩選一致；不改動傳進來的陣列', () => {
-    expect((['label', 'official', 'ai', 'manual', 'unknown'] as FoodSource[]).filter(isUnverified)).toEqual(['ai', 'unknown'])
+  it('不改動傳進來的陣列', () => {
     const copy = [...foods]
     rankUnverified(foods, new Map([[7, 1]]))
     expect(foods).toEqual(copy)

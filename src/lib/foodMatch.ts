@@ -1,15 +1,13 @@
 /* 估一筆先查食品庫（spec「食品庫改版」第二步）：切段、正規化、比對鍵、完全一樣、相近、互斥詞、同名多筆怎麼挑、新增時查重。
    純邏輯，不沾 DOM（未來原樣帶去 React Native）。相近與互斥詞的作法取自 FoodKcalNotes（server/journal.js 的 similarity／EXCLUSIVE，
    ADR 0003），清單照 spec 改過：收「水煮」、不收「生 vs 熟」（「熟成牛排」含「熟」，誤擋比擋對多）。 */
-import type { FoodSource } from './api'
-
 /** 比對用的食物欄位（Food 的子集，測試不用造整筆）。 */
 export interface MatchFood {
   id: number
   name: string
   vendor: string | null
   aliases: string[]
-  source: FoodSource
+  verified: boolean
   archived: boolean
 }
 
@@ -34,17 +32,14 @@ export function keysOf(f: Pick<MatchFood, 'name' | 'vendor' | 'aliases'>): strin
   return [...new Set([...names, ...(vendor ? names.map((n) => vendor + n) : [])])]
 }
 
-/** 同來源的先後：官方 ＞ 標示 ＞ 自己填 ＞ AI 粗估 ＞ 未標。 */
-const SOURCE_ORDER: FoodSource[] = ['official', 'label', 'manual', 'ai', 'unknown']
-
 /**
- * 同名好幾筆時挑哪一筆：**最近記過的優先**（rank 越小越近），都沒記過才看來源（使用者 2026-11-22：
+ * 同名好幾筆時挑哪一筆：**最近記過的優先**（rank 越小越近），都沒記過才看來源——官方標示先於粗估（使用者 2026-11-22：
  * 匯入的通用茶葉蛋是官方，會壓過他天天吃的 7-11 那筆；習慣比來源更能代表他說的是哪一筆）。再平手取 id 小的（先建的），結果固定。
  */
 export function pickBest<F extends MatchFood>(cands: readonly F[], rank: ReadonlyMap<number, number>): F | null {
   if (cands.length === 0) return null
   const r = (f: F) => rank.get(f.id) ?? Infinity
-  return [...cands].sort((a, b) => r(a) - r(b) || SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source) || a.id - b.id)[0]
+  return [...cands].sort((a, b) => r(a) - r(b) || Number(b.verified) - Number(a.verified) || a.id - b.id)[0]
 }
 
 /** 完全一樣：正規化後等於某筆使用中食物的任一個鍵。封存的不算（估一筆沒勾存進食品庫的就是封存的，本來就是一次性）。 */

@@ -416,7 +416,7 @@ export async function seedFetchStub(
           if (table === 'foods' && method === 'POST') {
             const rec = Array.isArray(body) ? body[0] : body
             // 資料庫的預設值：還沒分類、沒手動改過；來源未標、沒別名、不知道幾克（2026-11-22 三欄）
-            const created = { id: nextFoodId++, category: null, category_manual: false, source: 'unknown', aliases: [], serving_g: null, ...(rec as Record<string, unknown>) }
+            const created = { id: nextFoodId++, category: null, category_manual: false, verified: false, aliases: [], ...(rec as Record<string, unknown>) }
             foodStore.push(created)
             return json([created], 201)
           }
@@ -482,7 +482,7 @@ export async function seedFetchStub(
              所以不能再用「不含 meal」跟餐建議的回看查詢分開——那支還有 id、name、foods(...) 等欄位。
              stub 不看 filter，回整份 kcalWindow；測試要驗 filter 就讀 window.__allFetches。 */
           const selectCols = (/select=([^&]*)/.exec(decodeURIComponent(path))?.[1] ?? '').split(',')
-          /* 食品庫「沒查證過」的近 90 天查詢（listIntakeFoodKcal）：select 剛好是 food_id、kcal、qty。回 fix.foodKcal90（沒有就空），
+          /* 食品庫「粗估」篩選的近 90 天查詢（listIntakeFoodKcal）：select 剛好是 food_id、kcal、qty。回 fix.foodKcal90（沒有就空），
              認 offset／limit（分頁停在空頁）。stub 不看 filter，要驗 eaten_on 讀 window.__allFetches。 */
           if ([...selectCols].sort().join(',') === 'food_id,kcal,qty') {
             const qs = new URL(u).searchParams

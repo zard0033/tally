@@ -167,9 +167,8 @@ function suggestedFood(item: RepeatItem): Food {
     category: item.category,
     // 只給 sheet 顯示與寫入用，不會寫回食品庫；手動與否、來源、別名這裡不知道也用不到
     category_manual: false,
-    source: 'unknown',
+    verified: false,
     aliases: [],
-    serving_g: null,
   }
 }
 
@@ -900,7 +899,7 @@ export default function LogSheet(props: LogSheetProps) {
                               <span className="nm">{draftName(d, meal)}</span>
                               <span className="sub">
                                 {d.lib
-                                  ? [d.lib.food.vendor, `食品庫${sourceTag(d.lib.food.source) ? `・${sourceTag(d.lib.food.source)}` : ''}`, `${d.lib.qty} 份`].filter(Boolean).join(' · ')
+                                  ? [d.lib.food.vendor, `食品庫${sourceTag(d.lib.food.verified) ? `・${sourceTag(d.lib.food.verified)}` : ''}`, `${d.lib.qty} 份`].filter(Boolean).join(' · ')
                                   : d.kcalOnly ? '估一筆・只估了熱量' : d.macrosGuessed ? '估一筆・蛋白質等是推估的' : '估一筆'}
                               </span>
                             </div>

@@ -1,21 +1,16 @@
-/* 食品庫的「來源」（spec「食品庫改版」第一步）：列上的小標，與「沒查證過」篩選的排序。純邏輯，不沾 DOM。 */
-import type { FoodSource } from './api'
+/* 食品庫的「來源」：列上的小標，與「粗估」篩選的排序。純邏輯，不沾 DOM。
+   2026-11-23 使用者把四種（標示／官方／AI 粗估／自己填）併成兩種：這個欄位只回答「這個數字能不能信、
+   還沒核對的有哪些」，標示與官方對他沒有差別；不是按 AI 估的，都是他照產品標示或官方資料打的。 */
 
-/** 列上的小標。只標查得到出處或 AI 估的；自己填與未標不標（每列都有字就沒有訊號了）。 */
-export function sourceTag(s: FoodSource): string | null {
-  return s === 'label' ? '標示' : s === 'official' ? '官方' : s === 'ai' ? '粗估' : null
-}
+/** 列上的小標：只標粗估（要核對的那些）。 */
+export const sourceTag = (verified: boolean): string | null => (verified ? null : '粗估')
 
-/** 表單來源選擇器的選項（未標不在裡面：未標＝沒選）。 */
-export const SOURCE_CHOICES: { key: FoodSource; label: string }[] = [
-  { key: 'label', label: '標示' },
-  { key: 'official', label: '官方' },
-  { key: 'ai', label: 'AI 粗估' },
-  { key: 'manual', label: '自己填' },
+/** 表單來源選擇器的兩格；key 與 verified 互轉見 FoodFormFields。 */
+export type SourceKey = 'verified' | 'rough'
+export const SOURCE_CHOICES: { key: SourceKey; label: string }[] = [
+  { key: 'verified', label: '官方標示' },
+  { key: 'rough', label: '粗估' },
 ]
-
-/** 「沒查證過」＝AI 粗估或未標。 */
-export const isUnverified = (s: FoodSource): boolean => s === 'ai' || s === 'unknown'
 
 /** 每樣食物在這段期間吃掉的熱量（快照熱量 × 份量）。 */
 export function kcalByFood(rows: readonly { food_id: number; kcal: number; qty: number }[]): Map<number, number> {
@@ -24,9 +19,9 @@ export function kcalByFood(rows: readonly { food_id: number; kcal: number; qty: 
   return m
 }
 
-/** 沒查證過的食物，吃最多的在前；沒吃過的排最後、照品名。核對的順序就是這個——先核吃最多的。 */
-export function rankUnverified<F extends { id: number; name: string; source: FoodSource }>(foods: readonly F[], eaten: ReadonlyMap<number, number>): F[] {
+/** 粗估的食物，吃最多的在前；沒吃過的排最後、照品名。核對的順序就是這個——先核吃最多的。 */
+export function rankUnverified<F extends { id: number; name: string; verified: boolean }>(foods: readonly F[], eaten: ReadonlyMap<number, number>): F[] {
   return foods
-    .filter((f) => isUnverified(f.source))
+    .filter((f) => !f.verified)
     .sort((a, b) => (eaten.get(b.id) ?? 0) - (eaten.get(a.id) ?? 0) || a.name.localeCompare(b.name, 'zh-Hant'))
 }

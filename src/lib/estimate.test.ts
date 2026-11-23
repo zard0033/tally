@@ -107,7 +107,7 @@ describe('合計與寫入', () => {
     expect(estimateTotals(ds)).toEqual({ n: 3, kcal: 1170, protein: 22, fat: 25, carb: 118 })
   })
   it('draftToFood：品名、店家空、來源一律 AI 粗估', () => {
-    expect(draftToFood(draftsFromItems([item()])[0], 'dinner')).toEqual({ name: '螺獅粉', vendor: null, kcal: 620, protein: 22, fat: 25, carb: 80, source: 'ai' })
+    expect(draftToFood(draftsFromItems([item()])[0], 'dinner')).toEqual({ name: '螺獅粉', vendor: null, kcal: 620, protein: 22, fat: 25, carb: 80, verified: false })
   })
   it('draftsToIntake：份量 1、營養快照＝草稿、餐別與日期照傳入', () => {
     const d = { ...draftsFromItems([item()])[0], foodId: 42 }

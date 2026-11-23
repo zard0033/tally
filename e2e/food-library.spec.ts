@@ -525,8 +525,8 @@ test('以現有食物為範本新增：表單預填來源的值，送出是 POST
   expect(writes, '不該動到原本那筆，只該新增一筆').toHaveLength(1)
   expect(writes[0].method).toBe('POST')
   expect(writes[0].body).toMatchObject({ name: `${name}（大份）` })
-  // 新的一筆不繼承範本的來源與別名（v2.153 review）：沒拍標示＝自己填；別名共用會讓估一筆對到兩筆
-  expect(writes[0].body, '範本新增繼承了來源或別名').toMatchObject({ source: 'manual', aliases: [] })
+  // 來源跟著範本走（使用者 2026-11-23；fixture 沒有 verified＝粗估）；別名不繼承（v2.153 review：共用會讓估一筆對到兩筆）
+  expect(writes[0].body, '範本新增的來源沒跟著範本、或繼承了別名').toMatchObject({ verified: false, aliases: [] })
 })
 
 test('新增必填擋在送出前：品名留空時顯示錯誤且不送出', async ({ page }) => {
@@ -1002,19 +1002,19 @@ test('類型標籤：393 寬命中區 ≥ 44×44、不撐出這一列', async ({
   expect(sel!.y + sel!.height, '命中區撐出列底，會蓋到下一列').toBeLessThanOrEqual(rowBox!.y + rowBox!.height + 0.5)
 })
 
-/* ───── v2.153 食品庫改版第一步：來源、別名、一份幾克（spec「食品庫改版」） ───── */
+/* ───── 食品庫改版：來源、別名（v2.153；2026-11-23 來源併成官方標示／粗估兩種、一份幾克刪掉） ───── */
 
-/* fixture 沒有新三欄的列（15–18）要被當成未標——讀取邊界的 normalizeFood 在守這件事 */
+/* fixture 沒有 verified 的列（15–18）要被當成粗估（同 DB 預設）——讀取邊界的 normalizeFood 在守這件事 */
 const SRC_FIX = {
   ...FIX,
   foods: FIX.foods.map((f) =>
-    f.id === 11 ? { ...f, source: 'official', aliases: [], serving_g: null }
-    : f.id === 12 ? { ...f, source: 'ai', aliases: [], serving_g: null }
-    : f.id === 13 ? { ...f, source: 'label', aliases: [], serving_g: 30 }
-    : f.id === 14 ? { ...f, source: 'manual', aliases: [], serving_g: null }
+    f.id === 11 ? { ...f, verified: true, aliases: [] }
+    : f.id === 12 ? { ...f, verified: false, aliases: [] }
+    : f.id === 13 ? { ...f, verified: true, aliases: [] }
+    : f.id === 14 ? { ...f, verified: true, aliases: [] }
     : f,
   ),
-  // 近 90 天吃了多少（快照熱量 × 份量）：官方的 11 吃最多，但不在「沒查證過」裡
+  // 近 90 天吃了多少（快照熱量 × 份量）：官方標示的 11 吃最多，但不在「粗估」裡
   foodKcal90: [
     { food_id: 11, kcal: 420, qty: 20 },
     { food_id: 12, kcal: 380, qty: 1 },
@@ -1024,36 +1024,31 @@ const SRC_FIX = {
   ],
 } as unknown as typeof FIX
 
-test('來源小標：標示／官方／粗估才標，自己填與未標（含舊資料沒有這欄）不標；有官方數字才出現食藥署出處', async ({ page }) => {
+test('來源小標：只標粗估（含舊資料沒有這欄的），官方標示不標；食藥署出處一律在清單底', async ({ page }) => {
   await openApp(page, {}, SRC_FIX)
   await openLibrary(page)
   const tagOf = (name: string, vendor?: string) => {
     const row = rows(page).filter({ has: page.locator('.nm', { hasText: name }) })
     return (vendor ? page.locator('.lib-group', { has: page.locator('.lib-group-title', { hasText: vendor }) }).locator('.lib-row').filter({ has: page.locator('.nm', { hasText: name }) }) : row).locator('.src-tag')
   }
-  await expect(tagOf('雞胸餐盒', '健康盒')).toHaveText('官方')
+  await expect(tagOf('雞胸餐盒', '健康盒')).toHaveCount(0)
   await expect(tagOf('雞胸餐盒', '減醣廚房')).toHaveText('粗估')
-  await expect(tagOf('乳清（1匙）')).toHaveText('標示')
+  await expect(tagOf('乳清（1匙）')).toHaveCount(0)
   await expect(tagOf('地瓜')).toHaveCount(0)
-  await expect(tagOf('香蕉')).toHaveCount(0)
+  await expect(tagOf('香蕉')).toHaveText('粗估')
   await expect(page.locator('.lib-attrib')).toHaveText('官方數字部分取自衛福部食藥署食品營養成分資料庫（政府資料開放授權）')
 })
 
-test('沒有官方數字的食品庫不出現食藥署出處', async ({ page }) => {
-  await openApp(page)
-  await openLibrary(page)
-  await expect(page.locator('.lib-attrib')).toHaveCount(0)
-})
-
-test('沒查證過：只在使用中出現；只列粗估與未標，依近 90 天吃掉的熱量排，沒吃過的照品名排最後', async ({ page }) => {
+test('粗估篩選：只在使用中出現；只列粗估，依近 90 天吃掉的熱量排，沒吃過的照品名排最後', async ({ page }) => {
   await openApp(page, {}, SRC_FIX)
   await openLibrary(page)
-  const chip = page.locator('.tabrow .chip', { hasText: '沒查證過' })
+  const chip = page.locator('.tabrow .chip.lib-unverified')
+  await expect(chip).toHaveText('粗估')
   await expect(chip).toHaveAttribute('aria-pressed', 'false')
   await chip.click()
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.lib-group-title')).toHaveText(['沒查證過・近 90 天吃最多的在前'])
-  // 12（粗估 570）> 16（240）> 17（105）> 沒吃過的 15、18 照品名；官方 11、標示 13、自己填 14 不在
+  await expect(page.locator('.lib-group-title')).toHaveText(['粗估・近 90 天吃最多的在前'])
+  // 12（570）> 16（240）> 17（105）> 沒吃過的 15、18 照品名；官方標示的 11、13、14 不在
   const names = await page.locator('.lib-row .nm').allTextContents()
   expect(names.slice(0, 3)).toEqual(['雞胸餐盒', '溫泉蛋', '香蕉'])
   expect([...names.slice(3)].sort()).toEqual(['拿鐵', '無糖豆漿'].sort())
@@ -1066,20 +1061,23 @@ test('沒查證過：只在使用中出現；只列粗估與未標，依近 90 �
   expect(q).toContain(`eaten_on=gte.${shiftIso(TODAY, -90)}`)
   // 關掉回到依店家分組；切到已封存時開關不在
   await chip.click()
-  await expect(page.locator('.lib-group-title').first()).not.toHaveText('沒查證過・近 90 天吃最多的在前')
+  await expect(page.locator('.lib-group-title').first()).not.toHaveText('粗估・近 90 天吃最多的在前')
   await page.locator('.tabrow .chip', { hasText: '已封存' }).click()
   await expect(chip).toHaveCount(0)
 })
 
-test('別名：Enter 與頓號加入、✕ 拿掉，存檔送出；記一筆搜尋別名找得到', async ({ page }) => {
+test('來源、別名：收起時列上寫狀態；Enter 與頓號加入、✕ 拿掉，存檔送出；記一筆搜尋別名找得到', async ({ page }) => {
   await openApp(page, {}, SRC_FIX)
   await openLibrary(page)
   await page.locator('[aria-label="編輯 地瓜"]').click()
   const more = page.locator('.lib-edit .form-more-btn')
   await expect(more).toHaveAttribute('aria-expanded', 'false')
+  await expect(more.locator('.form-more-sum')).toHaveText('官方標示・沒有別名')
+  // 沒有「一份幾克」了
+  await expect(page.locator('#le-serving')).toHaveCount(0)
   await more.click()
-  // 來源：自己填那顆按下（地瓜的 fixture 是 manual）
-  await expect(page.locator('.lib-edit .seg button', { hasText: '自己填' })).toHaveAttribute('aria-pressed', 'true')
+  // 來源：官方標示那格按下（地瓜的 fixture 是 verified）
+  await expect(page.locator('.lib-edit .seg button', { hasText: '官方標示' })).toHaveAttribute('aria-pressed', 'true')
   const alias = page.locator('#le-alias')
   await alias.fill('番薯')
   await alias.press('Enter')
@@ -1088,10 +1086,15 @@ test('別名：Enter 與頓號加入、✕ 拿掉，存檔送出；記一筆搜�
   await expect(alias).toHaveValue('')
   await page.locator('[aria-label="拿掉別名 甘藷"]').click()
   await expect(page.locator('.lib-edit .alias-chips li')).toHaveText(['番薯'])
-  await page.locator('#le-serving').fill('200')
+  // 改成粗估再收起：列上的狀態跟著變
+  await page.locator('.lib-edit .seg button', { hasText: '粗估' }).click()
+  await more.click()
+  await expect(more.locator('.form-more-sum')).toHaveText('粗估・1 個別名')
   await page.locator('.lib-edit .pick-bar-btn', { hasText: '儲存' }).click()
   await expect.poll(async () => (await foodWrites(page)).length).toBe(1)
-  expect((await foodWrites(page))[0].body).toMatchObject({ aliases: ['番薯'], serving_g: 200, source: 'manual' })
+  const body = (await foodWrites(page))[0].body as Record<string, unknown>
+  expect(body).toMatchObject({ aliases: ['番薯'], verified: false })
+  expect(body, '還在送一份幾克').not.toHaveProperty('serving_g')
 
   // 記一筆的搜尋：打別名找得到地瓜
   await page.locator('[aria-label="返回設定"]').click()
@@ -1102,36 +1105,24 @@ test('別名：Enter 與頓號加入、✕ 拿掉，存檔送出；記一筆搜�
   await expect(page.locator('.food-list .nm', { hasText: '地瓜' })).toBeVisible()
 })
 
-test('拍標示：沒改數字存成「標示」、帶每份重量；拍了又改數字存成「自己填」', async ({ page }) => {
+test('新增食物：手打的預設官方標示；拍標示讀進來、改了數字也照樣是官方標示', async ({ page }) => {
   await openApp(page)
   await openLibrary(page)
-  const scanAndOpen = async () => {
-    await page.locator('.lib-fab').click()
-    const sheet = page.locator('[data-screen="food-add-sheet"]')
-    await settled(sheet)
-    await page.evaluate((body) => {
-      ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body }
-    }, SCAN_READING)
-    await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
-    await expect(page.locator('#lf-kcal')).toHaveValue('82')
-    return sheet
-  }
-  let sheet = await scanAndOpen()
-  // 更多裡看得到：來源是標示、一份 17 克
-  await sheet.locator('.form-more-btn').click()
-  await expect(sheet.locator('.seg button', { hasText: '標示' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('#lf-serving')).toHaveValue('17')
-  await sheet.locator('.pick-bar-btn', { hasText: '加入食品庫' }).click()
-  await expect.poll(async () => (await foodWrites(page)).filter((w) => w.method === 'POST').length).toBe(1)
-  expect((await foodWrites(page)).filter((w) => w.method === 'POST')[0].body).toMatchObject({ source: 'label', serving_g: 17, kcal: 82 })
-
-  sheet = await scanAndOpen()
-  // 第二次存成另一個品名：同名同店家會被新增時查重擋下（v2.154，AC 13）
-  await page.locator('#lf-name').fill('奶茶（大杯）')
+  await page.locator('.lib-fab').click()
+  const sheet = page.locator('[data-screen="food-add-sheet"]')
+  await settled(sheet)
+  await expect(sheet.locator('.form-more-sum')).toHaveText('官方標示・沒有別名')
+  await page.evaluate((body) => {
+    ;(window as unknown as { __scan: unknown }).__scan = { mode: 'ok', body }
+  }, SCAN_READING)
+  await page.locator('[data-testid="lf-scan-input"]').setInputFiles(TINY_PNG)
+  await expect(page.locator('#lf-kcal')).toHaveValue('82')
   await page.locator('#lf-kcal').fill('90')
   await sheet.locator('.pick-bar-btn', { hasText: '加入食品庫' }).click()
-  await expect.poll(async () => (await foodWrites(page)).filter((w) => w.method === 'POST').length).toBe(2)
-  expect((await foodWrites(page)).filter((w) => w.method === 'POST')[1].body).toMatchObject({ source: 'manual', kcal: 90 })
+  await expect.poll(async () => (await foodWrites(page)).filter((w) => w.method === 'POST').length).toBe(1)
+  const body = (await foodWrites(page)).filter((w) => w.method === 'POST')[0].body as Record<string, unknown>
+  expect(body).toMatchObject({ verified: true, kcal: 90 })
+  expect(body).not.toHaveProperty('serving_g')
 })
 
 /* ── 新增時查重（spec「食品庫改版」AC 13）＋文字鈕新規則（v2.154） ── */

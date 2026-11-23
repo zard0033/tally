@@ -102,16 +102,11 @@ export interface Food {
   category: string | null
   /** 使用者在食品庫手動改過類型：AI 補判跳過它。 */
   category_manual: boolean
-  /** 數字從哪來（spec「食品庫改版」）：標示／官方／AI 粗估／自己填／未標。 */
-  source: FoodSource
-  /** 別的叫法，記一筆搜尋與（第二步的）估一筆比對用。 */
+  /** 來源（使用者 2026-11-23 定兩種）：true＝官方標示（照產品標示或官方資料打的）、false＝粗估（估一筆存的、舊資料沒標的）。 */
+  verified: boolean
+  /** 別的叫法，記一筆搜尋與估一筆比對用。 */
   aliases: string[]
-  /** 一份幾克（飲料用毫升），知道才有。 */
-  serving_g: number | null
 }
-
-export type FoodSource = 'label' | 'official' | 'ai' | 'manual' | 'unknown'
-const FOOD_SOURCES: readonly FoodSource[] = ['label', 'official', 'ai', 'manual', 'unknown']
 
 export interface NewFood {
   name: string
@@ -120,24 +115,22 @@ export interface NewFood {
   protein: number
   fat: number
   carb: number
-  /** 不帶＝資料庫預設 unknown。 */
-  source?: FoodSource
+  /** 不帶＝資料庫預設 false（粗估）。 */
+  verified?: boolean
   aliases?: string[]
-  serving_g?: number | null
 }
 
-const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived,category,category_manual,source,aliases,serving_g'
+const FOOD_COLS = 'id,name,vendor,kcal,protein,fat,carb,archived,category,category_manual,verified,aliases'
 
-/** 讀進來的 foods 列在這裡補齊新欄位：舊的 e2e fixture 沒有這三欄，一律當未標／沒別名／不知道幾克。
- *  只在讀取邊界收斂一次，畫面與 lib 不必各自防 undefined。numeric 欄 PostgREST 可能回字串，一併轉數字。 */
+/** 讀進來的 foods 列在這裡補齊欄位：e2e fixture 沒有這兩欄時當粗估（同 DB 預設）／沒別名。
+ *  只在讀取邊界收斂一次，畫面與 lib 不必各自防 undefined。 */
 export function normalizeFood(row: Food): Food {
-  const r = row as Omit<Food, 'source' | 'aliases' | 'serving_g'> & { source?: unknown; aliases?: unknown; serving_g?: unknown }
+  const r = row as Omit<Food, 'verified' | 'aliases'> & { verified?: unknown; aliases?: unknown }
   return {
     ...r,
-    source: FOOD_SOURCES.includes(r.source as FoodSource) ? (r.source as FoodSource) : 'unknown',
+    verified: r.verified === true,
     // 去重：DB 不擋重複，重複的別名在表單 chip 會撞 key、按 ✕ 一次拿掉兩個
     aliases: Array.isArray(r.aliases) ? [...new Set(r.aliases.filter((a): a is string => typeof a === 'string'))] : [],
-    serving_g: r.serving_g == null || !Number.isFinite(Number(r.serving_g)) ? null : Number(r.serving_g),
   }
 }
 

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>食品庫展開卡：按鈕區三方向</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  .harness-title { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .harness-sub { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 24px; max-width: 1100px; line-height: 1.7; }
+  .harness-sub b { color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(4, 393px); column-gap: 24px; row-gap: 12px; align-items: start; }
+  .gh { font-size: var(--t-md); font-weight: 800; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 92px; }
+  .gd b { color: var(--ink); }
+  .rowlbl { grid-column: 1 / -1; font-size: var(--t-sm); font-weight: 800; color: var(--ink-muted); margin-top: 12px; }
+  .same { font-size: var(--t-sm); color: var(--ink-muted); padding: 24px 8px; }
+
+  /* 卡片 */
+  .card { background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-1); position: relative; }
+  .head { display: flex; align-items: center; gap: var(--s-3); min-height: 64px; padding: 0 var(--s-3); }
+  .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--plate); display: grid; place-items: center; flex-shrink: 0; }
+  .ico i { width: 20px; height: 14px; border-radius: 3px; background: var(--accent); display: block; }
+  .nmw { flex: 1; min-width: 0; }
+  .nm { font-size: var(--t-base); font-weight: 600; }
+  .sub { font-size: var(--t-xs); color: var(--ink-muted); }
+  .tag { display: inline-block; margin-left: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted); font-size: var(--t-xs); }
+  .kc { font-family: var(--font-num); font-weight: 700; font-size: var(--t-base); }
+  .kc small { font-size: var(--t-xs); color: var(--ink-muted); font-weight: 600; margin-left: 2px; }
+  .chev { width: 16px; height: 16px; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .body { padding: 0 var(--s-3) var(--s-3); }
+  .flbl { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 0 4px 4px; }
+  .fld { background: var(--fill); border-radius: var(--r-tab); min-height: 48px; display: flex; align-items: center; padding: 0 var(--s-3); font-size: var(--t-base); position: relative; margin-bottom: var(--s-3); }
+  .fld::after { content: ''; position: absolute; left: var(--s-3); right: var(--s-3); bottom: 0; height: 2px; background: var(--rule-field); }
+  .fld.num { font-family: var(--font-num); font-weight: 600; }
+  .frow { display: flex; gap: var(--s-2); }
+  .frow > div { flex: 1; min-width: 0; }
+
+  /* 現在的「更多」與文字鈕 */
+  .tb { border: none; background: none; font: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--accent); min-height: 44px; padding: 0 var(--s-2); display: inline-flex; align-items: center; gap: 4px; }
+  .tb svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .tb.bold { font-weight: 700; }
+  .more-old { margin: calc(var(--s-2) * -1) 0 var(--s-2) calc(var(--s-2) * -1); }
+  .two-old { display: flex; gap: var(--s-2); margin: 0 calc(var(--s-2) * -1) var(--s-1); }
+
+  /* 可點開的列（A、B） */
+  .disc { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 52px; border: none; background: none; font: inherit; text-align: left;
+    border-top: 1px solid var(--rule-subtle); border-bottom: 1px solid var(--rule-subtle); padding: 0 var(--s-1); margin: 0 0 var(--s-3); }
+  .disc .t { font-size: var(--t-base); font-weight: 600; }
+  .disc .sum { flex: 1; text-align: right; font-size: var(--t-sm); color: var(--ink-muted); }
+  .disc .chev { stroke: var(--accent); transition: transform .2s; }
+  .disc.open { border-bottom: none; margin-bottom: var(--s-2); }
+  .disc.open .chev { transform: rotate(90deg); }
+  .disc-body { border-bottom: 1px solid var(--rule-subtle); padding: 0 0 var(--s-3); margin-bottom: var(--s-3); }
+
+  /* 來源兩格 */
+  .seg2 { display: flex; background: var(--fill); padding: 2px; border-radius: 12px; margin-bottom: 4px; }
+  .seg2 span { flex: 1; min-height: 40px; display: grid; place-items: center; font-size: var(--t-sm); color: var(--ink-muted); border-radius: 10px; }
+  .seg2 span.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-1); }
+  .hint { font-size: var(--t-xs); color: var(--ink-muted); margin: 0 0 var(--s-3) 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--s-1); padding: var(--s-2) var(--s-3); min-height: 48px; align-items: center; }
+  .chips em { font-style: normal; background: var(--raised); border-radius: var(--r-pill); padding: 2px 4px 2px 10px; font-size: var(--t-sm); display: inline-flex; align-items: center; gap: 2px; }
+  .chips em b { font-weight: 400; color: var(--ink-muted); width: 20px; text-align: center; }
+  .chips .ph { color: var(--ink-muted); font-size: var(--t-sm); }
+
+  /* 描邊膠囊（DESIGN「文字鈕與列內動作」） */
+  .caps { display: flex; gap: var(--s-2); margin-bottom: var(--s-3); }
+  .cap { border: 1.5px solid var(--rule-field); background: var(--card); color: var(--accent); border-radius: var(--r-pill); font: inherit; font-size: var(--t-sm); font-weight: 600;
+    min-height: 36px; padding: 0 var(--s-3); display: inline-flex; align-items: center; gap: 6px; }
+  .cap svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* 底部 */
+  .acts { display: flex; gap: var(--s-2); align-items: center; }
+  .acts .cancel { flex: 0 0 88px; justify-content: center; }
+  .save { flex: 1; min-height: 48px; border: none; border-radius: var(--r-btn); background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 800; font-size: var(--t-base); }
+  .dots { flex: 0 0 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--rule-field); background: var(--card); display: grid; place-items: center; }
+  .dots svg { width: 18px; height: 18px; fill: var(--accent); }
+
+  /* ⋯ 選單 */
+  .menu { position: absolute; left: var(--s-3); bottom: 64px; background: var(--card); border-radius: var(--r-tab); box-shadow: var(--shadow-2); min-width: 200px; padding: 4px 0; z-index: 2; }
+  .menu div { display: flex; align-items: center; gap: var(--s-3); min-height: 48px; padding: 0 var(--s-4); font-size: var(--t-base); color: var(--ink); }
+  .menu div + div { border-top: 1px solid var(--rule-subtle); }
+  .menu svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .scrim-note { font-size: var(--t-xs); color: var(--ink-muted); text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1 class="harness-title">食品庫展開卡：按鈕區三方向</h1>
+<p class="harness-sub">
+  <b>問題</b>：現在展開後有四樣東西都是同一種藍字（更多、以此為範本新增、封存、取消），但做的事完全不同（展開、新建、收起這筆、關掉），分不出輕重；「更多」看起來像連結，不像可以點開的區塊。<br>
+  <b>三個方向都已經套上待核可的改動</b>：來源只剩「官方標示／粗估」兩格，一份幾克拿掉，所以「更多」只剩「來源、別名」。<br>
+  兩件事可以分開挑：<b>「更多」怎麼長</b>（A、B 是可點開的列，C 是不收起）、<b>範本新增與封存放哪</b>（A 收進 ⋯ 選單，B、C 是描邊膠囊）。
+</p>
+
+<div class="grid">
+  <div><div class="gh">現在（v2.154）</div><div class="gd">四顆藍字疊成三層。</div></div>
+  <div><div class="gh">A　最少按鈕</div><div class="gd">「來源、別名」是可點開的列，右邊寫現在的狀態。範本新增、封存這兩個少用的動作收進左下角 ⋯，底部只剩<b>取消／儲存</b>。缺點：要多點一下才看得到範本新增；<b>原地展開時選單會浮在清單中間、蓋到下面幾筆</b>，⋯ 放左下角也不常見。</div></div>
+  <div><div class="gh">B　全部看得到、分輕重（推薦）</div><div class="gd">「更多」同 A。範本新增、封存改成描邊膠囊，跟估一筆的列內動作同一種樣子；取消／儲存自己一列。兩層動作，但輕重分得出來：膠囊＝少用的動作、實心＝儲存。按鈕都在卡片裡，原地展開不會蓋到別筆。</div></div>
+  <div><div class="gh">C　不收起</div><div class="gd">來源只剩兩格、別名一格，乾脆直接露出，沒有「更多」。動作同 B。缺點：新增食物的表單也會跟著多兩列（同一份表單）。</div></div>
+
+  <div class="rowlbl">收起時（剛點開這筆）</div>
+
+  <!-- 現在 -->
+  <div class="card">
+    <div class="head"><span class="ico"><i></i></span><div class="nmw"><div class="nm">雞排便當</div><div class="sub">便當</div></div><span class="kc">900<small>卡</small></span><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="body">
+      <div class="frow"><div><p class="flbl">品名 *</p><div class="fld">雞排便當</div></div><div><p class="flbl">店家</p><div class="fld">本便當</div></div></div>
+      <p class="flbl">熱量（卡）*</p><div class="fld num">900</div>
+      <div class="frow"><div><p class="flbl">蛋白質 g</p><div class="fld num">45</div></div><div><p class="flbl">脂肪 g</p><div class="fld num">34</div></div><div><p class="flbl">碳水 g</p><div class="fld num">103</div></div></div>
+      <div class="more-old"><button class="tb">更多：來源、別名、一份幾克<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
+      <div class="two-old"><button class="tb">以此為範本新增</button><button class="tb">封存</button></div>
+      <div class="acts"><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+    </div>
+  </div>
+
+  <!-- A -->
+  <div class="card">
+    <div class="head"><span class="ico"><i></i></span><div class="nmw"><div class="nm">雞排便當</div><div class="sub">便當<span class="tag">粗估</span></div></div><span class="kc">900<small>卡</small></span><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="body">
+      <div class="frow"><div><p class="flbl">品名 *</p><div class="fld">雞排便當</div></div><div><p class="flbl">店家</p><div class="fld">本便當</div></div></div>
+      <p class="flbl">熱量（卡）*</p><div class="fld num">900</div>
+      <div class="frow"><div><p class="flbl">蛋白質 g</p><div class="fld num">45</div></div><div><p class="flbl">脂肪 g</p><div class="fld num">34</div></div><div><p class="flbl">碳水 g</p><div class="fld num">103</div></div></div>
+      <button class="disc"><span class="t">來源、別名</span><span class="sum">粗估・沒有別名</span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div class="acts"><span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="card">
+    <div class="head"><span class="ico"><i></i></span><div class="nmw"><div class="nm">雞排便當</div><div class="sub">便當<span class="tag">粗估</span></div></div><span class="kc">900<small>卡</small></span><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="body">
+      <div class="frow"><div><p class="flbl">品名 *</p><div class="fld">雞排便當</div></div><div><p class="flbl">店家</p><div class="fld">本便當</div></div></div>
+      <p class="flbl">熱量（卡）*</p><div class="fld num">900</div>
+      <div class="frow"><div><p class="flbl">蛋白質 g</p><div class="fld num">45</div></div><div><p class="flbl">脂肪 g</p><div class="fld num">34</div></div><div><p class="flbl">碳水 g</p><div class="fld num">103</div></div></div>
+      <button class="disc"><span class="t">來源、別名</span><span class="sum">粗估・沒有別名</span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div class="caps">
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>以此為範本新增</button>
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>封存</button>
+      </div>
+      <div class="acts"><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="card">
+    <div class="head"><span class="ico"><i></i></span><div class="nmw"><div class="nm">雞排便當</div><div class="sub">便當<span class="tag">粗估</span></div></div><span class="kc">900<small>卡</small></span><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="body">
+      <div class="frow"><div><p class="flbl">品名 *</p><div class="fld">雞排便當</div></div><div><p class="flbl">店家</p><div class="fld">本便當</div></div></div>
+      <p class="flbl">熱量（卡）*</p><div class="fld num">900</div>
+      <div class="frow"><div><p class="flbl">蛋白質 g</p><div class="fld num">45</div></div><div><p class="flbl">脂肪 g</p><div class="fld num">34</div></div><div><p class="flbl">碳水 g</p><div class="fld num">103</div></div></div>
+      <p class="flbl">來源</p>
+      <div class="seg2"><span>官方標示</span><span class="on">粗估</span></div>
+      <p class="hint">照產品標示或官網打的選官方標示</p>
+      <p class="flbl">別名</p><div class="fld chips"><span class="ph">別的叫法，按 Enter 加入</span></div>
+      <div class="caps">
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>以此為範本新增</button>
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>封存</button>
+      </div>
+      <div class="acts"><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+    </div>
+  </div>
+
+  <div class="rowlbl">點開「來源、別名」／點 ⋯ 之後</div>
+
+  <div class="same">（現在的展開內容：四格來源、別名、一份幾克，略）</div>
+
+  <!-- A 展開 + 選單 -->
+  <div>
+    <div class="card">
+      <div class="body" style="padding-top: var(--s-3)">
+        <button class="disc open"><span class="t">來源、別名</span><span class="sum"></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+        <div class="disc-body">
+          <p class="flbl">來源</p>
+          <div class="seg2"><span>官方標示</span><span class="on">粗估</span></div>
+          <p class="hint">照產品標示或官網打的選官方標示</p>
+          <p class="flbl">別名</p><div class="fld chips" style="margin-bottom:0"><em>雞排飯<b>✕</b></em><span class="ph">按 Enter 加入</span></div>
+        </div>
+        <div class="menu">
+          <div><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>以此為範本新增</div>
+          <div><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>封存</div>
+        </div>
+        <div class="acts"><span class="dots"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+      </div>
+    </div>
+    <p class="scrim-note">點 ⋯ 從按鈕上方彈出，點外面收起</p>
+  </div>
+
+  <!-- B 展開 -->
+  <div class="card">
+    <div class="body" style="padding-top: var(--s-3)">
+      <button class="disc open"><span class="t">來源、別名</span><span class="sum"></span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div class="disc-body">
+        <p class="flbl">來源</p>
+        <div class="seg2"><span>官方標示</span><span class="on">粗估</span></div>
+        <p class="hint">照產品標示或官網打的選官方標示</p>
+        <p class="flbl">別名</p><div class="fld chips" style="margin-bottom:0"><em>雞排飯<b>✕</b></em><span class="ph">按 Enter 加入</span></div>
+      </div>
+      <div class="caps">
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>以此為範本新增</button>
+        <button class="cap"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>封存</button>
+      </div>
+      <div class="acts"><button class="tb bold cancel">取消</button><button class="save">儲存</button></div>
+    </div>
+  </div>
+
+  <div class="same">（不收起，同上）</div>
+</div>
+</body>
+</html>

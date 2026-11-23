@@ -90,7 +90,7 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
      結果就是卡在 90% 或衝到 99% 乾等——比沒有更煩。秒數不假裝知道還要多久，
      但回答了使用者真正在問的問題：**它還活著嗎**（辨識期間表單是鎖住的，這點更重要）。 */
   const [scanSec, setScanSec] = useState(0)
-  /* 「更多」（來源、別名、一份幾克，spec「食品庫改版」）預設收起：新增食物照舊三行就能送出，不變長。 */
+  /* 「來源、別名」（spec「食品庫改版」）預設收起：新增食物照舊三行就能送出，不變長。 */
   const [moreOpen, setMoreOpen] = useState(false)
   /** 別名輸入框裡還沒加進去的字。 */
   const [aliasDraft, setAliasDraft] = useState('')
@@ -315,15 +315,22 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
         {renderField({ id: id('carb'), label: '碳水 g', numeric: true, value: form.carb, onChange: (v) => set({ carb: v }) })}
       </div>
       {/* 「更多」留在同一個 fieldset 裡：辨識中一起鎖住，iOS 鍵盤上下箭頭也照樣切得到（見 <form> 那段註解） */}
-      <button className="form-more-btn" type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
-        更多：來源、別名、一份幾克
+      {/* 2026-11-23 樣張 food-edit-actions.html B：從藍字連結改成一條可點開的列（上下細線），右邊寫現在的狀態，
+          收起時也看得到來源與別名，不必點開才知道 */}
+      <button className="form-more-btn" type="button" aria-expanded={moreOpen} aria-controls={id('more')} onClick={() => setMoreOpen((o) => !o)}>
+        <span className="form-more-title">來源、別名</span>
+        {!moreOpen && (
+          <span className="form-more-sum">
+            {form.verified ? '官方標示' : '粗估'}・{form.aliases.length ? `${form.aliases.length} 個別名` : '沒有別名'}
+          </span>
+        )}
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
       </button>
       {moreOpen && (
-        <div className="form-more">
-          {/* 未標的舊食物＝四顆都沒按下（SegmentedControl 的 value 不在選項裡就沒有白塊） */}
-          <p className="form-more-label" aria-hidden="true">數字從哪來</p>
-          <SegmentedControl label="數字從哪來" items={SOURCE_CHOICES} value={form.source} onPick={(k) => set({ source: k })} />
+        <div className="form-more" id={id('more')}>
+          <p className="form-more-label" aria-hidden="true">來源</p>
+          <SegmentedControl label="來源" items={SOURCE_CHOICES} value={form.verified ? 'verified' : 'rough'} onPick={(k) => set({ verified: k === 'verified' })} />
+          <p className="form-more-hint">照產品標示或官網打的選官方標示</p>
           <div className="field-float alias-field">
             <input
               id={id('alias')}
@@ -357,7 +364,6 @@ export default function FoodFormFields(props: FoodFormFieldsProps) {
               ))}
             </ul>
           )}
-          {renderField({ id: id('serving'), label: '一份約幾克', numeric: true, value: form.serving_g, onChange: (v) => set({ serving_g: v }) })}
         </div>
       )}
       </fieldset>

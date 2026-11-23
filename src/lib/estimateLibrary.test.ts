@@ -18,12 +18,12 @@ import {
 } from './estimate'
 
 const food = (id: number, name: string, vendor: string | null, kcal: number, extra: Partial<LibCandidate> = {}): LibCandidate => ({
-  id, name, vendor, aliases: [], source: 'unknown', archived: false, kcal, protein: 10, fat: 5, carb: 20, ...extra,
+  id, name, vendor, aliases: [], verified: false, archived: false, kcal, protein: 10, fat: 5, carb: 20, ...extra,
 })
 const FOODS = [
   food(1, '油雞腿飯', '十八燒', 780),
-  food(17, '茶葉蛋', '7-11', 70, { source: 'official', protein: 7, fat: 4.5, carb: 1 }),
-  food(39, '薯條', '麥當勞', 346, { source: 'official' }),
+  food(17, '茶葉蛋', '7-11', 70, { verified: true, protein: 7, fat: 4.5, carb: 1 }),
+  food(39, '薯條', '麥當勞', 346, { verified: true }),
   food(41, '雙牛堡', '麥當勞', 461),
 ]
 const none = new Map<number, number>()

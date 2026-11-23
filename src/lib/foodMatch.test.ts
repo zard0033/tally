@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { conflicts, duplicateCheck, exactMatch, keysOf, nearMatch, normalizeKey, pickBest, recencyRank, similarity, splitSegments, type MatchFood } from './foodMatch'
 
 const food = (id: number, name: string, vendor: string | null = null, extra: Partial<MatchFood> = {}): MatchFood => ({
-  id, name, vendor, aliases: [], source: 'unknown', archived: false, ...extra,
+  id, name, vendor, aliases: [], verified: false, archived: false, ...extra,
 })
 
 describe('foodMatch', () => {
@@ -32,10 +32,10 @@ describe('foodMatch', () => {
     expect(exactMatch('十八燒雞腿飯', foods, none)).toBeNull()
   })
 
-  it('同名好幾筆：最近記過的優先，都沒記過才照來源（官方＞標示＞自己填＞粗估＞未標），再平手取先建的', () => {
-    const egg711 = food(17, '茶葉蛋', '7-11', { source: 'unknown' })
-    const eggGov = food(134, '茶葉蛋', null, { source: 'official' })
-    const egg3 = food(200, '茶葉蛋', '全家', { source: 'official' })
+  it('同名好幾筆：最近記過的優先，都沒記過才照來源（官方標示＞粗估），再平手取先建的', () => {
+    const egg711 = food(17, '茶葉蛋', '7-11', { verified: false })
+    const eggGov = food(134, '茶葉蛋', null, { verified: true })
+    const egg3 = food(200, '茶葉蛋', '全家', { verified: true })
     // 7-11 那筆最近記過 → 壓過官方的通用版
     expect(pickBest([eggGov, egg711], new Map([[17, 3]]))?.id).toBe(17)
     expect(pickBest([eggGov, egg711], new Map([[17, 3], [134, 1]]))?.id).toBe(134)

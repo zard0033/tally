@@ -236,7 +236,7 @@ export default function EstimateView(p: Props) {
           {p.drafts.map((d, i) => {
             if (d.lib) {
               const lib = d.lib
-              const tag = sourceTag(lib.food.source)
+              const tag = sourceTag(lib.food.verified)
               const swapping = p.libAi[d.key] === 'busy'
               const made = d.foodId !== null
               return (
