@@ -35,7 +35,8 @@ create table foods (
   --   update foods set verified = source in ('label','official','manual')
   --     where not verified and created_at > '2026-11-23T02:00:00Z';  -- 只補加欄位後舊版新建的；新版不寫 source，不限時間會蓋掉部署後手動改成粗估的舊食物
   --   alter table foods drop column serving_g; alter table foods drop column source;
-  -- 換之前每筆的 source／serving_g 備份在本機 D:\Temp\tally-backup（repo 是 public，不放這裡）。
+  -- 2026-11-23 晚上已全部執行完：使用者手機換到 v2.159 後，補對應那句改到 0 筆（加欄位後新建的 18 筆都是直接寫入、verified 已設好），兩欄已刪、回讀確認。
+  -- 換之前、刪之前每筆的 source／serving_g 都備份在本機 D:\Temp\tally-backup（repo 是 public，不放這裡）。
   -- 別名：alter table foods add column aliases text[] not null default '{}' check (cardinality(aliases) <= 10);
   verified  boolean not null default false,
   aliases   text[] not null default '{}' check (cardinality(aliases) <= 10),

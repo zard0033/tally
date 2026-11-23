@@ -4,7 +4,7 @@
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
 現況（2026-11-23）：v2.158（記一筆勾了留原位＋已選膠囊＋建議段微調）已部署（CI run 45144247897 全綠，commit 33c9328；第一次 push 紅是真 bug：打開就勾時補捲動失效，已修，見 wiki lesson-pin-scroll）；v2.156 已部署＝份量微調、類型 17→13（DB 已轉換，備份在 D:\Temp\tally-backup）、通用組名、官方小標、對到別名。
-下一步：①真機用份量微調（飲料中杯微糖、便當半飯、照上次）②手機換 v2.156 後：補 verified 對應（created_at>2026-11-23T02:00Z）→ drop foods.source／serving_g ③真機看 v2.158 記一筆（往下捲勾、點膠囊、建議段飲料照上次）④v2.159 健康餐盒加主菜已部署（CI run 45148775716 全綠，commit 590e64d）：真機試；當晚壯壯雙雞胸若用範本新增那筆，之後封存⑤「每一餐記店家」spec＋樣張。v2.157 設定頁底部有版本號。
+下一步：①真機用份量微調（飲料中杯微糖、便當半飯、照上次）②~~補 verified 對應→drop foods.source／serving_g~~（2026-11-23 晚做完：對應 0 筆、兩欄已刪、備份 D:\Temp\tally-backup\foods-source-serving-before-drop-2026-11-23.json）③真機看 v2.158 記一筆（往下捲勾、點膠囊、建議段飲料照上次）④v2.159 健康餐盒加主菜已部署（CI run 45148775716 全綠，commit 590e64d）：真機試；當晚壯壯雙雞胸若用範本新增那筆，之後封存⑤「每一餐記店家」spec＋樣張。v2.157 設定頁底部有版本號。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
