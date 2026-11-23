@@ -254,7 +254,7 @@ export default function EstimateView(p: Props) {
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
                   </button>
                   <div className="est-row-foot">
-                    <span className="est-lib-tag"><BookIcon />食品庫{tag && <>・<b>{tag}</b></>}</span>
+                    <span className="est-lib-tag"><BookIcon />食品庫・<b>{tag}</b></span>
                     <button className="row-pill" type="button" disabled={p.locked || p.fixBusy || p.status === 'busy'} onClick={() => p.onLibToAi(d.key)}>
                       {swapping ? '估算中…' : p.libAi[d.key] === 'error' ? '重試 AI 估' : '改用 AI 估'}
                     </button>

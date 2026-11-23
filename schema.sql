@@ -64,6 +64,11 @@ create table intake (
   -- **刻意不回填**——null 的 fallback 就是正確行為，回填只會讓每一筆都無謂地脫鉤。
   -- 既有資料庫補這欄：alter table intake add column name text;
   name       text,
+  -- 份量微調（2026-11-23，spec「份量微調＋類型壓縮…」）：這一餐按了哪些（cup:m、sweet:half、top:pearl、rice:half、noodle:less、skin:off）。
+  -- kcal 等四個快照存的是調整後的值；前端以固定清單驗證、清單外的忽略。記一筆「照上次」從最近一筆讀。
+  -- 既有資料庫補這欄：alter table intake add column mods text[] not null default '{}' check (cardinality(mods) <= 12);
+  -- 回滾：alter table intake drop column mods;
+  mods       text[] not null default '{}' check (cardinality(mods) <= 12),
   created_at timestamptz not null default now()
 );
 create index intake_user_date_idx on intake (user_id, eaten_on);

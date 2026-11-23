@@ -7,6 +7,7 @@ import { categoryOf, isMealType, type FoodCategory } from './categories'
 import { isWeekend, shiftDate } from './dates'
 import { num, sumIntake, type Goal } from './formulas'
 import { MEALS, type MealKey } from './meals'
+import { suffixOf } from './portionMods'
 import { normalizeQty } from './quantity'
 
 /** 回看天數，含第 28 天（D-28 是同一個星期幾）。 */
@@ -28,6 +29,8 @@ export interface RepeatSourceRow {
   fat: number
   carb: number
   name: string | null
+  /** 份量微調（v2.156）；舊 fixture 沒有這欄當沒調。快照數字已是調過的。 */
+  mods?: string[]
   created_at?: string
   foods: { name: string; vendor: string | null; archived: boolean; category: string | null } | null
 }
@@ -41,8 +44,10 @@ export interface RepeatItem {
   carb: number
   /** 寫入用的快照，來源是 null 就寫 null，不可把 foods.name 寫進去。 */
   name: string | null
-  /** 顯示用：row.name ?? foods.name。 */
+  /** 顯示用：row.name ?? foods.name，有份量微調就接「（中杯・微糖）」。 */
   label: string
+  /** 來源那一筆的份量微調：照搬時原樣寫回（數字已是調過的，不重算），之後再改微調才不會從錯的基準算。 */
+  mods: string[]
   vendor: string | null
   archived: boolean
   /** null＝還沒分類，不參與類型的重複判斷。 */
@@ -118,7 +123,8 @@ function combosOf(rows: RepeatSourceRow[], viewDate: string, meal: MealKey, same
         fat: num(r.fat),
         carb: num(r.carb),
         name: r.name,
-        label: r.name ?? r.foods.name,
+        label: (r.name ?? r.foods.name) + suffixOf(r.mods ?? [], { name: r.foods.name, category: r.foods.category }),
+        mods: r.mods ?? [],
         vendor: r.foods.vendor,
         archived: r.foods.archived,
         category: categoryOf(r.foods.category),
@@ -328,6 +334,8 @@ export function repeatToIntake(s: RepeatSuggestion, date: string): NewIntake[] {
     fat: i.fat,
     carb: i.carb,
     name: i.name,
+    // 照搬來源的微調；沒調就不帶（同其他寫入路徑的形狀）
+    ...(i.mods.length ? { mods: i.mods } : {}),
   }))
 }
 

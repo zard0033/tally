@@ -1024,17 +1024,18 @@ const SRC_FIX = {
   ],
 } as unknown as typeof FIX
 
-test('來源小標：只標粗估（含舊資料沒有這欄的），官方標示不標；食藥署出處一律在清單底', async ({ page }) => {
+test('來源小標：兩邊都標——官方（主色打勾、無底色）／粗估（灰底，含舊資料沒有這欄的）；食藥署出處一律在清單底', async ({ page }) => {
   await openApp(page, {}, SRC_FIX)
   await openLibrary(page)
   const tagOf = (name: string, vendor?: string) => {
     const row = rows(page).filter({ has: page.locator('.nm', { hasText: name }) })
     return (vendor ? page.locator('.lib-group', { has: page.locator('.lib-group-title', { hasText: vendor }) }).locator('.lib-row').filter({ has: page.locator('.nm', { hasText: name }) }) : row).locator('.src-tag')
   }
-  await expect(tagOf('雞胸餐盒', '健康盒')).toHaveCount(0)
+  await expect(tagOf('雞胸餐盒', '健康盒')).toHaveText('官方')
+  await expect(tagOf('雞胸餐盒', '健康盒')).toHaveClass(/is-official/)
   await expect(tagOf('雞胸餐盒', '減醣廚房')).toHaveText('粗估')
-  await expect(tagOf('乳清（1匙）')).toHaveCount(0)
-  await expect(tagOf('地瓜')).toHaveCount(0)
+  await expect(tagOf('乳清（1匙）')).toHaveText('官方')
+  await expect(tagOf('地瓜')).toHaveText('官方')
   await expect(tagOf('香蕉')).toHaveText('粗估')
   await expect(page.locator('.lib-attrib')).toHaveText('官方數字部分取自衛福部食藥署食品營養成分資料庫（政府資料開放授權）')
 })

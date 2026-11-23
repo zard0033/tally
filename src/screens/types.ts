@@ -51,6 +51,8 @@ export interface TodayProps {
   /** 改這一筆自己的品名／營養值（去皮、少醬那種當天調整），不動食品庫。
    *  一次一欄，失敗處理同 onUpdateIntakeQty。 */
   onUpdateIntakeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
+  /** 食品庫裡使用中的那一筆（份量微調重算的基準）；封存或刪掉的查不到。 */
+  foodById: (id: number) => Food | undefined
   /** 這一天各餐的建議（該餐已有紀錄就沒有那一格）。沒資料或查詢失敗就是空物件。 */
   repeatByMeal: RepeatByMeal
   /** 進行中的一鍵操作：加入是「日期|餐別」，復原是別的值；非 null 時所有建議都不能按。 */

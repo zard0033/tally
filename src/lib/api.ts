@@ -204,9 +204,17 @@ export interface IntakeRow {
    *  刻意不回填）。有值代表使用者為這一筆改過名（「雞排便當（去皮）」），
    *  之後食品庫再改品名也不會回頭改寫它——與 kcal/protein/fat/carb 同一套快照語意。 */
   name: string | null
+  /** 份量微調代碼（spec「份量微調」）；kcal 等快照已是調整後的值。沒調是空陣列。 */
+  mods: string[]
   /** 餐建議避開重複用（同一天同店家、同品項）。 */
   food_id: number
   foods: { name: string; vendor: string | null; category: string | null } | null
+}
+
+/** 讀進來的 intake 列補 mods：e2e fixture 沒有這欄當沒調（同 DB 預設）。 */
+const withMods = <R extends object>(r: R): R & { mods: string[] } => {
+  const m = (r as { mods?: unknown }).mods
+  return { ...r, mods: Array.isArray(m) ? m.filter((x): x is string => typeof x === 'string') : [] }
 }
 
 /** 區間內每筆的 eaten_on／qty／kcal（單份快照），實測維持熱量用。只撈三欄、不 join foods。
@@ -274,14 +282,14 @@ export async function listIntake(date: string, { retry = false }: { retry?: bool
      推不出關聯基數，型別預設當作陣列——實際回傳仍是單一物件，用明確泛型覆寫成真實形狀 */
   return unwrap(await supabase
     .from('intake')
-    .select<'id,meal,qty,kcal,protein,fat,carb,name,food_id,foods(name,vendor,category)', IntakeRow>(
-      'id,meal,qty,kcal,protein,fat,carb,name,food_id,foods(name,vendor,category)',
+    .select<'id,meal,qty,kcal,protein,fat,carb,name,mods,food_id,foods(name,vendor,category)', IntakeRow>(
+      'id,meal,qty,kcal,protein,fat,carb,name,mods,food_id,foods(name,vendor,category)',
     )
     .eq('eaten_on', date)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true }) // 同批寫入的 created_at 相同，時間軸順序才穩
     .retry(retry)
-    .abortSignal(dbSignal()))
+    .abortSignal(dbSignal())).map(withMods)
 }
 
 /** 餐建議的回看查詢。不分頁：28 天遠低於單次上限 1000 列（假設，未實測）。
@@ -289,31 +297,33 @@ export async function listIntake(date: string, { retry = false }: { retry?: bool
 export async function listIntakeForRepeat(from: string, to: string): Promise<RepeatSourceRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived,category)', RepeatSourceRow>(
-      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,created_at,foods(name,vendor,archived,category)',
+    .select<'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,created_at,foods(name,vendor,archived,category)', RepeatSourceRow>(
+      'id,eaten_on,meal,food_id,qty,kcal,protein,fat,carb,name,mods,created_at,foods(name,vendor,archived,category)',
     )
     .gte('eaten_on', from)
     .lte('eaten_on', to)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
-    .abortSignal(dbSignal()))
+    .abortSignal(dbSignal())).map(withMods)
 }
 
 export interface RecentIntakeRow {
   meal: MealKey
   food_id: number
   qty: number
+  /** 份量微調：記一筆「照上次」用（同一樣食物最近一筆按了什麼）。 */
+  mods: string[]
 }
 
-/** 常吃排序用：按 eaten_on 由新到舊撈最近 limit 筆。 */
+/** 常吃排序與「照上次」用：按 eaten_on 由新到舊撈最近 limit 筆。 */
 export async function listRecentIntake(limit = 120): Promise<RecentIntakeRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select('meal,food_id,qty')
+    .select<'meal,food_id,qty,mods', RecentIntakeRow>('meal,food_id,qty,mods')
     .order('eaten_on', { ascending: false })
     .order('id', { ascending: false }) // 同日多筆時「最近一次」才有定義（review 抓的）
     .limit(limit)
-    .abortSignal(dbSignal()))
+    .abortSignal(dbSignal())).map(withMods)
 }
 
 export interface NewIntake {
@@ -327,6 +337,8 @@ export interface NewIntake {
   carb: number
   /** 品名快照，語意同 IntakeRow.name；null＝沿用 foods 的品名。 */
   name: string | null
+  /** 份量微調代碼；不帶＝沒調（DB 預設空陣列）。 */
+  mods?: string[]
 }
 
 /** 存單份營養快照（不乘 qty）：改食物庫的營養值不該改寫過去的紀錄。 */
@@ -364,7 +376,7 @@ export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void>
  *  絕不碰 foods**——那正是這個功能存在的理由：調整當天實際吃的量，不污染食品庫的標準值。
  *  呼叫端一次只送一欄（編輯區各欄 blur 時各自 commit），與 updateIntakeQty/Meal 同慣例。
  *  name 送 null＝清掉快照、顯示退回 foods 的品名。 */
-export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb'>>
+export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb' | 'mods'>>
 
 export async function updateIntakeDetail(id: number, patch: IntakeDetailPatch): Promise<void> {
   const { error } = await supabase.from('intake').update(patch).eq('id', id).abortSignal(dbSignal())

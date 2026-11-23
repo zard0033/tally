@@ -382,11 +382,11 @@ describe('read-label 分類模式', () => {
   })
 
   it('㉓ 成功：送純文字（沒有圖片）、提示詞帶清單與三條界線與品名店家，回 {results}', async () => {
-    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"},{"id":2,"category":"蛋白質補充"}]}'))
+    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"便當"},{"id":2,"category":"蛋白質補充"}]}'))
     const res = await handleRequest(post(await validToken(), { foods: FOODS }, SITE), JWKS, OR_KEY)
     expect(res.status).toBe(200)
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(SITE)
-    expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }, { id: 2, category: '蛋白質補充' }] })
+    expect(await res.json()).toEqual({ results: [{ id: 1, category: '便當' }, { id: 2, category: '蛋白質補充' }] })
 
     expect(spy).toHaveBeenCalledTimes(1)
     const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
@@ -400,10 +400,11 @@ describe('read-label 分類模式', () => {
     expect(parts).toHaveLength(1)
     expect(parts[0].type).toBe('text')
     const text: string = parts[0].text
-    expect(text).toContain('燒臘、便當、健康餐盒、飯類、麵食、餃類、速食、早餐店、滷味／鹽水雞、鍋物、日式、其他正餐')
+    expect(text).toContain('便當、丼飯類、健康餐盒、麵食、速食、早餐店、滷味／鹽水雞、其他正餐')
     expect(text).toContain('飲料、蛋白質補充、配菜、主食、點心')
     expect(text).toContain('便當＝')
-    expect(text).toContain('飯類＝')
+    expect(text).toContain('丼飯類＝')
+    expect(text).toContain('飯糰、握便當這類超商飯團歸主食')
     expect(text).toContain('早餐店是一整類')
     expect(text).toContain('健康餐盒＝')
     expect(text).toContain('{"id":1,"name":"叉燒飯","vendor":"燒臘店"}')
@@ -432,11 +433,11 @@ describe('read-label 分類模式', () => {
 
   it('㉕ 模型包 ``` 或省掉外層物件也解得開', async () => {
     const token = await validToken()
-    for (const content of ['```json\n{"results":[{"id":1,"category":"燒臘"}]}\n```', '[{"id":1,"category":"燒臘"}]']) {
+    for (const content of ['```json\n{"results":[{"id":1,"category":"便當"}]}\n```', '[{"id":1,"category":"便當"}]']) {
       stubUpstream(upstreamReply(content))
       const res = await handleRequest(post(token, { foods: FOODS }), JWKS, OR_KEY)
       expect(res.status, content).toBe(200)
-      expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }] })
+      expect(await res.json()).toEqual({ results: [{ id: 1, category: '便當' }] })
     }
   })
 
@@ -488,7 +489,7 @@ describe('read-label 分類模式', () => {
     const leaky = JSON.stringify({ error: { message: `Invalid API key: ${OR_KEY}` } })
     const cases: (() => void)[] = [
       () => stubUpstream(upstreamReply('看不懂')),
-      () => stubUpstream(upstreamReply('{"results":"燒臘"}')),
+      () => stubUpstream(upstreamReply('{"results":"便當"}')),
       () => stubUpstream(upstreamReply('null')),
       () => stubUpstream(leaky, 500),
       () => stubUpstream(JSON.stringify({ choices: [] }), 200),
@@ -516,7 +517,7 @@ describe('read-label 分類模式', () => {
   })
 
   it('㉚ 帶 foods 就走分類，不看 image（同時帶也一樣，不會把圖送出去）', async () => {
-    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+    const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"便當"}]}'))
     const res = await handleRequest(post(await validToken(), { foods: FOODS, image: IMAGE }), JWKS, OR_KEY)
     expect(res.status).toBe(200)
     const sent = JSON.parse((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
@@ -543,7 +544,7 @@ describe('read-label 模型設定（全站統一）', () => {
 
   it('㉜ 分類：一律 DeepSeek 主、Qwen 備援；請求帶 model（含指定 Qwen）也不改順序、不 400', async () => {
     for (const model of [QW, DS, undefined, 'openai/gpt-9-ultra', 42]) {
-      const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+      const spy = stubUpstream(upstreamReply('{"results":[{"id":1,"category":"便當"}]}'))
       const res = await handleRequest(post(await validToken(), { foods: FOODS, model }), JWKS, OR_KEY)
       expect(res.status).toBe(200)
       expect(sentBody(spy).models, String(model)).toEqual([DS, QW])
@@ -884,9 +885,9 @@ describe('read-label 估算模式', () => {
       expect((await res.json()).basis).toBe('per_serving')
       expect(JSON.stringify(sentBody(spy))).toContain('image_url')
     }
-    stubUpstream(upstreamReply('{"results":[{"id":1,"category":"燒臘"}]}'))
+    stubUpstream(upstreamReply('{"results":[{"id":1,"category":"便當"}]}'))
     const res = await handleRequest(post(token, { mode: 'other', foods: [{ id: 1, name: '叉燒飯', vendor: null }] }), JWKS, OR_KEY)
-    expect(await res.json()).toEqual({ results: [{ id: 1, category: '燒臘' }] })
+    expect(await res.json()).toEqual({ results: [{ id: 1, category: '便當' }] })
   })
 })
 

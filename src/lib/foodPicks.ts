@@ -25,17 +25,21 @@ export function recentStats(hist: RecentIntakeRow[]): {
   lastQty: Map<string, number>
   /** 餐別 → 食物 → 次數。sheet 依類型分組的組序用（同一份歷史，不另外查）。 */
   counts: Map<MealKey, Map<number, number>>
+  /** 食物 → 最近一筆的份量微調（不分餐別：中杯微糖是習慣，跟午晚餐無關）。沒調過的也收（空陣列＝上次沒調）。 */
+  lastMods: Map<number, string[]>
 } {
   const byMeal = new Map<MealKey, Map<number, number>>(MEALS.map((m) => [m.key, new Map()]))
   const lastQty = new Map<string, number>()
+  const lastMods = new Map<number, string[]>()
   for (const r of hist) {
     const key = `${r.meal}:${r.food_id}`
     if (!lastQty.has(key)) lastQty.set(key, num(r.qty))
+    if (!lastMods.has(r.food_id)) lastMods.set(r.food_id, r.mods ?? [])
     const c = byMeal.get(r.meal)
     if (c) c.set(r.food_id, (c.get(r.food_id) ?? 0) + 1)
   }
   const recent = new Map([...byMeal].map(([k, counts]) => [k, [...counts].sort((a, b) => b[1] - a[1]).map(([id]) => id)] as [MealKey, number[]]))
-  return { recent, lastQty, counts: byMeal }
+  return { recent, lastQty, counts: byMeal, lastMods }
 }
 
 /* ── 「全部食物」依類型分組（spec.md C 節第三版）──

@@ -1088,6 +1088,9 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 來源小標（v2.153）：只有標示／官方／粗估會出現，跟在類型後面。樣式同估一筆的「粗估」（.est-only）。 */
 .src-tag { display: inline-block; margin-left: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--raised);
   color: var(--ink-muted); font-size: var(--t-xs); font-weight: 600; vertical-align: 1px; }
+/* 官方標示（v2.156，樣張 portion-mods.html 乙）：主色打勾＋「官方」、無底色——一整排官方的不會變成一片色塊，粗估仍是灰底，一眼分得出 */
+.src-tag.is-official { display: inline-flex; align-items: center; gap: 2px; padding: 0; background: none; color: var(--accent); font-weight: 700; }
+.src-tag.is-official svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 /* 「沒查證過」是使用中分頁上的開關，不是第三個分頁：推到這一排最右 */
 .lib-unverified { margin-left: auto; }
 .lib-unverified-note { padding: 0 var(--s-5) var(--s-2); font-size: var(--t-sm); }
@@ -1428,6 +1431,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .food-row .nm { font-size: var(--t-base); display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .food-row .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
+/* 搜尋只靠別名對上：「對到：麻古 紅萱波波」，對上的字標主色（v2.156） */
+.food-row .alias-hit mark { background: none; color: var(--accent); font-weight: 700; }
 .food-row .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
   flex-shrink: 0; font-variant-numeric: tabular-nums; }
 /* 逐筆超標預警（DESIGN.md v2.10）：kc-wrap 讓 kc 數字與下面的 delta 小字垂直堆疊、
@@ -1453,6 +1458,36 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
   padding: var(--s-1) 0; }
 .food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
+
+/* 份量微調（spec「份量微調」，樣張 portion-mods.html B）：已選那一列下面一行主色字寫現在的狀態，點了展開。
+   左緣對齊品名（勾 20px＋間距）。記一筆與今日頁就地編輯共用；就地編輯裡沒有勾，左緣歸零、上下交給容器的 gap。 */
+.pmods { margin: calc(var(--s-1) * -1) 0 var(--s-2) calc(20px + var(--s-3)); }
+.pmods-sum { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 36px; padding: 0; border: none; background: none;
+  font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; position: relative; }
+.pmods-sum::before { content: ""; position: absolute; inset: -4px -6px; }
+.pmods-sum svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--dur-base) var(--ease); }
+.pmods-sum[aria-expanded="true"] svg { transform: rotate(90deg); }
+.pmods-sum:active { opacity: .6; }
+.pmods-sum:disabled { color: var(--ink-faint); cursor: default; }
+.pmods-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
+.pmods-last { font-weight: 400; color: var(--ink-muted); }
+.pmods-panel { border-left: 2px solid var(--accent-soft); padding: var(--s-1) 0 var(--s-1) var(--s-3); margin-top: var(--s-1); }
+.pmods-grp + .pmods-grp { margin-top: var(--s-2); }
+.pmods-lbl { margin: 0 0 var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.pmods-panel .seg { flex: none; }
+.pmods-panel .seg button { min-height: 44px; font-size: var(--t-sm); }
+.item-editor .pmods { margin: 0; }
+.pmods-chips { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
+/* 配料可複選：描邊小膠囊（同 .row-pill 的形狀），按下＝主色實心 */
+.pmods-chip { position: relative; min-height: 32px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill); background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--rule-field); color: var(--ink); font: inherit; font-size: var(--t-sm); cursor: pointer;
+  -webkit-appearance: none; appearance: none; }
+.pmods-chip::before { content: ""; position: absolute; inset: -6px -2px; }
+.pmods-chip[aria-pressed="true"] { background: var(--accent); box-shadow: none; color: var(--on-accent); font-weight: 700; }
+.pmods-chip:active { opacity: .6; }
+.pmods-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pmods-calc { margin: var(--s-2) 0 0; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .qty-stepper { display: flex; align-items: center; gap: 0; flex-shrink: 0; padding: 2px;
   background: var(--fill); border-radius: var(--r-pill); }
 /* 填色膠囊＋兩顆浮起的圓鈕（--shadow-1），沒有分隔線（全站基礎 spec 規則 1）。

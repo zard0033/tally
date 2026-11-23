@@ -152,8 +152,8 @@ export function foodToForm(f: {
 /** 食品庫的排序：依品名，中文照 zh-Hant 排。 */
 export const byFoodName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'zh-Hant')
 
-/** vendor 為 null 的食物在食品庫裡歸的那一組。 */
-export const NO_VENDOR = '未標店家'
+/** vendor 為 null 的食物在食品庫裡歸的那一組。2026-11-23 起叫「通用（不分店家）」：通用食物（手搖飲、便當）店家留空，跟燕麥、白飯同一組；不在店家欄填「通用」——晚餐建議會把它當成一家店。 */
+export const NO_VENDOR = '通用（不分店家）'
 
 /** 依店家分組，未標店家的排最後——它不是一個真的店家名，跟著筆畫排序沒有意義。 */
 export function groupByVendor<F extends { name: string; vendor: string | null }>(foods: F[]): { vendor: string; items: F[] }[] {
@@ -174,6 +174,14 @@ export function groupByVendor<F extends { name: string; vendor: string | null }>
 
 /* 同時比對品名、店家與別名——五筆「雞胸餐盒」其中三筆完全同名，只靠店家區分；
    別名讓「中薯」找得到「麥當勞薯條（中）」（spec「食品庫改版」）。 */
+/** 搜尋只靠別名對上時（品名、店家都不含搜尋字），回對上的那個別名；記一筆的副標寫「對到：…」，
+ *  通用食物（手搖飲（無糖純茶＋寒天，大杯））才認得出是你點的「麻古 紅萱波波」（使用者 2026-11-23）。 */
+export function aliasHit(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): string | null {
+  const s = q.trim().toLowerCase()
+  if (!s || f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)) return null
+  return (f.aliases ?? []).find((a) => a.toLowerCase().includes(s)) ?? null
+}
+
 export function foodMatches(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): boolean {
   const s = q.trim().toLowerCase()
   if (!s) return true

@@ -327,6 +327,7 @@ describe('mergeByFood', () => {
     carb: 2,
     name: null,
     label: '乳清（1匙）',
+    mods: [],
     vendor: null,
     archived: false,
     category: null,
@@ -357,7 +358,7 @@ describe('suggestLabel', () => {
 
 describe('suggestMeals', () => {
   const rows = [row('2026-11-03'), row('2026-11-03', { meal: 'dinner', kcal: 400, protein: 40, fat: 5, carb: 20 })]
-  const dayRow = (meal: IntakeRow['meal'], kcal = 120): IntakeRow => ({ id: nextId++, meal, qty: 1, kcal, protein: 24, fat: 1.5, carb: 2, name: null, food_id: 13, foods: null })
+  const dayRow = (meal: IntakeRow['meal'], kcal = 120): IntakeRow => ({ id: nextId++, meal, qty: 1, kcal, protein: 24, fat: 1.5, carb: 2, name: null, mods: [], food_id: 13, foods: null })
   const ctx: GapContext = { targets: { kcal: 1778, protein: 137, fat: 65, carb: 163 }, goal: 'cut' }
 
   it('該餐已有紀錄就不給，其他餐照給', () => {
@@ -422,8 +423,8 @@ describe('第三版：避開重複', () => {
     food_id,
     foods: { name, vendor, archived: false, category },
   })
-  const ROAST_A = food(201, '叉燒飯', '燒臘店甲', '燒臘')
-  const ROAST_B = food(202, '燒臘便當', '燒臘店乙', '燒臘')
+  const ROAST_A = food(201, '叉燒飯', '燒臘店甲', '丼飯類')
+  const ROAST_B = food(202, '燒臘便當', '燒臘店乙', '丼飯類')
   const CHICKEN = food(203, '雞腿便當', '便當店', '便當')
   const BURGER = food(204, '漢堡套餐', '漢堡店', '速食')
   const NUGGET = food(205, '雞塊', '漢堡店', '速食')
@@ -431,7 +432,7 @@ describe('第三版：避開重複', () => {
   const WHEY2 = food(207, '乳清', null, '蛋白質補充')
   const EGG = food(208, '茶葉蛋', null, '配菜')
   const BEEF = food(209, '牛肉麵', '麵店', '麵食')
-  const DUMPLING = food(210, '水餃', '麵店', '餃類')
+  const DUMPLING = food(210, '水餃', '麵店', '滷味／鹽水雞')
   const SOYMILK = food(211, '豆漿', '便利店', '飲料')
   const OMELET = food(212, '蛋餅', '早餐店甲', '早餐店')
 
@@ -449,6 +450,7 @@ describe('第三版：避開重複', () => {
     qty: 1,
     ...n,
     name: null,
+    mods: [],
     food_id: f.food_id,
     foods: { name: f.foods.name, vendor: f.foods.vendor, category: f.foods.category },
   })
@@ -459,7 +461,7 @@ describe('第三版：避開重複', () => {
       const dayRows = [today('breakfast', WHEY2), today('lunch', ROAST_A), today('lunch', TEA)]
       const rows = [...ate('2026-11-03', 'dinner', [BEEF, EGG]), ...ate('2026-11-02', 'dinner', [CHICKEN])]
       const r = recentMeals(rows, VIEW, dayRows, 'dinner')
-      expect([...r.categories].sort()).toEqual(['燒臘', '麵食'].sort())
+      expect([...r.categories].sort()).toEqual(['丼飯類', '麵食'].sort())
       expect([...r.items].sort()).toEqual([201, 206, 209])
       expect([...r.vendors].sort()).toEqual(['燒臘店甲', '飲料店'].sort())
     })
@@ -484,8 +486,8 @@ describe('第三版：避開重複', () => {
       const rows = [...ate('2026-11-03', 'dinner', [BEEF, EGG]), ...ate('2026-11-03', 'lunch', [ROAST_B]), ...ate('2026-11-02', 'dinner', [CHICKEN])]
       const m = seenCategories(rows, VIEW, dayRows, 'dinner')
       // 燒臘今天中午、昨天中午都吃過 → 取今天；飲料、配菜是搭配類不收；便當是前天，不在範圍
-      expect([...m.keys()].sort()).toEqual(['早餐店', '燒臘', '麵食'].sort())
-      expect(seenText(m.get('燒臘')!)).toBe('中午吃過')
+      expect([...m.keys()].sort()).toEqual(['早餐店', '丼飯類', '麵食'].sort())
+      expect(seenText(m.get('丼飯類')!)).toBe('中午吃過')
       expect(seenText(m.get('早餐店')!)).toBe('早上吃過')
       expect(seenText(m.get('麵食')!)).toBe('昨天吃過')
     })
@@ -499,7 +501,7 @@ describe('第三版：避開重複', () => {
 
     it('同一類今天兩餐都吃過，取一天裡較早那餐（與紀錄先後無關）', () => {
       const dayRows = [today('snack', ROAST_B), today('breakfast', ROAST_A)]
-      expect(seenText(seenCategories(null, VIEW, dayRows, 'dinner').get('燒臘')!)).toBe('早上吃過')
+      expect(seenText(seenCategories(null, VIEW, dayRows, 'dinner').get('丼飯類')!)).toBe('早上吃過')
     })
   })
 
@@ -519,7 +521,7 @@ describe('第三版：避開重複', () => {
     })
 
     it('全部都重複：照第二版（允許重複），不會整格空白', () => {
-      const rows = [...days(['2026-10-28', '2026-10-27'], 'dinner', [ROAST_B]), ...ate('2026-10-29', 'dinner', [food(213, '燒肉飯', '燒臘店乙', '燒臘')])]
+      const rows = [...days(['2026-10-28', '2026-10-27'], 'dinner', [ROAST_B]), ...ate('2026-10-29', 'dinner', [food(213, '燒肉飯', '燒臘店乙', '丼飯類')])]
       const s = suggestMeals(rows, VIEW, [today('lunch', ROAST_A)], null).dinner![0]
       expect(s).toMatchObject({ source: 'frequent', sourceDate: '2026-10-28' })
       expect(label(s)).toBe('燒臘便當')
@@ -647,7 +649,7 @@ describe('第三版：避開重複', () => {
     })
 
     it('當天其他餐的店家：整組拿掉、不算進換一個的總數；拿掉完沒有候選就不出', () => {
-      const sameShop = food(216, '燒鴨飯', '燒臘店甲', '燒臘')
+      const sameShop = food(216, '燒鴨飯', '燒臘店甲', '丼飯類')
       const rows = [...ate('2026-10-30', 'dinner', [sameShop], CK), ...ate('2026-10-29', 'dinner', [CHICKEN], CK)]
       const ranked = suggestMeals(rows, VIEW, DAY, ctx).dinner!
       expect(names(ranked)).toEqual(['雞腿便當'])

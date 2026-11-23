@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { kcalByFood, rankUnverified, sourceTag, SOURCE_CHOICES } from './foodSource'
 
 describe('sourceTag', () => {
-  it('只標粗估；官方標示不標', () => {
+  it('兩邊都標：粗估／官方', () => {
     expect(sourceTag(false)).toBe('粗估')
-    expect(sourceTag(true)).toBe(null)
+    expect(sourceTag(true)).toBe('官方')
   })
   it('表單只有兩格：官方標示、粗估', () => {
     expect(SOURCE_CHOICES.map((c) => c.label)).toEqual(['官方標示', '粗估'])

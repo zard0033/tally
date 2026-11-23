@@ -9,19 +9,6 @@ import type { FoodCategory } from '@/lib/categories'
 export type CategoryBadge = 'today' | 'yesterday'
 
 const ICONS: Record<FoodCategory, ReactNode> = {
-  '燒臘': (
-    <>
-      <g transform="translate(24 23) scale(.86) translate(-24 -24) rotate(-40 24 24)">
-      <circle cx="21.2" cy="38.6" r="3.1" fill="var(--snow)" stroke="var(--hill-far)" strokeWidth="1.3" />
-      <circle cx="26.8" cy="38.6" r="3.1" fill="var(--snow)" stroke="var(--hill-far)" strokeWidth="1.3" />
-      <rect x="21.5" y="27" width="5" height="11.4" fill="var(--snow)" />
-      <path d="M21.5 30v8M26.5 30v8" stroke="var(--hill-far)" strokeWidth="1.3" />
-      <path d="M24 6.5c6.6 0 10.8 5.5 10.8 11.8 0 5.8-3.5 9.6-7.2 11.7h-7.2c-3.7-2.1-7.2-5.9-7.2-11.7C13.2 12 17.4 6.5 24 6.5z" fill="var(--clay)" />
-      <path d="M31 9.4c2.4 2.3 3.8 5.5 3.8 8.9 0 5.8-3.5 9.6-7.2 11.7h-3.2c3.6-2.4 6.6-6.4 6.6-11.6 0-3.3 0-6.2 0-9z" fill="var(--clay-deep)" />
-      <ellipse cx="19.4" cy="14.6" rx="2" ry="4" fill="var(--snow)" opacity=".45" />
-      </g>
-    </>
-  ),
   '便當': (
     <>
       <rect x="8" y="17" width="32" height="21" rx="4" fill="var(--accent)" />
@@ -43,7 +30,7 @@ const ICONS: Record<FoodCategory, ReactNode> = {
       <rect x="25.8" y="30.1" width="8" height="2.9" rx="1.45" fill="var(--clay)" />
     </>
   ),
-  '飯類': (
+  '丼飯類': (
     <>
       <path d="M10.5 24.5C10.5 14.6 37.5 14.6 37.5 24.5z" fill="var(--snow)" stroke="var(--hill-far)" strokeWidth="1.4" strokeLinejoin="round" />
       <g fill="var(--hill-far)"><ellipse cx="18" cy="20.6" rx="1.5" ry=".85" /><ellipse cx="24" cy="18" rx="1.5" ry=".85" /><ellipse cx="29.6" cy="20.8" rx="1.5" ry=".85" /><ellipse cx="22.6" cy="22.6" rx="1.5" ry=".85" /></g>
@@ -61,15 +48,6 @@ const ICONS: Record<FoodCategory, ReactNode> = {
       <rect x="18" y="37.4" width="12" height="3.2" rx="1.6" fill="var(--ink)" />
       <path d="M19.4 14.6c-1.6 2.2 1.4 3.8-.2 6.4M23.2 15.2c-1.6 2.2 1.4 3.8-.2 6.4M27 15.6c-1.4 2 1.2 3.4-.2 5.6" stroke="var(--sun-noodle)" strokeWidth="2.6" strokeLinecap="round" fill="none" />
       <path d="M17 13.6L40 5.6M18.4 16.4L41 10.6" stroke="var(--ink)" strokeWidth="2.2" strokeLinecap="round" fill="none" />
-    </>
-  ),
-  '餃類': (
-    <>
-      <ellipse cx="24" cy="35.4" rx="16.5" ry="4.2" fill="var(--accent)" />
-      <path d="M8.5 31.5C8.5 21 16.5 14 24 14s15.5 7 15.5 17.5c-6 3.4-25 3.4-31 0z" fill="var(--snow)" stroke="var(--hill-far)" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M10.4 30.2c6.4 2.6 20.8 2.6 27.2 0" stroke="var(--hill-far)" strokeWidth="2.4" fill="none" strokeLinecap="round" />
-      <path d="M13.8 22.4C16.9 18.6 20.3 16.8 24 16.8s7.1 1.8 10.2 5.6" stroke="var(--accent)" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-      <path d="M17.6 19.4l1.4 3.6M24 16.8v3.8M30.4 19.4l-1.4 3.6" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" />
     </>
   ),
   '速食': (
@@ -97,24 +75,6 @@ const ICONS: Record<FoodCategory, ReactNode> = {
       <ellipse cx="29.6" cy="13.6" rx="1.3" ry="2.2" transform="rotate(-51 29.6 13.6)" fill="var(--snow)" opacity=".45" />
       <rect x="19.6" y="19.1" width="9.8" height="9.8" rx="2.2" transform="rotate(-51 24.5 24)" fill="var(--accent)" />
       <rect x="13.1" y="28.4" width="9.4" height="8.2" rx="3.6" transform="rotate(-51 17.8 32.5)" fill="var(--hill-mid)" />
-    </>
-  ),
-  '鍋物': (
-    <>
-      <path d="M17.5 11.5c-1.6-1.6 1.6-3.2 0-4.8M24 10.5c-1.6-1.6 1.6-3.2 0-4.8M30.5 11.5c-1.6-1.6 1.6-3.2 0-4.8" stroke="var(--hill-mid)" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-      <path d="M10 22.5h28v8.5a7 7 0 0 1-7 7H17a7 7 0 0 1-7-7z" fill="var(--accent)" />
-      <rect x="13.5" y="25" width="2.6" height="8" rx="1.3" fill="var(--snow)" opacity=".35" />
-      <rect x="4.6" y="24.6" width="6.4" height="3.8" rx="1.9" fill="var(--ink)" />
-      <rect x="37" y="24.6" width="6.4" height="3.8" rx="1.9" fill="var(--ink)" />
-      <path d="M8.5 23.2C9.6 16.6 38.4 16.6 39.5 23.2z" fill="var(--ink)" />
-      <rect x="21" y="14" width="6" height="3.6" rx="1.8" fill="var(--ink)" />
-    </>
-  ),
-  '日式': (
-    <>
-      <path d="M24 9.5c2 0 3.4 1.3 4.8 3.6l9.4 16.2c2.4 4.1-.2 8.7-4.9 8.7H14.7c-4.7 0-7.3-4.6-4.9-8.7l9.4-16.2c1.4-2.3 2.8-3.6 4.8-3.6z" fill="var(--snow)" stroke="var(--hill-far)" strokeWidth="1.4" />
-      <path d="M17.4 27h13.2v11H17.4z" fill="var(--ink)" />
-      <path d="M17.4 27h13.2v2.2H17.4z" fill="var(--hill-near)" />
     </>
   ),
   '其他正餐': (

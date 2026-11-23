@@ -22,7 +22,7 @@ const TRAIN = ['training', 'rest-timer', 'spring-sheet', 'sync-sheet', 'weight-s
 const ANALYSIS = ['analysis', 'recovery-foreground']
 const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
-  'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest',
+  'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest', 'portion-mods',
 ]
 const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend', 'weekly-compare']
 const SHEETS = ['spring-sheet', 'sync-sheet']
@@ -63,6 +63,9 @@ const FILES = {
   'src/useMaintenanceEstimate.ts': SETTINGS,
   'src/lib/mealSuggest.ts': FOOD,
   'src/useRepeatHistory.ts': FOOD,
+  // 份量微調：記一筆已選與今日頁就地編輯共用（v2.156）
+  'src/lib/portionMods.ts': FOOD,
+  'src/components/PortionMods.tsx': FOOD,
 }
 
 /* 不影響任何 e2e 的路徑：文件、狀態、腳本、建置產物、後端定義（e2e 的 fetch 全 stub）、

@@ -1162,6 +1162,7 @@ export default function App() {
             onUpdateIntakeQty={handleUpdateIntakeQty}
             onUpdateIntakeMeal={handleUpdateIntakeMeal}
             onUpdateIntakeDetail={handleUpdateIntakeDetail}
+            foodById={(id) => foods?.find((f) => f.id === id)}
             repeatByMeal={repeatByMeal}
             repeatBusyKey={repeatBusyKey}
             repeatErr={repeatErr}

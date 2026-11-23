@@ -1427,8 +1427,8 @@ interface Typed {
   carb: number
 }
 const T = {
-  roastA: { food_id: 501, name: '叉燒飯', vendor: '燒臘店甲', category: '燒臘', kcal: 700, protein: 30, fat: 25, carb: 90 },
-  roastB: { food_id: 502, name: '燒臘便當', vendor: '燒臘店乙', category: '燒臘', kcal: 750, protein: 45, fat: 20, carb: 70 },
+  roastA: { food_id: 501, name: '叉燒飯', vendor: '燒臘店甲', category: '丼飯類', kcal: 700, protein: 30, fat: 25, carb: 90 },
+  roastB: { food_id: 502, name: '燒臘便當', vendor: '燒臘店乙', category: '丼飯類', kcal: 750, protein: 45, fat: 20, carb: 70 },
   chicken: { food_id: 503, name: '雞腿便當', vendor: '便當店', category: '便當', kcal: 650, protein: 35, fat: 18, carb: 60 },
   burger: { food_id: 504, name: '漢堡套餐', vendor: '漢堡店', category: '速食', kcal: 800, protein: 30, fat: 35, carb: 80 },
   nugget: { food_id: 505, name: '雞塊', vendor: '漢堡店', category: '速食', kcal: 450, protein: 25, fat: 25, carb: 30 },

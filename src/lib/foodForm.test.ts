@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, addAliases, byFoodName, foodMatches, foodToForm, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
+import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, addAliases, aliasHit, byFoodName, foodMatches, foodToForm, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -93,6 +93,18 @@ describe('foodToForm', () => {
   })
 })
 
+describe('aliasHit', () => {
+  const tea = { name: '手搖飲（無糖純茶＋寒天，大杯）', vendor: null, aliases: ['紅萱波波', '麻古 紅萱波波'] }
+  it('只靠別名對上才回別名；品名或店家對上就不回', () => {
+    expect(aliasHit(tea, '麻古')).toBe('麻古 紅萱波波')
+    expect(aliasHit(tea, '紅萱')).toBe('紅萱波波')
+    expect(aliasHit(tea, '寒天')).toBe(null)
+    expect(aliasHit({ ...tea, vendor: '麻古' }, '麻古')).toBe(null)
+    expect(aliasHit(tea, ' ')).toBe(null)
+    expect(aliasHit(tea, '珍珠')).toBe(null)
+  })
+})
+
 describe('byFoodName', () => {
   it('同名回 0，不同名依 zh-Hant 排序', () => {
     expect(byFoodName({ name: '雞胸' }, { name: '雞胸' })).toBe(0)
@@ -104,8 +116,8 @@ describe('byFoodName', () => {
 
 describe('groupByVendor', () => {
   const f = (name: string, vendor: string | null) => ({ name, vendor })
-  it('NO_VENDOR 就是畫面上的「未標店家」', () => {
-    expect(NO_VENDOR).toBe('未標店家')
+  it('NO_VENDOR 就是畫面上的「通用（不分店家）」', () => {
+    expect(NO_VENDOR).toBe('通用（不分店家）')
   })
   it('店家照筆畫序（八方 2 畫在三商 3 畫前，與碼位序相反）、未標店家固定最後，組內依品名', () => {
     const groups = groupByVendor([f('e', '三商'), f('b', null), f('d', '八方'), f('a', null), f('c', '三商')])

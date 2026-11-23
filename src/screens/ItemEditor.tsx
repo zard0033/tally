@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IntakeDetailPatch, IntakeRow } from '@/lib/api'
 import { DeleteIcon } from '@/components/DeleteIcon'
+import PortionMods from '@/components/PortionMods'
 import QtyStepper from '@/components/QtyStepper'
 import SegmentedControl from '@/components/SegmentedControl'
 import { num } from '@/lib/formulas'
 import { MEALS, type MealKey } from '@/lib/meals'
 import { MACRO_MAX } from '@/lib/foodForm'
+import { applyMods, normalizeMods, type Macros, type ModTarget } from '@/lib/portionMods'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 
 /* 就地編輯區的數字欄標籤。與新增食物表單同一組字（DESIGN.md「新增食物表單欄位」），
@@ -33,6 +35,7 @@ export default function ItemEditor({
   onDetail,
   onDelete,
   err,
+  modBase,
 }: {
   id: string
   row: IntakeRow
@@ -44,6 +47,8 @@ export default function ItemEditor({
   onDetail: (patch: IntakeDetailPatch) => Promise<void>
   onDelete: () => void
   err: string | null
+  /** 份量微調的基準（食品庫現在那一筆）；查不到（已封存不在清單、已刪）就不出微調。 */
+  modBase?: { target: ModTarget; base: Macros } | null
 }) {
   const [localQty, setLocalQty] = useState(qty)
   const [draft, setDraft] = useState(String(qty))
@@ -200,6 +205,29 @@ export default function ItemEditor({
     </div>
   )
 
+  /* 份量微調（spec「份量微調」）：改了就用食品庫現在的數字重算，微調與四個營養值一次送（同一個動作，分開送會有一半存進去的中間態）。 */
+  const [localMods, setLocalMods] = useState<string[]>(row.mods)
+  const [modsOpen, setModsOpen] = useState(false)
+  /* 送出中鎖住微調（v2.156 review）：連按兩下時第一筆失敗、第二筆成功，回滾會把畫面退回比資料庫還舊的狀態 */
+  const [modsBusy, setModsBusy] = useState(false)
+  async function commitMods(next: string[]) {
+    if (!modBase || modsBusy) return
+    const prev = localMods
+    const m = normalizeMods(next, modBase.target)
+    const v = applyMods(modBase.base, m, modBase.target).result
+    setLocalMods(m)
+    setModsBusy(true)
+    try {
+      await onDetail({ mods: m, kcal: v.kcal, protein: v.protein, fat: v.fat, carb: v.carb })
+      setDetail((d) => ({ ...d, kcal: String(v.kcal), protein: String(v.protein), fat: String(v.fat), carb: String(v.carb) }))
+      setSaid(`已改為 ${Math.round(v.kcal)} 卡`)
+    } catch {
+      setLocalMods(prev)
+    } finally {
+      setModsBusy(false)
+    }
+  }
+
   async function pickMeal(key: MealKey) {
     if (key === localMeal || busy) return
     const prev = localMeal
@@ -242,6 +270,18 @@ export default function ItemEditor({
           <DeleteIcon />
         </button>
       </div>
+      {modBase && (
+        <PortionMods
+          target={modBase.target}
+          base={modBase.base}
+          mods={localMods}
+          open={modsOpen}
+          onToggleOpen={() => setModsOpen((o) => !o)}
+          onChange={(m) => void commitMods(m)}
+          note="用食品庫現在的數字重算"
+          disabled={modsBusy}
+        />
+      )}
       <div className="ed-line">
         {/* 餐別是互斥的四選一，用分段控制器而不是記一筆 sheet 那排可捲動的 pill chip。
             **選中態用 aria-pressed，不用 aria-current**：後者的規範語意是「目前所在的

@@ -18,6 +18,7 @@ import { DUR, EASE, sec, SETTLE_SPRING } from '@/lib/durations'
 import { CLICK_GRACE_MS, clampReleaseVelocity, shouldOpenSwipe } from '@/lib/swipePhysics'
 import { macroExceeds, macroGap, num, pct, sumIntake } from '@/lib/formulas'
 import { MEALS, type Meal, type MealKey } from '@/lib/meals'
+import { suffixOf, type Macros, type ModTarget } from '@/lib/portionMods'
 import { suggestLabel, type RepeatByMeal, type RepeatSuggestion, type SuggestSource } from '@/lib/mealSuggest'
 import ItemEditor from './ItemEditor'
 import TodayScene from './TodayScene'
@@ -51,12 +52,20 @@ export default function Today(props: TodayProps) {
     onUpdateIntakeQty,
     onUpdateIntakeMeal,
     onUpdateIntakeDetail,
+    foodById,
     repeatByMeal,
     repeatBusyKey,
     repeatErr,
     onAddRepeat,
     onSwapRepeat,
   } = props
+
+  /* 份量微調的基準：食品庫現在那一筆（spec「份量微調」：之後再改用現在的數字重算）。封存或刪掉的查不到就不出微調。 */
+  const modBaseOf = (r: IntakeRow): { target: ModTarget; base: Macros } | null => {
+    const f = foodById(r.food_id)
+    if (!f) return null
+    return { target: { name: f.name, category: f.category }, base: { kcal: num(f.kcal), protein: num(f.protein), fat: num(f.fat), carb: num(f.carb) } }
+  }
 
   const rows = dayData.rows
   /* v2.47：主數字的語意分岔點從「是不是今天」改成**「是不是過去」**。
@@ -270,6 +279,7 @@ export default function Today(props: TodayProps) {
               handleChangeQty,
               handleChangeMeal,
               handleChangeDetail,
+              modBaseOf,
               editErr,
               repeatByMeal,
               onAddRepeat,
@@ -295,6 +305,7 @@ interface TimelineHelpers {
   handleChangeQty: (id: number, qty: number) => Promise<void>
   handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
   handleChangeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
+  modBaseOf: (r: IntakeRow) => { target: ModTarget; base: Macros } | null
   editErr: { id: number; msg: string } | null
   repeatByMeal: RepeatByMeal
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
@@ -315,6 +326,7 @@ interface TimelineHelpers {
 function SwipeRow({
   row,
   name,
+  suffix,
   vendor,
   qty,
   open,
@@ -328,9 +340,12 @@ function SwipeRow({
   onMeal,
   onDetail,
   err,
+  modBase,
 }: {
   row: IntakeRow
   name: string
+  /** 份量微調的後綴（中杯・微糖）；只接在顯示上，不進就地編輯的品名欄（否則沒改就關會把後綴存成品名）。 */
+  suffix: string
   vendor: string | null
   qty: number
   open: boolean
@@ -344,6 +359,7 @@ function SwipeRow({
   onMeal: (meal: MealKey) => Promise<void>
   onDetail: (patch: IntakeDetailPatch) => Promise<void>
   err: string | null
+  modBase: { target: ModTarget; base: Macros } | null
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLButtonElement>(null)
@@ -475,6 +491,7 @@ function SwipeRow({
             <span className="nm-wrap">
               <span className="nm">
                 {name}
+                {suffix}
                 {vendor && <span className="vendor"> {vendor}</span>}
               </span>
               {qty !== 1 && <span className="qty">×{qty}</span>}
@@ -516,6 +533,7 @@ function SwipeRow({
               onDetail={onDetail}
               onDelete={onDelete}
               err={err}
+              modBase={modBase}
             />
           </motion.div>
         )}
@@ -631,8 +649,10 @@ function MealNode({
                 {items.map((r) => {
                   /* intake 自己的品名快照優先於 foods 的：改過名的那筆從此與食品庫脫鉤，
                      食品庫日後改品名不回頭改寫它（與 kcal/protein/fat/carb 同一套語意）。 */
-                  const name = r.name ?? r.foods?.name ?? '（食物已刪除）'
-                  const dup = (nameCount.get(name) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
+                  const baseName = r.name ?? r.foods?.name ?? '（食物已刪除）'
+                  const dup = (nameCount.get(baseName) ?? 0) > 1 ? (r.foods?.vendor ?? null) : null
+                  // 份量微調接在品名後（中杯・微糖）；判斷適用與否看食品庫那一筆的品名與類型
+                  const suffix = r.foods ? suffixOf(r.mods, { name: r.foods.name, category: r.foods.category }) : ''
                   return (
                     <motion.li
                       className="item"
@@ -650,7 +670,8 @@ function MealNode({
                     >
                       <SwipeRow
                         row={r}
-                        name={name}
+                        name={baseName}
+                        suffix={suffix}
                         vendor={dup}
                         qty={num(r.qty)}
                         open={h.active?.id === r.id && h.active.mode === 'swipe'}
@@ -664,6 +685,7 @@ function MealNode({
                         onMeal={(m) => h.handleChangeMeal(r.id, m)}
                         onDetail={(p) => h.handleChangeDetail(r.id, p)}
                         err={h.editErr?.id === r.id ? h.editErr.msg : null}
+                        modBase={h.modBaseOf(r)}
                       />
                     </motion.li>
                   )

@@ -2,8 +2,9 @@
    2026-11-23 使用者把四種（標示／官方／AI 粗估／自己填）併成兩種：這個欄位只回答「這個數字能不能信、
    還沒核對的有哪些」，標示與官方對他沒有差別；不是按 AI 估的，都是他照產品標示或官方資料打的。 */
 
-/** 列上的小標：只標粗估（要核對的那些）。 */
-export const sourceTag = (verified: boolean): string | null => (verified ? null : '粗估')
+/** 列上的小標：兩邊都標（使用者 2026-11-23：只標粗估時，沒標的看不出是官方還是忘了標）。
+ *  外觀輕重不同（樣張 portion-mods.html 乙）：官方＝主色打勾＋字、無底色；粗估＝灰底小標。 */
+export const sourceTag = (verified: boolean): string => (verified ? '官方' : '粗估')
 
 /** 表單來源選擇器的兩格；key 與 verified 互轉見 FoodFormFields。 */
 export type SourceKey = 'verified' | 'rough'
