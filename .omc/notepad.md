@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-23）：v2.156 推送中（CI 全量待確認）＝份量微調（intake.mods 已上 DB）、類型 17→13、通用組名、官方小標、對到別名；read-label 分類清單已改，要先部署函式。
-下一步：①CI 綠部署後轉換 foods.category（清單見 spec「類型壓縮」表）②手機換 v2.156 後：補 verified 對應（created_at>2026-11-23T02:00Z）→ drop foods.source／serving_g ③下一輪「每一餐記店家」spec＋樣張 ④封存四筆過渡食物（拿鐵＋珍珠／寒天、兩筆去皮便當）前先列給使用者。
+現況（2026-11-23）：v2.156 已部署（CI 614 過，run 45123824577；read-label 先部署）＝份量微調、類型 17→13（DB 已轉換，備份在 D:\Temp\tally-backup）、通用組名、官方小標、對到別名。
+下一步：①真機用份量微調（飲料中杯微糖、便當半飯、照上次）②手機換 v2.156 後：補 verified 對應（created_at>2026-11-23T02:00Z）→ drop foods.source／serving_g ③下一輪「每一餐記店家」spec＋樣張 ④封存四筆過渡食物（拿鐵＋珍珠／寒天、兩筆去皮便當）前先列給使用者。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
