@@ -55,6 +55,8 @@ schemaVersion: 1
 
 2026-11-22 量 `openApp` 各段耗時（notepad 待辦 10，臨時 spec 序列跑 10 次、1 worker，本機）：中位數 **313 ms**＝裝 stub 5＋goto 121＋等外殼 132＋等首頁數字 56。以 2026-11-02 全量 415 條／14.4 分／2 worker 換算每條約 4.2 秒，openApp 只佔 7–8%，**不是瓶頸、不值得優化，待辦結案**；慢在各條本體（動畫落定、離線重試退避 7 秒等）。另：v2.150／v2.151 本機 push 前 smoke 55 過、estimate 20 過、vitest 1210 過；「慢態有出口」整套與單跑都紅（偶發清單：本機幾乎必紅、基線一樣），判與本批無關。
 
+2026-11-24 v2.162 記店家改版 CI（`c24669a`，run 45319875515）：**8 份 659 條全過、0 flaky、burn-in 75 過、已部署**；vitest 1323。本機：smoke 55 過、受影響的 spec 逐檔單跑全過；`interaction`「慢請求在換日之後才失敗」本機紅（乾淨 HEAD 同比例、CI 過，見偶發紅清單）。同日 hotfix `8cd2d2e`（估一筆別名店家）CI run 45309216795 全過。
+
 2026-11-22 v2.149 CI（`1c72c9a`，run 44923372398）：**8 份 585 條全過、0 flaky、已部署**（`--list` 實測 585 條 23 檔＝577＋weight-trend 新 8 條）；burn-in 80 過。
 
 2026-11-21 v2.149 體重趨勢講人話＋觸控（本機，autopilot）：weight-trend 20 過（新 5 條觸控、改 9 條用詞）；weekly-compare＋analysis＋recovery-foreground＋settings-nav 35 過；vitest 1197 過。`e2e:affected` 判 FULL（app.css、新檔 useChartHover）→ smoke 第一次只跑 **54 條全過**——**少一條不是過**：smoke.json 存的是測試標題原文，我改了 weight-trend 一條標題，-g 對不到、靜默略過。`scripts/e2e-smoke.mjs` 加檢查（標題對不到任何 spec 就 exit 1，實測會擋），清單改新標題後 55 過。**通則：數條數，不只看綠**。mutation 3 個（stale 過濾、讀數固定優先序、touchcancel）都紅；第一次做 mutation 時改到變數沒用到，`tsc -b` 擋下 build、e2e 一條沒跑，輸出看起來像「沒結果」，要改成能編譯的 mutation。

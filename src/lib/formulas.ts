@@ -32,6 +32,8 @@ export interface Profile {
   measured_tdee_on?: string | null
   /** 上次變動前的 measured_tdee（「還原」用）；null＝沒得還原。 */
   measured_tdee_prev?: number | string | null
+  /** 目標體重（spec「每日目標改版」）；null／沒有＝還沒設，方向照舊看 goal。只有每日目標頁讀寫，計算不讀它。 */
+  goal_weight_kg?: number | string | null
 }
 
 export interface Targets {

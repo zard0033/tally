@@ -171,8 +171,6 @@ export interface MaintenanceSectionProps {
   askNewer: boolean
   /** 活動係數那一列（只影響公式推導，掛在它下面；改用紀錄回推時不給）。 */
   activityRow: ReactNode
-  /** 確認框（要顯示時才給）。 */
-  confirm: ReactNode
   onOpenConfirm: () => void
   onRevert: () => void
   onRestore: () => void
@@ -256,13 +254,13 @@ export default function MaintenanceSection(p: MaintenanceSectionProps) {
         {recordRow}
         <RestoreLine measuredTdee={p.measuredTdee} measuredOn={p.measuredOn} prevTdee={p.prevTdee} onRestore={p.onRestore} />
         {/* 已改用、最新回推差得多到要人判斷：確認框收起時給一列可以再打開 */}
-        {p.askNewer && !p.confirm && cur?.status === 'ok' && (
+        {/* 確認框打開時（v2.163 起畫在結果卡下面）呼叫端把 askNewer 關掉，這列就不出 */}
+        {p.askNewer && cur?.status === 'ok' && (
           <button type="button" className="goal-pick as-btn" onClick={p.onOpenConfirm}>
             <span className="lb">依最新紀錄算出約 {r(cur.maintenance)} 卡，要換成這個嗎</span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         )}
-        {p.confirm}
         {estimate.state === 'done' && <RecordNotes estimate={estimate} />}
       </div>
     </div>
@@ -395,7 +393,7 @@ export function CalcDetail(p: CalcDetailProps) {
         </div>
       )}
 
-      <h3>② {p.goal === 'cut' ? '減重' : p.goal === 'bulk' ? '增肌' : '維持'}</h3>
+      <h3>② {p.goal === 'cut' ? '減重' : p.goal === 'bulk' ? '增重' : '維持'}</h3>
       {p.goal === 'maintain' || delta === null
         ? ln(<>維持不加不減，每日目標＝維持熱量。</>)
         : <>

@@ -127,6 +127,9 @@ export async function seedFetchStub(
         __dataDown: boolean
         /* 設 true＝實測維持熱量卡的區間查詢回 500，驗「讀不到記錄」那條。 */
         __kcalFail: boolean
+        /* 設 true＝體重「清單」查詢（limit≠1）回 500；開機讀最新一筆（limit=1）照常。清單查詢不只設定頁那份：
+           回推維持熱量（useMaintenanceEstimate）與體重趨勢頁撈的也會一起失敗——用在每日目標頁「讀不到清單退回最近一次」那條。 */
+        __weightListFail: boolean
         /* 區間查詢要回的列，蓋掉 fix.kcalWindow：測試中途換帳號用。 */
         __kcalWindow: { eaten_on: string; qty: number; kcal: number; meal: string }[] | null
         /* 有值時區間查詢等它 resolve 才回，用來造「查詢在飛」。要回哪一份在等之前就決定了（查詢送出當下的帳號）。 */
@@ -156,6 +159,7 @@ export async function seedFetchStub(
       w.__failIntake = new Set()
       w.__dropIntake = new Set()
       w.__kcalFail = kcalFail
+      w.__weightListFail = false
       w.__kcalWindow = null
       w.__kcalHold = null
       w.__writes = []
@@ -462,7 +466,10 @@ export async function seedFetchStub(
         }
 
         if (table === 'profile') return json(fix.profile)
-        if (table === 'weight') return json(fix.weight)
+        if (table === 'weight') {
+          if (w.__weightListFail && new URL(u).searchParams.get('limit') !== '1') return json({ message: '模擬的讀取失敗' }, 500)
+          return json(fix.weight)
+        }
         if (table === 'foods') {
           const qs = new URL(u).searchParams
           if (qs.get('category') === 'is.null') return json(foodStore.filter(foodFilter(qs)))

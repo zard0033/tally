@@ -7,13 +7,32 @@
 import { test, expect, type Page } from '@playwright/test'
 import { monthDay, shiftDate } from '../src/lib/dates'
 import { FIX, TODAY } from './fixtures'
-import { openApp } from './harness'
+import { openApp, openAppAt } from './harness'
 
-/* 設定分頁的 aria-label 在「有新的維持熱量」時會多一句（v2.143 小點），所以比對開頭 */
-async function openGoal(page: Page) {
+/* 設定分頁的 aria-label 在「有新的維持熱量」時會多一句（v2.143 小點），所以比對開頭。
+   v2.163 起維持熱量、怎麼分、身體數據、自訂都收在「怎麼算的」裡（預設收合）：這份大部分在測那些，預設打開；
+   要驗收合狀態的傳 { more: false }。 */
+async function openGoal(page: Page, { more = true }: { more?: boolean } = {}) {
   await page.locator('.tab[aria-label^="設定"]').click()
   await page.locator('.entry-row', { hasText: '每日目標' }).click()
   await expect(page.locator('[data-screen="daily-goal"]')).toBeVisible()
+  if (more) await openMore(page)
+}
+async function openMore(page: Page) {
+  const more = page.locator('.goal-more')
+  if ((await more.getAttribute('open')) === null) await more.locator('> summary').click()
+  await expect(more).toHaveAttribute('open', '')
+}
+
+/* v2.163 兩個控制：目標體重（步進器＋數字框）、速度（只停五格的滑桿）。fixture 只有一筆體重 75.95，平均體重＝75.95。 */
+const goalInput = (page: Page) => page.locator('#g-goal-weight')
+const rateSlider = (page: Page) => page.getByRole('slider', { name: '要多快' })
+const pace = (page: Page) => page.locator('.goal-pace-now')
+const when = (page: Page) => page.locator('.goal-hero-when')
+const dirLine = (page: Page) => page.locator('.goal-plan-dir')
+async function setGoalKg(page: Page, kg: number) {
+  await goalInput(page).fill(String(kg))
+  await goalInput(page).blur()
 }
 
 const profilePatches = (page: Page) =>
@@ -38,18 +57,34 @@ const setWriteDelay = (page: Page, ms: number) =>
     ;(window as unknown as { __writeDelayMs: number }).__writeDelayMs = d
   }, ms)
 
-test('目標與速度各自一列；選「維持」時速度那列消失，換回減重／增肌又出現', async ({ page }) => {
+/* v2.163 AC 3、4：方向由目標體重跟平均體重推（±0.5 kg），存檔時寫回 goal；維持時速度那段整個不出。 */
+test('目標體重推方向：輕 0.5 以上減重、差不到 0.5 維持（速度消失）、重 0.5 以上增重（速度回來），寫回 goal', async ({ page }) => {
   await openApp(page)
-  await openGoal(page)
+  await openGoal(page, { more: false })
+  await expect(dirLine(page), '沒設過目標體重').toHaveText('還沒設目標體重')
+  await expect(goalInput(page), '沒設過就從平均體重起（對齊 0.5）').toHaveValue('76.0')
 
-  await expect(page.locator('#g-goal')).toHaveValue('cut')
-  await expect(page.locator('#g-rate')).toBeVisible()
+  await setGoalKg(page, 70)
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  // fixture 本來就是 cut、有速度：方向沒變也照寫（存檔一律帶推出來的方向）
+  expect((await profilePatches(page))[0].body).toEqual({ goal_weight_kg: 70, goal: 'cut' })
+  await expect(dirLine(page)).toHaveText('比現在輕 6.0 kg · 減重')
+  await expect(rateSlider(page)).toBeVisible()
 
-  await page.locator('#g-goal').selectOption('maintain')
-  await expect(page.locator('#g-rate'), '維持沒有變化速度可言，那列該整個不渲染').toHaveCount(0)
+  await setGoalKg(page, 76.2)
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
+  expect((await profilePatches(page))[1].body).toEqual({ goal_weight_kg: 76.2, goal: 'maintain' })
+  await expect(dirLine(page)).toHaveText('差不到 0.5 kg · 維持')
+  await expect(rateSlider(page), '維持沒有速度可言，那段該整個不渲染').toHaveCount(0)
+  await expect(when(page)).toHaveText('維持在 76.2 kg')
+  const maintainKcal = await kcal(page)
 
-  await page.locator('#g-goal').selectOption('bulk')
-  await expect(page.locator('#g-rate'), '換回增肌時速度那列沒回來').toBeVisible()
+  await setGoalKg(page, 77)
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(3)
+  expect((await profilePatches(page))[2].body).toEqual({ goal_weight_kg: 77, goal: 'bulk' })
+  await expect(dirLine(page)).toHaveText('比現在重 1.0 kg · 增重')
+  await expect(rateSlider(page), '換回增重時速度那段沒回來').toBeVisible()
+  await expect.poll(() => kcal(page), '增重的熱量要高於維持熱量').toBeGreaterThan(maintainKcal)
 })
 
 /* v2.23 的核心裁決：脂肪是「體重 × 0.85 g/kg 固定值」，目標只能動總熱量與碳水。 */
@@ -61,7 +96,7 @@ test('脂肪＝體重固定 g/kg：換目標只動熱量與碳水，脂肪一克
   const cutKcal = await kcal(page)
   expect(cut, '前提不成立：cut 狀態下算不出來').not.toBeNull()
 
-  await page.locator('#g-goal').selectOption('maintain')
+  await setGoalKg(page, 76) // 跟平均體重 75.95 差不到 0.5 → 維持
   await expect(heroNum(page)).not.toHaveText(String(cutKcal))
   const maintain = await macros(page)
   const maintainKcal = await kcal(page)
@@ -82,14 +117,13 @@ test('改一列只送那一欄；沒碰過的速度顯示真實值、不被近�
   await openApp(page)
   await openGoal(page)
 
-  await expect(page.locator('#g-rate'), 'DB 值對不上五格時要顯示真實值').toHaveValue('2.17')
-  await expect(page.locator('.goal-pick', { hasText: '速度' }).locator('.val')).toHaveText('2.17 kg/月')
+  await expect(pace(page), 'DB 值對不上五格時要顯示真實值').toHaveText('每月 2.17 kg')
 
   await page.locator('#g-protein').selectOption('2')
 
   await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
   expect((await profilePatches(page))[0].body, '只該送蛋白質這一欄').toEqual({ protein_g_per_kg: 2 })
-  await expect(page.locator('#g-rate')).toHaveValue('2.17')
+  await expect(pace(page)).toHaveText('每月 2.17 kg')
 })
 
 test('改速度：換算成 kg/週 寫回、數字當場變、閃已儲存', async ({ page }) => {
@@ -97,11 +131,16 @@ test('改速度：換算成 kg/週 寫回、數字當場變、閃已儲存', asy
   await openGoal(page)
   const before = await kcal(page)
 
-  await page.locator('#g-rate').selectOption('1')
+  // 2.17 kg/月對不上五格，滑桿停在最近的 1.5；往左兩格＝1 kg/月。鍵盤每按一下就是一次放開（存一次）
+  await setWriteDelay(page, 600)
+  await rateSlider(page).focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowLeft')
+  await expect(pace(page)).toHaveText('每月 1 kg')
 
-  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
-  // 1 kg/月 ÷ (52/12) 週 ≈ 0.2308，資料庫是 numeric(3,2)，先捨入成 0.23
-  expect((await profilePatches(page))[0].body).toEqual({ rate_kg_per_week: 0.23 })
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
+  // 1.25 kg/月 → 0.29；1 kg/月 ÷ (52/12) 週 ≈ 0.2308，資料庫是 numeric(3,2)，先捨入成 0.23
+  expect((await profilePatches(page)).map((w) => w.body)).toEqual([{ rate_kg_per_week: 0.29 }, { rate_kg_per_week: 0.23 }])
   // 每天差從 550 變成 0.23 × 1100 ＝ 253，目標多 297
   await expect.poll(() => kcal(page)).toBe(before + 297)
   await expect(page.locator('.goal-saved')).toHaveText('已儲存')
@@ -138,11 +177,12 @@ test('存檔失敗：退回原值、顯示錯誤，數字也回來', async ({ pa
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'profile', method: 'PATCH' }
   })
 
-  await page.locator('#g-goal').selectOption('maintain')
+  await setGoalKg(page, 76) // → 維持
 
   await expect(page.locator('.goal-err')).toBeVisible()
-  await expect(page.locator('#g-goal'), '失敗要退回原值').toHaveValue('cut')
-  await expect(page.locator('#g-rate')).toBeVisible()
+  await expect(dirLine(page), '失敗要退回原值').toHaveText('還沒設目標體重')
+  await expect(goalInput(page), '數字框也要退回原本的值').toHaveValue('76.0')
+  await expect(rateSlider(page), '方向沒變（還是減重，速度還在）').toBeVisible()
   expect(await kcal(page)).toBe(before)
   await expect(page.locator('.goal-saved')).toHaveText('')
 })
@@ -220,7 +260,12 @@ test('每一列命中區 ≥44px，整列都點得到 select', async ({ page }) 
   await openApp(page)
   await openGoal(page)
 
-  for (const id of ['g-goal', 'g-rate', 'g-protein', 'g-activity']) {
+  // v2.163：目標體重步進器的兩顆鈕、速度滑桿的拖曳區也要 44px
+  for (const sel of ['.goal-plan-step .qty-btn >> nth=0', '.goal-plan-step .qty-btn >> nth=1', '.goal-slider-ctl']) {
+    const b = (await page.locator(sel).boundingBox())!
+    expect(b.height, `${sel} 矮於 44px`).toBeGreaterThanOrEqual(44)
+  }
+  for (const id of ['g-protein', 'g-activity']) {
     const row = page.locator(`.goal-pick:has(#${id}), .goal-sub-pick:has(#${id})`)
     // 版面變長後有些列在可視範圍外，elementFromPoint 只量得到看得見的點
     await row.scrollIntoViewIfNeeded()
@@ -293,7 +338,7 @@ test('自訂目標：四格都標必填，離開整組才存、不合法不寫�
   await page.locator('.goal-seg-wrap .seg button', { hasText: '自動' }).click()
   await expect.poll(async () => (await profilePatches(page)).length).toBe(3)
   expect((await profilePatches(page))[2].body, '切回自動只動開關，自訂值要留著').toEqual({ use_custom_targets: false })
-  await expect(src(page)).toContainText('（公式推導）')
+  await expect(src(page)).toContainText('用公式估的')
 })
 
 test('切自動／自訂時捲動位置回頂：自訂第一格不會被捲走', async ({ page }) => {
@@ -309,9 +354,14 @@ test('切自動／自訂時捲動位置回頂：自訂第一格不會被捲走',
   await expect(page.locator('#g-custom-kcal')).toBeInViewport()
   expect(
     await scroll.evaluate((el) => el.scrollHeight - el.clientHeight),
-    '前提不成立：自訂那頁沒有比可視區長，歸零不是 reset 造成的',
+    '前提不成立：自訂那頁沒有比可視區長，捲到位不是 reset 造成的',
   ).toBeGreaterThan(0)
-  expect(await scroll.evaluate((el) => el.scrollTop)).toBe(0)
+  // v2.163：切換鈕在「怎麼算的」裡，捲到這段的頂端（不是整頁歸零：歸零會把自訂第一格捲出視窗）
+  const off = await page.evaluate(() => {
+    const sc = document.querySelector('.goal-scroll')!.getBoundingClientRect().top
+    return document.querySelector('.goal-more')!.getBoundingClientRect().top - sc
+  })
+  expect(Math.abs(off)).toBeLessThan(2)
 })
 
 /* ═══════════ 維持熱量與確認（spec.md「每日目標改版」）═══════════ */
@@ -427,7 +477,8 @@ test('改用：寫入三欄、目標與來源都變、活動量消失；今日�
   // v2.143：只移一半；從公式換過去，前值是 null（沒有可還原的回推值，回公式有「改回公式」）
   expect((await profilePatches(page))[0].body).toEqual({ measured_tdee: next, measured_tdee_on: TODAY, measured_tdee_prev: null })
   await expect(heroNum(page)).toHaveText(String(next - 550))
-  await expect(src(page)).toContainText(`維持熱量 ${next}（紀錄回推） − 減重 550`)
+  await expect(src(page)).toContainText('用你最近 28 天的紀錄算的')
+  await expect(page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out')).toHaveText(`${next} 卡`)
   // v2.143：不只按「改用」會變（每週也會自動調），副標從「確認的數字」改成「更新的數字」
   await expect(est(page, '紀錄回推')).toContainText(`${monthDay(TODAY)} 採用的數字`)
   await expect(page.locator('.goal-saved')).toHaveText('已儲存')
@@ -468,7 +519,8 @@ test('已改用的帳號：吃資料庫的值（numeric 字串）；改回公式
   await openGoal(page)
 
   await expect(heroNum(page)).toHaveText('1450')
-  await expect(src(page)).toContainText('維持熱量 2000（紀錄回推）')
+  await expect(src(page)).toContainText('用你最近 28 天的紀錄算的')
+  await expect(page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out')).toHaveText('2000 卡')
   await expect(est(page, '紀錄回推')).toContainText('10/30 採用的數字') // v2.143 用詞，見「改用」那條
   await expect(confirm(page)).toHaveCount(0)
 
@@ -477,7 +529,7 @@ test('已改用的帳號：吃資料庫的值（numeric 字串）；改回公式
   // v2.143：改回公式也算一次變動——蓋今天（7 天內不問）、前值記 2000（可以還原）
   expect((await profilePatches(page))[0].body).toEqual({ measured_tdee: null, measured_tdee_on: TODAY, measured_tdee_prev: 2000 })
   await expect(heroNum(page)).not.toHaveText('1450')
-  await expect(src(page)).toContainText('（公式推導）')
+  await expect(src(page)).toContainText('用公式估的')
   await expect(page.locator('#g-activity')).toBeVisible()
   await expect(confirm(page), '剛改回公式就又跳卡片太吵').toHaveCount(0)
   await expect(est(page, '紀錄回推'), '改回之後點紀錄回推那一列可以再改用').toHaveJSProperty('tagName', 'BUTTON')
@@ -522,25 +574,33 @@ test('自訂目標模式：不問，但對帳跟著輸入框走', async ({ page 
 
 /* ═══════════ v2.118 照算式排（樣張 daily-goal-v2.html）═══════════ */
 
-test('頂端：大數字標「每日目標」，算式膠囊的兩個數字相減剛好等於大數字', async ({ page }) => {
-  await openApp(page)
-  await openGoal(page)
+/* v2.163 AC 1：頂端只有結果（每天吃多少、幾月到、數字從哪來），下面兩個控制，其餘收在「怎麼算的」裡、預設收合。 */
+test('頂端是結果卡：每天吃、幾月到、來源；只有目標體重與速度兩個控制，其餘收在「怎麼算的」裡', async ({ page }) => {
+  await openAppAt(page, '2026-11-24')
+  await openGoal(page, { more: false })
 
-  await expect(page.locator('.goal-hero-cap')).toHaveText('每日目標')
-  const eq = ((await page.locator('.goal-hero-eq').textContent()) ?? '').trim()
-  const m = /^維持熱量 (\d+)（公式推導） − 減重 (\d+)$/.exec(eq)
-  expect(m, `算式膠囊的格式不對：「${eq}」`).not.toBeNull()
-  expect(Number(m![1]) - Number(m![2]), '算式要用畫面上的整數相減，才會剛好等於大數字').toBe(await kcal(page))
-  // 段標題右邊寫這段算出來的數字，跟算式對得起來
-  await expect(page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out')).toHaveText(`${m![1]} 卡`)
-  await expect(page.locator('.goal-sec-h', { hasText: '② 減重多少' }).locator('.out')).toHaveText(`− ${m![2]} 卡／天`)
-  // 公式推導那列直接寫 BMR × 活動係數，使用中
+  await expect(page.locator('.goal-hero-cap')).toHaveText('每天吃')
+  await expect(src(page)).toContainText('用公式估的，可能偏樂觀')
+  await expect(when(page), '還沒設目標體重').toHaveText('設一個目標體重，就算得出幾月到')
+  await expect(goalInput(page)).toBeVisible()
+  await expect(rateSlider(page)).toBeVisible()
+  await expect(page.locator('.goal-more'), '怎麼算的預設收合').not.toHaveAttribute('open', '')
+  await expect(page.locator('#g-protein'), '蛋白質在怎麼算的裡').toBeHidden()
+  await expect(page.locator('.goal-seg-wrap'), '自動／自訂在怎麼算的裡').toBeHidden()
+
+  // 目標 70：平均 75.95 → 現在 76.0、差 6.0 kg；速度是 DB 的 0.5 kg/週＝2.17 kg/月 → 6 ÷ 2.17 ≈ 2.77 個月 ≈ 84 天
+  // → 2026-11-24 ＋ 84 天＝2027-02-16＝2 月中
+  await setGoalKg(page, 70)
+  await expect(when(page)).toHaveText('2 月中到 70.0 kg')
+  const target = await kcal(page)
+
+  // 打開「怎麼算的」：維持熱量那段寫的數字 − 頂端＝每天少吃的 550（0.5 kg/週 × 7700 ÷ 7）
+  await openMore(page)
+  const tdee = Number(((await page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out').textContent()) ?? '').replace(/[^\d]/g, ''))
+  expect(tdee - target).toBe(550)
   await expect(est(page, '公式推導')).toContainText('× 活動係數 1.375')
   await expect(est(page, '公式推導').locator('.goal-tag')).toHaveText('使用中')
-
-  await page.locator('#g-goal').selectOption('maintain')
-  await expect(page.locator('.goal-hero-eq'), '維持沒有減項').toHaveText(`維持熱量 ${m![1]}（公式推導）`)
-  await expect(page.locator('.goal-sec-h', { hasText: '② 目標' }).locator('.out')).toHaveText('± 0 卡')
+  await expect(page.locator('.goal-sec-h', { hasText: '② ' }), '② 減重多少那段併進頂端的兩個控制了').toHaveCount(0)
 })
 
 test('兩種維持熱量那兩列的算式不換行：393 寬、桌機捲軸佔掉 15px 也一樣', async ({ page }) => {
@@ -648,13 +708,18 @@ test('回推在範圍內：不自己跳確認框，但點紀錄回推那一列�
 test('怎麼算的：速度寫選單上的值（不是換算回來的 2.17），後面註明存成每週多少', async ({ page }) => {
   await openApp(page)
   await openGoal(page)
-  await page.locator('#g-rate').selectOption('1.5')
-  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  // DB 是 2.17 kg/月（對不上五格，滑桿停在最近的 1.5）：往左再往右，最後存的是 1.5 那格
+  await rateSlider(page).focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
+  expect((await profilePatches(page))[1].body).toEqual({ rate_kg_per_week: 0.35 })
   await page.locator('.goal-how summary').click()
   // 1.5 kg/月 存成 0.35 kg/週 ⇒ 0.35 × 7700 ÷ 7 ＝ 385
   await expect(page.locator('.goal-calc')).toContainText('速度 1.5 kg/月（存成每週 0.35 kg）')
   await expect(page.locator('.goal-calc')).toContainText('每天少吃 ＝ 0.35 × 7700 ÷ 7 ＝ 385 卡')
-  await expect(page.locator('.goal-hero-eq')).toContainText('− 減重 385')
+  const tdee = Number(((await page.locator('.goal-sec-h', { hasText: '① 維持熱量（TDEE）' }).locator('.out').textContent()) ?? '').replace(/[^\d]/g, ''))
+  expect(tdee - (await kcal(page)), '頂端＝維持熱量 − 385').toBe(385)
 })
 
 test('讀不到記錄：不拖垮頁面，也不問', async ({ page }) => {
@@ -934,7 +999,8 @@ test('切回自動、離開再進來（前一筆還在路上）：落地後畫�
   await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
   await reenterGoal(page)
 
-  await expect(page.locator('#g-goal'), '前一筆落地了，畫面還停在自訂').toBeVisible({ timeout: 5000 })
+  await openMore(page) // 重新進來「怎麼算的」又是收合的
+  await expect(page.locator('#g-protein'), '前一筆落地了，畫面還停在自訂').toBeVisible({ timeout: 5000 })
   await page.getByRole('button', { name: '返回設定' }).click()
   await page.waitForTimeout(300)
   expect((await profilePatches(page)).map((w) => w.body.use_custom_targets), '舊的自訂被寫回去了').toEqual([false])
@@ -1048,7 +1114,7 @@ test('一欄失敗、別欄成功：錯誤留著，別欄成功不能把它洗�
   await expect(page.locator('.goal-err')).toBeVisible()
   await expect(page.locator('#g-protein')).toHaveValue('1.8')
 
-  await page.locator('#g-goal').selectOption('maintain')
+  await setGoalKg(page, 76) // → 維持
   await expect(page.locator('.goal-saved')).toHaveText('已儲存')
   await expect(page.locator('.goal-err'), '蛋白質沒存到，改目標成功不能洗掉提示').toBeVisible()
 
@@ -1098,13 +1164,15 @@ test('已改用回推值時清空出生年：NaN 不進畫面', async ({ page })
 
 test('速度五格存完都認得回來：kg/週 兩位小數換回 kg/月 的誤差在容差內', async ({ page }) => {
   await openApp(page)
-  await openGoal(page)
-  for (const v of ['0.5', '0.75', '1', '1.25', '1.5']) {
-    await page.locator('#g-rate').selectOption(v)
-    await expect(page.locator('#g-rate'), `${v} 存完認不回來`).toHaveValue(v)
-    await expect(page.locator('.goal-pick', { hasText: '速度' }).locator('.val')).toHaveText(`${v} kg/月`)
+  await openGoal(page, { more: false })
+  await rateSlider(page).focus()
+  for (const [i, v] of ['0.5', '0.75', '1', '1.25', '1.5'].entries()) {
+    await page.keyboard.press(i === 0 ? 'Home' : 'ArrowRight')
+    await expect.poll(async () => (await profilePatches(page)).length, `${v} 沒有存`).toBe(i + 1)
     await expect(page.locator('.goal-saved')).toHaveText('已儲存')
-    await expect(page.locator('.goal-pick', { hasText: '速度' }).locator('.val')).toHaveText(`${v} kg/月`)
+    // 存完重讀的是捨到兩位的 kg/週：換回來要還認得是這一格，不是 0.52 之類
+    await expect(pace(page), `${v} 存完認不回來`).toHaveText(`每月 ${v} kg`)
+    await expect(rateSlider(page)).toHaveAttribute('aria-valuenow', String(i))
   }
 })
 
@@ -1144,12 +1212,13 @@ test('舊資料沒有速度：帶速度的前一筆失敗、後一筆也要帶�
   await setWriteDelay(page, 300)
   await failNextPatch(page)
 
-  await page.locator('#g-goal').selectOption('cut')
+  await setGoalKg(page, 70) // → 減重（要帶速度）
   await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
-  await page.locator('#g-goal').selectOption('bulk')
+  expect((await profilePatches(page))[0].body).toEqual({ goal_weight_kg: 70, goal: 'cut', rate_kg_per_week: 0.12 })
+  await setGoalKg(page, 80) // → 增重
 
   await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
-  expect((await profilePatches(page))[1].body).toEqual({ goal: 'bulk', rate_kg_per_week: 0.12 })
+  expect((await profilePatches(page))[1].body).toEqual({ goal_weight_kg: 80, goal: 'bulk', rate_kg_per_week: 0.12 })
   await expect(page.locator('.notice')).toHaveCount(0)
 })
 
@@ -1157,10 +1226,11 @@ test('速度存失敗後改選維持：速度列消失，錯誤跟著收掉', as
   await openApp(page)
   await openGoal(page)
   await failNextPatch(page)
-  await page.locator('#g-rate').selectOption('1')
+  await rateSlider(page).focus()
+  await page.keyboard.press('ArrowLeft')
   await expect(page.locator('.goal-err')).toBeVisible()
 
-  await page.locator('#g-goal').selectOption('maintain')
+  await setGoalKg(page, 76) // → 維持
   await expect(page.locator('.goal-saved')).toHaveText('已儲存')
   await expect(page.locator('.goal-err'), '失敗的欄位都不見了，錯誤收不掉').toHaveCount(0)
 })
@@ -1169,7 +1239,8 @@ test('切分頁會收掉失敗的錯誤，之後別欄失敗再補上也收得�
   await openApp(page)
   await openGoal(page)
   await failNextPatch(page)
-  await page.locator('#g-rate').selectOption('1')
+  await rateSlider(page).focus()
+  await page.keyboard.press('ArrowLeft')
   await expect(page.locator('.goal-err')).toBeVisible()
 
   await page.locator('.goal-seg-wrap .seg button', { hasText: '自訂' }).click()
@@ -1197,7 +1268,7 @@ test('連按自動、自訂、自動，前一筆失敗：畫面停在自動', as
   await page.locator('.goal-seg-wrap .seg button', { hasText: '自動' }).click()
 
   await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
-  await expect(page.locator('#g-goal'), '最後按的是自動').toBeVisible()
+  await expect(page.locator('#g-protein'), '最後按的是自動').toBeVisible()
   await expect(page.locator('#g-custom-kcal')).toHaveCount(0)
 })
 
@@ -1242,6 +1313,7 @@ test('基本資料改到一半直接點返回：值要存到；不合法就丟�
   expect((await profilePatches(page))[0].body).toEqual({ height_cm: 180 })
 
   await page.locator('.entry-row', { hasText: '每日目標' }).click()
+  await openMore(page)
   await page.locator('#g-height').fill('')
   await page.getByRole('button', { name: '返回設定' }).click()
   await page.waitForTimeout(200)
@@ -1417,4 +1489,144 @@ test('七天冷卻：六天前變動過，差在自動區間也不調；差很�
   await p2.getByRole('button', { name: '返回設定' }).click()
   await expect(settingsTab(p2).locator('.tab-dot')).toHaveCount(0)
   await expect(p2.locator('.entry-row', { hasText: '每日目標' }).locator('.lb-new')).toHaveCount(0)
+})
+
+/* ═══════════ v2.163 目標體重＋速度滑桿（spec「每日目標改版」AC 2、5、6、7）═══════════ */
+
+test('速度滑桿：拖動中結果卡的熱量與日期跟著變、放開才存；存完離開再進來還停在那一格', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page, { more: false })
+  await setGoalKg(page, 70)
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  const kcal0 = await kcal(page)
+  const when0 = await when(page).textContent()
+
+  // 拖到最左（每月 0.5 kg）：按住不放時只預覽、不寫
+  const thumb = page.locator('.goal-slider-thumb')
+  const ctl = (await page.locator('.goal-slider-ctl').boundingBox())!
+  const t = (await thumb.boundingBox())!
+  await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(ctl.x + 2, t.y + t.height / 2, { steps: 8 })
+  await expect(pace(page)).toHaveText('每月 0.5 kg')
+  await expect.poll(() => kcal(page), '拖動中熱量沒跟著變').toBeGreaterThan(kcal0)
+  await expect(when(page), '拖動中日期沒跟著變').not.toHaveText(when0 ?? '')
+  expect(await profilePatches(page), '還沒放開就寫了').toHaveLength(1)
+  await page.mouse.up()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(2)
+  // 0.5 kg/月 ÷ (52/12) ≈ 0.115 → 0.12
+  expect((await profilePatches(page))[1].body).toEqual({ rate_kg_per_week: 0.12 })
+
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await page.locator('.entry-row', { hasText: '每日目標' }).click()
+  await expect(pace(page)).toHaveText('每月 0.5 kg')
+  await expect(rateSlider(page)).toHaveAttribute('aria-valuenow', '0')
+})
+
+test('體重清單讀不到：退回用最近一次體重（照實寫「最近一次」），方向與日期照算、存檔照樣寫方向', async ({ page }) => {
+  await openAppAt(page, '2026-11-24')
+  await page.evaluate(() => {
+    ;(window as unknown as { __weightListFail: boolean }).__weightListFail = true
+  })
+  await openGoal(page, { more: false })
+  await expect(page.locator('.goal-plan-now'), '不是平均體重就不能寫「現在」').toHaveText('最近一次 76.0 kg')
+  await expect(when(page), '讀不到清單不等於沒有紀錄，不能說「量一次體重」').toHaveText('設一個目標體重，就算得出幾月到')
+  await expect(heroNum(page)).toHaveText(/\d/)
+
+  await setGoalKg(page, 70)
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  expect((await profilePatches(page))[0].body).toEqual({ goal_weight_kg: 70, goal: 'cut' })
+  await expect(dirLine(page)).toHaveText('比現在輕 6.0 kg · 減重')
+  await expect(when(page)).toHaveText('2 月中到 70.0 kg')
+})
+
+test('平均體重已到目標（減重）：結果卡寫「到 X kg 了」＋「改成維持」，不按就不改', async ({ page }) => {
+  const fix = { ...FIX, profile: [{ ...FIX.profile[0], goal_weight_kg: 77 }] } as unknown as typeof FIX
+  await openApp(page, {}, fix)
+  await openGoal(page, { more: false })
+  await expect(when(page)).toHaveText('到 77.0 kg 了')
+  await expect(dirLine(page), '到了就寫已到目標，不寫「比現在重 … · 減重」').toHaveText('比現在重 1.0 kg · 已到目標')
+  const btn = page.getByRole('button', { name: '改成維持' })
+  await expect(btn).toBeVisible()
+  await page.waitForTimeout(300)
+  expect(await profilePatches(page), '到了不能自己切成維持').toHaveLength(0)
+  await expect(rateSlider(page), '還沒按就還是減重、速度還在').toBeVisible()
+
+  await btn.click()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  // 目標體重一起換成現在（平均 75.95 捨到 0.1），方向行才讀得通
+  expect((await profilePatches(page))[0].body).toEqual({ goal: 'maintain', goal_weight_kg: 76 })
+  await expect(when(page)).toHaveText('維持在 76.0 kg')
+  await expect(dirLine(page)).toHaveText('差不到 0.5 kg · 維持')
+  await expect(btn).toHaveCount(0)
+  await expect(rateSlider(page)).toHaveCount(0)
+})
+
+test('自訂目標時：滑桿停用並說速度不影響熱量，結果卡寫自訂的數字；到了也不出「改成維持」', async ({ page }) => {
+  const fix = customFix()
+  Object.assign(fix.profile[0], { goal_weight_kg: 77 }) // 減重、平均 75.95 已低於目標＝到了
+  await openApp(page, {}, fix)
+  await openGoal(page, { more: false })
+  await expect(page.getByRole('button', { name: '改成維持' })).toHaveCount(0)
+  await expect(rateSlider(page)).toBeDisabled()
+  await expect(page.locator('.goal-pace-note')).toHaveText('用自己填的目標時，速度不影響熱量')
+  await expect(src(page)).toContainText('自己填的')
+  expect(await kcal(page)).toBe(Number(customFix().profile[0].custom_kcal))
+})
+
+test('目標體重打到一半直接點返回（iOS 不會失焦）：照樣存，「71,5」當 71.5', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page, { more: false })
+  await goalInput(page).fill('71,5')
+  await suppressBlur(page)
+  await page.getByRole('button', { name: '返回設定' }).click()
+  await expect.poll(async () => (await profilePatches(page)).length).toBe(1)
+  expect((await profilePatches(page))[0].body).toEqual({ goal_weight_kg: 71.5, goal: 'cut' })
+})
+
+/* 手機上從滑桿開始往下捲頁面：不能改到速度（v2.163 review）。touch-action: pan-y 讓瀏覽器接手捲動，但 Base UI 的 Slider
+   touchstart 就把值設到手指位置、touchend 照樣 commit、不聽 cancel——擋在 DailyGoal 的 gestureRef。
+   桌面 WebKit 沒有真的觸控捲動：這裡用自己造的 touch 事件（Base UI 讀 changedTouches／touches 的 identifier 與座標），
+   驗的是「我們的判斷」；瀏覽器真的接手捲動時的 pointercancel 順序只能真機看。 */
+async function touchOnSlider(page: Page, from: { x: number; y: number }, moves: { x: number; y: number }[]) {
+  await page.evaluate(({ from, moves }) => {
+    const ctl = document.querySelector('.goal-slider-ctl') as HTMLElement
+    const fire = (target: EventTarget, type: string, p: { x: number; y: number }, ended = false) => {
+      const t = { identifier: 1, clientX: p.x, clientY: p.y, pageX: p.x, pageY: p.y, target: ctl }
+      const ev = new Event(type, { bubbles: true, cancelable: true })
+      Object.defineProperty(ev, 'touches', { value: ended ? [] : [t] })
+      Object.defineProperty(ev, 'targetTouches', { value: ended ? [] : [t] })
+      Object.defineProperty(ev, 'changedTouches', { value: [t] })
+      target.dispatchEvent(ev)
+    }
+    fire(ctl, 'touchstart', from)
+    let last = from
+    for (const m of moves) {
+      fire(ctl, 'touchmove', m)
+      last = m
+    }
+    fire(ctl, 'touchend', last, true)
+  }, { from, moves })
+}
+
+test('手機：在滑桿上點一下軌道會換格並存；從滑桿開始往下捲頁面不換格、不存、預覽也退回', async ({ page }) => {
+  await openApp(page)
+  await openGoal(page, { more: false })
+  const box = (await page.locator('.goal-slider-ctl').boundingBox())!
+  const y = box.y + box.height / 2
+  const left = { x: box.x + 6, y } // 最左那格（每月 0.5 kg）
+  const before = await kcal(page)
+
+  // 往下捲：起點在最左格，垂直走 60px
+  await touchOnSlider(page, left, [{ x: left.x, y: y + 15 }, { x: left.x + 2, y: y + 35 }, { x: left.x + 3, y: y + 60 }])
+  await page.waitForTimeout(300)
+  expect(await profilePatches(page), '捲頁面不能存速度').toHaveLength(0)
+  await expect(pace(page), '捲頁面不能留下預覽').toHaveText('每月 2.17 kg')
+  expect(await kcal(page)).toBe(before)
+
+  // 正控制：同一個點直接點一下（沒移動）＝換到那格、存
+  await touchOnSlider(page, left, [])
+  await expect.poll(async () => (await profilePatches(page)).length, '造的 touch 事件沒進到 Base UI，上面那條就沒驗到').toBe(1)
+  expect((await profilePatches(page))[0].body).toEqual({ rate_kg_per_week: 0.12 })
+  await expect(pace(page)).toHaveText('每月 0.5 kg')
 })

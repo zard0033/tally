@@ -205,7 +205,7 @@ export default function Settings(props: SettingsProps) {
   if (view === 'goal') {
     return (
       <>
-        <DailyGoal profile={profile} latestWeight={latestWeight} estimate={estimate} onSaveProfile={onSaveProfile} onSaveLost={onSaveLost} onBack={() => setView('list')} onOpenBodyUpdate={openBodyUpdate} />
+        <DailyGoal profile={profile} latestWeight={latestWeight} weights={weights} estimate={estimate} onSaveProfile={onSaveProfile} onSaveLost={onSaveLost} onBack={() => setView('list')} onOpenBodyUpdate={openBodyUpdate} />
         {bodyUpdateSheet}
       </>
     )

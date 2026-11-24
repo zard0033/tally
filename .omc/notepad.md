@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-24）：v2.162 記店家改版（別名當列、新店卡、今日頁點開收斂 D）review 修完、本機 vitest 1323／smoke 綠，commit 待 push（CI 全量待確認）。每日目標改版 spec 已核可、DDL goal_weight_kg 已上 prod，程式未動。
-下一步：①v2.162 push＋gh run watch ②實作每日目標改版（D2）③寫 spec：一個框記一餐（甲）、熱量看這一週（B；weekly-*.html 含個人數值未進 git，寫 spec 時換示意值）④真機看 v2.160–v2.162 ⑤AI 課表訪談。
+現況（2026-11-24）：v2.162 記店家改版（別名當列、新店卡、今日頁點開收斂 D）已部署（c24669a，CI 659 條全綠）。v2.163 每日目標改版（目標體重＋速度滑桿 D2）review 修完、本機綠，待 push。
+下一步：①v2.163 push＋CI（完整 SHA 才查得到 run）③寫 spec：一個框記一餐（甲）、熱量看這一週（B；weekly-*.html 含個人數值未進 git，寫 spec 時換示意值）④真機看 v2.160–v2.162 ⑤AI 課表訪談。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -33,6 +33,7 @@
 **真機待驗**
 - 拍照辨識 v2.46（iOS 切欄位鍵盤上下箭頭會中斷）：仍會斷先分辨 (a) 箭頭按了焦點沒動＝accessory bar 分組問題，嫌疑是 v2.34 關掉的 vaul hack（app.css `.sheet`）(b) 焦點移了但看不到＝空間／捲動，下一格可收「鍵盤升起時收起 AI 辨識鈕」。全文 DESIGN v2.46。
 - B2 訓練中改版清單（DESIGN v2.69）、v2.91–v2.93、RPE、重量建議、有氧卡與有氧 sheet、縮圖放大檢視器疊在加動作 sheet 上的手感。
+- v2.163 每日目標滑桿：手指從滑桿上開始往下捲頁面，不能換格、不能存（`touch-action: pan-y`＋垂直 >10px 或 cancel 就作廢；10px 是假設值）。桌面只驗到自造 touch 事件，瀏覽器真接手捲動的事件順序要真機看。
 - 同步細條 `role=status` 會不會讓 VoiceOver 每記一筆都播報「1 筆尚未同步」（Training.tsx:232）；吵就只在有失敗條目時進 live region。
 
 **待辦（2026-11-11 整理，依序）**
