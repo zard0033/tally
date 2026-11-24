@@ -59,7 +59,8 @@ export interface EstimateDraft {
   /** 縮放的基準：AI（或檔位）原本給的那組數字。改熱量一律從這組換算——每打一個字就拿「目前」的數字再縮放，
    *  四捨五入會一路疊加，中間打出 0 還會把營養素永久歸零（review B1）。 */
   origin: { kcal: number; protein: number; fat: number; carb: number }
-  /** AI 的列：估這一樣用的那句話（修正時一起送，v2.151）；檔位與自己打的是 null。 */
+  /** 估出或對上這一樣的那句話：AI 的列＝整句（修正時一起送，v2.151）；食品庫列＝送 AI 前對上的那一段，或 AI 估完才換上的整句。
+   *  寫入時靠它認店家（draftsToIntake）。檔位與自己打的是 null——不能拿 null 判斷「是不是 AI 的列」，看 lib。 */
   sentence: string | null
   /** AI 給的品名：使用者改過品名（name ≠ aiName）就保留他的，修正只換數字與假設。 */
   aiName: string
@@ -313,7 +314,8 @@ export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: 
       low: null, high: null, assumption: null,
       kcalOnly: false, macrosGuessed: false, keep: false, foodId: null,
       origin: { kcal: 0, protein: 0, fat: 0, carb: 0 },
-      sentence: null, aiName: '', fixedBy: null, fixCount: 0,
+      // 預設留對上的那一段（不是 null）：寫入時靠它認店家，漏了就是 v2.161 真機那個 bug；AI 估完才換的呼叫端再蓋成整句
+      sentence: segment.trim() || null, aiName: '', fixedBy: null, fixCount: 0,
       lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', via, segment, ai },
       near: null,
       noLib: false,
@@ -353,6 +355,7 @@ export function resolveBeforeAi(segments: readonly string[], foods: readonly Lib
   if (segments.length === 0) return null
   const hits = segments.map((s) => exactMatch(s, foods, rank))
   if (hits.some((h) => h === null)) return null
+  // 店家只算那一段（draftFromLibrary 把 segment 留成 sentence）；AI 估完那條是整句，見 resolveAfterAi
   return hits.map((f, i) => draftFromLibrary(f as LibCandidate, 'pre', segments[i]))
 }
 
