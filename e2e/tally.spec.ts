@@ -231,6 +231,10 @@ test('Tally UI 回歸', async ({ page }) => {
       (await a.locator('.item-editor .qty-stepper').count()) === 1,
       '編輯區展開了卻沒有份量 stepper',
     )
+    // 餐別收在「改餐別、品名、營養」裡（v2.162），預設收著
+    check((await a.locator('.item-editor .seg button').count()) === 0, '餐別分段控制器應該預設收在「改餐別、品名、營養」裡')
+    await a.locator('.item-editor .ed-more').click()
+    await settle(page, 300)
     check(
       (await a.locator('.item-editor .seg button').count()) === 4,
       '編輯區的餐別分段控制器應該有四格',

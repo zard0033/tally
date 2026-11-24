@@ -8,7 +8,7 @@
    守門擋下」。它鎖的是 App.tsx 的 patchIntakeRow，而那道防線這輪還從單一 mutation
    擴成份量與餐別共用，所以改成兩條路徑各驗一次。 */
 import { test, expect, type Page } from '@playwright/test'
-import { nextDay, openApp, prevDay } from './harness'
+import { nextDay, openApp, openEditMore, prevDay } from './harness'
 
 /** fixture：id 102 是午餐「雞胸餐盒」，qty=1，kcal=420（單份快照） */
 const ROW = '.item[data-row="102"]'
@@ -69,6 +69,8 @@ test('按餐別分段控制器把午餐那筆改成晚餐：換區段、編輯�
   const lunchNode = page.locator('.node', { has: page.locator('.node-name', { hasText: '午餐' }) })
   await expect(lunchNode.locator(ROW)).toHaveCount(1)
 
+  // 餐別收在「改餐別、品名、營養」裡（v2.162）
+  await openEditMore(page, ROW)
   await page.locator(`${ROW} .seg button`, { hasText: '晚餐' }).click()
 
   /* 收合。**不是靠 FLIP 動畫**——那一筆進到另一個 MealNode 的 <ul>，React 卸載重掛，

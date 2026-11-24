@@ -438,6 +438,19 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
    .item-editor 註解），混用兩套節奏會讓最後一欄底下多出一段對不上任何 token 的空白。 */
 .ed-detail { flex-direction: column; align-items: stretch; gap: var(--s-2); }
 .ed-detail .field-float { margin-bottom: 0; }
+/* 點開只露常用的（v2.162，spec「記店家改版」D）：餐別、品名、營養收成這一行，字型與箭頭同份量微調那行（.pmods-sum），
+   後面灰字寫現在的「早餐 · 60 卡」——收著也看得到值，不必點開確認。 */
+.ed-more { display: flex; align-items: center; gap: var(--s-1); min-height: 36px; padding: 0; border: none; background: none;
+  font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent); cursor: pointer; text-align: left;
+  -webkit-appearance: none; appearance: none; position: relative; }
+.ed-more::before { content: ""; position: absolute; inset: -4px -6px; }
+.ed-more svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform var(--dur-base) var(--ease); }
+.ed-more[aria-expanded="true"] svg { transform: rotate(90deg); }
+.ed-more:active { opacity: .6; }
+.ed-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
+.ed-more-now { margin-left: var(--s-1); font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.ed-more-body { display: flex; flex-direction: column; gap: var(--s-2); }
 
 /* 刪除：--over 是破表狀態的專用色，`.item-delete` 用實心紅圓沒問題是因為它只在左滑
    時短暫出現；這一顆是展開期間常駐的，填色會讓警告色變成常態元素、也會壓過真正的
@@ -1599,6 +1612,27 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .add-food-row, .est-row { transition: opacity var(--dur-base) var(--ease); }
 .add-food-row:active, .est-row:active { opacity: .6; }
 .add-food-row:focus-visible, .est-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 新店第一次（v2.162，spec「記店家改版」甲3，樣張 vendor-directions.html 甲3）：搜不到時一張主色淡底卡，
+   列出差不多的通用食物（白底選項，選中＝主色描邊）、記住勾選、主按鈕寫「記成『品名 · 店家』」。 */
+.shop-card { margin: var(--s-2) var(--s-5) 0; padding: var(--s-3); border-radius: var(--r-btn); background: var(--accent-soft);
+  display: flex; flex-direction: column; gap: var(--s-2); }
+.shop-card-t { margin: 0; font-size: var(--t-sm); font-weight: 800; color: var(--ink); }
+.shop-opt { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 44px; padding: 0 var(--s-3); border: none;
+  border-radius: var(--r-tab); background: var(--card); color: var(--ink); font: inherit; font-size: var(--t-sm); text-align: left;
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.shop-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 700; }
+.shop-opt-nm { flex: 1; min-width: 0; }
+.shop-opt-kc { color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.shop-opt-est { color: var(--ink-muted); }
+.shop-opt:active, .shop-more:active { opacity: .6; }
+.shop-opt:focus-visible, .shop-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shop-more { align-self: flex-start; min-height: 36px; padding: 0; border: none; background: none; color: var(--accent);
+  font: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.shop-keep { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink); }
+.shop-keep input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.shop-note { margin: 0; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.shop-card .pick-bar-btn { margin: 0; }
 
 /* ═══ 估一筆（spec.md A 節 2026-11-13；DESIGN v2.134。樣張 estimate-entry.html B、ai-flair.html 光暈 A）═══
    太陽色（--sun／--sun-pale／--sun-deep）在這裡是「這是 AI」的身分，不是狀態色，所以可以跟主藍、破表紅同框。

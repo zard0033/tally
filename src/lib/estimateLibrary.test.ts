@@ -8,7 +8,9 @@ import {
   draftsFromItems,
   draftsToIntake,
   estimateTotals,
+  libShown,
   libSummary,
+  matchedAlias,
   resolveAfterAi,
   resolveBeforeAi,
   stepLibQty,
@@ -43,6 +45,46 @@ describe('① 送 AI 之前', () => {
     const rows = draftsToIntake(r ?? [], 'breakfast', '2026-11-24', ['麻古', '青山'])
     expect(rows[0].vendor).toBe('麻古')
     expect(rows[1]).not.toHaveProperty('vendor') // 滷蛋那段沒提店家
+  })
+  it('靠「店家 品名」別名對上的列：顯示與寫入都用別名的品名與店家，跟清單勾別名列同一個結果（v2.162 AC 6）', () => {
+    const tea = food(139, '手搖飲（無糖純茶＋寒天，大杯）', null, 60, { aliases: ['麻古 紅萱波波', '青山 菜燕春青'] })
+    // 送 AI 前：整段對上別名
+    const [pre] = resolveBeforeAi(splitSegments('麻古 紅萱波波'), [...FOODS, tea], none) ?? []
+    expect([pre.name, pre.lib?.alias?.vendor]).toEqual(['紅萱波波', '麻古'])
+    expect(libShown(pre.lib!)).toEqual({ name: '紅萱波波', vendor: '麻古' })
+    // 句子裡沒有已知店家也照別名寫（不靠 vendorInSentence）
+    expect(draftsToIntake([pre], 'breakfast', '2026-11-24', [])[0]).toMatchObject({ food_id: 139, name: '紅萱波波', vendor: '麻古' })
+    // AI 回來後：AI 回的品名對上別名的品名段
+    const [post] = resolveAfterAi([item('紅萱波波', 80)], '早上一杯紅萱波波', [...FOODS, tea], none)
+    expect(post.lib?.food.id).toBe(139)
+    expect(draftsToIntake([post], 'breakfast', '2026-11-24', ['麻古'])[0]).toMatchObject({ name: '紅萱波波', vendor: '麻古' })
+    // 對上品名本身：不算別名，照舊不寫品名
+    const [byName] = resolveBeforeAi(['手搖飲（無糖純茶＋寒天，大杯）'], [...FOODS, tea], none) ?? []
+    expect(byName.lib?.alias).toBeNull()
+    expect(draftsToIntake([byName], 'breakfast', '2026-11-24', [])[0]).toMatchObject({ name: null })
+    expect(matchedAlias('青山菜燕春青', tea)?.vendor).toBe('青山')
+    expect(matchedAlias('紅萱波波', { ...tea, vendor: '麻古' })).toBeNull()
+  })
+  it('好幾家有同一個品名：整個別名對上就是那家；只對上品名時看句子提到哪家，沒提或提了兩家就不猜（review #2）', () => {
+    const tea = food(140, '手搖飲（無糖純茶＋珍珠，大杯）', null, 165, { aliases: ['50嵐 四季春青茶', '清心 四季春青茶', '麻古 紅萱波波'] })
+    const foods = [...FOODS, tea]
+    expect(matchedAlias('清心 四季春青茶', tea)?.vendor).toBe('清心')
+    expect(matchedAlias('四季春青茶', tea, '下午在清心買了四季春青茶')?.vendor).toBe('清心')
+    expect(matchedAlias('四季春青茶', tea, '一杯四季春青茶')).toBeNull()
+    expect(matchedAlias('四季春青茶', tea, '50嵐跟清心的四季春青茶')).toBeNull()
+    // 只有一家有的品名：句子沒提店家也是那家
+    expect(matchedAlias('紅萱波波', tea, '一杯紅萱波波')?.vendor).toBe('麻古')
+    // AI 估完：句子提到清心 → 寫清心；沒提 → 不猜，品名照食物、店家退回從句子認（認不到就不寫）
+    const [named] = resolveAfterAi([item('四季春青茶', 160)], '下午在清心買了四季春青茶', foods, none)
+    expect(draftsToIntake([named], 'snack', '2026-11-24', ['50嵐', '清心'])[0]).toMatchObject({ food_id: 140, name: '四季春青茶', vendor: '清心' })
+    const [unnamed] = resolveAfterAi([item('四季春青茶', 160)], '一杯四季春青茶', foods, none)
+    expect(unnamed.lib?.alias).toBeNull()
+    const row = draftsToIntake([unnamed], 'snack', '2026-11-24', ['50嵐', '清心'])[0]
+    expect(row).toMatchObject({ food_id: 140, name: null })
+    expect(row).not.toHaveProperty('vendor')
+    // 送 AI 前只打品名：同樣不猜
+    const [pre] = resolveBeforeAi(['四季春青茶'], foods, none) ?? []
+    expect(pre.lib?.alias).toBeNull()
   })
   it('有一段對不上 → null（整句送 AI）；空句子也是 null', () => {
     expect(resolveBeforeAi(['十八燒油雞腿飯', '夜市臭豆腐'], FOODS, none)).toBeNull()

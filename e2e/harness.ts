@@ -146,6 +146,13 @@ export async function closeFirstRow(page: Page) {
   }
 }
 
+/** 就地編輯展開「改餐別、品名、營養」（v2.162 起預設收著，spec「記店家改版」D）。編輯區要先打開。 */
+export async function openEditMore(page: Page, row: string) {
+  const more = page.locator(`${row} .item-editor .ed-more`)
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click()
+  await expect(page.locator(`${row} .item-editor .ed-more-body`)).toBeVisible()
+}
+
 /** 不經手勢的刪除路徑：點品項展開編輯區 → 按裡面的刪除鈕。
  *  v2.20 前是「點品項露出紅圓 → 按紅圓」；點按語意改成展開編輯區之後，鍵盤與
  *  非觸控的刪除入口跟著搬進編輯區（左滑露出紅圓那條手勢路徑完全沒變）。

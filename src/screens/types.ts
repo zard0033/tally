@@ -55,8 +55,6 @@ export interface TodayProps {
   onUpdateIntakeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   /** 食品庫裡使用中的那一筆（份量微調重算的基準）；封存或刪掉的查不到。 */
   foodById: (id: number) => Food | undefined
-  /** 店家選項（食品庫的店家＋別名裡的店家）：就地編輯改「這一餐在哪買」用。 */
-  vendorOptions: string[]
   /** 這一天各餐的建議（該餐已有紀錄就沒有那一格）。沒資料或查詢失敗就是空物件。 */
   repeatByMeal: RepeatByMeal
   /** 進行中的一鍵操作：加入是「日期|餐別」，復原是別的值；非 null 時所有建議都不能按。 */
@@ -96,6 +94,8 @@ export interface LogSheetProps {
   onCreateFood: (food: NewFood) => Promise<Food>
   /** 「估一筆」的一列先建成 foods（keep＝false 就建立即封存），回傳新列給 LogSheet 記下 id 再寫 intake。 */
   onCreateEstimateFood: (food: NewFood, keep: boolean) => Promise<Food>
+  /** 改食品庫那一筆（新店卡的「記住」把搜尋字加成別名，spec「記店家改版」甲3）；失敗 rejects，卡上自己接。 */
+  onUpdateFood: (id: number, patch: Partial<NewFood>) => Promise<void>
 }
 
 export interface SettingsProps {

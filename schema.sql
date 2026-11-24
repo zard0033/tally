@@ -130,6 +130,10 @@ create table weight (
 --   alter table profile add column measured_tdee_on date;
 -- 2026-11-15 起 measured_tdee_prev＝上一次變動前的值（「還原」用；每週自動調整，spec「每日目標省心」）。既有資料庫補：
 --   alter table profile add column measured_tdee_prev numeric(6,1) check (measured_tdee_prev is null or measured_tdee_prev between 800 and 5000);
+-- 2026-11-24 起 goal_weight_kg＝目標體重（spec「每日目標改版」）：null＝還沒設，方向照舊看 goal；設了之後存檔時由它推方向寫回 goal
+-- （差不到 0.5 kg＝maintain），computeTargets 照舊只讀 goal。既有資料庫補（2026-11-24 已執行）：
+--   alter table profile add column goal_weight_kg numeric(4,1) check (goal_weight_kg is null or goal_weight_kg between 30 and 250);
+--   回滾：alter table profile drop column goal_weight_kg;
 create table profile (
   user_id            uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   sex                text not null check (sex in ('male','female')),
@@ -146,7 +150,8 @@ create table profile (
   custom_carb_g      numeric(5,1) check (custom_carb_g is null or custom_carb_g between 0 and 2000),
   measured_tdee      numeric(6,1) check (measured_tdee is null or measured_tdee between 800 and 5000),
   measured_tdee_on   date,
-  measured_tdee_prev numeric(6,1) check (measured_tdee_prev is null or measured_tdee_prev between 800 and 5000)
+  measured_tdee_prev numeric(6,1) check (measured_tdee_prev is null or measured_tdee_prev between 800 and 5000),
+  goal_weight_kg     numeric(4,1) check (goal_weight_kg is null or goal_weight_kg between 30 and 250)
 );
 
 alter table foods   enable row level security;

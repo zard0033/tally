@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aliasVendors, clampVendor, intakeVendor, needsVendor, rowVendor, splitAlias, vendorFromQuery, vendorInSentence } from './mealVendor'
+import { aliasVendors, clampVendor, intakeVendor, rowVendor, splitAlias, vendorInSentence } from './mealVendor'
 import { exactMatch, keysOf } from './foodMatch'
 import { aliasHit, foodMatches, vendorOptionsOf } from './foodForm'
 
@@ -22,35 +22,6 @@ describe('rowVendor', () => {
     expect(rowVendor({ vendor: '麻古', foods: { vendor: null } })).toBe('麻古')
     expect(rowVendor({ vendor: '  ', foods: { vendor: null } })).toBeNull()
     expect(rowVendor({ foods: null })).toBeNull()
-  })
-})
-
-describe('needsVendor（AC 4、5）', () => {
-  it('通用的餐點類與飲料出，有店家的、主食／蛋白質補充／配菜／點心不出', () => {
-    expect(needsVendor({ vendor: null, category: '飲料' })).toBe(true)
-    expect(needsVendor({ vendor: null, category: '便當' })).toBe(true)
-    expect(needsVendor({ vendor: '壯壯餐盒', category: '健康餐盒' })).toBe(false)
-    for (const c of ['主食', '蛋白質補充', '配菜', '點心']) expect(needsVendor({ vendor: null, category: c })).toBe(false)
-    expect(needsVendor({ vendor: null, category: null })).toBe(false)
-  })
-})
-
-describe('vendorFromQuery（AC 1、2）', () => {
-  it('搜店名、品名、店名＋品名（不打空白）都帶那家', () => {
-    expect(vendorFromQuery(TEA, '麻古')).toBe('麻古')
-    expect(vendorFromQuery(TEA, '紅萱波波')).toBe('麻古')
-    expect(vendorFromQuery(TEA, '麻古紅萱')).toBe('麻古')
-    expect(vendorFromQuery(TEA, '菜燕')).toBe('青山')
-  })
-  it('對到兩家店、或對到沒寫店家的別名：留空', () => {
-    const f = { name: '無糖純茶', vendor: null, aliases: ['50嵐 四季春青茶', '清心 四季春青茶'] }
-    expect(vendorFromQuery(f, '四季春')).toBeNull()
-    expect(vendorFromQuery({ name: 'x', vendor: null, aliases: ['麻古 紅萱波波', '紅萱波波特調'] }, '紅萱波波')).toBeNull()
-  })
-  it('品名本身就含搜尋字、食物本身有店家、空字串：不帶', () => {
-    expect(vendorFromQuery(TEA, '手搖飲')).toBeNull()
-    expect(vendorFromQuery({ ...TEA, vendor: '麻古' }, '紅萱')).toBeNull()
-    expect(vendorFromQuery(TEA, '  ')).toBeNull()
   })
 })
 

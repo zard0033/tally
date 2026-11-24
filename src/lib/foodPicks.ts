@@ -5,10 +5,10 @@ import { categoryOf, FOOD_CATEGORIES, type FoodCategory } from './categories'
 import { num, rowOverage, sumIntake, type IntakeTotals, type OverDelta, type Targets } from './formulas'
 import { MEALS, type MealKey } from './meals'
 
-/** 已勾選品項的營養小計與樣數；查不到的 id（例如剛被封存）略過，不算進樣數。 */
-export function pickTotals(
-  picks: Map<number, number>,
-  foodById: (id: number) => Food | undefined,
+/** 已勾選品項的營養小計與樣數；查不到的鍵（例如剛被封存）略過，不算進樣數。鍵是記一筆清單的列 key（v2.162 起不是 food_id）。 */
+export function pickTotals<K>(
+  picks: Map<K, number>,
+  foodById: (key: K) => Food | undefined,
 ): IntakeTotals & { n: number } {
   const amounts = [...picks]
     .map(([id, qty]) => ({ f: foodById(id), qty }))
@@ -18,59 +18,68 @@ export function pickTotals(
 }
 
 /** 「常吃」＝該餐別歷史出現次數（多的排前面，同次數維持歷史出現順序），
- *  順便記住每個「餐別:食物」最近一次的份量。hist 要由新到舊排（listRecentIntake 的順序），
- *  第一次見到的 key 才是「最近一次」。 */
-export function recentStats(hist: RecentIntakeRow[]): {
-  recent: Map<MealKey, number[]>
+ *  順便記住每個「餐別:列」最近一次的份量。hist 要由新到舊排（listRecentIntake 的順序），
+ *  第一次見到的 key 才是「最近一次」。
+ *  keyOf：一筆紀錄算哪一列（v2.162：記一筆的別名列，見 listRows.rowKeyOfIntake）；不給就是 food_id。
+ *  counts 一律以 food_id 計——那是依類型分組的組序，跟列無關。 */
+export function recentStats<K = number>(
+  hist: RecentIntakeRow[],
+  keyOf: (r: RecentIntakeRow) => K = (r) => r.food_id as K,
+): {
+  recent: Map<MealKey, K[]>
   lastQty: Map<string, number>
   /** 餐別 → 食物 → 次數。sheet 依類型分組的組序用（同一份歷史，不另外查）。 */
   counts: Map<MealKey, Map<number, number>>
-  /** 食物 → 最近一筆的份量微調（不分餐別：中杯微糖是習慣，跟午晚餐無關）。沒調過的也收（空陣列＝上次沒調）。 */
-  lastMods: Map<number, string[]>
+  /** 列 → 最近一筆的份量微調（不分餐別：中杯微糖是習慣，跟午晚餐無關）。沒調過的也收（空陣列＝上次沒調）。 */
+  lastMods: Map<K, string[]>
 } {
-  const byMeal = new Map<MealKey, Map<number, number>>(MEALS.map((m) => [m.key, new Map()]))
+  const byMeal = new Map<MealKey, Map<K, number>>(MEALS.map((m) => [m.key, new Map()]))
+  const counts = new Map<MealKey, Map<number, number>>(MEALS.map((m) => [m.key, new Map()]))
   const lastQty = new Map<string, number>()
-  const lastMods = new Map<number, string[]>()
+  const lastMods = new Map<K, string[]>()
   for (const r of hist) {
-    const key = `${r.meal}:${r.food_id}`
+    const k = keyOf(r)
+    const key = `${r.meal}:${String(k)}`
     if (!lastQty.has(key)) lastQty.set(key, num(r.qty))
-    if (!lastMods.has(r.food_id)) lastMods.set(r.food_id, r.mods ?? [])
+    if (!lastMods.has(k)) lastMods.set(k, r.mods ?? [])
     const c = byMeal.get(r.meal)
-    if (c) c.set(r.food_id, (c.get(r.food_id) ?? 0) + 1)
+    if (c) c.set(k, (c.get(k) ?? 0) + 1)
+    const fc = counts.get(r.meal)
+    if (fc) fc.set(r.food_id, (fc.get(r.food_id) ?? 0) + 1)
   }
-  const recent = new Map([...byMeal].map(([k, counts]) => [k, [...counts].sort((a, b) => b[1] - a[1]).map(([id]) => id)] as [MealKey, number[]]))
-  return { recent, lastQty, counts: byMeal, lastMods }
+  const recent = new Map([...byMeal].map(([m, cs]) => [m, [...cs].sort((a, b) => b[1] - a[1]).map(([k]) => k)] as [MealKey, K[]]))
+  return { recent, lastQty, counts, lastMods }
 }
 
 /* ── 「全部食物」依類型分組（spec.md C 節第三版）──
    清單用標示、建議用排序：組序只看「這一餐吃過幾次」，吃過的提示（徽章）不改組序。 */
 
-export interface FoodGroup {
+export interface FoodGroup<T = Food> {
   /** null＝還沒分類，也是一組。 */
   category: FoodCategory | null
-  /** 照傳進來的順序（呼叫端先排好「吃得下的在前、再照品名」）。 */
-  foods: Food[]
+  /** 照傳進來的順序（呼叫端先排好「吃得下的在前、再照品名」）。記一筆傳的是清單的列（listRows），食物與它的別名列同一組。 */
+  foods: T[]
   /** 這一餐吃過這一類幾次。 */
   count: number
 }
 
-export interface GroupedFoods {
+export interface GroupedFoods<T = Food> {
   /** 這一餐吃過的類型（次數多的在前），接著是哪一餐都沒吃過的（新加的食物）。 */
-  main: FoodGroup[]
+  main: FoodGroup<T>[]
   /** 只在其他餐吃過的類型：沉到最底、收合。這一餐還沒有任何歷史時是空的（不收）。 */
-  elsewhere: FoodGroup[]
+  elsewhere: FoodGroup<T>[]
 }
 
 const categoryRank = (c: FoodCategory | null) => (c === null ? FOOD_CATEGORIES.length : FOOD_CATEGORIES.indexOf(c))
 
 /** list＝要分組的食物（已排好序）；categoryById 要查得到歷史裡的食物（含不在 list 裡的，例如已勾、常吃那幾樣）。
  *  查不到的 food_id（已封存、已刪）不算次數。同次數照固定清單的順序，未分類排最後。 */
-export function groupByCategory(
-  list: Food[],
+export function groupByCategory<T extends { category: string | null }>(
+  list: T[],
   meal: MealKey | null,
   counts: Map<MealKey, Map<number, number>>,
   categoryById: (id: number) => FoodCategory | null | undefined,
-): GroupedFoods {
+): GroupedFoods<T> {
   const tally = (m: MealKey) => {
     const out = new Map<FoodCategory | null, number>()
     for (const [id, n] of counts.get(m) ?? []) {
@@ -87,7 +96,7 @@ export function groupByCategory(
     for (const c of tally(m.key).keys()) if (!here.has(c)) elsewhereCats.add(c)
   }
 
-  const byCat = new Map<FoodCategory | null, Food[]>()
+  const byCat = new Map<FoodCategory | null, T[]>()
   for (const f of list) {
     const c = categoryOf(f.category)
     const arr = byCat.get(c)
@@ -102,10 +111,10 @@ export function groupByCategory(
   }
 }
 
-/** 勾選時的預設份量：該餐上次吃這樣東西的份量，沒有（或不是正數）就 1。 */
-export function defaultQty(lastQty: Map<string, number>, meal: MealKey | null, foodId: number): number {
+/** 勾選時的預設份量：該餐上次吃這一列的份量，沒有（或不是正數）就 1。key 同 recentStats 的 keyOf。 */
+export function defaultQty(lastQty: Map<string, number>, meal: MealKey | null, key: number | string): number {
   if (!meal) return 1
-  const q = lastQty.get(`${meal}:${foodId}`)
+  const q = lastQty.get(`${meal}:${key}`)
   return Number.isFinite(q) && (q as number) > 0 ? (q as number) : 1
 }
 
@@ -138,7 +147,7 @@ export function overQuotaAmounts(
 
 /** 符合的排前面（維持原本順序，Array.sort 穩定排序）；不符合的排後面，按超出總量
  *  （kcal ＋ 脂 ＋ 碳，三個單位不同但只拿來排序不顯示，不必為排序另外換算成同一單位）由小到大。 */
-export function byQuotaFit(list: Food[], overAmounts: Map<number, OverDelta>): Food[] {
+export function byQuotaFit<T extends { id: number }>(list: T[], overAmounts: Map<number, OverDelta>): T[] {
   return [...list].sort((a, b) => {
     const oa = overAmounts.get(a.id)
     const ob = overAmounts.get(b.id)

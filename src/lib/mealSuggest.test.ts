@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { rowKeyOfIntake } from './listRows'
 import type { IntakeRow } from './api'
 import { isWeekend } from './dates'
 import { macroGap } from './formulas'
 import {
-  mergeByFood,
+  mergeByKey,
   recentMeals,
   repeatToIntake,
   seenCategories,
@@ -317,7 +318,7 @@ describe('repeatToIntake', () => {
   })
 })
 
-describe('mergeByFood', () => {
+describe('mergeByKey', () => {
   const item = (over: Partial<RepeatItem>): RepeatItem => ({
     food_id: 13,
     qty: 1,
@@ -336,17 +337,29 @@ describe('mergeByFood', () => {
   })
 
   it('同食物份量相加，單份值與快照取第一列，順序照第一次出現', () => {
-    const merged = mergeByFood([
+    const merged = mergeByKey([
       item({ qty: 1, kcal: 120, name: '第一列' }),
       item({ food_id: 15, label: '無糖豆漿' }),
       item({ qty: 2, kcal: 999, name: '第二列' }),
-    ])
+    ], (i) => i.food_id)
     expect(merged.map((i) => i.food_id)).toEqual([13, 15])
     expect(merged[0]).toMatchObject({ qty: 3, kcal: 120, name: '第一列' })
   })
 
   it('小數份量相加不留浮點尾巴', () => {
-    expect(mergeByFood([item({ qty: 0.1 }), item({ qty: 0.2 })])[0].qty).toBe(0.3)
+    expect(mergeByKey([item({ qty: 0.1 }), item({ qty: 0.2 })], (i) => i.food_id)[0].qty).toBe(0.3)
+  })
+
+  it('同一筆通用食物的不同別名是不同列：各自留著品名、店家、份量、微調；同一個別名才合併（v2.162）', () => {
+    const tea = { vendor: null, aliases: ['麻古 紅萱波波', '50嵐 四季春青茶（珍珠）'] }
+    const key = (i: RepeatItem) => rowKeyOfIntake({ food_id: i.food_id, name: i.name, vendor: i.intakeVendor }, tea)
+    const a = item({ food_id: 40, name: '紅萱波波', intakeVendor: '麻古', mods: ['sweet:light'] })
+    const b = item({ food_id: 40, name: '四季春青茶（珍珠）', intakeVendor: '50嵐', qty: 2 })
+    const merged = mergeByKey([a, b, { ...a, qty: 2 }], key)
+    expect(merged.map((i) => [i.name, i.intakeVendor, i.qty, i.mods])).toEqual([
+      ['紅萱波波', '麻古', 3, ['sweet:light']],
+      ['四季春青茶（珍珠）', '50嵐', 2, []],
+    ])
   })
 })
 

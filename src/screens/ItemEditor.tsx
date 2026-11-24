@@ -5,9 +5,8 @@ import PortionMods from '@/components/PortionMods'
 import QtyStepper from '@/components/QtyStepper'
 import SegmentedControl from '@/components/SegmentedControl'
 import { num } from '@/lib/formulas'
-import { MEALS, type MealKey } from '@/lib/meals'
+import { MEALS, mealLabel, type MealKey } from '@/lib/meals'
 import { MACRO_MAX } from '@/lib/foodForm'
-import { clampVendor, needsVendor } from '@/lib/mealVendor'
 import { applyMods, normalizeMods, type Macros, type ModTarget } from '@/lib/portionMods'
 import { normalizeQty, parseTypedQty } from '@/lib/quantity'
 
@@ -37,7 +36,6 @@ export default function ItemEditor({
   onDelete,
   err,
   modBase,
-  vendorOptions,
 }: {
   id: string
   row: IntakeRow
@@ -51,8 +49,6 @@ export default function ItemEditor({
   err: string | null
   /** 份量微調的基準（食品庫現在那一筆）；查不到（已封存不在清單、已刪）就不出微調。 */
   modBase?: { target: ModTarget; base: Macros } | null
-  /** 店家選項：通用食物的「這一餐在哪買」用 */
-  vendorOptions: string[]
 }) {
   const [localQty, setLocalQty] = useState(qty)
   const [draft, setDraft] = useState(String(qty))
@@ -232,30 +228,10 @@ export default function ItemEditor({
     }
   }
 
-  /* 這一餐在哪買（spec「每一餐記店家」）：通用食物（食物本身沒店家、餐點類或飲料）出；估一筆從句子帶了店家的列也出（類型可能還沒分好），
-     不然寫了改不掉。從清單點選或離開欄位時存；空白＝清掉。 */
-  const askVendor = (!!row.foods && needsVendor(row.foods)) || (!!row.vendor && !row.foods?.vendor)
-  const [localVendor, setLocalVendor] = useState(row.vendor ?? '')
-  const savedVendor = useRef(row.vendor ?? '')
-  /* 一個接一個送：打了一半就點清單時，離開欄位（半截字）與點選（完整店名）會各存一次，並行送的話先後不保證 */
-  const vendorQueue = useRef<Promise<void>>(Promise.resolve())
-  function commitVendor(raw: string) {
-    vendorQueue.current = vendorQueue.current.then(() => saveVendor(raw))
-  }
-  async function saveVendor(raw: string) {
-    const v = clampVendor(raw)
-    if (v === savedVendor.current) return setLocalVendor(v)
-    const prev = savedVendor.current
-    savedVendor.current = v
-    setLocalVendor(v)
-    try {
-      await onDetail({ vendor: v || null })
-      setSaid(v ? `店家已改為 ${v}` : '店家已清掉')
-    } catch {
-      savedVendor.current = prev
-      setLocalVendor(prev)
-    }
-  }
+  /* 點開只露常用的（v2.162，spec「記店家改版」D）：份量、刪除、份量微調那一行；餐別、品名、營養收成一行，點了才在原地展開。
+     每次點開都收著（這個元件跟著點開掛載，初始值就是收著）。店家沒有入口：店家跟著記一筆勾的那一列，要換就刪掉重勾。 */
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreId = `${id}-more`
 
   async function pickMeal(key: MealKey) {
     if (key === localMeal || busy) return
@@ -299,58 +275,70 @@ export default function ItemEditor({
           <DeleteIcon />
         </button>
       </div>
-      {(modBase || askVendor) && (
+      {modBase && (
         <PortionMods
-          // 食品庫查不到（封存的估一筆）就只有店家：類型給 null，不會長出任何微調組
-          target={modBase?.target ?? { name: '', category: null }}
-          base={modBase?.base ?? { kcal: 0, protein: 0, fat: 0, carb: 0 }}
+          target={modBase.target}
+          base={modBase.base}
           mods={localMods}
           open={modsOpen}
           onToggleOpen={() => setModsOpen((o) => !o)}
           onChange={(m) => void commitMods(m)}
           note="用食品庫現在的數字重算"
           disabled={modsBusy}
-          vendor={
-            askVendor
-              ? { value: localVendor, options: vendorOptions, onChange: setLocalVendor, onPick: commitVendor, onBlur: () => commitVendor(localVendor) }
-              : undefined
-          }
         />
       )}
-      <div className="ed-line">
-        {/* 餐別是互斥的四選一，用分段控制器而不是記一筆 sheet 那排可捲動的 pill chip。
-            **選中態用 aria-pressed，不用 aria-current**：後者的規範語意是「目前所在的
-            頁面／步驟／位置」，用在一個按下去會改變資料值的控制項上是誤用（a11y 稽核
-            抓到；LogSheet 那排 chip 已比照改好）。
-            沒有升級成 radiogroup 是刻意的取捨：APG 的 radiogroup 契約要 roving tabindex
-            ＋方向鍵導航，半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟。
-            另配字重 600 當非顏色訊號——選中的白塊對軌道只有 1.18:1（v2.68 改版後；原為 --accent-soft 對 --card 1.22:1）。
-            **不用原生 disabled 擋重入**：那會讓正被按下、正持有焦點的那顆瞬間失焦，
-            失敗時焦點就掉到 body 再也回不來（a11y 稽核抓到）；改用 busy 邏輯守衛。 */}
-        <SegmentedControl label="餐別" items={MEALS} value={localMeal} onPick={(k) => void pickMeal(k)} />
-      </div>
-      {/* 品名與營養值。欄位版型照新增食物表單（DESIGN.md「新增食物表單欄位」）：品名整行、
-          熱量整行、三大營養素三欄並排——同一組數字在兩個地方長得一樣，使用者不必重學。
-          店家不在這裡：通用食物的「這一餐在哪買」在上面份量微調那一行（spec「每一餐記店家」），有店家的食物店家是食品庫的屬性。 */}
-      <div className="ed-line ed-detail">
-        <div className="field-float">
-          <input
-            id={`${id}-name`}
-            type="text"
-            placeholder=" "
-            value={detail.name}
-            onChange={(e) => setDetail((d) => ({ ...d, name: e.target.value }))}
-            onBlur={(e) => void commitName(e.target.value)}
-          />
-          <label htmlFor={`${id}-name`}>品名</label>
+      <button
+        className="ed-more"
+        type="button"
+        aria-expanded={moreOpen}
+        aria-controls={moreId}
+        onClick={() => setMoreOpen((o) => !o)}
+      >
+        <span className="ed-more-lb">改餐別、品名、營養</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        {/* 寫這一筆的總熱量（單份 × 份量），跟今日頁那一列的數字一樣 */}
+        <span className="ed-more-now">{mealLabel(localMeal)} · {Math.round(num(row.kcal) * localQty)} 卡</span>
+      </button>
+      {moreOpen && (
+        <div className="ed-more-body" id={moreId}>
+          <div className="ed-line">
+            {/* 餐別是互斥的四選一，用分段控制器而不是記一筆 sheet 那排可捲動的 pill chip。
+                **選中態用 aria-pressed，不用 aria-current**：後者的規範語意是「目前所在的
+                頁面／步驟／位置」，用在一個按下去會改變資料值的控制項上是誤用（a11y 稽核
+                抓到；LogSheet 那排 chip 已比照改好）。
+                沒有升級成 radiogroup 是刻意的取捨：APG 的 radiogroup 契約要 roving tabindex
+                ＋方向鍵導航，半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟。
+                另配字重 600 當非顏色訊號——選中的白塊對軌道只有 1.18:1（v2.68 改版後；原為 --accent-soft 對 --card 1.22:1）。
+                **不用原生 disabled 擋重入**：那會讓正被按下、正持有焦點的那顆瞬間失焦，
+                失敗時焦點就掉到 body 再也回不來（a11y 稽核抓到）；改用 busy 邏輯守衛。 */}
+            <SegmentedControl label="餐別" items={MEALS} value={localMeal} onPick={(k) => void pickMeal(k)} />
+          </div>
+          {/* 品名與營養值。欄位版型照新增食物表單（DESIGN.md「新增食物表單欄位」）：品名整行、
+              熱量整行、三大營養素三欄並排——同一組數字在兩個地方長得一樣，使用者不必重學。
+              店家不在這裡：通用食物的店家跟著記一筆勾的那一列（「紅萱波波 · 麻古」，spec「記店家改版」），有店家的食物店家是食品庫的屬性。 */}
+          <div className="ed-line ed-detail">
+            <div className="field-float">
+              <input
+                id={`${id}-name`}
+                type="text"
+                placeholder=" "
+                value={detail.name}
+                onChange={(e) => setDetail((d) => ({ ...d, name: e.target.value }))}
+                onBlur={(e) => void commitName(e.target.value)}
+              />
+              <label htmlFor={`${id}-name`}>品名</label>
+            </div>
+            {macroField('kcal')}
+            <div className="field-row">
+              {macroField('protein')}
+              {macroField('fat')}
+              {macroField('carb')}
+            </div>
+          </div>
         </div>
-        {macroField('kcal')}
-        <div className="field-row">
-          {macroField('protein')}
-          {macroField('fat')}
-          {macroField('carb')}
-        </div>
-      </div>
+      )}
       {err && (
         <p className="sheet-error ed-error" role="alert">
           存不進去：{err}

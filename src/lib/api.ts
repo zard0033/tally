@@ -314,15 +314,18 @@ export interface RecentIntakeRow {
   meal: MealKey
   food_id: number
   qty: number
-  /** 份量微調：記一筆「照上次」用（同一樣食物最近一筆按了什麼）。 */
+  /** 份量微調：記一筆「照上次」用（同一列最近一筆按了什麼）。 */
   mods: string[]
+  /** 品名快照與這一餐的店家：接回記一筆的別名列用（listRows.rowKeyOfIntake）。 */
+  name: string | null
+  vendor: string | null
 }
 
 /** 常吃排序與「照上次」用：按 eaten_on 由新到舊撈最近 limit 筆。 */
 export async function listRecentIntake(limit = 120): Promise<RecentIntakeRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select<'meal,food_id,qty,mods', RecentIntakeRow>('meal,food_id,qty,mods')
+    .select<'meal,food_id,qty,mods,name,vendor', RecentIntakeRow>('meal,food_id,qty,mods,name,vendor')
     .order('eaten_on', { ascending: false })
     .order('id', { ascending: false }) // 同日多筆時「最近一次」才有定義（review 抓的）
     .limit(limit)
@@ -381,7 +384,7 @@ export async function updateIntakeMeal(id: number, meal: MealKey): Promise<void>
  *  絕不碰 foods**——那正是這個功能存在的理由：調整當天實際吃的量，不污染食品庫的標準值。
  *  呼叫端一次只送一欄（編輯區各欄 blur 時各自 commit），與 updateIntakeQty/Meal 同慣例。
  *  name 送 null＝清掉快照、顯示退回 foods 的品名。 */
-export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb' | 'mods' | 'vendor'>>
+export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'protein' | 'fat' | 'carb' | 'mods'>>
 
 export async function updateIntakeDetail(id: number, patch: IntakeDetailPatch): Promise<void> {
   const { error } = await supabase.from('intake').update(patch).eq('id', id).abortSignal(dbSignal())

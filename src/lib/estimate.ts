@@ -5,6 +5,7 @@
    這一層禁沾 DOM（未來要原樣帶去 React Native）。 */
 import { MACRO_MAX } from './foodForm'
 import { exactMatch, nearMatch, normalizeKey, type MatchFood } from './foodMatch'
+import { vendorAliases, type VendorAlias } from './listRows'
 import { mealLabel, type MealKey } from './meals'
 import { intakeVendor, vendorInSentence } from './mealVendor'
 import { normalizeQty } from './quantity'
@@ -99,6 +100,8 @@ export interface LibLink {
   segment: string
   /** post 的列：換成食品庫之前 AI 給的那一樣，「改用 AI 估」就換回它。 */
   ai: EstimateItem | null
+  /** 靠通用食物的「店家 品名」別名對上的（v2.162）：顯示與寫入都用別名的品名與店家，跟清單勾別名列同一個結果。 */
+  alias: VendorAlias | null
 }
 
 export interface NearFood {
@@ -285,6 +288,10 @@ export function draftsToIntake(drafts: readonly EstimateDraft[], meal: MealKey, 
     const said = d.sentence ? vendorInSentence(d.sentence, knownVendors) : null
     if (d.lib) {
       const f = d.lib.food
+      // 靠「店家 品名」別名對上的：品名與店家照別名寫（跟清單勾別名列同一個結果），不看句子
+      if (d.lib.alias) {
+        return { eaten_on: date, meal, food_id: f.id, qty: d.lib.qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: d.lib.alias.item, vendor: d.lib.alias.vendor }
+      }
       const v = intakeVendor(f, said)
       return { eaten_on: date, meal, food_id: f.id, qty: d.lib.qty, kcal: f.kcal, protein: f.protein, fat: f.fat, carb: f.carb, name: null, ...(v ? { vendor: v } : {}) }
     }
@@ -303,12 +310,38 @@ const libFoodOf = (f: LibCandidate): LibFood => ({
   kcal: Number(f.kcal), protein: Number(f.protein), fat: Number(f.fat), carb: Number(f.carb),
 })
 
-/** 食品庫列：數字＝那一筆 × 份數（份數預設 1——AI 估的份數不搬過來，它可能是 8 顆的總熱量，食品庫是 1 顆）。 */
-export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: string, ai: EstimateItem | null = null): EstimateDraft {
+/**
+ * 對上的那個字是哪個「店家 品名」別名；對上品名本身、或食物有店家，就不是（null）。
+ * 整個別名對上（「麻古 紅萱波波」）就是它；只對上品名段（「紅萱波波」）時：只有一家有這個品名就是那家，
+ * 好幾家都有就看句子提到哪家——剛好一家才算，沒提或提了好幾家就不猜（null，退回從句子認店家；v2.161「兩家以上就留空」）。
+ * context：原句（AI 估完的列）或那一段（送 AI 前），預設就是 text。
+ */
+export function matchedAlias(text: string, f: Pick<MatchFood, 'name' | 'vendor' | 'aliases'>, context: string = text): VendorAlias | null {
+  const k = normalizeKey(text)
+  if (!k || normalizeKey(f.name) === k) return null
+  const all = vendorAliases(f)
+  const whole = all.find((a) => normalizeKey(a.alias) === k)
+  if (whole) return whole
+  const byItem = all.filter((a) => normalizeKey(a.item) === k)
+  if (byItem.length <= 1) return byItem[0] ?? null
+  const said = normalizeKey(context)
+  const named = byItem.filter((a) => said.includes(normalizeKey(a.vendor)))
+  return named.length === 1 ? named[0] : null
+}
+
+/** 食品庫列給人看的品名與店家：別名對上的寫別名的（「紅萱波波」・麻古），否則那筆食物的。 */
+export function libShown(lib: Pick<LibLink, 'food' | 'alias'>): { name: string; vendor: string | null } {
+  return lib.alias ? { name: lib.alias.item, vendor: lib.alias.vendor } : { name: lib.food.name, vendor: lib.food.vendor }
+}
+
+/** 食品庫列：數字＝那一筆 × 份數（份數預設 1——AI 估的份數不搬過來，它可能是 8 顆的總熱量，食品庫是 1 顆）。
+ *  品名照對上的字：靠「店家 品名」別名對上就是別名的品名段（matchedAlias）。 */
+export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: string, ai: EstimateItem | null = null, context: string = segment): EstimateDraft {
+  const alias = matchedAlias(segment, f, context)
   return withLibQty(
     {
       key: nextKey(),
-      name: f.name,
+      name: alias?.item ?? f.name,
       tag: '',
       kcal: 0, kcalDraft: '0', protein: 0, fat: 0, carb: 0,
       low: null, high: null, assumption: null,
@@ -316,7 +349,7 @@ export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: 
       origin: { kcal: 0, protein: 0, fat: 0, carb: 0 },
       // 預設留對上的那一段（不是 null）：寫入時靠它認店家，漏了就是 v2.161 真機那個 bug；AI 估完才換的呼叫端再蓋成整句
       sentence: segment.trim() || null, aiName: '', fixedBy: null, fixCount: 0,
-      lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', via, segment, ai },
+      lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', via, segment, ai, alias },
       near: null,
       noLib: false,
     },
@@ -366,7 +399,7 @@ export function resolveAfterAi(items: readonly EstimateItem[], sentence: string,
     const hit = it.name ? exactMatch(it.name, foods, rank) : null
     /* AI 回的品名常把店家拿掉（「星巴克拿鐵」回「拿鐵」），只靠品名會對到別家的那一筆（全家拿鐵）。
        那筆有店家、而使用者那句話裡沒提到這個店家 → 不自動換，降成相近提示、按了才換（v2.154 review H1）。 */
-    if (hit && (!hit.vendor || said.includes(normalizeKey(hit.vendor)))) return { ...draftFromLibrary(hit, 'post', it.name ?? '', it), sentence }
+    if (hit && (!hit.vendor || said.includes(normalizeKey(hit.vendor)))) return { ...draftFromLibrary(hit, 'post', it.name ?? '', it, sentence), sentence }
     const [d] = draftsFromItems([it], sentence)
     if (hit) return { ...d, near: { id: hit.id, name: hit.name, vendor: hit.vendor, kcal: Math.round(Number(hit.kcal)) } }
     return withNear(d, foods, rank)

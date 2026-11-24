@@ -56,7 +56,6 @@ export default function Today(props: TodayProps) {
     onUpdateIntakeMeal,
     onUpdateIntakeDetail,
     foodById,
-    vendorOptions,
     repeatByMeal,
     repeatBusyKey,
     repeatErr,
@@ -329,7 +328,6 @@ export default function Today(props: TodayProps) {
               handleChangeMeal,
               handleChangeDetail,
               modBaseOf,
-              vendorOptions,
               editErr,
               repeatByMeal,
               onAddRepeat,
@@ -356,7 +354,6 @@ interface TimelineHelpers {
   handleChangeMeal: (id: number, meal: MealKey) => Promise<void>
   handleChangeDetail: (id: number, patch: IntakeDetailPatch) => Promise<void>
   modBaseOf: (r: IntakeRow) => { target: ModTarget; base: Macros } | null
-  vendorOptions: string[]
   editErr: { id: number; msg: string } | null
   repeatByMeal: RepeatByMeal
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
@@ -392,7 +389,6 @@ function SwipeRow({
   onDetail,
   err,
   modBase,
-  vendorOptions,
 }: {
   row: IntakeRow
   name: string
@@ -412,7 +408,6 @@ function SwipeRow({
   onDetail: (patch: IntakeDetailPatch) => Promise<void>
   err: string | null
   modBase: { target: ModTarget; base: Macros } | null
-  vendorOptions: string[]
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLButtonElement>(null)
@@ -590,7 +585,6 @@ function SwipeRow({
               onDelete={onDelete}
               err={err}
               modBase={modBase}
-              vendorOptions={vendorOptions}
             />
           </motion.div>
         )}
@@ -730,7 +724,6 @@ function MealNode({
                         onDetail={(p) => h.handleChangeDetail(r.id, p)}
                         err={h.editErr?.id === r.id ? h.editErr.msg : null}
                         modBase={h.modBaseOf(r)}
-                        vendorOptions={h.vendorOptions}
                       />
                     </motion.li>
                   )

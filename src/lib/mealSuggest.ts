@@ -352,12 +352,14 @@ export function suggestLabel(s: RepeatSuggestion): string {
   return s.items.map((i) => (i.qty === 1 ? i.label : `${i.label} ×${i.qty}`)).join('・')
 }
 
-/** sheet 的勾選以 food_id 為鍵，同食物要合併：份量相加、其餘取第一列。 */
-export function mergeByFood(items: RepeatItem[]): RepeatItem[] {
-  const merged = new Map<number, RepeatItem>()
+/** sheet 的勾選以列為鍵（v2.162 起，listRows），同一列要合併：份量相加、其餘取第一列。keyOf 給列 key——
+ *  同一筆通用食物的不同別名（麻古的紅萱波波、50嵐的四季春青茶）是不同列，各自留著品名、店家、份量、微調。 */
+export function mergeByKey<K>(items: RepeatItem[], keyOf: (i: RepeatItem) => K): RepeatItem[] {
+  const merged = new Map<K, RepeatItem>()
   for (const item of items) {
-    const first = merged.get(item.food_id)
-    merged.set(item.food_id, first ? { ...first, qty: normalizeQty(first.qty + item.qty) } : item)
+    const k = keyOf(item)
+    const first = merged.get(k)
+    merged.set(k, first ? { ...first, qty: normalizeQty(first.qty + item.qty) } : item)
   }
   return [...merged.values()]
 }

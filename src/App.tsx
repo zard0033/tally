@@ -38,7 +38,6 @@ import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, num, numOrNull, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
-import { vendorOptionsOf } from '@/lib/foodForm'
 import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
 import { defaultMeal, MEALS, type MealKey } from '@/lib/meals'
 import { mealMacroRatio } from '@/lib/estimate'
@@ -1178,7 +1177,6 @@ export default function App() {
             onUpdateIntakeMeal={handleUpdateIntakeMeal}
             onUpdateIntakeDetail={handleUpdateIntakeDetail}
             foodById={(id) => foods?.find((f) => f.id === id)}
-            vendorOptions={vendorOptionsOf(foods)}
             repeatByMeal={repeatByMeal}
             repeatBusyKey={repeatBusyKey}
             repeatErr={repeatErr}
@@ -1345,6 +1343,7 @@ export default function App() {
           onCreateIntake={handleCreateIntake}
           onCreateFood={handleCreateFoodAndClassify}
           onCreateEstimateFood={handleCreateEstimateFood}
+          onUpdateFood={handleUpdateFood}
         />
       )}
     </div>

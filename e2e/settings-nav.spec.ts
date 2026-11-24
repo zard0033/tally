@@ -5,7 +5,7 @@
    體重趨勢頁的內容（圖表、明細、範圍切換）由 weight-trend.spec.ts 守，這裡只驗進得去、回得來。 */
 import { test, expect, type Page } from '@playwright/test'
 import { FIX } from './fixtures'
-import { openApp } from './harness'
+import { openApp, openEditMore } from './harness'
 
 const ENTRIES = [
   { label: '每日目標', screen: 'daily-goal' },
@@ -105,6 +105,7 @@ test('多欄輸入群組一律包在 form 裡（iOS 鍵盤上下箭頭靠它分�
   // ① 今日頁的就地編輯區
   await page.locator('.timeline .item-content').first().click()
   await expect(page.locator('.item-editor')).toBeVisible()
+  await openEditMore(page, '.timeline')
   expect(await inForm('.item-editor .ed-detail input'), '就地編輯區的欄位不在 form 裡').toBe(true)
   expect(await inForm('.item-editor .qty-value'), '就地編輯區的份量欄不在 form 裡').toBe(true)
   await page.locator('.timeline .item-content').first().click()

@@ -2,7 +2,7 @@
    規則與數字由 src/lib/portionMods.test.ts 釘；這裡驗畫面接線：摘要行、展開控件、照上次、寫進 intake 的快照與 mods、
    今日頁就地編輯重算、食品庫不被動到。各條都自己 openApp、不共用狀態。 */
 import { test, expect, type Page } from '@playwright/test'
-import { openApp } from './harness'
+import { openApp, openEditMore } from './harness'
 import { FIX } from './fixtures'
 
 test.describe.configure({ mode: 'parallel' })
@@ -38,14 +38,17 @@ async function search(page: Page, q: string) {
 }
 const pickedRow = (page: Page, name: string) => page.locator('.food-item.selected', { has: page.locator('.nm', { hasText: name }) })
 
-test('記一筆：搜通用飲料的別名，副標寫「對到：麻古 紅萱波波」、對上的字標主色', async ({ page }) => {
+test('記一筆：搜到沒有店家段的舊式別名，副標寫「對到：紅萱波波」、對上的字標主色；「店家 品名」別名自己是一列（v2.162）', async ({ page }) => {
   await openApp(page, {}, MODS_FIX)
   await openDinner(page)
-  await search(page, '麻古')
+  await search(page, '紅萱')
   const row = page.locator('.food-row', { has: page.locator('.nm', { hasText: TEA.name }) })
-  await expect(row.locator('.sub')).toHaveText('對到：麻古 紅萱波波')
-  await expect(row.locator('.sub mark')).toHaveText('麻古')
-  await expect(row).toHaveAttribute('aria-label', /對到 麻古 紅萱波波/)
+  await expect(row.locator('.sub')).toHaveText('對到：紅萱波波')
+  await expect(row.locator('.sub mark')).toHaveText('紅萱')
+  await expect(row).toHaveAttribute('aria-label', /對到 紅萱波波/)
+  // 「麻古 紅萱波波」是別名列：品名＋店家，不寫「對到」
+  const aliasRow = page.locator('.food-row', { has: page.locator('.nm', { hasText: /^紅萱波波$/ }) })
+  await expect(aliasRow.locator('.sub')).toHaveText('麻古')
   // 品名本身對上的不寫「對到」
   await search(page, '手搖飲')
   await expect(row.locator('.sub')).toHaveCount(0)
@@ -156,7 +159,8 @@ test('今日頁：調過的紀錄品名後接「（半飯）」；就地編輯�
   await page.locator(`${ROW} .item-content`).click()
   const ed = page.locator(`${ROW} .item-editor`)
   await expect(ed).toBeVisible()
-  // 就地編輯的品名欄是原名，不帶後綴（沒改就關不會把後綴存成品名）
+  // 就地編輯的品名欄是原名，不帶後綴（沒改就關不會把後綴存成品名）；品名收在「改餐別、品名、營養」裡（v2.162）
+  await openEditMore(page, ROW)
   await expect(ed.locator('.ed-detail input').first()).toHaveValue('排骨便當（滷）')
   await ed.locator('.pmods-sum').click()
   await expect(ed.locator('.pmods-calc').first()).toHaveText('用食品庫現在的數字重算')

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>每日目標：從頭想</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  .g3-note { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 22px; max-width: 1260px; line-height: 1.7; }
+  .g3-note b { color: var(--ink); }
+  .g3-grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .g3-gh { font-size: var(--t-base); font-weight: 800; margin-bottom: 4px; }
+  .g3-gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 92px; margin-bottom: 10px; }
+  .g3-gd b { color: var(--ink); }
+
+  .g3-phone { background: var(--paper); border-radius: 22px; box-shadow: var(--shadow-1); overflow: hidden; padding-bottom: 18px; min-height: 600px; }
+  .g3-top { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; font-weight: 800; font-size: var(--t-md); }
+  .g3-top i { font-style: normal; color: var(--accent); font-size: var(--t-lg); width: 28px; text-align: center; }
+  .g3-card { margin: 10px 16px 0; background: var(--card); border-radius: 18px; padding: 18px; box-shadow: var(--shadow-1); }
+
+  /* 結果 */
+  .g3-res { text-align: center; padding: 6px 0 2px; }
+  .g3-res .cap { font-size: var(--t-sm); color: var(--ink-muted); font-weight: 700; }
+  .g3-res .num { font-family: var(--font-num); font-size: var(--t-display); font-weight: 900; letter-spacing: var(--track-display); line-height: 1; margin-top: 4px; }
+  .g3-res .num small { font-size: var(--t-lg); font-weight: 700; margin-left: 4px; letter-spacing: 0; }
+  .g3-res .when { font-size: var(--t-md); font-weight: 800; margin-top: 8px; }
+  .g3-res .when b { font-family: var(--font-num); color: var(--accent); }
+  .g3-res .fine { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 6px; }
+
+  /* D1 填空句 */
+  .g3-sent { font-size: var(--t-lg); font-weight: 800; line-height: 2.1; }
+  .g3-sent .fixed { font-family: var(--font-num); }
+  .g3-tok { display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; min-height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-family: var(--font-num); vertical-align: middle; line-height: 1; }
+  .g3-tok::after { content: '▾'; font-size: var(--t-xs); }
+  .g3-rule { height: 1px; background: var(--rule-subtle); margin: 16px 0 12px; }
+
+  /* D2 */
+  .g3-lbl { font-size: var(--t-sm); font-weight: 800; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .g3-lbl span { color: var(--ink-muted); font-weight: 600; font-size: var(--t-xs); }
+  .g3-step { display: flex; align-items: center; justify-content: space-between; background: var(--fill); border-radius: var(--r-pill); padding: 4px; }
+  .g3-step span { width: 44px; height: 44px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow-1); display: grid; place-items: center; color: var(--accent); font-weight: 800; font-size: var(--t-md); }
+  .g3-step b { font-family: var(--font-num); font-size: var(--t-lg); }
+  .g3-step b small { font-family: var(--font-body); font-size: var(--t-sm); color: var(--ink-muted); margin-left: 4px; }
+  .g3-slider { position: relative; height: 44px; margin: 4px 6px 0; }
+  .g3-slider .tr { position: absolute; left: 0; right: 0; top: 20px; height: 4px; border-radius: 2px; background: var(--track); }
+  .g3-slider .fill { position: absolute; left: 0; top: 20px; height: 4px; border-radius: 2px; background: var(--accent); width: 50%; }
+  .g3-slider .tick { position: absolute; top: 18px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--card); border: 2px solid var(--track); box-sizing: border-box; }
+  .g3-slider .knob { position: absolute; top: 8px; left: 50%; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow-1); border: 2px solid var(--accent); box-sizing: border-box; }
+  .g3-ends { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--ink-muted); margin: 0 2px; }
+  .g3-pace { text-align: center; font-size: var(--t-sm); font-weight: 700; margin-top: 4px; }
+  .g3-pace b { font-family: var(--font-num); }
+
+  /* D3 */
+  .g3-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .g3-chip { min-height: 40px; padding: 0 14px; border-radius: var(--r-pill); border: 1.5px solid var(--rule-field); display: inline-grid; place-items: center; font-size: var(--t-sm); background: var(--card); box-sizing: border-box; }
+  .g3-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .g3-chip.off { color: var(--ink-faint); border-style: dashed; }
+  .g3-warn { font-size: var(--t-xs); color: var(--ink-muted); margin-top: 8px; }
+
+  .g3-more { margin: 12px 16px 0; background: var(--card); border-radius: 14px; display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 14px; font-size: var(--t-sm); }
+  .g3-more small { color: var(--ink-muted); font-size: var(--t-xs); display: block; }
+</style>
+</head>
+<body>
+<h1>每日目標：從頭想</h1>
+<p class="g3-note">
+  <b>這頁只做一件事：決定「到幾公斤、多快」，得到「每天吃多少、幾月到」。</b>兩個輸入、一個結果，結果只出現一次。<br>
+  拿掉的：答案卡＋速度列表＋步進器三處重複同一個結果；「實際體重 vs 計畫」——那是檢查進度，搬去體重趨勢頁；減重／維持／增重——由目標體重推。維持熱量、蛋白質、身體數據都在最下面「怎麼算的」。<b>數字全是示意</b>（現在 70.4、目標 66、維持 2,100）。
+</p>
+
+<div class="g3-grid">
+  <!-- D1 -->
+  <div>
+    <div class="g3-gh">D1　一句話填空</div>
+    <div class="g3-gd">整頁就是一句話：「從 70.4 瘦到 <b>[66 kg]</b>，每月 <b>[1 kg]</b>」，藍底兩格點了就改；下面是答案。<b>最少東西</b>；代價：可以改的地方藏在句子裡，速度快慢的取捨要點開才看得到。</div>
+    <div class="g3-phone">
+      <div class="g3-top"><i>‹</i>每日目標</div>
+      <div class="g3-card">
+        <div class="g3-sent">從 <span class="fixed">70.4 kg</span><br>瘦到 <span class="g3-tok">66 kg</span><br>每月 <span class="g3-tok">1 kg</span></div>
+        <div class="g3-rule"></div>
+        <div class="g3-res">
+          <div class="cap">每天吃</div>
+          <div class="num">1,850<small>卡</small></div>
+          <div class="when"><b>4 月初</b>到</div>
+          <div class="fine">用公式估的，可能偏樂觀</div>
+        </div>
+      </div>
+      <div class="g3-more"><span>怎麼算的<small>維持熱量、蛋白質、身體數據、自己填目標</small></span><span>›</span></div>
+    </div>
+  </div>
+
+  <!-- D2 -->
+  <div>
+    <div class="g3-gh">D2　目標體重＋速度滑桿（推薦）</div>
+    <div class="g3-gd">兩個控制看得見：上面<b>目標體重</b>、下面<b>一條慢↔快的滑桿</b>；答案放最大，拖滑桿時「每天吃多少」跟「幾月到」<b>一起動</b>——快一點少吃一點、早一點到，取捨直接看得到。</div>
+    <div class="g3-phone">
+      <div class="g3-top"><i>‹</i>每日目標</div>
+      <div class="g3-card">
+        <div class="g3-res">
+          <div class="cap">每天吃</div>
+          <div class="num">1,850<small>卡</small></div>
+          <div class="when"><b>4 月初</b>到 66 kg</div>
+          <div class="fine">用公式估的，可能偏樂觀</div>
+        </div>
+      </div>
+      <div class="g3-card">
+        <div class="g3-lbl">目標體重<span>現在 70.4 kg</span></div>
+        <div class="g3-step"><span>−</span><b>66.0<small>kg</small></b><span>＋</span></div>
+        <div class="g3-rule"></div>
+        <div class="g3-lbl">要多快</div>
+        <div class="g3-slider">
+          <div class="tr"></div><div class="fill"></div>
+          <span class="tick" style="left:0%"></span><span class="tick" style="left:25%"></span><span class="tick" style="left:50%"></span><span class="tick" style="left:75%"></span><span class="tick" style="left:100%"></span>
+          <span class="knob"></span>
+        </div>
+        <div class="g3-ends"><span>慢 · 吃多一點</span><span>快 · 吃少一點</span></div>
+        <div class="g3-pace">每月 <b>1 kg</b></div>
+      </div>
+      <div class="g3-more"><span>怎麼算的<small>維持熱量、蛋白質、身體數據、自己填目標</small></span><span>›</span></div>
+    </div>
+  </div>
+
+  <!-- D3 -->
+  <div>
+    <div class="g3-gh">D3　選「幾月到」，速度倒推</div>
+    <div class="g3-gd">很多人心裡想的是日期（「過年前」「4 月旅行」），不是每月幾公斤。改成選月份，<b>速度由 app 倒推</b>，太快（每月超過 1.5 kg）的月份灰掉。<b>跟你說的「控制速度」不同</b>——速度變成結果，不是輸入。</div>
+    <div class="g3-phone">
+      <div class="g3-top"><i>‹</i>每日目標</div>
+      <div class="g3-card">
+        <div class="g3-res">
+          <div class="cap">每天吃</div>
+          <div class="num">1,830<small>卡</small></div>
+          <div class="when">3 月底前到 · 每月瘦約 <b>1 kg</b></div>
+          <div class="fine">用公式估的，可能偏樂觀</div>
+        </div>
+      </div>
+      <div class="g3-card">
+        <div class="g3-lbl">目標體重<span>現在 70.4 kg</span></div>
+        <div class="g3-step"><span>−</span><b>66.0<small>kg</small></b><span>＋</span></div>
+        <div class="g3-rule"></div>
+        <div class="g3-lbl">想在什麼時候到</div>
+        <div class="g3-chips"><span class="g3-chip off">1 月</span><span class="g3-chip">2 月</span><span class="g3-chip on">3 月</span><span class="g3-chip">4 月</span><span class="g3-chip">5 月</span><span class="g3-chip">6 月</span></div>
+        <div class="g3-warn">1 月底太快了（每月要瘦 2 kg）。</div>
+      </div>
+      <div class="g3-more"><span>怎麼算的<small>維持熱量、蛋白質、身體數據、自己填目標</small></span><span>›</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

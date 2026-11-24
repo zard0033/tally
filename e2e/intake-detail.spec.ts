@@ -9,7 +9,7 @@
    驗不到真正的 DB 持久化——「切走再切回」那條驗的是 App.tsx `patchIntakeRow` 有沒有
    一併更新 cacheRef（走快取路徑時該顯示改過的值）。DB 那半靠 PATCH body 的斷言＋真機。 */
 import { test, expect, type Page } from '@playwright/test'
-import { nextDay, openApp, prevDay } from './harness'
+import { nextDay, openApp, openEditMore, prevDay } from './harness'
 
 /** fixture：id 102 是午餐「雞胸餐盒」，qty=1，kcal=420、protein=45、fat=12、carb=30 */
 const ROW = '.item[data-row="102"]'
@@ -17,6 +17,8 @@ const ROW = '.item[data-row="102"]'
 async function expand(page: Page) {
   await page.locator(`${ROW} .item-content`).click()
   await expect(page.locator(`${ROW} .item-editor`)).toBeVisible()
+  // 品名與營養收在「改餐別、品名、營養」裡（v2.162）
+  await openEditMore(page, ROW)
 }
 
 const writes = (page: Page, table: string, method: string) =>

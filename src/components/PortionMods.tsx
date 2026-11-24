@@ -2,9 +2,8 @@
    列下面一行主色字寫「現在的狀態」（沒調過也寫：大杯・無糖／正常飯量），點了在下面展開控件；
    展開後最下面一行算式。記一筆的「已選」與今日頁就地編輯共用這一份。
    狀態（按了哪些、開著沒）留在呼叫端；這裡只畫、只回報。 */
-import { useId, type RefObject } from 'react'
+import { useId } from 'react'
 import SegmentedControl from '@/components/SegmentedControl'
-import VendorField from '@/components/VendorField'
 import { calcLineOf, groupsFor, optionsOf, summaryOf, toggleMod, type Macros, type ModTarget } from '@/lib/portionMods'
 
 interface PortionModsProps {
@@ -22,17 +21,6 @@ interface PortionModsProps {
   note?: string
   /** 不出算式：要記的不是這個算式的結果時（記一筆從建議段勾、還沒改的那一列記的是來源快照），由 note 說明 */
   hideCalc?: boolean
-  /** 這一餐在哪買（spec「每一餐記店家」S1）：通用食物才給。摘要接在最後（「大杯・無糖・麻古」，沒填寫「＋店家」），展開後面板最上面一格。 */
-  vendor?: VendorSlot
-}
-
-export interface VendorSlot {
-  value: string
-  options: string[]
-  onChange: (v: string) => void
-  onPick?: (v: string) => void
-  onBlur?: () => void
-  portalContainer?: RefObject<HTMLElement | null>
 }
 
 /** 單選組的「沒按」那一格：用一個不在代碼表裡的 key，SegmentedControl 才有東西可以按下。 */
@@ -43,13 +31,13 @@ const GROUP_LABEL: Record<string, string> = { cup: '杯型', sweet: '甜度', to
 /** 甜度六格放得下：選項字縮成一個字（「微糖」→「微」）。 */
 const short = (group: string, label: string) => (group === 'sweet' ? label.replace('糖', '') : label)
 
-export default function PortionMods({ target, base, mods, open, onToggleOpen, onChange, fromLast, disabled, note, hideCalc, vendor }: PortionModsProps) {
+/* 店家不在這裡（v2.162 起）：通用食物的店家跟著勾的那一列記（「紅萱波波 · 麻古」，spec「記店家改版」），不再另外問。 */
+export default function PortionMods({ target, base, mods, open, onToggleOpen, onChange, fromLast, disabled, note, hideCalc }: PortionModsProps) {
   const panelId = useId()
   const groups = groupsFor(target)
-  if (!groups.length && !vendor) return null
-  const vendorText = vendor ? vendor.value.trim() || '＋店家' : null
-  const summary = [groups.length ? summaryOf(mods, target) : null, vendorText].filter(Boolean).join('・')
-  const calc = hideCalc || !groups.length ? null : calcLineOf(base, mods, target)
+  if (!groups.length) return null
+  const summary = summaryOf(mods, target)
+  const calc = hideCalc ? null : calcLineOf(base, mods, target)
   return (
     <div className="pmods">
       <button
@@ -57,11 +45,7 @@ export default function PortionMods({ target, base, mods, open, onToggleOpen, on
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={[
-          target.name,
-          groups.length ? `份量微調：${summaryOf(mods, target)}${fromLast ? '，照上次' : ''}` : null,
-          vendor ? `店家：${vendor.value.trim() || '未填'}` : null,
-        ].filter(Boolean).join('，')}
+        aria-label={`${target.name}，份量微調：${summary}${fromLast ? '，照上次' : ''}`}
         disabled={disabled}
         onClick={onToggleOpen}
       >
@@ -73,20 +57,6 @@ export default function PortionMods({ target, base, mods, open, onToggleOpen, on
       </button>
       {open && (
         <div className="pmods-panel" id={panelId}>
-          {vendor && (
-            <div className="pmods-grp pmods-vendor">
-              <VendorField
-                id={`${panelId}-vendor`}
-                value={vendor.value}
-                options={vendor.options}
-                onChange={vendor.onChange}
-                onPick={vendor.onPick}
-                onBlur={vendor.onBlur}
-                portalContainer={vendor.portalContainer}
-                disabled={disabled}
-              />
-            </div>
-          )}
           {groups.map((g) => {
             const opts = optionsOf(g)
             // 可複選的組（配料、加主菜）用膠囊；其餘單選用分段鈕

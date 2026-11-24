@@ -1665,3 +1665,26 @@ test('加進來（從記一筆 sheet 加入）：一樣三個都有，時間軸�
   expect(a.kcal.some((t) => Number(t) > 0 && Number(t) < 130), `小計沒有滾，直接跳到：${a.kcal.join(',')}`).toBe(true)
 })
 
+
+/* v2.162 review #1：sheet 的建議段以列為鍵合併。同一筆通用食物在兩家買的（麻古的紅萱波波、50嵐的四季春青茶）是兩列，
+   各自留著品名、店家、份量、微調；以前照 food_id 合併會併成一列、份量相加、店家只剩第一家。 */
+test('sheet 建議段：同一筆通用食物的兩個別名各自一列，各寫各的品名店家份量（v2.162）', async ({ page }) => {
+  const TEA = { id: 40, name: '手搖飲（無糖純茶＋珍珠，大杯）', vendor: null, kcal: 165, protein: 0, fat: 0, carb: 41, category: '飲料', category_manual: false, verified: true, aliases: ['麻古 紅萱波波', '50嵐 四季春青茶（珍珠）'] }
+  const teaRow = (id: number, name: string, vendor: string, qty: number, mods: string[] = []) => ({
+    id, eaten_on: '2026-10-30', meal: 'breakfast', food_id: 40, qty, kcal: 165, protein: 0, fat: 0, carb: 41, name, vendor, mods,
+    created_at: '2026-10-30T01:00:00.000Z', foods: { name: TEA.name, vendor: null, archived: false, category: '飲料' },
+  })
+  const fix = { ...fixWith([teaRow(311, '紅萱波波', '麻古', 1, ['sweet:slight']), teaRow(312, '四季春青茶（珍珠）', '50嵐', 2)]), foods: [...FIX.foods, TEA] } as unknown as typeof FIX
+  await openAppAt(page, MON, {}, fix)
+  await openMealSheet(page, '早餐')
+  await expect(suggestNames(page)).toHaveText([/^紅萱波波/, /^四季春青茶（珍珠）/])
+  await sheetOf(page).locator('.sect-suggest .sect-act').click()
+  await expect(pickedNames(page)).toHaveCount(2)
+  await sheetOf(page).locator('.pick-bar .pick-bar-btn').click()
+  await expect.poll(async () => (await intakeWrites(page, 'POST')).length).toBe(1)
+  const body = (await intakeWrites(page, 'POST'))[0].body as Record<string, unknown>[]
+  expect(body.map((r) => [r.food_id, r.name, r.vendor, r.qty, r.mods ?? []])).toEqual([
+    [40, '紅萱波波', '麻古', 1, ['sweet:slight']],
+    [40, '四季春青茶（珍珠）', '50嵐', 2, []],
+  ])
+})

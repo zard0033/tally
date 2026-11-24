@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useReducedMotion } from 'motion/react'
 import QtyStepper from '@/components/QtyStepper'
 import type { Food } from '@/lib/api'
-import { canFix, defaultDraftName, draftName, fixTag, fixTextOk, isManualDraft, libSummary, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
+import { canFix, defaultDraftName, draftName, fixTag, fixTextOk, isManualDraft, libShown, libSummary, parseKcal, TIERS, type EstimateDraft, type TierKey } from '@/lib/estimate'
 import { duplicateCheck, foodLabel } from '@/lib/foodMatch'
 import { sourceTag } from '@/lib/foodSource'
 import type { MealKey } from '@/lib/meals'
@@ -236,21 +236,22 @@ export default function EstimateView(p: Props) {
           {p.drafts.map((d, i) => {
             if (d.lib) {
               const lib = d.lib
+              const shown = libShown(lib)
               const tag = sourceTag(lib.food.verified)
               const swapping = p.libAi[d.key] === 'busy'
               const made = d.foodId !== null
               return (
                 <li key={d.key} className={swapping ? 'est-draft est-lib busy' : 'est-draft est-lib'} aria-busy={swapping}>
                   <span className="est-lib-name">
-                    {lib.food.vendor && <span className="vd">{lib.food.vendor}</span>}
-                    {lib.food.name}
+                    {shown.vendor && <span className="vd">{shown.vendor}</span>}
+                    {shown.name}
                   </span>
-                  <QtyStepper qty={lib.qty} draft={lib.qtyDraft} name={lib.food.name}
+                  <QtyStepper qty={lib.qty} draft={lib.qtyDraft} name={shown.name}
                     onStep={(dir) => !p.locked && p.onLibStep(d.key, dir)}
                     onInput={(raw) => !p.locked && p.onLibQtyInput(d.key, raw)}
                     onBlur={(raw) => p.onLibQtyBlur(d.key, raw)} />
                   <span className="est-lib-kc num" aria-label={`${d.kcal} 卡`}>{d.kcal}<small aria-hidden="true">卡</small></span>
-                  <button className="est-del" type="button" aria-label={`刪掉${lib.food.name}`} disabled={p.locked || made || swapping} onClick={() => p.onDelete(d.key)}>
+                  <button className="est-del" type="button" aria-label={`刪掉${shown.name}`} disabled={p.locked || made || swapping} onClick={() => p.onDelete(d.key)}>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
                   </button>
                   <div className="est-row-foot">

@@ -36,11 +36,11 @@ describe('pickTotals', () => {
 describe('recentStats', () => {
   // 由新到舊
   const hist: RecentIntakeRow[] = [
-    { meal: 'lunch', food_id: 2, qty: 1, mods: [] },
-    { meal: 'lunch', food_id: 1, qty: 2, mods: [] },
-    { meal: 'lunch', food_id: 1, qty: 3, mods: [] },
-    { meal: 'dinner', food_id: 1, qty: 1, mods: [] },
-    { meal: 'lunch', food_id: 3, qty: 4, mods: [] },
+    { meal: 'lunch', food_id: 2, qty: 1, mods: [], name: null, vendor: null },
+    { meal: 'lunch', food_id: 1, qty: 2, mods: [], name: null, vendor: null },
+    { meal: 'lunch', food_id: 1, qty: 3, mods: [], name: null, vendor: null },
+    { meal: 'dinner', food_id: 1, qty: 1, mods: [], name: null, vendor: null },
+    { meal: 'lunch', food_id: 3, qty: 4, mods: [], name: null, vendor: null },
   ]
   it('各餐別按出現次數由多到少，同次數維持歷史出現順序；沒吃過的餐別是空陣列', () => {
     const { recent } = recentStats(hist)
