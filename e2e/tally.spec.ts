@@ -107,7 +107,7 @@ test('Tally UI 回歸', async ({ page }) => {
     for (const [sel, label] of [
       ['.chip-bar', 'chip 列'],
       ['.chiprow .chip', '餐別 chip'],
-      ['input[aria-label="搜尋食物"]', '搜尋框'],
+      ['input[aria-label="吃了什麼"]', '搜尋框'],
       ['.food-scroll', '清單捲動區'],
       ['button[aria-label="關閉"]', '關閉鈕'],
     ] as const) {
@@ -146,7 +146,7 @@ test('Tally UI 回歸', async ({ page }) => {
   })
 
   await step('搜尋框逐鍵輸入 — 焦點與值不被重繪吃掉', async () => {
-    const q = page.locator('input[aria-label="搜尋食物"]')
+    const q = page.locator('input[aria-label="吃了什麼"]')
     await q.click()
     await q.pressSequentially('雞胸', { delay: 60 })
     await page.waitForTimeout(200)

@@ -1195,11 +1195,11 @@ test('同一食物不同時出現在建議段與常吃段；常吃先濾再取�
   await expect(sectNames(page, '.sect-lb:has-text("早餐常吃")')).toHaveText(['雞胸餐盒', '雞胸餐盒', '地瓜', '溫泉蛋', '香蕉'])
   await expect(sheet.locator('.food-groups .nm')).toHaveText(['拿鐵'])
 
-  await sheet.getByLabel('搜尋食物').fill('乳清')
+  await sheet.getByLabel('吃了什麼').fill('乳清')
   await expect(sheet.locator('.sect-suggest')).toHaveCount(0)
   await expect(sectNames(page, '.sect-lb:has-text("搜尋結果")')).toHaveText(['乳清（1匙）'])
 
-  await sheet.getByLabel('搜尋食物').fill('')
+  await sheet.getByLabel('吃了什麼').fill('')
   await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
 })
 
@@ -1576,11 +1576,11 @@ test('第三版：sheet 全部食物依類型分組、組序看這一餐吃過�
   await expect(grp('飲料').locator('.nm')).toHaveCount(2)
 
   // 搜尋時是平的結果，不分組
-  await sheet.getByLabel('搜尋食物').fill('陽春')
+  await sheet.getByLabel('吃了什麼').fill('陽春')
   await expect(groups).toHaveCount(0)
   await expect(sheet.locator('.grp')).toHaveCount(0)
   await expect(sectNames(page, '.sect-lb:has-text("搜尋結果")')).toHaveText(['陽春麵'])
-  await sheet.getByLabel('搜尋食物').fill('')
+  await sheet.getByLabel('吃了什麼').fill('')
 
   // 早餐不套用避開重複，也就不提示吃過
   await sheet.locator('.chip', { hasText: '早餐' }).click()

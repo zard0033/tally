@@ -1,6 +1,6 @@
-/* 「估一筆」的純邏輯（spec.md「A. 用一句話記一餐」2026-11-13 版，樣張 `_design-sample/estimate-entry.html` B）：
-   AI 估回來的品項、三個檔位、自己打的數字，一律先變成「草稿列」；使用者看過、改過，「帶回清單」放進已選，
-   跟清單勾的食物一起按「加入」才寫入（使用者 2026-11-13：估一筆的結果帶回 sheet 打勾，一次加入）。
+/* 「估一筆」的純邏輯（spec.md「A. 用一句話記一餐」2026-11-13 版；v2.164 起併進記一筆的「這一餐」段，spec「一個框記一餐」）：
+   AI 估回來的品項、三個檔位、自己打的數字，一律先變成「草稿列」，在「這一餐」段勾著，
+   跟清單勾的食物一起按「加入」才寫入。
    寫入分兩步：每一列先建一筆 foods（沒勾「存進食品庫」的直接封存），再寫 intake——intake 要 food_id。
    這一層禁沾 DOM（未來要原樣帶去 React Native）。 */
 import { MACRO_MAX } from './foodForm'
@@ -60,8 +60,8 @@ export interface EstimateDraft {
   /** 縮放的基準：AI（或檔位）原本給的那組數字。改熱量一律從這組換算——每打一個字就拿「目前」的數字再縮放，
    *  四捨五入會一路疊加，中間打出 0 還會把營養素永久歸零（review B1）。 */
   origin: { kcal: number; protein: number; fat: number; carb: number }
-  /** 估出或對上這一樣的那句話：AI 的列＝整句（修正時一起送，v2.151）；食品庫列＝送 AI 前對上的那一段，或 AI 估完才換上的整句。
-   *  寫入時靠它認店家（draftsToIntake）。檔位與自己打的是 null——不能拿 null 判斷「是不是 AI 的列」，看 lib。 */
+  /** 估出這一樣的那一段（v2.164 起每段各自估；修正時一起送，v2.151）。食品庫列是 AI 估完才換上的那一段。
+   *  寫入時靠它認店家（draftsToIntake，店家只認這一段寫的）。檔位與自己打的是 null——不能拿 null 判斷「是不是 AI 的列」，看 lib。 */
   sentence: string | null
   /** AI 給的品名：使用者改過品名（name ≠ aiName）就保留他的，修正只換數字與假設。 */
   aiName: string
@@ -94,11 +94,7 @@ export interface LibLink {
   qty: number
   /** 份量框正在打的字（同清單的 qtyDrafts）。 */
   qtyDraft: string
-  /** pre＝送 AI 之前整段就對上了（沒叫 AI）；post＝AI 回來的那一樣對上的，或按了相近提示的「改用」。 */
-  via: 'pre' | 'post'
-  /** 對上的那一段原文（pre 的「改用 AI 估」拿它去估）。 */
-  segment: string
-  /** post 的列：換成食品庫之前 AI 給的那一樣，「改用 AI 估」就換回它。 */
+  /** 換成食品庫之前 AI 給的那一樣，「改用 AI 估」就換回它（v2.164 起整段對上食品庫的不走草稿，直接是清單上勾好的那一列）。 */
   ai: EstimateItem | null
   /** 靠通用食物的「店家 品名」別名對上的（v2.162）：顯示與寫入都用別名的品名與店家，跟清單勾別名列同一個結果。 */
   alias: VendorAlias | null
@@ -335,9 +331,9 @@ export function libShown(lib: Pick<LibLink, 'food' | 'alias'>): { name: string; 
 }
 
 /** 食品庫列：數字＝那一筆 × 份數（份數預設 1——AI 估的份數不搬過來，它可能是 8 顆的總熱量，食品庫是 1 顆）。
- *  品名照對上的字：靠「店家 品名」別名對上就是別名的品名段（matchedAlias）。 */
-export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: string, ai: EstimateItem | null = null, context: string = segment): EstimateDraft {
-  const alias = matchedAlias(segment, f, context)
+ *  品名照對上的字：靠「店家 品名」別名對上就是別名的品名段（matchedAlias）。matched＝對上的那個字（AI 回的品名），context＝估的那一段。 */
+export function draftFromLibrary(f: LibCandidate, matched: string, ai: EstimateItem | null, context: string): EstimateDraft {
+  const alias = matchedAlias(matched, f, context)
   return withLibQty(
     {
       key: nextKey(),
@@ -347,9 +343,9 @@ export function draftFromLibrary(f: LibCandidate, via: 'pre' | 'post', segment: 
       low: null, high: null, assumption: null,
       kcalOnly: false, macrosGuessed: false, keep: false, foodId: null,
       origin: { kcal: 0, protein: 0, fat: 0, carb: 0 },
-      // 預設留對上的那一段（不是 null）：寫入時靠它認店家，漏了就是 v2.161 真機那個 bug；AI 估完才換的呼叫端再蓋成整句
-      sentence: segment.trim() || null, aiName: '', fixedBy: null, fixCount: 0,
-      lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', via, segment, ai, alias },
+      // 留估的那一段：寫入時靠它認店家（漏了就是 v2.161 真機那個 bug）
+      sentence: context.trim() || null, aiName: '', fixedBy: null, fixCount: 0,
+      lib: { food: libFoodOf(f), qty: 1, qtyDraft: '1', ai, alias },
       near: null,
       noLib: false,
     },
@@ -380,65 +376,36 @@ function withNear(d: EstimateDraft, foods: readonly LibCandidate[], rank: Readon
   return { ...d, near: n ? { id: n.id, name: n.name, vendor: n.vendor, kcal: Math.round(Number(n.kcal)) } : null }
 }
 
-/**
- * ① 送 AI 之前：每一段都完全對上就回食品庫列（不叫 AI）；有一段對不上回 null（照舊整句送 AI）。
- * 段落是 splitSegments 切的；空句子回 null。
- */
-export function resolveBeforeAi(segments: readonly string[], foods: readonly LibCandidate[], rank: ReadonlyMap<number, number>): EstimateDraft[] | null {
-  if (segments.length === 0) return null
-  const hits = segments.map((s) => exactMatch(s, foods, rank))
-  if (hits.some((h) => h === null)) return null
-  // 店家只算那一段（draftFromLibrary 把 segment 留成 sentence）；AI 估完那條是整句，見 resolveAfterAi
-  return hits.map((f, i) => draftFromLibrary(f as LibCandidate, 'pre', segments[i]))
-}
-
-/** ② AI 回來後：品名完全一樣的換成食品庫列（記住 AI 那一樣，可以換回去）；其餘照舊是 AI 的列、附相近提示。 */
+/** AI 回來後（估的是一段，sentence＝那一段）：品名完全一樣的換成食品庫列（記住 AI 那一樣，可以換回去）；其餘照舊是 AI 的列、附相近提示。
+ *  整段完全對上食品庫的不會走到這裡——在框裡打完那一段就直接勾好清單上的那一列（mealBox.resolveSegment）。 */
 export function resolveAfterAi(items: readonly EstimateItem[], sentence: string, foods: readonly LibCandidate[], rank: ReadonlyMap<number, number>): EstimateDraft[] {
   const said = normalizeKey(sentence)
   return items.map((it) => {
     const hit = it.name ? exactMatch(it.name, foods, rank) : null
     /* AI 回的品名常把店家拿掉（「星巴克拿鐵」回「拿鐵」），只靠品名會對到別家的那一筆（全家拿鐵）。
        那筆有店家、而使用者那句話裡沒提到這個店家 → 不自動換，降成相近提示、按了才換（v2.154 review H1）。 */
-    if (hit && (!hit.vendor || said.includes(normalizeKey(hit.vendor)))) return { ...draftFromLibrary(hit, 'post', it.name ?? '', it, sentence), sentence }
+    if (hit && (!hit.vendor || said.includes(normalizeKey(hit.vendor)))) return draftFromLibrary(hit, it.name ?? '', it, sentence)
     const [d] = draftsFromItems([it], sentence)
     if (hit) return { ...d, near: { id: hit.id, name: hit.name, vendor: hit.vendor, kcal: Math.round(Number(hit.kcal)) } }
     return withNear(d, foods, rank)
   })
 }
 
-/** ③ 相近提示的「改用」：AI 的列換成那一筆食品庫列，記住目前的估算（「改用 AI 估」換回來）。key 不變，畫面不重掛。 */
+/** 相近提示的「改用」、查重的「改用那筆」：AI 的列換成那一筆食品庫列，記住目前的估算（「改用 AI 估」換回來）。key 不變，畫面不重掛。 */
 export function adoptNear(d: EstimateDraft, f: LibCandidate): EstimateDraft {
-  const lib = draftFromLibrary(f, 'post', d.name || d.aiName, fixRequestItem(d))
+  const lib = draftFromLibrary(f, d.name || d.aiName, fixRequestItem(d), d.sentence ?? '')
   return { ...lib, key: d.key, sentence: d.sentence }
 }
 
-/** post 的食品庫列按「改用 AI 估」：換回 AI 那一樣，之後不再自動換、不再提示。pre 的列沒有 AI 結果，呼叫端要先去估。 */
+/** 食品庫列按「改用 AI 估」：換回 AI 那一樣，之後不再自動換、不再提示。 */
 export function backToAi(d: EstimateDraft): EstimateDraft {
   if (!d.lib?.ai) return d
   const [next] = draftsFromItems([d.lib.ai], d.sentence)
   return { ...next, key: d.key, noLib: true }
 }
 
-/** pre 的食品庫列按「改用 AI 估」、估回來的品項：取代那一列，同樣標「選過 AI」。 */
-export function aiDraftsChosen(items: readonly EstimateItem[], sentence: string): EstimateDraft[] {
-  return draftsFromItems(items, sentence).map((d) => ({ ...d, noLib: true }))
-}
-
-/** 結果上面那一行：都是送 AI 前就對上的＝「N 樣都在食品庫，沒叫 AI」；有食品庫也有 AI 的＝「N 樣用食品庫、M 樣 AI 估」。沒有食品庫列不出這行。 */
-export function libSummary(drafts: readonly EstimateDraft[]): string | null {
-  const lib = drafts.filter((d) => d.lib)
-  if (lib.length === 0) return null
-  const ai = drafts.filter((d) => !d.lib && !isManualDraft(d) && d.foodId === null).length
-  if (ai === 0 && lib.every((d) => d.lib?.via === 'pre')) return `${lib.length} 樣都在食品庫，沒叫 AI`
-  return ai === 0 ? `${lib.length} 樣用食品庫` : `${lib.length} 樣用食品庫、${ai} 樣 AI 估`
-}
-
-/** 描述框：送出前 trim，1–300 字（以 code point 計，同 handler.ts）。 */
+/** 一段送去估的上限：1–300 字（以 code point 計，同 handler.ts）。框裡打完的段超過就截掉（mealBox）。 */
 export const ESTIMATE_TEXT_MAX = 300
-export function estimateTextOk(text: string): boolean {
-  const n = [...text.trim()].length
-  return n >= 1 && n <= ESTIMATE_TEXT_MAX
-}
 
 /** 回應是外部資料：逐欄驗型別。任一樣不合法整組丟掉（同 handler：悄悄少一樣使用者不會發現）。 */
 export function parseEstimateResponse(data: unknown): EstimateItem[] | null {

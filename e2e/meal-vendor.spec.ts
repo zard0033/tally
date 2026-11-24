@@ -40,7 +40,7 @@ async function openMeal(page: Page, meal = '晚餐') {
   await page.waitForSelector('.sheet', { timeout: 3000 })
   await page.locator('.chip', { hasText: meal }).click()
 }
-const search = (page: Page, q: string) => page.fill('input[aria-label="搜尋食物"]', q)
+const search = (page: Page, q: string) => page.fill('input[aria-label="吃了什麼"]', q)
 /** 清單上一列：品名（.nm 全等）＋副標（店家） */
 const listRow = (page: Page, name: string) => page.locator('.food-item', { has: page.locator('.nm', { hasText: new RegExp(`^${name.replace(/[()（）+＋]/g, '\\$&')}$`) }) })
 
@@ -155,7 +155,7 @@ test('記一筆：搜不到出「跟哪一樣差不多？」，選了記成「�
   await search(page, '春陽 冬瓜檸檬')
   const card = page.getByRole('group', { name: '跟哪一樣差不多？' })
   await expect(card).toBeVisible()
-  // 估一筆收進卡裡，下面那列不重複
+  // v2.164 起沒有「估一筆『…』」那一列（卡裡「都不像 → 估一筆」＝這一段直接估）
   await expect(page.locator('.est-row')).toHaveCount(0)
   await card.locator('.shop-opt', { hasText: TEA.name }).click()
   await expect(card.locator('.shop-opt', { hasText: TEA.name })).toHaveAttribute('aria-pressed', 'true')
@@ -164,7 +164,7 @@ test('記一筆：搜不到出「跟哪一樣差不多？」，選了記成「�
   await expect.poll(async () => (await writes(page, 'foods', 'PATCH')).length).toBe(1)
   expect((await writes(page, 'foods', 'PATCH'))[0]).toEqual({ aliases: [...TEA.aliases, '春陽 冬瓜檸檬'] })
   // 回清單、勾著那一列（品名＋店家）
-  await expect(page.locator('input[aria-label="搜尋食物"]')).toHaveValue('')
+  await expect(page.locator('input[aria-label="吃了什麼"]')).toHaveValue('')
   const row = listRow(page, '冬瓜檸檬')
   await expect(row).toHaveClass(/selected/)
   await expect(row.locator('.sub')).toHaveText('春陽')

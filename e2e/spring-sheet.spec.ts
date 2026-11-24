@@ -329,7 +329,7 @@ test('記一筆 sheet 開啟：焦點落在 sheet 容器本身，不是第一顆
 
 test('AI 辨識中：Escape、點 scrim、下滑都收不掉記一筆 sheet；辨識結束後 Escape 收得掉', async ({ page }) => {
   await openLogSheet(page)
-  const q = page.locator('input[aria-label="搜尋食物"]')
+  const q = page.locator('input[aria-label="吃了什麼"]')
   await q.click()
   await q.pressSequentially('測試奶茶', { delay: 30 })
   await page.locator('.add-food-row').click()

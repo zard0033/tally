@@ -1102,7 +1102,7 @@ test('來源、別名：收起時列上寫狀態；Enter 與頓號加入、✕ �
   await page.locator('.tab[aria-label="飲食"]').click()
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
-  await page.fill('input[aria-label="搜尋食物"]', '番薯')
+  await page.fill('input[aria-label="吃了什麼"]', '番薯')
   await expect(page.locator('.food-list .nm', { hasText: '地瓜' })).toBeVisible()
 })
 

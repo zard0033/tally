@@ -403,7 +403,7 @@ test('記錄食物裡新增食物斷網失敗：訊息是白話', async ({ page 
   await openApp(page)
   await page.click('button.cta')
   const sheet = page.locator('[data-screen="log-sheet"]')
-  await sheet.getByPlaceholder(/搜尋/).first().fill('測試用新食物')
+  await sheet.getByLabel('吃了什麼').fill('測試用新食物')
   await sheet.locator('.add-food-row').click()
   await sheet.locator('#f-kcal').fill('200')
   await setDown(page, true)

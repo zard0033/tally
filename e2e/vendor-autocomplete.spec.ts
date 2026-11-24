@@ -15,7 +15,7 @@ interface Write {
 async function openFoodForm(page: import('@playwright/test').Page, name: string) {
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
-  const q = page.locator('input[aria-label="搜尋食物"]')
+  const q = page.locator('input[aria-label="吃了什麼"]')
   await q.click()
   await q.pressSequentially(name, { delay: 40 })
   await page.locator('.add-food-row').click()

@@ -34,7 +34,7 @@ async function openDinner(page: Page) {
   await page.locator('.chip', { hasText: '晚餐' }).click()
 }
 async function search(page: Page, q: string) {
-  await page.fill('input[aria-label="搜尋食物"]', q)
+  await page.fill('input[aria-label="吃了什麼"]', q)
 }
 const pickedRow = (page: Page, name: string) => page.locator('.food-item.selected', { has: page.locator('.nm', { hasText: name }) })
 

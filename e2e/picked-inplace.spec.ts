@@ -142,7 +142,7 @@ test('膠囊捲到看不到的列：被搜尋濾掉就清掉搜尋、在收合�
   await openBreakfast(page)
   const sheet = sheetOf(page)
   const scroller = scrollerOf(page)
-  const search = sheet.getByLabel('搜尋食物')
+  const search = sheet.getByLabel('吃了什麼')
 
   // 健康餐盒只在午餐吃過 → 早餐清單裡收在「其他餐的」
   await search.fill('健康盒')
@@ -191,23 +191,21 @@ test('第一次勾、膠囊列出現：手指底下那一列不動（補 scrollT
   expect(Math.abs((await row.boundingBox())!.y - y0), '膠囊列消失把那一列拉走了').toBeLessThan(1)
 })
 
-/** 估一筆選一個檔位、帶回清單：回來時膠囊列已經有一顆草稿 */
-async function bringBackTier(page: Page) {
-  await sheetOf(page).locator('.est-entry').click()
-  await sheetOf(page).locator('.est-tier', { hasText: '一般正餐' }).click()
-  await sheetOf(page).locator('.pick-bar-btn', { hasText: '帶回清單' }).click()
-  await expect(sheetOf(page).locator('.pick-pin .pick-chip')).toHaveCount(1)
-}
-
-test('補 scrollTop 只在膠囊列出現／消失那一刻：從估一筆回來不補（新的捲動區從頂端開始）、已有草稿時再勾也不補', async ({ page }) => {
+test('框裡打完一段（v2.164）：「這一餐」段與膠囊列一起出現時捲回頂端、看得到剛打的那一列；膠囊列已經在時再勾清單也不補', async ({ page }) => {
   await openApp(page, {}, LONG_FIX)
   await openBreakfast(page)
   const sheet = sheetOf(page)
   const scroller = scrollerOf(page)
-  await bringBackTier(page)
-  expect(await scroller.evaluate((el) => el.scrollTop), '從估一筆回來的捲動區被往下捲了').toBe(0)
+  // 先捲到下面，再在框裡打一段對上食品庫的：手指不在清單哪一列上，不照膠囊列補捲動，捲回頂端
+  await scroller.evaluate((el) => (el.scrollTop = 300))
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(100)
+  await sheet.getByLabel('吃了什麼').fill('小菜3號、')
+  await expect(sheet.locator('.pick-pin .pick-chip')).toHaveCount(1)
+  await expect(sheet.locator('.meal-sect')).toBeVisible()
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop), '打完一段要捲回頂端，看得到「這一餐」').toBe(0)
+  await expect.poll(() => inView(scroller, sheet.locator('.meal-rows .food-item').first())).toBe(true)
 
-  const row = rowOf(page, '小菜3號')
+  const row = rowOf(page, '小菜5號')
   await row.scrollIntoViewIfNeeded()
   await expect.poll(() => inView(scroller, row)).toBe(true)
   const top0 = await scroller.evaluate((el) => el.scrollTop)
@@ -287,7 +285,7 @@ test('建議段有的食物從搜尋結果勾：跟從建議段勾一樣，記�
   await page.locator('.timeline .node').filter({ hasText: '早餐' }).locator('.todo-row').click()
   const sheet = sheetOf(page)
   await expect(sheet.locator('.sect-suggest')).toBeVisible()
-  await sheet.getByLabel('搜尋食物').fill('手搖')
+  await sheet.getByLabel('吃了什麼').fill('手搖')
   await sheet.locator('.food-row', { hasText: '手搖飲' }).click()
   await expect(sheet.locator('.food-item.selected .pmods-last')).toHaveText('· 照上次')
   await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 120 卡')
@@ -337,7 +335,7 @@ test('全選之後別的路徑改了勾選：焦點不會被搶到建議段最�
   await expect(rows.first().locator('.food-row')).toBeFocused()
 
   // 之後別的路徑改了勾選、焦點又掉到 body（新增食物查重擋下按「改用那筆」：表單整頁卸載、回清單）
-  await sheet.getByLabel('搜尋食物').fill('香蕉')
+  await sheet.getByLabel('吃了什麼').fill('香蕉')
   await sheet.locator('.add-food-row').click()
   // 用鍵盤按：WebKit 用滑鼠點按鈕不會把焦點放上去（焦點留在 sheet 上），鍵盤按的鈕卸載了焦點才會掉到 body
   await sheet.locator('.dup-block .row-pill', { hasText: '改用那筆' }).focus()
@@ -379,5 +377,5 @@ test('取消勾之後那一列不見、膠囊列也收了：焦點回搜尋框',
   await stray.focus()
   await page.keyboard.press('Enter')
   await expect(sheet.locator('.pick-pin')).toHaveCount(0)
-  await expect(sheet.getByLabel('搜尋食物')).toBeFocused()
+  await expect(sheet.getByLabel('吃了什麼')).toBeFocused()
 })

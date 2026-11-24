@@ -12,7 +12,6 @@ import {
   draftToFood,
   draftsFromItems,
   draftsToIntake,
-  estimateTextOk,
   estimateTotals,
   parseEstimateResponse,
   parseKcal,
@@ -124,12 +123,6 @@ describe('合計與寫入', () => {
   it('還沒建好 food 的列不能寫 intake', () => {
     expect(() => draftsToIntake(draftsFromItems([item()]), 'dinner', '2026-11-13')).toThrow()
   })
-})
-
-describe('estimateTextOk：trim 後 1–300 字（code point）', () => {
-  it.each([['', false], ['   ', false], ['螺獅粉', true], ['a'.repeat(300), true], ['a'.repeat(301), false], ['😀'.repeat(300), true]])('%#', (t, ok) =>
-    expect(estimateTextOk(t)).toBe(ok),
-  )
 })
 
 describe('parseEstimateResponse：回應是外部資料', () => {
