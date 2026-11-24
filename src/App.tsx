@@ -35,7 +35,7 @@ import {
 } from '@/lib/api'
 import { withCategories, type FoodCategory } from '@/lib/categories'
 import { DUR, EASE, sec } from '@/lib/durations'
-import { computeTargets, num, numOrNull, type Targets } from '@/lib/formulas'
+import { computeTargets, formulaBmr, num, numOrNull, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
 import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
@@ -54,6 +54,7 @@ import TabBar, { type Tab } from '@/screens/TabBar'
 import LiveBar from '@/components/LiveBar'
 import { liveWorkout } from '@/lib/trainingHome'
 import { useMonthMarks } from '@/useMonthMarks'
+import { useWeekData } from '@/useWeekData'
 import { useRepeatHistory } from '@/useRepeatHistory'
 import { useFoodCategories } from '@/useFoodCategories'
 import { useViewportInsets } from '@/useViewportInsets'
@@ -429,6 +430,12 @@ export default function App() {
 
 
   const { markedDates, loadMonthMarks, resetMonthMarks } = useMonthMarks(rows, currentDate)
+  /* 「這週」卡（v2.165）：正在看的那天所在的週；登入的人才抓。打平下限是公式 BMR（自訂目標時也照公式算）。 */
+  const { week, retry: retryWeek, skipsOf, setSkip } = useWeekData(session ? session.user.id : null, currentDate, rows)
+  const weekBmr = useMemo(
+    () => (profile && weight ? formulaBmr(profile, num(weight.weight_kg), weight.body_fat_pct) : 0),
+    [profile, weight],
+  )
 
   /* 要排在 commitDelete 之前：invalidateRepeat 在它的 deps 裡。同一份下發今日頁與 sheet。 */
   const { history: repeatHistory, invalidate: invalidateRepeat, reset: resetRepeatHistory } = useRepeatHistory(
@@ -1182,6 +1189,11 @@ export default function App() {
             repeatErr={repeatErr}
             onAddRepeat={handleAddRepeat}
             onSwapRepeat={handleSwapRepeat}
+            week={week}
+            weekBmr={weekBmr}
+            onWeekRetry={retryWeek}
+            skipsOf={skipsOf}
+            onSetSkip={setSkip}
           />
         ) : (
           <Settings

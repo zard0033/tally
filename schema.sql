@@ -163,3 +163,16 @@ create policy owner_all on foods   for all using (auth.uid() = user_id) with che
 create policy owner_all on intake  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy owner_all on weight  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy owner_all on profile for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 這一餐沒吃（2026-11-24，spec「熱量看這一週」）：早、午、晚餐空著時使用者按「沒吃」才寫；這週卡把那餐算 0、不再問「沒記完」。
+-- 那餐之後有了紀錄就不算（前端判斷，不刪這筆）。點心不問、不寫。2026-11-24 已建（anon 讀回空、寫入被 RLS 擋，已驗）。
+-- 回滾：drop table meal_skip;
+create table meal_skip (
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  eaten_on   date not null,
+  meal       text not null check (meal in ('breakfast','lunch','dinner')),
+  created_at timestamptz not null default now(),
+  primary key (user_id, eaten_on, meal)
+);
+alter table meal_skip enable row level security;
+create policy owner_all on meal_skip for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

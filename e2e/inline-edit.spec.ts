@@ -202,6 +202,8 @@ test('改份量失敗顯示錯誤；收合再展開同一列，舊的失敗訊�
 test('左滑仍露出刪除鈕，且不會順手展開編輯區', async ({ page }) => {
   await openApp(page)
 
+  // v2.165 起三大營養素下面多一張「這週」卡，午餐那列落到底部列後面：先捲進來，拖曳才落在列上
+  await page.locator(`${ROW} .item-content`).scrollIntoViewIfNeeded()
   const box = await page.locator(`${ROW} .item-content`).boundingBox()
   expect(box, '拿不到品項座標').not.toBeNull()
   const y = box!.y + box!.height / 2

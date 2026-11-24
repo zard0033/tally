@@ -19,6 +19,7 @@ import type { LabelReading } from './foodForm'
 import type { RepeatSourceRow } from './mealSuggest'
 import { normalizeCategory, type FoodCategory } from './categories'
 import { parseEstimateResponse, type EstimateItem } from './estimate'
+import type { MainMeal } from './weekBudget'
 
 /* 明確傳 storageKey：離線開機要自己讀本機 session（session.ts），讀的 key 必須與 supabase-js
    寫的是同一個。值等於它的預設，所以既有登入不受影響。 */
@@ -388,6 +389,38 @@ export type IntakeDetailPatch = Partial<Pick<IntakeRow, 'name' | 'kcal' | 'prote
 
 export async function updateIntakeDetail(id: number, patch: IntakeDetailPatch): Promise<void> {
   const { error } = await supabase.from('intake').update(patch).eq('id', id).abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
+/* ═══════════ meal_skip（這一餐沒吃，spec「熱量看這一週」） ═══════════ */
+
+export interface MealSkip {
+  eaten_on: string
+  meal: MainMeal
+}
+
+/** 區間內按過「沒吃」的餐。一週最多 21 列，不分頁。 */
+export async function listMealSkips(from: string, to: string): Promise<MealSkip[]> {
+  return unwrap(await supabase
+    .from('meal_skip')
+    .select<'eaten_on,meal', MealSkip>('eaten_on,meal')
+    .gte('eaten_on', from)
+    .lte('eaten_on', to)
+    .abortSignal(dbSignal()))
+}
+
+/** 按「沒吃」：已經有就略過（同一餐按兩次不報錯）。 */
+export async function addMealSkip(date: string, meal: MainMeal): Promise<void> {
+  const { error } = await supabase
+    .from('meal_skip')
+    .upsert({ eaten_on: date, meal }, { onConflict: 'user_id,eaten_on,meal', ignoreDuplicates: true })
+    .abortSignal(dbSignal())
+  if (error) throw new Error(error.message)
+}
+
+/** 取消「沒吃」。 */
+export async function removeMealSkip(date: string, meal: MainMeal): Promise<void> {
+  const { error } = await supabase.from('meal_skip').delete().eq('eaten_on', date).eq('meal', meal).abortSignal(dbSignal())
   if (error) throw new Error(error.message)
 }
 

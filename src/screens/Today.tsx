@@ -22,8 +22,10 @@ import { MEALS, type Meal, type MealKey } from '@/lib/meals'
 import { suffixOf, type Macros, type ModTarget } from '@/lib/portionMods'
 import { suggestLabel, type RepeatByMeal, type RepeatSuggestion, type SuggestSource } from '@/lib/mealSuggest'
 import { rowVendor } from '@/lib/mealVendor'
+import { askSkip, isMainMeal, msToNextAskBoundary, type MainMeal } from '@/lib/weekBudget'
 import ItemEditor from './ItemEditor'
 import TodayScene from './TodayScene'
+import WeekCard from './WeekCard'
 import type { TodayProps } from './types'
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -61,6 +63,11 @@ export default function Today(props: TodayProps) {
     repeatErr,
     onAddRepeat,
     onSwapRepeat,
+    week,
+    weekBmr,
+    onWeekRetry,
+    skipsOf,
+    onSetSkip,
   } = props
 
   /* 份量微調的基準：食品庫現在那一筆（spec「份量微調」：之後再改用現在的數字重算）。封存或刪掉的查不到就不出微調。 */
@@ -170,6 +177,16 @@ export default function Today(props: TodayProps) {
   const over = eatenKcal !== null && targetKcal - eatenKcal < 0
 
   const edge = useSkyEdge()
+
+  /* 「沒吃／補記」與這週卡看現在幾點、今天是哪天：在下一個 11 點、15 點或午夜重畫一次（review N4），
+     一直開著也會在時段過了的當下冒出來，不必等使用者切日期。同時只有一個計時器，卸載就清掉。 */
+  const [clockTick, setClockTick] = useState(0)
+  useEffect(() => {
+    const t = window.setTimeout(() => setClockTick((n) => n + 1), msToNextAskBoundary(new Date()) + 50)
+    return () => window.clearTimeout(t)
+  }, [clockTick])
+  const nowDay = localDate()
+  const nowHour = new Date().getHours()
 
   /* 記完一餐的那句話（訓練分頁改版 D2-b，使用者 2026-11-23 選）：某一餐從「沒記」變成「記了」的那一下（只看剛加入的那幾筆，
      載入、換日期、編輯都不算），頂端浮出「晚餐記好了 · 還能吃 420 卡」約 2 秒；今天的早、午、晚三餐因此都記了（點心不算必要），
@@ -307,6 +324,10 @@ export default function Today(props: TodayProps) {
           })}
         </section>
 
+        {/* 這週（v2.165）：放在今天的三大營養素之後、時間軸之前——大數字與三大是「今天」，卡片是「這週」，
+            不插進兩者中間（樣張沒有三大這一列）。 */}
+        <WeekCard data={week} today={nowDay} target={targets.kcal} bmr={weekBmr} onRetry={onWeekRetry} onGoToDate={onGoToDate} />
+
         <div className="meals">
           {rows === null ? (
             /* 四列餐別骨架，列高同 .todo-row（44px）。讀屏與 e2e 讀隱藏的「載入中…」 */
@@ -334,6 +355,11 @@ export default function Today(props: TodayProps) {
               onSwapRepeat,
               repeatBusyKey,
               repeatErr,
+              skips: skipsOf(currentDate),
+              onSetSkip: (meal, on) => onSetSkip(currentDate, meal, on),
+              today: nowDay,
+              hour: nowHour,
+              skipsReady: week.state === 'done',
             })
           )}
         </div>
@@ -360,6 +386,12 @@ interface TimelineHelpers {
   onSwapRepeat: (meal: MealKey) => void
   repeatBusyKey: string | null
   repeatErr: { key: string; msg: string } | null
+  /** 這一天按過「沒吃」的餐。 */
+  skips: ReadonlySet<MainMeal>
+  onSetSkip: (meal: MainMeal, on: boolean) => Promise<void>
+  today: string
+  hour: number
+  skipsReady: boolean
 }
 
 /* 一列品項。位移層是 motion.div（純 transform，不動 layout），刪除鈕壓在它底下，
@@ -741,6 +773,10 @@ function MealNode({
                 </svg>
               </span>
             </button>
+            {/* 這週還沒讀到就不問：還不知道伺服器上有沒有按過沒吃（review S2） */}
+            {h.skipsReady && isMainMeal(meal.key) && askSkip(meal.key, date, h.today, h.hour) && (
+              <SkipAsk meal={meal.key} label={meal.label} skipped={h.skips.has(meal.key)} onOpenSheet={() => h.onOpenSheet(meal.key)} onSetSkip={h.onSetSkip} />
+            )}
             {suggestion && (
               <SuggestRow
                 suggestion={suggestion}
@@ -756,6 +792,73 @@ function MealNode({
         )}
       </div>
     </div>
+  )
+}
+
+/* 待記錄的三餐問一下「沒吃／補記」（v2.165，spec「熱量看這一週」）：這週卡把沒交代的餐補到目標（保守算），
+   按「沒吃」那餐照實算 0、不再問；按了之後同一行換成「沒吃了」＋「取消」。「補記」＝開這一餐的記一筆。
+   寫入失敗在下面一行「存不進去：」（同餐建議），鎖住用 aria-disabled（焦點不掉）。 */
+function SkipAsk({
+  meal,
+  label,
+  skipped,
+  onOpenSheet,
+  onSetSkip,
+}: {
+  meal: MainMeal
+  label: string
+  skipped: boolean
+  onOpenSheet: () => void
+  onSetSkip: (meal: MainMeal, on: boolean) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  // 按了之後這一行換掉、焦點所在的鈕也不見了：結果用一句話唸出來（review N3）
+  const [said, setSaid] = useState('')
+  const set = async (on: boolean) => {
+    if (busy) return
+    setBusy(true)
+    setErr(null)
+    try {
+      await onSetSkip(meal, on)
+      setSaid(on ? `已記下${label}沒吃` : `已取消「${label}沒吃」`)
+    } catch (e) {
+      setErr(friendlyError(errMsg(e)))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <div className="skip-ask" data-meal={meal}>
+        {skipped ? (
+          <>
+            <span className="lb">{label}沒吃</span>
+            <button type="button" aria-disabled={busy || undefined} aria-label={`取消「${label}沒吃」`} onClick={() => void set(false)}>
+              取消
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="lb">沒記到{label}？</span>
+            <button type="button" aria-disabled={busy || undefined} aria-label={`${label}沒吃`} onClick={() => void set(true)}>
+              沒吃
+            </button>
+            <button type="button" aria-label={`補記${label}`} onClick={onOpenSheet}>
+              補記
+            </button>
+          </>
+        )}
+      </div>
+      {err && (
+        <p className="sheet-error" role="alert">
+          存不進去：{err}
+        </p>
+      )}
+      <span className="sr-only" role="status" aria-live="polite">
+        {said}
+      </span>
+    </>
   )
 }
 

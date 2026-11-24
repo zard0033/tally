@@ -109,6 +109,19 @@ export const ACTIVITY_FACTOR_PRESETS = [1.2, 1.375, 1.55, 1.725, 1.9] as const
 /** 攝取蛋白質 g/kg 選單的四個固定值，同樣沒有自訂。 */
 export const PROTEIN_G_PER_KG_PRESETS = [1.4, 1.6, 1.8, 2.0] as const
 
+/** 公式 BMR：有體脂率 → Katch-McArdle（去脂體重），沒有 → Mifflin-St Jeor。自訂目標時 computeTargets 不算它，
+ *  但「這週」卡的打平下限要一個 BMR（spec「熱量看這一週」），所以單獨匯出。 */
+export function formulaBmr(
+  profile: Pick<Profile, 'birth_year' | 'height_cm' | 'sex'>,
+  weightKg: number,
+  bodyFatPct: number | null,
+  today: Date = new Date(),
+): number {
+  if (bodyFatPct !== null && Number.isFinite(bodyFatPct)) return 370 + 21.6 * weightKg * (1 - bodyFatPct / 100)
+  const age = ageFromYear(num(profile.birth_year), today)
+  return 10 * weightKg + 6.25 * num(profile.height_cm) - 5 * age + (profile.sex === 'male' ? 5 : -161)
+}
+
 /**
  * weightKg／bodyFatPct 一律取 weight 表最新一筆（呼叫端負責查）；bodyFatPct 那一筆若沒填
  * 傳 null，不找更舊的值——體脂率會隨時間變，用舊資料騙自己比老實承認沒有更糟。
@@ -132,11 +145,8 @@ export function computeTargets(
     }
   }
 
-  const h = num(profile.height_cm)
   const af = num(profile.activity_factor)
-  const bmr = bodyFatPct !== null && Number.isFinite(bodyFatPct)
-    ? 370 + 21.6 * weightKg * (1 - bodyFatPct / 100) // Katch-McArdle：去脂體重
-    : 10 * weightKg + 6.25 * h - 5 * age + (profile.sex === 'male' ? 5 : -161) // Mifflin-St Jeor
+  const bmr = formulaBmr(profile, weightKg, bodyFatPct, today)
   const formulaTdee = bmr * af
   const tdee = numOrNull(profile.measured_tdee) ?? formulaTdee
 

@@ -40,6 +40,8 @@ export interface StubOptions {
   /** 回推估算的區間查詢（eaten_on,kcal,meal,qty 四欄）回 500。v2.143 起開 App 就查，要從開機就失敗才需要這個選項；
    *  測試中途改 `window.__kcalFail` 只影響之後的查詢（例如存體重後重算）。月份小點走同一形狀，一起失敗。 */
   kcalFail?: boolean
+  /** 區間查詢（同 kcalFail 那一支）從開機就停住，等 `window.__kcalRelease()` 才回：造「這週還在讀」（v2.165）。 */
+  kcalHold?: boolean
   /** intake 寫入真的落地（預設不落地）：由 fix.intake／intakeYday／repeatWindow 起頭，POST 與 DELETE 改得到
    *  之後的 GET，驗「寫入後重撈」「復原」「切走切回不復活」用。PATCH 不落地。 */
   intakePersist?: boolean
@@ -67,7 +69,7 @@ export async function seedFetchStub(
   opts: StubOptions = {},
 ): Promise<void> {
   await page.addInitScript(
-    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, kcalFail, intakePersist, holdIntake, classify }) => {
+    ({ fix, today, userId, storageKey, intakeDelayMs, authMode, unparseableSession, dataDown, repeatFail, kcalFail, kcalHold, intakePersist, holdIntake, classify }) => {
       const stored: Record<string, unknown> = {
         access_token: 'stub-token',
         refresh_token: 'stub-refresh',
@@ -134,6 +136,7 @@ export async function seedFetchStub(
         __kcalWindow: { eaten_on: string; qty: number; kcal: number; meal: string }[] | null
         /* 有值時區間查詢等它 resolve 才回，用來造「查詢在飛」。要回哪一份在等之前就決定了（查詢送出當下的帳號）。 */
         __kcalHold: Promise<void> | null
+        __kcalRelease: () => void
         /* 設 true＝餐建議的回看查詢回 500（見 StubOptions.repeatFail）。 */
         __repeatFail: boolean
         /* 餐建議的回看查詢回應過幾次（要回應前才 +1），斷言「失敗了也沒事」要等到它。 */
@@ -161,7 +164,15 @@ export async function seedFetchStub(
       w.__kcalFail = kcalFail
       w.__weightListFail = false
       w.__kcalWindow = null
-      w.__kcalHold = null
+      w.__kcalRelease = () => {}
+      w.__kcalHold = kcalHold
+        ? new Promise<void>((resolve) => {
+            w.__kcalRelease = () => {
+              w.__kcalHold = null
+              resolve()
+            }
+          })
+        : null
       w.__writes = []
       w.__allFetches = []
       w.__blocked = []
@@ -254,6 +265,10 @@ export async function seedFetchStub(
           (qs.get('category') !== 'is.null' || f.category == null) &&
           (qs.get('category_manual') !== 'eq.false' || !f.category_manual)
       }
+
+      /* meal_skip（這餐沒吃，v2.165）的假資料表：由 fix.mealSkip 起頭（沒有就空），寫入落地。 */
+      let skipStore: { eaten_on: string; meal: string }[] = [...(((fix as { mealSkip?: { eaten_on: string; meal: string }[] }).mealSkip) ?? [])]
+      ;(window as unknown as { __mealSkips: () => { eaten_on: string; meal: string }[] }).__mealSkips = () => [...skipStore]
 
       const real = window.fetch.bind(window)
       // @ts-expect-error — 刻意覆寫全域 fetch，型別對不上是預期的
@@ -462,10 +477,32 @@ export async function seedFetchStub(
               201,
             )
           }
+          /* 「這餐沒吃」（v2.165）：寫入落地，之後的 GET 讀得到。POST＝upsert（同一餐已有就略過），DELETE 以 eaten_on＋meal 定位。 */
+          if (table === 'meal_skip') {
+            if (method === 'POST') {
+              for (const r of (Array.isArray(body) ? body : [body]) as { eaten_on: string; meal: string }[]) {
+                if (!skipStore.some((s) => s.eaten_on === r.eaten_on && s.meal === r.meal)) skipStore.push({ eaten_on: r.eaten_on, meal: r.meal })
+              }
+              return new Response(null, { status: 201 })
+            }
+            if (method === 'DELETE') {
+              const qs = new URL(u).searchParams
+              const on = qs.get('eaten_on')?.replace(/^eq\./, '')
+              const meal = qs.get('meal')?.replace(/^eq\./, '')
+              skipStore = skipStore.filter((s) => !(s.eaten_on === on && s.meal === meal))
+              return new Response(null, { status: 204 })
+            }
+          }
           return new Response(null, { status: 204 })
         }
 
         if (table === 'profile') return json(fix.profile)
+        if (table === 'meal_skip') {
+          const range = new URL(u).searchParams.getAll('eaten_on')
+          const from = range.find((c) => c.startsWith('gte.'))?.slice(4) ?? ''
+          const to = range.find((c) => c.startsWith('lte.'))?.slice(4) ?? '9999'
+          return json(skipStore.filter((s) => s.eaten_on >= from && s.eaten_on <= to))
+        }
         if (table === 'weight') {
           if (w.__weightListFail && new URL(u).searchParams.get('limit') !== '1') return json({ message: '模擬的讀取失敗' }, 500)
           return json(fix.weight)
@@ -552,6 +589,7 @@ export async function seedFetchStub(
       dataDown: opts.dataDown ?? false,
       repeatFail: opts.repeatFail ?? false,
       kcalFail: opts.kcalFail ?? false,
+      kcalHold: opts.kcalHold ?? false,
       intakePersist: opts.intakePersist ?? false,
       holdIntake: opts.holdIntake ?? [],
       classify: opts.classify ?? { mode: 'fail' },

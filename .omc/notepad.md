@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-24）：v2.162 記店家改版（別名當列、新店卡、今日頁點開收斂 D）已部署（c24669a，CI 659 條全綠）。v2.163 每日目標改版（目標體重＋速度滑桿 D2）已部署（740d063，CI 664＋1 flaky 環境差）。
-下一步：①v2.164 一個框記一餐 review 修完、本機 vitest 1350／smoke 驗中→push＋CI（notepad／wiki 這輪更新一起帶）；真機待驗：iOS 注音打「、」與鍵盤「完成」切段③寫 spec：一個框記一餐（甲）、熱量看這一週（B；weekly-*.html 含個人數值未進 git，寫 spec 時換示意值）④真機看 v2.160–v2.162 ⑤AI 課表訪談。
+現況（2026-11-24）：v2.162 記店家改版、v2.163 每日目標改版（目標體重＋速度滑桿）、v2.164 一個框記一餐都已部署（879b178；CI 各 1 條環境差 flaky，見 wiki）。這輪 notepad／wiki 更新還沒 commit。
+下一步：①真機看 v2.162–v2.164（iOS 注音打「、」與鍵盤「完成」切段、每日目標滑桿往下捲不誤改）②v2.165 熱量看這一週：spec 已核可（這週卡 B、打平下限 BMR、紅只在這週已超、早午晚餐空著問「沒吃／補記」），meal_skip 表已上 prod（RLS anon 讀空寫拒已驗），review 修完（卡高 193→133px、class 改 wkb-、本機沒吃疊在伺服器上、目標低於 BMR 時下限取目標、到 11／15 點自動出鈕）本機綠→push③AI 量身訂做課表先訪談。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
@@ -34,6 +34,7 @@
 - 拍照辨識 v2.46（iOS 切欄位鍵盤上下箭頭會中斷）：仍會斷先分辨 (a) 箭頭按了焦點沒動＝accessory bar 分組問題，嫌疑是 v2.34 關掉的 vaul hack（app.css `.sheet`）(b) 焦點移了但看不到＝空間／捲動，下一格可收「鍵盤升起時收起 AI 辨識鈕」。全文 DESIGN v2.46。
 - B2 訓練中改版清單（DESIGN v2.69）、v2.91–v2.93、RPE、重量建議、有氧卡與有氧 sheet、縮圖放大檢視器疊在加動作 sheet 上的手感。
 - v2.163 每日目標滑桿：手指從滑桿上開始往下捲頁面，不能換格、不能存（`touch-action: pan-y`＋垂直 >10px 或 cancel 就作廢；10px 是假設值）。桌面只驗到自造 touch 事件，瀏覽器真接手捲動的事件順序要真機看。
+- v2.165 這週卡：①今日頁第一屏多了約 133px 的卡，時間軸被往下推，看能不能接受 ②連按兩次「沒吃」不能報錯（upsert 只在 stub 驗過）③「沒吃／補記」到 11 點／15 點會自己冒出來。
 - 同步細條 `role=status` 會不會讓 VoiceOver 每記一筆都播報「1 筆尚未同步」（Training.tsx:232）；吵就只在有失敗條目時進 live region。
 
 **待辦（2026-11-11 整理，依序）**

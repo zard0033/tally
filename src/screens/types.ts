@@ -15,6 +15,8 @@ import type { RepeatByMeal, RepeatSuggestion, SeenByMeal } from '@/lib/mealSugge
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import type { MaintenanceEstimate } from '@/useMaintenanceEstimate'
+import type { WeekData } from '@/useWeekData'
+import type { MainMeal } from '@/lib/weekBudget'
 
 /**
  * 目前檢視日期的 intake 快照。
@@ -65,6 +67,16 @@ export interface TodayProps {
   onAddRepeat: (date: string, s: RepeatSuggestion) => void
   /** 「換一個」：這一餐換成排序的下一名（最後一名再回第一名）。只有依缺口挑、候選 > 1 時才有鈕。 */
   onSwapRepeat: (meal: MealKey) => void
+  /** 「這週」卡的資料（正在看的那天所在的週；spec「熱量看這一週」）。 */
+  week: WeekData
+  /** 打平的下限：公式 BMR（自訂目標時也照公式算）。 */
+  weekBmr: number
+  /** 這週讀不到時的重試。 */
+  onWeekRetry: () => void
+  /** 某天按過「沒吃」的餐（只有早、午、晚餐）。 */
+  skipsOf: (date: string) => ReadonlySet<MainMeal>
+  /** 按「沒吃」或取消；失敗 rejects，Today 在那一餐底下顯示「存不進去：」。 */
+  onSetSkip: (date: string, meal: MainMeal, on: boolean) => Promise<void>
 }
 
 export interface LogSheetProps {
