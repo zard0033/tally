@@ -245,3 +245,6 @@
 - **Pages:** lesson-meal-vendor-2026-11-23.md
 - **Summary:** Created new page "lesson-meal-vendor 每一餐記店家的三條通則（2026-11-23）"
 
+## [2026-11-24T10:21:24.000Z] ingest
+- **Pages:** lesson-rethink-from-user-2026-11-24.md
+- **Summary:** Created new page "lesson-rethink-from-user 從使用者怎麼想重做四個畫面的五條通則（2026-11-24）"

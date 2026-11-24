@@ -1,6 +1,6 @@
 # Wiki Index
 
-> 42 pages | Last updated: 2026-11-23T15:04:53.896Z
+> 43 pages | Last updated: 2026-11-24T10:21:24.000Z
 
 ## debugging
 
@@ -40,6 +40,7 @@
 - [lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）](lesson-rpe-expansion-rpe-push-review-2026-10-28.md) — # lesson-rpe-expansion RPE 擴大用途與 push 前 review 的五條通則（2026-10-28）
 - [lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）](lesson-spring-sheet-spring-sheet-2026-10-16.md) — # lesson-spring-sheet 自製 spring sheet 的三條通則（2026-10-16）
 - [lesson-state-text-to-visual 狀態文字換成插圖／骨架的兩條通則（2026-11-14）](lesson-state-text-to-visual-2026-11-14.md) — # lesson-state-text-to-visual 狀態文字換成插圖／骨架的兩條通則（2026-11-14）
+- [lesson-rethink-from-user 從使用者怎麼想重做四個畫面的五條通則（2026-11-24）](lesson-rethink-from-user-2026-11-24.md) — # lesson-rethink-from-user 從使用者怎麼想重做四個畫面的五條通則（2026-11-24）
 - [lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）](lesson-sync-sheet-review-sheet-2026-10-15.md) — # lesson-sync-sheet-review 同步 sheet 的三條通則（2026-10-15）
 - [lesson-training-reskin 時間軸套進可排序清單的三條通則（2026-11-16）](lesson-training-reskin-2026-11-16.md) — # lesson-training-reskin 時間軸套進可排序清單的三條通則（2026-11-16）
 - [lesson-weight-loss-loop 減重回饋圈與回推的四條通則（2026-11-13）](lesson-weight-loss-loop-2026-11-13.md) — # lesson-weight-loss-loop 減重回饋圈與回推的四條通則（2026-11-13）

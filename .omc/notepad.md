@@ -3,8 +3,8 @@
 
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
-現況（2026-11-24）：v2.162 記店家改版、v2.163 每日目標改版（目標體重＋速度滑桿）、v2.164 一個框記一餐都已部署（879b178；CI 各 1 條環境差 flaky，見 wiki）。這輪 notepad／wiki 更新還沒 commit。
-下一步：①真機看 v2.162–v2.164（iOS 注音打「、」與鍵盤「完成」切段、每日目標滑桿往下捲不誤改）②v2.165 熱量看這一週：spec 已核可（這週卡 B、打平下限 BMR、紅只在這週已超、早午晚餐空著問「沒吃／補記」），meal_skip 表已上 prod（RLS anon 讀空寫拒已驗），review 修完（卡高 193→133px、class 改 wkb-、本機沒吃疊在伺服器上、目標低於 BMR 時下限取目標、到 11／15 點自動出鈕）本機綠→push③AI 量身訂做課表先訪談。
+現況（2026-11-24）：v2.162 記店家、v2.163 每日目標（目標體重＋速度滑桿）、v2.164 一個框記一餐、v2.165 熱量看這一週（這週卡＋沒吃／補記）全部已部署（458be76；CI 各 1 條環境差 flaky，見 wiki）。這次 wiki／notepad 更新還沒 commit。
+下一步：①使用者真機看 v2.162–v2.165（清單在 MANUAL 真機待驗）②AI 量身訂做課表先訪談。
 
 ## Working Memory
 <!-- Session notes. Auto-pruned after 7 days. -->
