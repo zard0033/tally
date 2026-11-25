@@ -4,7 +4,7 @@
 ## Priority Context
 <!-- ALWAYS loaded. Keep under 500 chars. Critical discoveries only. -->
 現況（2026-11-24）：v2.162 記店家、v2.163 每日目標（目標體重＋速度滑桿）、v2.164 一個框記一餐、v2.165 熱量看這一週（這週卡＋沒吃／補記）全部已部署（458be76；CI 各 1 條環境差 flaky，見 wiki）。
-2026-11-25：v2.166 三小改（速度按鈕、拿掉踏腳石、沒吃併進餐別列＋這週卡提醒「從週X看」、增重慢快字修正）實作＋review 修完（vitest 1378、smoke 55、改到的 spec 綠），等使用者點頭 commit／push；記一筆整張重想樣張 logsheet-redesign.html 等選（估一筆一律存選甲、併入）。
+2026-11-25：v2.166 三小改（速度按鈕、拿掉踏腳石、沒吃併進餐別列＋這週卡提醒「從週X看」、增重慢快字修正）c16315d CI 紅 1 條（新測試量整塊天空、Linux 字型差 2px，改量山坡帶），修正已 push，**CI 全量待確認**；記一筆整張重想樣張 logsheet-redesign.html 等選（估一筆一律存選甲、併入）。
 下一步：①驗收 v2.166→commit→push ②記一筆選方向→spec ③食品庫合併 spec＋plan ④真機 v2.162–v2.165。
 
 ## Working Memory

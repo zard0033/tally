@@ -1091,14 +1091,25 @@ test('記一筆的餐別膠囊：這天記過的餐前面有勾、讀屏說記�
   await expect(tick).toHaveCSS('stroke-width', '2.5px')
 })
 
-/* v2.166 AC 4：今日頁的山坡帶只留到稜線（20），訓練頁有啞鈴照舊 48——393 寬時今日頁天空比訓練頁矮 28px（兩頁天空裡那一行同高，見 .tr-hero） */
-test('今日頁天空比訓練頁矮 28px（踏腳石那截拿掉）', async ({ page }) => {
+/* v2.166 AC 4：今日頁的山坡帶只留到稜線（20），訓練頁有啞鈴照舊 48——393 寬時今日頁的山坡帶比訓練頁矮 28px。
+   量的是山坡帶（.sky 的 padding-bottom＝--band 換算），不是整塊天空：天空裡的字在 CI 的 Linux 字型下會高 2px，
+   整塊比會量到字型差而假紅（2026-11-25 CI run 45540140898：今日 226.4、訓練 252.4）。 */
+test('今日頁山坡帶比訓練頁矮 28px（踏腳石那截拿掉）', async ({ page }) => {
   await openApp(page)
-  const today = (await page.locator('[data-screen="today"] .sky').boundingBox())!.height
+  /* 高度寫在兩處：CSS 的 --band（天空留的空間）與 TodayScene 的 BAND_H（山坡圖的 viewBox）。兩個都量，只改一邊會紅 */
+  const band = (screen: string) =>
+    page.locator(`[data-screen="${screen}"] .sky`).evaluate((el) => ({
+      pad: parseFloat(getComputedStyle(el).paddingBottom),
+      hills: el.querySelector('.scene-hills')?.getBoundingClientRect().height ?? -1,
+    }))
+  const today = await band('today')
   await page.locator('.tab[aria-label="訓練"]').click()
   await page.waitForSelector('[data-screen="training"] .sky')
-  const training = (await page.locator('[data-screen="training"] .sky').boundingBox())!.height
-  expect(Math.abs(training - 28 - today), `今日 ${today}、訓練 ${training}`).toBeLessThanOrEqual(0.5)
+  const training = await band('training')
+  for (const [name, got, want] of [['今日', today, 20], ['訓練', training, 48]] as const) {
+    expect(Math.abs(got.pad - want), `${name}天空留的 ${got.pad}`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(got.hills - want), `${name}山坡圖 ${got.hills}`).toBeLessThanOrEqual(0.5)
+  }
 })
 
 /* 過場（v2.136）：今日頁從那幅畫換成內容時疊一層 .gate.is-exit 播完就卸掉。它不擋點擊（pointer-events: none），

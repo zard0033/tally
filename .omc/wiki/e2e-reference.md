@@ -60,6 +60,8 @@ schemaVersion: 1
 
 2026-11-24 v2.165 熱量看這一週 CI（`458be76`，run 45371701422）：**8 份 678 過＋1 flaky、burn-in 80 過、已部署**；flaky 是 shard 5 `spring-sheet`「下滑手勢（慢拖、沒過門檻）」spring 沒落定（量到 153.6，要 < 0.5），重試過；本機 `--repeat-each 5` 全過；v2.165 沒動 SpringSheet→環境差。本機：vitest 1379、smoke 55、受影響 341 條（1 紅＝本機限定那條）。
 
+2026-11-25 v2.166 三小改 CI（`c16315d`，run 45540140898）：**7 份全過、shard 3 紅 1 條（重試也紅）、未部署**；紅的是新加的 `interaction`「今日頁天空比訓練頁矮 28px」，CI 量到今日 226.4、訓練 252.4（差 26，本機差 28）——兩頁天空裡的字不同，Linux 字型讓今日頁高 2px，是**斷言量了整塊含字的區塊**，不是功能壞。改量 `.sky` 的 padding-bottom（CSS `--band`）與 `.scene-hills` 的實際高度（TodayScene `BAND_H`）兩處，今日 20／訓練 48；兩個 mutation（今日 --band 改 48、BAND_H.today 改 48）各自會紅、改回後綠（review 指出只量 CSS 時改 BAND_H 抓不到）。通則：**高度斷言只量要守的那一截，不量裝著字的容器**。本機 push 前：vitest 1378、smoke 55、改到的 spec 163＋47。
+
 2026-11-24 v2.164 一個框記一餐 CI（`879b178`，run 45351829826）：**8 份 676 過＋1 flaky、已部署**；flaky 是 shard 1 `daily-goal`「切分頁會收掉失敗的錯誤…」等 `#g-protein` 逾時 5 秒，重試過；本機 `--repeat-each 10` 全過。本機：vitest 1350、smoke 55、estimate 等 4 檔 75 條。
 
 2026-11-24 v2.163 每日目標改版 CI（`740d063`，run 45330624873）：**8 份 664 過＋1 flaky、已部署**；flaky 是 shard 6 `tally.spec`「Tally UI 回歸」的「刪除後焦點沒接到復原鈕，停在 BODY」（固定 settle 300ms 後量焦點，CI 慢時量得太早），重試過；本機 `tally.spec --repeat-each 3` 全過；v2.163 沒動今日頁、v2.162 CI 首跑就過→環境差，不是回歸。本機：vitest 1339、smoke 55、daily-goal 等 5 檔 122 條。
