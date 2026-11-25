@@ -162,8 +162,11 @@ button { -webkit-user-select: none; user-select: none; }
    天空上的次要字換成 --ink-sky：--ink-muted 對 --sky 只有 4.30:1，--ink-sky 是 5.60:1；
    停用的日期格用 --rule-field（3.09:1），--ink-faint 在天空上只剩 2.58:1。 */
 .sky { position: relative; isolation: isolate; background: var(--sky); container-type: inline-size;
-  padding-bottom: calc(48 / 393 * 100%);
+  --band: 48; padding-bottom: calc(var(--band) / 393 * 100%);
   --ink-muted: var(--ink-sky); --ink-faint: var(--rule-field); }
+/* 今日頁（v2.166）：踏腳石拿掉後，山坡帶只留到紙色地面的稜線（插圖座標 20 高，393 寬時 20px），天空矮 28px。
+   同步 TodayScene 的 BAND_H。太陽、月亮從底往上算位置：一起扣掉少掉的那截，離天空頂端的距離不變（不會爬到週列上） */
+.sky.is-today { --band: 20; }
 .sky > .topbar, .sky > .gauge { position: relative; z-index: 1; }
 /* 往下拉過頭（iOS 的橡皮筋）時，捲動區頂端被拉開的那一段原本露出底下的紙色，夾在天空色的狀態列與天空之間（v2.136 真機回報）。
    天空往上接一段一整屏高的天空色：在內容上緣之外，不增加可捲範圍，拉開時跟著內容一起下來、把縫補上。設定頁的橫幅同理。 */
@@ -202,38 +205,17 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .scene-hills { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: auto; }
 /* 雲坐在山坡帶上方（數字見下一條）：山坡帶高＝寬度的 48/393，所以用 cqw（.sky 的寬），不是 %（那是對天空的高度算，月曆一展開雲就飄走） */
 /* v2.126 天空矮了：雲縮到 26% 寬、離山坡帶 52px，頂端才不會碰到週列 */
-.scene-clouds { position: absolute; right: 3%; bottom: calc(48 / 393 * 100cqw + 52px); width: 26%; height: auto; }
+.scene-clouds { position: absolute; right: 3%; bottom: calc(var(--band) / 393 * 100cqw + 52px); width: 26%; height: auto; }
 /* 太陽沿著右半邊的弧線走（位置由 lib/todayScene.ts 算，TodayScene 換成 --sun-x／--sun-b）。
    left／bottom 不做過場：一分鐘只挪 0.05%，動畫沒有意義；只有進場時升起一次。 */
-.scene-sun { position: absolute; left: var(--sun-x); bottom: var(--sun-b); width: 76px; height: 76px;
+.scene-sun { position: absolute; left: var(--sun-x); bottom: calc(var(--sun-b) - (48 - var(--band)) / 393 * 100cqw); width: 76px; height: 76px;
   margin: 0 0 -38px -38px; animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
 /* 右半邊的山在 v2.126 隆起：月亮要高過山頭，又不能碰到週列 */
-.scene-moon { position: absolute; left: 82%; bottom: 116px; width: 60px; height: 60px; margin: 0 0 -30px -30px;
+.scene-moon { position: absolute; left: 82%; bottom: calc(116px - (48 - var(--band)) / 393 * 100cqw); width: 60px; height: 60px; margin: 0 0 -30px -30px;
   animation: scene-rise 900ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes scene-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-/* 字級是插圖座標（viewBox 393 寬裡的 12.5 單位），跟著插圖等比縮放，不是字級 token——DESIGN「今日頁插圖」的例外 */
-/* 小徑的虛線從字底下穿過會像被劃掉：字描一圈地面（紙）的顏色、描邊畫在填色底下（paint-order），把字底下的點蓋掉。
-   v2.125 起踏腳石站在紙色地面上：餐名墨色 12.60:1（原本白字對近山 5.82） */
-.stone-label { font-family: var(--font-body); font-size: 12.5px; font-weight: 700; fill: var(--ink);
-  paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; }
-/* 踏腳石的命中區（v2.125）：插圖座標換成 cqw——山坡帶寬 393 單位＝.sky 的寬，viewBox 底在 76。
-   中心落在石頭往右 16 單位（石頭＋餐名一起蓋住），寬 64 單位、高 44px */
-.stone-hit { position: absolute; left: calc((var(--x) - 16) / 393 * 100cqw);
-  /* 低處的石頭（點心、早餐）照算會伸出山坡帶底下、被 .scene 的 overflow 切掉一截：碰底就整塊往上推，保住 44px */
-  bottom: max(0px, calc((76 - var(--y)) / 393 * 100cqw - 22px));
-  width: calc(64 / 393 * 100cqw); height: 44px; padding: 0; border: none; border-radius: var(--r-pill); background: none;
-  cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; }
-/* 手機沒有 hover，按下必須立刻有回饋：石頭加餐名底下浮一塊淡主藍 */
-.stone-hit:active { background: var(--accent-soft); }
-/* 現在該記的那一塊：一圈慢慢呼吸的光。**只呼吸兩次（4.8 秒）就停在亮的那一格**：跟內容並排、會動超過 5 秒的東西
-   要能暫停（WCAG 2.2.2），這個 app 一次只開三秒，兩次已經夠被看到。減少動態時整個不動（下方 media query） */
-.stone-pulse { transform-box: fill-box; transform-origin: center; animation: stone-pulse 2.4s cubic-bezier(.4, 0, .2, 1) 2; }
-@keyframes stone-pulse { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: .35; transform: scale(1.25); } }
-/* 剛記下那一餐：那塊石頭亮起來時跳一下（只有「從沒亮變成亮」那一次，見 TodayScene） */
-.stone.just-lit .stone-mark { transform-box: fill-box; transform-origin: center; animation: stone-lit 520ms cubic-bezier(.34, 1.56, .64, 1) both; }
-@keyframes stone-lit { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .scene-sun, .scene-moon, .stone-pulse, .stone.just-lit .stone-mark { animation: none; }
+  .scene-sun, .scene-moon { animation: none; }
 }
 
 /* ── 熱量量尺 ── */
@@ -311,19 +293,32 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .wkb-day.is-today { color: var(--ink); font-weight: 800; }
 /* 沒記完：星期字加虛線底線（柱子本身也是虛線邊）；不另起一行「沒記完」 */
 .wkb-day.is-unlogged { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+/* 這週有沒交代的正餐（v2.166，樣張 today-goal-small.html 三 乙）：卡片最下面一行，整行是鈕、點了跳到最早那天 */
+.wkb-miss { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 44px;
+  margin-top: var(--s-2); padding: 0 var(--s-1); border: none; border-top: 1px solid var(--rule-subtle); background: none;
+  font-family: inherit; font-size: var(--t-sm); color: var(--ink); text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.wkb-miss-go { display: inline-flex; align-items: center; flex: none; color: var(--accent); font-weight: 700; }
+.wkb-miss-go svg { width: 14px; height: 14px; }
+.wkb-miss:active { opacity: .6; }
+.wkb-miss:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
 .wkb-err { margin: var(--s-1) var(--s-1) 0; font-size: var(--t-sm); color: var(--ink-muted); display: flex; align-items: center; gap: var(--s-2); }
 .wkb-retry { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font-family: inherit;
   font-size: var(--t-sm); font-weight: 600; cursor: pointer; }
 
-/* 待記錄的三餐：「沒吃」「補記」（v2.165）。一行 44px，文字鈕；按了沒吃換成「沒吃 · 取消」。 */
-.skip-ask { display: flex; align-items: center; gap: var(--s-1); min-height: 44px; font-size: var(--t-sm); color: var(--ink-muted); }
-.skip-ask .lb { margin-right: auto; }
-.skip-ask button { min-height: 44px; padding: 0 var(--s-2); border: none; background: none; font-family: inherit; font-size: var(--t-sm);
-  font-weight: 600; color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
-.skip-ask button:active { opacity: .6; }
-.skip-ask button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
-.skip-ask button[aria-disabled="true"] { opacity: .6; cursor: default; }
-.skip-ask + .sheet-error { margin-top: 0; }
+/* 待記錄的三餐問「沒吃」（v2.165；v2.166 併進那一餐的標題列，樣張 today-goal-small.html 三 甲）。
+   .todo-row（點了＝補記）佔滿左邊，右邊「沒吃」膠囊（.row-pill）或「復原」文字鈕是它的兄弟。名字下一行小字講為什麼問 */
+.todo-wrap { display: flex; align-items: center; gap: var(--s-2); }
+.todo-wrap .todo-row { flex: 1; min-width: 0; }
+.todo-ask .lb small { display: block; font-size: var(--t-xs); font-weight: 400; letter-spacing: var(--track-xs);
+  line-height: 1.4; color: var(--ink-muted); }
+.todo-ask.is-skipped .lb { color: var(--ink-muted); }
+.todo-ask .row-pill { flex: none; }
+.todo-undo { flex: none; min-height: 44px; padding: 0 var(--s-2); border: none; background: none; font-family: inherit; font-size: var(--t-sm);
+  font-weight: 700; color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.todo-undo:active { opacity: .6; }
+.todo-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-1); }
+.todo-ask [aria-disabled="true"] { opacity: .6; cursor: default; }
+.todo-ask + .sheet-error { margin-top: 0; }
 
 /* ── 破表狀態（DESIGN.md v1.1 · C + F） ── */
 .is-over .gauge-lead, .is-over .gauge-num { color: var(--over); }
@@ -354,6 +349,11 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .node-dot { position: absolute; left: 0; top: 13px; z-index: 1; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%;
   border: 2px solid var(--ink-faint); background: var(--paper); display: grid; place-items: center; }
 .node.is-done .node-dot { border-color: var(--accent); background: var(--accent); }
+/* 過了時間還空著（v2.166）：節點換虛線圈；按了沒吃＝淡灰底一橫（--fill 底、--ink-muted 線） */
+.node.is-asking .node-dot { border-style: dashed; border-color: var(--ink-muted); }
+/* --fill 對 --paper 只有 1.11:1：外框用 --rule-field（3.83:1），圓盤才有邊 */
+.node.is-skipped .node-dot { border-color: var(--rule-field); background: var(--fill); }
+.node.is-skipped .node-dot svg { stroke: var(--ink-muted); }
 .node-dot svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* 加進來：剛從沒記變成記了，節點彈一下（只動 transform；減少動態關掉） */
 @keyframes node-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
@@ -537,6 +537,8 @@ html[data-edge="sky"] .edge-top { background: var(--sky); }
 .seg-label { position: relative; z-index: 1; }
 .seg button:active { opacity: .6; }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg button:disabled { color: var(--ink-faint); cursor: default; }
+.seg button:disabled:active { opacity: 1; }
 
 
 /* ── 待記錄餐次（整行可點） ── */
@@ -955,22 +957,16 @@ span.ci svg { display: block; width: 100%; height: 100%; fill: var(--ink); strok
 .goal-wt small { font-size: var(--t-sm); color: var(--ink-muted); }
 .goal-plan-dir { margin: var(--s-2) 0 0; font-size: var(--t-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .goal-pace { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--rule-subtle); }
-/* 滑桿：只停五格（RATE_PRESETS_KG_PER_MONTH），觸控區 44px 高；軌道與刻度用 --track、走過的段用主藍 */
-.goal-slider { padding: 0 var(--s-3); }
-/* pan-y：從滑桿上開始的上下捲動交給瀏覽器（none 的話整頁捲不動、還會改到速度）；捲動判定與作廢在 DailyGoal 的 gestureRef */
-.goal-slider-ctl { position: relative; display: flex; align-items: center; height: 44px; touch-action: pan-y; }
-.goal-slider-track { position: relative; width: 100%; height: 4px; border-radius: 2px; background: var(--track); }
-.goal-slider-fill { height: 100%; border-radius: 2px; background: var(--accent); }
-.goal-slider-tick { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
-  background: var(--card); box-shadow: inset 0 0 0 2px var(--track); pointer-events: none; }
-.goal-slider-thumb { width: 28px; height: 28px; border-radius: 50%; background: var(--card);
-  box-shadow: var(--shadow-1), inset 0 0 0 2px var(--accent); }
-.goal-slider-thumb:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.goal-slider[data-disabled] .goal-slider-thumb { box-shadow: var(--shadow-1), inset 0 0 0 2px var(--rule-field); }
-.goal-slider[data-disabled] .goal-slider-fill { background: var(--rule-field); }
-.goal-slider-ends { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--ink-muted); }
-.goal-pace-now { margin: var(--s-2) 0 0; text-align: center; font-size: var(--t-sm); font-weight: 700; color: var(--ink); }
-.goal-pace-now b { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.goal-pace-unit { font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
+/* 速度五格（v2.166，取代滑桿）：分段控制只能點、不能拖。格子 48px（樣張 today-goal-small.html 甲），數字用 --font-num */
+.goal-rate { flex: none; }
+.goal-rate button { min-height: 48px; font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: var(--t-base); font-weight: 700; }
+.goal-rate button[aria-pressed="true"] { font-weight: 800; }
+.goal-pace-ends { display: flex; justify-content: space-between; margin-top: var(--s-1); font-size: var(--t-xs); color: var(--ink-muted); }
+/* 舊值（2.17 kg/月）不在五格上：一格都不亮，這一句說現在是多少、點一格就換掉 */
+.goal-pace-legacy { margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-tab); background: var(--accent-soft);
+  font-size: var(--t-xs); line-height: 1.5; color: var(--ink-muted); }
+.goal-pace-legacy b { color: var(--ink); font-weight: 700; }
 .goal-pace-note { margin: var(--s-1) 0 0; text-align: center; font-size: var(--t-xs); color: var(--ink-muted); }
 .goal-more summary { list-style: none; }
 .goal-more summary::-webkit-details-marker { display: none; }
@@ -1508,6 +1504,14 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* v2.30：選擇器從 [aria-current="true"] 換成 [aria-pressed="true"]——語意修正，
    視覺完全不變（見 LogSheet.tsx／FoodLibrary.tsx 該處註解）。 */
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+/* 記過的餐（v2.166，樣張 today-goal-small.html 二）：字前面一個主藍描邊小勾。選中時是墨色底，主藍在上面只剩 1.9:1，
+   勾改跟字同色（--card）。.screen svg 的線條預設（1.6px currentColor）比單一 class 重，所以選擇器寫兩層。
+   **膠囊寬度不跟著勾變**：記一筆可以在當天還在讀的時候打開，紀錄晚到時勾才冒出來——四顆一律留好「勾＋兩個字」的寬
+   （餐名都是兩個字；內距從 --s-4 收到 --s-3，393 寬四顆加關閉鈕仍放得下），沒勾的字置中 */
+.chip-bar .chip { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-1); padding: 0 var(--s-3);
+  min-width: calc(2em + 14px + var(--s-1) + 2 * var(--s-3)); }
+.chip .chip-done { width: 14px; height: 14px; flex: none; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.chip[aria-pressed="true"] .chip-done { stroke: currentColor; }
 
 .sect-lb { padding: var(--s-4) var(--s-5) var(--s-1); font-size: var(--t-xs);
   color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }

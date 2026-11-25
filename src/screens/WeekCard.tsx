@@ -1,9 +1,11 @@
 /* 今日頁「這週」卡（spec「熱量看這一週」，樣張 `_design-sample/weekly-v2.html` B）：
    卡頭左「這週」、右邊總帳；七根柱子對一條目標虛線，超出那段淺一點的藍＋「+N」（單日多吃不用紅）；
-   還沒到的日子虛線框畫在打平的高度、框裡寫數字；沒記完的日子虛線邊、星期字虛線底線，那欄點了跳到那天。圖下不寫字。
+   還沒到的日子虛線框畫在打平的高度、框裡寫數字；沒記完的日子虛線邊、星期字虛線底線，那欄點了跳到那天。
+   圖下只有一種字（v2.166，樣張 today-goal-small.html 三 乙）：這週有沒交代的正餐時一行「這週 N 餐沒記，至少照目標算　從週X看 ›」，
+   點了跳到最早那天（已經在那天就捲到那一餐，由今日頁的 onShowMissed 決定）；沒有就不出。
    數字的規則全在 lib/weekBudget.ts。class 一律 wkb-（wk- 是體重趨勢頁的，見 app.css）。 */
 import { useMemo } from 'react'
-import { headerText, weekBudget, type WeekDay } from '@/lib/weekBudget'
+import { headerText, missedMeals, weekBudget, type WeekDay } from '@/lib/weekBudget'
 import type { WeekData } from '@/useWeekData'
 
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
@@ -23,13 +25,16 @@ interface WeekCardProps {
   bmr: number
   onRetry: () => void
   onGoToDate: (iso: string) => void
+  /** 底下「這週 N 餐沒記」那行：去最早那天看（今日頁決定是換日期還是原地捲過去）。 */
+  onShowMissed: (iso: string) => void
 }
 
-export default function WeekCard({ data, today, target, bmr, onRetry, onGoToDate }: WeekCardProps) {
+export default function WeekCard({ data, today, target, bmr, onRetry, onGoToDate, onShowMissed }: WeekCardProps) {
   const w = useMemo(
     () => (data.state === 'done' ? weekBudget(data.dates, today, target, bmr, data.byDate) : null),
     [data, today, target, bmr],
   )
+  const missed = useMemo(() => (data.state === 'done' ? missedMeals(data.dates, today, data.byDate) : null), [data, today])
   // 整週都在未來：不出這張卡（看的是明天、而明天是下週一）
   if (data.dates[0] > today) return null
 
@@ -91,6 +96,22 @@ export default function WeekCard({ data, today, target, bmr, onRetry, onGoToDate
           </span>
         ))}
       </div>
+      {missed && (
+        <button
+          className="wkb-miss"
+          type="button"
+          aria-label={`這週 ${missed.n} 餐沒記，至少照目標算；從週${WEEKDAY[data.dates.indexOf(missed.first)]}看`}
+          onClick={() => onShowMissed(missed.first)}
+        >
+          <span>這週 {missed.n} 餐沒記，至少照目標算</span>
+          <span className="wkb-miss-go">
+            從週{WEEKDAY[data.dates.indexOf(missed.first)]}看
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </span>
+        </button>
+      )}
     </section>
   )
 }

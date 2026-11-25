@@ -1,7 +1,7 @@
 /* 每日目標改版（spec「每日目標改版：目標體重＋速度滑桿」，樣張 _design-sample/goal-v3.html D2）：
    使用者只決定「目標體重」和「速度」，這裡算「往哪個方向」「幾月到」「到了沒」。純邏輯，不沾 DOM。
    目標熱量本身照舊由 computeTargets 算（讀 goal＋rate_kg_per_week），這裡不重算一份。 */
-import { rateMonthlyToWeekly, rateWeeklyToMonthly, type Goal } from './formulas'
+import { RATE_PRESETS_KG_PER_MONTH, rateMonthlyToWeekly, rateWeeklyToMonthly, type Goal } from './formulas'
 
 /** 目標跟現在差不到這麼多就算維持（假設值：跟體重的日常起伏同一個量級，沒有出處；spec「我定的」）。 */
 export const GOAL_BAND_KG = 0.5
@@ -82,6 +82,38 @@ export function arrivalText(today: string, goal: Goal, goalKg: number, nowKg: nu
 /** 存下的 kg/週 換回 kg/月（給日期用）；沒有或不是數字回 null。 */
 export function monthlyOf(rateKgPerWeek: number | null): number | null {
   return rateKgPerWeek !== null && Number.isFinite(rateKgPerWeek) && rateKgPerWeek > 0 ? rateWeeklyToMonthly(rateKgPerWeek) : null
+}
+
+/** kg/週 存進 numeric(3,2) 再換回 kg/月 會有誤差（0.5 → 0.12 → 0.52），這個範圍內算同一格；格距是 0.25。 */
+export const RATE_MATCH_KG_PER_MONTH = 0.03
+
+/** 每日目標「要多快」五格裡亮哪一格（v2.166）：
+ *  - preset：對得上某一格（容差內）。
+ *  - unset：還沒有速度（null／0）——一格都不亮，叫人點一格。
+ *  - legacy：舊值對不上任何一格（2.17 kg/月）——一格都不亮、照寫真實值（捨到兩位），不寫回；where 說它在五格的哪一邊。 */
+export type RateSpot =
+  | { kind: 'preset'; index: number }
+  | { kind: 'unset' }
+  | { kind: 'legacy'; kgPerMonth: number; where: 'faster' | 'slower' | 'between' }
+
+export function rateSpot(kgPerMonth: number | null, presets: readonly number[] = RATE_PRESETS_KG_PER_MONTH): RateSpot {
+  if (kgPerMonth === null || !Number.isFinite(kgPerMonth) || kgPerMonth <= 0) return { kind: 'unset' }
+  const index = presets.findIndex((p) => Math.abs(p - kgPerMonth) <= RATE_MATCH_KG_PER_MONTH)
+  if (index >= 0) return { kind: 'preset', index }
+  const where = kgPerMonth > presets[presets.length - 1] ? 'faster' : kgPerMonth < presets[0] ? 'slower' : 'between'
+  return { kind: 'legacy', kgPerMonth: Math.round(kgPerMonth * 100) / 100, where }
+}
+
+/** 舊值那句括號裡的說法。 */
+export const RATE_WHERE_TEXT: Record<'faster' | 'slower' | 'between', string> = {
+  faster: '比最快那格還快',
+  slower: '比最慢那格還慢',
+  between: '不在這五格上',
+}
+
+/** 「要多快」兩端的字：減重時快＝吃少，增重時快＝吃多（v2.166 修：原本增重也寫減重那組，方向反了）。 */
+export function paceEnds(goal: Goal): [slow: string, fast: string] {
+  return goal === 'bulk' ? ['慢 · 吃少一點', '快 · 吃多一點'] : ['慢 · 吃多一點', '快 · 吃少一點']
 }
 
 /** 目標體重起始值（DB 還沒設時用現在的平均體重）：對齊到步進格、夾在可設範圍內。 */

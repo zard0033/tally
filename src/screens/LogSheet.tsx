@@ -1076,6 +1076,8 @@ export default function LogSheet(props: LogSheetProps) {
      判斷收在 dates.ts 共用，不在這裡再維護一份（第一版就是各維護一份才漏改）。 */
   const plannable = isPlannable(dayData.date)
   const eaten = sumIntake(dayData.rows ?? [])
+  /** 這天已經有紀錄的餐：餐別膠囊前面打勾。 */
+  const loggedMeals = new Set((dayData.rows ?? []).map((r) => r.meal))
   const totals = pickTotals(picks, (key) => pickedRow(key)?.food)
   const addOn = (t: IntakeTotals): IntakeTotals => ({
     kcal: eaten.kcal + t.kcal,
@@ -1424,6 +1426,7 @@ export default function LogSheet(props: LogSheetProps) {
                 APG tablist 契約還要 roving tabindex ＋ 方向鍵導航 ＋ aria-controls 指向
                 tabpanel。半套實作會讓螢幕閱讀器期待方向鍵可用卻沒有，比不做更糟——這是
                 ItemEditor.tsx 拒絕升級成 radiogroup 時的同一個判斷。 */}
+            {/* v2.166：這天記過的餐前面一個小勾（今日頁的踏腳石拿掉後，「記過了沒」搬到這裡）；預選規則不變 */}
             <div className="chiprow" role="group" aria-label="餐別">
               {MEALS.map((m) => (
                 <button
@@ -1431,12 +1434,18 @@ export default function LogSheet(props: LogSheetProps) {
                   className="chip"
                   type="button"
                   aria-pressed={meal === m.key}
+                  aria-label={loggedMeals.has(m.key) ? `${m.label}，記過了` : undefined}
                   onClick={() => {
                     setMeal(m.key)
                     // 換餐別，「其他餐的」收的是另一批類型，收回去
                     setElsewhereOpen(false)
                   }}
                 >
+                  {loggedMeals.has(m.key) && (
+                    <svg className="chip-done" viewBox="0 0 14 14" aria-hidden="true">
+                      <path d="M3 7.5l2.5 2.5L11 4.5" />
+                    </svg>
+                  )}
                   {m.label}
                 </button>
               ))}

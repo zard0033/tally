@@ -380,7 +380,7 @@ export default function Training({
       {/* 訓練分頁改版 A：跟今日頁同一副頂端——天空裡是日期標題、週列、一行大字，跟著內容一起捲（取代 v2.132 的 96px 固定橫幅） */}
       <div className="tr-home" ref={edge.ref} onScroll={edge.sync}>
         <div className="sky">
-          <TodayScene variant="training" date={date} logged={null} onPick={noop} />
+          <TodayScene variant="training" date={date} />
           <header className="topbar">
             <DateStrip
               date={date}

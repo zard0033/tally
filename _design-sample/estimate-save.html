@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>估一筆一律存進食品庫：樣張</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 44px 0 4px; }
+  .ob-note { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 18px; max-width: 1260px; line-height: 1.7; }
+  .ob-note b { color: var(--ink); }
+  .ob-note .bad { color: var(--over); font-weight: 700; }
+  .ob-grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .ob-gh { font-size: var(--t-base); font-weight: 800; margin-bottom: 4px; }
+  .ob-gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 72px; margin-bottom: 10px; }
+  .ob-gd b { color: var(--ink); }
+  .ob-gd .bad { color: var(--over); font-weight: 700; }
+
+  .ob-phone { position: relative; background: var(--card); border-radius: 22px; box-shadow: var(--shadow-1); overflow: hidden; }
+  .ob-top { padding: 14px 20px 10px; border-bottom: 1px solid var(--rule-subtle); }
+  .ob-meals { display: flex; gap: 8px; margin-bottom: 10px; }
+  .ob-meals span { padding: 0 14px; min-height: 36px; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); font-weight: 700; }
+  .ob-meals span.on { background: var(--ink); color: var(--card); }
+  .ob-box { min-height: 44px; border-radius: 12px; background: var(--fill); color: var(--ink); font-size: var(--t-base); display: flex; align-items: center; padding: 8px 12px; box-sizing: border-box; line-height: 1.4; }
+  .ob-box.ph { color: var(--ink-muted); }
+  .ob-box.focus { background: var(--card); box-shadow: 0 0 0 3px var(--accent-ring); border-bottom: 2px solid var(--accent); }
+  .ob-box .caret { display: inline-block; width: 1.5px; height: 1.1em; background: var(--accent); margin-left: 1px; vertical-align: -2px; }
+  .ob-sec { padding: 12px 20px 2px; font-weight: 800; font-size: var(--t-sm); display: flex; justify-content: space-between; align-items: baseline; }
+  .ob-sec span { color: var(--ink-muted); font-weight: 400; font-size: var(--t-xs); }
+  .ob-empty { padding: 4px 20px 0; font-size: var(--t-sm); color: var(--ink-muted); }
+  .ob-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; }
+  .ob-ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-muted); flex-shrink: 0; box-sizing: border-box; }
+  .ob-ck.on { border: none; background: var(--accent); display: grid; place-items: center; }
+  .ob-ck.on svg { width: 14px; height: 14px; fill: none; stroke: var(--on-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .ob-ck.wait { border-style: dashed; }
+  .ob-picked { background: var(--accent-soft); padding-bottom: 8px; margin-top: 1px; }
+  .ob-nm { flex: 1; min-width: 0; font-size: var(--t-base); line-height: 1.35; }
+  .ob-nm .shop { color: var(--ink-muted); font-size: var(--t-sm); }
+  .ob-nm .sub { display: block; color: var(--ink-muted); font-size: var(--t-xs); }
+  .ob-kc { font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-sm); }
+  .ob-kc.big { color: var(--ink); font-size: var(--t-base); }
+  .ob-tag { margin: 0 20px 0 54px; font-size: var(--t-xs); color: var(--ink-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 32px; }
+  .ob-tag b { color: var(--ink); font-weight: 700; }
+  .ob-pill { min-height: 28px; padding: 0 10px; border-radius: var(--r-pill); border: 1.5px solid var(--accent); color: var(--accent); font-weight: 700; font-size: var(--t-xs); display: inline-grid; place-items: center; background: var(--card); }
+  .ob-pill.solid { background: var(--accent); color: var(--on-accent); }
+  .ob-txt { color: var(--accent); font-weight: 700; font-size: var(--t-xs); }
+  .ob-go { min-height: 36px; padding: 0 14px; border-radius: var(--r-pill); background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: var(--t-sm); display: inline-grid; place-items: center; flex-shrink: 0; }
+  .ob-acts { margin: 0 20px 6px 54px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .ob-keepline { margin: 0 20px 0 54px; font-size: var(--t-xs); color: var(--ink-muted); display: flex; gap: 6px; align-items: flex-start; line-height: 1.5; }
+  .ob-keepline svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ob-keepline b { color: var(--ink); font-weight: 700; }
+  .ob-keepline.off svg { stroke: var(--ink-muted); }
+  .ob-old { margin: 0 20px 0 54px; font-size: var(--t-xs); color: var(--ink-muted); display: flex; gap: 8px; align-items: center; min-height: 32px; }
+  .ob-old .box { width: 16px; height: 16px; border: 1.5px solid var(--ink-muted); border-radius: 4px; box-sizing: border-box; }
+  .ob-old .box.on { background: var(--accent); border-color: var(--accent); }
+
+  .shop-in { margin: 4px 20px 8px 54px; border-radius: 12px; background: var(--accent-soft); padding: 8px 10px; display: grid; gap: 6px; }
+  .shop-in .t { font-size: var(--t-xs); font-weight: 800; }
+  .shop-in .o { display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 10px; border-radius: 10px; background: var(--card); font-size: var(--t-sm); }
+  .shop-in .o.on { box-shadow: inset 0 0 0 2px var(--accent); }
+  .shop-in .o span:last-child { font-family: var(--font-num); color: var(--ink-muted); }
+  .shop-in .k { display: flex; gap: 8px; align-items: center; font-size: var(--t-xs); min-height: 32px; }
+  .shop-in .b { min-height: 40px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: var(--t-sm); display: grid; place-items: center; }
+
+  .ob-bar { margin-top: 8px; padding: 10px 20px 14px; border-top: 1px solid var(--rule-subtle); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); }
+  .ob-bar .s { font-size: var(--t-sm); color: var(--ink-muted); font-family: var(--font-num); }
+  .ob-bar .b { min-height: 48px; min-width: 132px; border-radius: 14px; background: var(--accent); color: var(--on-accent); font-weight: 800; display: grid; place-items: center; }
+  .ob-hl { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 8px; }
+  .ob-bad { outline: 2px dashed var(--over); outline-offset: 2px; border-radius: 8px; }
+
+  /* 丙：加入後今日頁的提示 */
+  .td { padding: 16px 20px; display: grid; gap: 10px; }
+  .td-h { font-size: var(--t-sm); color: var(--ink-muted); }
+  .td-big { font-family: var(--font-num); font-size: 40px; font-weight: 800; line-height: 1; }
+  .td-row { display: flex; justify-content: space-between; font-size: var(--t-base); min-height: 40px; align-items: center; border-bottom: 1px solid var(--rule-subtle); }
+  .td-row span:last-child { font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-sm); }
+  .toast { margin: 8px 12px 14px; padding: 12px 14px; border-radius: 14px; background: var(--ink); color: var(--card); font-size: var(--t-sm); line-height: 1.55; display: flex; gap: 12px; align-items: center; }
+  .toast p { margin: 0; flex: 1; }
+  .toast b { font-weight: 800; }
+  .toast span { color: var(--accent-soft); font-weight: 800; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<h1>估一筆一律存進食品庫，你打的字自動當別名</h1>
+<p class="ob-note">
+  例子：午餐打「夜市臭豆腐、春陽 冬瓜檸檬」。兩樣食品庫都沒有。<b>臭豆腐 480 是示意數字</b>；候選飲料是食品庫現有的通用飲料；甲1 的「冬瓜檸檬 · 清心」「冬瓜茶」是示意。虛線框＝跟現在不一樣的地方，紅虛線＝現在的問題。<br>
+  三個方案共用的部分：①新店卡不再邊打邊跳，改成打完一段才在待估列出現 ②AI 估的、從新店卡選的，都存進食品庫，並把<b>你打的那段</b>收成別名（例如 AI 取名「臭豆腐（一份）」，別名收「夜市臭豆腐」），下次打一樣的字就直接用食品庫，不叫 AI ③「只記熱量」的列和自己打熱量的列不存（沒有名字可以對）。三個方案只差在<b>畫面上怎麼告訴你這件事</b>。
+</p>
+
+<h2>現況（v2.164）</h2>
+<p class="ob-note">「記住」和「存進食品庫」是兩顆不同的勾、出現在不同地方，而且「存進食品庫」預設沒勾：沒勾的那筆建好就封存，下次打一樣的字還是對不上，又叫一次 AI。</p>
+<div class="ob-grid">
+  <div>
+    <div class="ob-gh">現況 1　打到一半就跳出新店卡</div>
+    <div class="ob-gd">「春陽 冬瓜檸檬」才打到「春陽 冬」，搜不到就出卡，<span class="bad">「記住：下次搜『春陽 冬』」</span>，每打一個字重出一次。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box focus">春陽 冬<span class="caret"></span></div></div>
+      <div class="ob-sec">搜尋結果</div>
+      <div class="ob-empty">找不到「春陽 冬」</div>
+      <div class="shop-in ob-bad" style="margin-left:20px">
+        <div class="t">跟哪一樣差不多？</div>
+        <div class="o on"><span>手搖飲無糖純茶＋寒天</span><span>60</span></div>
+        <div class="o"><span>手搖飲無糖純茶＋珍珠</span><span>165</span></div>
+        <div class="o"><span>無糖拿鐵</span><span>123</span></div>
+        <div class="o" style="color:var(--accent);font-weight:700"><span>都不像 → 估一筆</span><span></span></div>
+        <div class="k"><span class="ob-old"><span class="box on"></span></span>記住：下次搜「春陽 冬」直接是這樣</div>
+        <div class="b">記成「冬 · 春陽」</div>
+      </div>
+      <div style="height:8px"></div>
+    </div>
+  </div>
+  <div>
+    <div class="ob-gh">現況 2　AI 估完：「存進食品庫」預設沒勾</div>
+    <div class="ob-gd">不勾就只用這次。下次打「夜市臭豆腐」：AI 的名字是「臭豆腐（一份）」，對不上，<span class="bad">又叫一次 AI</span>。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐</div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">臭豆腐（一份）<span class="sub">400–580 · 假設一份 8 塊、含泡菜</span></span><span class="ob-kc big">480</span></div>
+        <div class="ob-old ob-bad"><span class="box"></span>存進食品庫<span class="ob-pill" style="margin-left:auto">✎ 修正</span></div>
+      </div>
+      <div class="ob-bar"><span class="s">1 樣 · 480 卡</span><span class="b">加入</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>甲　不放任何勾，列上一行字講清楚會怎樣（推薦）</h2>
+<p class="ob-note">拿掉兩顆勾。AI 估完、或從新店卡選完，那一列下面多一行灰字「下次打『…』直接用這個」。不想留的到食品庫封存或刪掉（之後的「合併」也在那裡）。<span class="bad">代價：一次性的東西（朋友煮的湯）也會進食品庫，要靠之後整理。</span></p>
+<div class="ob-grid">
+  <div>
+    <div class="ob-gh">甲1　打到一半：照樣模糊搜尋</div>
+    <div class="ob-gd">整串對不到時，<b>拆開來找</b>：空白分開的每一截、或字依序出現（「冬檸」找得到「冬瓜檸檬」），列在「差不多的」。只是搜尋，<b>不出卡、不問要不要記住</b>；按完成也不會自動勾差不多的（照舊只有完全一樣才自動勾）。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box focus">春陽 冬<span class="caret"></span></div></div>
+      <div class="ob-sec">搜尋結果</div>
+      <div class="ob-empty">沒有「春陽 冬」</div>
+      <div class="ob-hl" style="margin:6px 8px 0">
+        <div class="ob-sec" style="padding-top:6px">差不多的<span>有對到「冬」</span></div>
+        <div class="ob-row"><span class="ob-ck"></span><span class="ob-nm">冬瓜檸檬 <span class="shop">· 清心</span></span><span class="ob-kc">170</span></div>
+        <div class="ob-row"><span class="ob-ck"></span><span class="ob-nm">冬瓜茶</span><span class="ob-kc">130</span></div>
+      </div>
+      <div class="ob-gd" style="padding:8px 20px 12px;min-height:0;margin:0">打完按完成：對不到的那段變成待估列（甲2）</div>
+    </div>
+  </div>
+  <div>
+    <div class="ob-gh">甲2　打完兩段：待估列</div>
+    <div class="ob-gd">兩列待估。有店家的那段多一顆<b>「選差不多的」</b>（就是原本的新店卡，收進這一列）；沒有店家的照舊只有「估」「只記熱量」。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐<span>2 樣待估 · <b style="color:var(--accent)">全部估</b></span></div>
+      <div class="ob-row"><span class="ob-ck wait"></span><span class="ob-nm">夜市臭豆腐<span class="sub">食品庫沒有</span></span><span class="ob-go">估</span></div>
+      <div class="ob-acts"><span class="ob-txt">只記熱量</span></div>
+      <div class="ob-row"><span class="ob-ck wait"></span><span class="ob-nm">冬瓜檸檬 <span class="shop">· 春陽</span><span class="sub">食品庫沒有</span></span><span class="ob-go">估</span></div>
+      <div class="ob-acts ob-hl"><span class="ob-txt">選差不多的 ›</span><span class="ob-txt">只記熱量</span></div>
+      <div class="shop-in">
+        <div class="t">跟哪一樣差不多？</div>
+        <div class="o on"><span>手搖飲無糖純茶＋寒天</span><span>60</span></div>
+        <div class="o"><span>手搖飲無糖純茶＋珍珠</span><span>165</span></div>
+        <div class="o"><span>無糖拿鐵</span><span>123</span></div>
+        <div class="b">用這個</div>
+      </div>
+      <div class="ob-bar"><span class="s">還有 2 樣沒估</span><span class="b" style="opacity:.45">加入</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="ob-gh">甲3　估完、選完</div>
+    <div class="ob-gd">兩列都勾上，下面同一句話：<b>下次打「你打的字」直接用這個</b>。修正過就存修正後的數字。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐</div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">臭豆腐（一份）<span class="sub">400–580 · 假設一份 8 塊、含泡菜</span></span><span class="ob-kc big">480</span></div>
+        <div class="ob-tag"><span class="ob-pill">✎ 修正</span></div>
+        <div class="ob-keepline ob-hl"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3L13 4.5"/></svg><span>下次打「<b>夜市臭豆腐</b>」直接用這個</span></div>
+      </div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">冬瓜檸檬 <span class="shop">· 春陽</span><span class="sub">照「手搖飲無糖純茶＋寒天」</span></span><span class="ob-kc big">60</span></div>
+        <div class="ob-tag" style="color:var(--accent);font-weight:700">大杯・無糖 ›</div>
+        <div class="ob-keepline ob-hl"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3L13 4.5"/></svg><span>下次打「<b>春陽 冬瓜檸檬</b>」直接用這個</span></div>
+      </div>
+      <div class="ob-bar"><span class="s">2 樣 · 540 卡</span><span class="b">加入</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>乙　同甲，再留一顆「只用這次」</h2>
+<p class="ob-note">預設照甲記進去；那一行後面多一顆文字鈕，按了這一列就不進食品庫。<span class="bad">代價：又多一個要不要按的決定；你說的「越用越少 AI」會被自己按掉。</span></p>
+<div class="ob-grid">
+  <div>
+    <div class="ob-gh">乙1　預設：會記</div>
+    <div class="ob-gd">同甲3，句尾多「只用這次」。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐</div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">臭豆腐（一份）<span class="sub">400–580 · 假設一份 8 塊、含泡菜</span></span><span class="ob-kc big">480</span></div>
+        <div class="ob-tag"><span class="ob-pill">✎ 修正</span></div>
+        <div class="ob-keepline"><svg viewBox="0 0 16 16"><path d="M3 8.5l3 3L13 4.5"/></svg><span>下次打「<b>夜市臭豆腐</b>」直接用這個 · <span class="ob-txt ob-hl">只用這次</span></span></div>
+      </div>
+      <div class="ob-bar"><span class="s">1 樣 · 480 卡</span><span class="b">加入</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="ob-gh">乙2　按了「只用這次」</div>
+    <div class="ob-gd">那一行變灰、換成「只用這次，不進食品庫」＋「改回來」。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐</div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">臭豆腐（一份）<span class="sub">400–580 · 假設一份 8 塊、含泡菜</span></span><span class="ob-kc big">480</span></div>
+        <div class="ob-tag"><span class="ob-pill">✎ 修正</span></div>
+        <div class="ob-keepline off"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg><span>只用這次，不進食品庫 · <span class="ob-txt">改回來</span></span></div>
+      </div>
+      <div class="ob-bar"><span class="s">1 樣 · 480 卡</span><span class="b">加入</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>丙　列上什麼都不寫，加入之後才告訴你</h2>
+<p class="ob-note">記一筆的畫面完全不提食品庫（同甲3 但沒有那一行字）。按「加入」回到今日頁，下面浮一條提示幾秒，可以當場撤回。<span class="bad">代價：估的當下看不出會存；提示幾秒就消失，沒看到就只能去食品庫找。</span></p>
+<div class="ob-grid">
+  <div>
+    <div class="ob-gh">丙1　記一筆：列上乾淨</div>
+    <div class="ob-gd">只剩數字、假設、修正。</div>
+    <div class="ob-phone">
+      <div class="ob-top"><div class="ob-meals"><span>早餐</span><span class="on">午餐</span><span>晚餐</span><span>點心</span></div><div class="ob-box ph">吃了什麼？打一樣或一整句</div></div>
+      <div class="ob-sec">這一餐</div>
+      <div class="ob-picked">
+        <div class="ob-row"><span class="ob-ck on"><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg></span><span class="ob-nm">臭豆腐（一份）<span class="sub">400–580 · 假設一份 8 塊、含泡菜</span></span><span class="ob-kc big">480</span></div>
+        <div class="ob-tag"><span class="ob-pill">✎ 修正</span></div>
+      </div>
+      <div class="ob-bar"><span class="s">1 樣 · 480 卡</span><span class="b">加入</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="ob-gh">丙2　回到今日頁：浮一條提示</div>
+    <div class="ob-gd">「記進食品庫了，下次打『夜市臭豆腐』直接用」＋<b>不要記</b>（撤回這筆，這次的紀錄照記）。</div>
+    <div class="ob-phone">
+      <div class="td">
+        <div class="td-h">今天還能吃</div>
+        <div class="td-big">1,120</div>
+        <div class="td-row"><span>臭豆腐（一份）</span><span>午餐 · 480</span></div>
+        <div class="td-row"><span>燕麥片（5匙）</span><span>早餐 · 120</span></div>
+      </div>
+      <div class="toast ob-hl"><p><b>臭豆腐（一份）</b>記進食品庫了，下次打「夜市臭豆腐」直接用</p><span>不要記</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MealKey } from './meals'
-import { askSkip, dayIntakeFromRows, headerText, mergeSkips, msToNextAskBoundary, unresolvedMeals, weekBudget, type DayIntake, type MainMeal } from './weekBudget'
+import { askSkip, dayIntakeFromRows, headerText, mergeSkips, missedMeals, msToNextAskBoundary, unresolvedMeals, weekBudget, type DayIntake, type MainMeal } from './weekBudget'
 
 // 2026-11-23 是週一
 const WEEK = ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28', '2026-11-29']
@@ -214,5 +214,40 @@ describe('msToNextAskBoundary：下一個 11 點、15 點或午夜（review N4�
     expect(ms(11, 0)).toBe(4 * 3600_000)
     expect(ms(14, 30)).toBe(30 * 60_000)
     expect(ms(23, 0)).toBe(3600_000)
+  })
+})
+
+describe('missedMeals：這週卡底下「這週 N 餐沒記」（v2.166）', () => {
+  it('今天以前三餐空著又沒按沒吃的加總；最早那天是點了要跳去的', () => {
+    const m = missedMeals(WEEK, THU, map({
+      '2026-11-23': day(1850),
+      '2026-11-24': day(1000, ['breakfast', 'lunch']),
+      '2026-11-25': day(400, ['breakfast']),
+    }))
+    expect(m).toEqual({ n: 3, first: '2026-11-24' })
+  })
+  it('查不到的過去日子＝三餐都沒記；跟 weekBudget 的「沒記完」同一天', () => {
+    const byDate = map({ '2026-11-24': day(1850), '2026-11-25': day(1850) })
+    expect(missedMeals(WEEK, THU, byDate)).toEqual({ n: 3, first: '2026-11-23' })
+    const w = weekBudget(WEEK, THU, 1850, 1600, byDate)!
+    expect(w.days.filter((d) => d.unlogged).map((d) => d.date)).toEqual(['2026-11-23'])
+  })
+  it('按了沒吃的不算；點心不算', () => {
+    expect(missedMeals(WEEK, THU, map({
+      '2026-11-23': day(1850),
+      '2026-11-24': day(1000, ['breakfast', 'lunch', 'snack'], ['dinner']),
+      '2026-11-25': day(1850),
+    }))).toBeNull()
+  })
+  it('今天與之後不算：今天本來就先照目標佔位', () => {
+    expect(missedMeals(WEEK, THU, map({
+      '2026-11-23': day(1850),
+      '2026-11-24': day(1850),
+      '2026-11-25': day(1850),
+      '2026-11-26': day(0, []),
+    }))).toBeNull()
+  })
+  it('整週都在過去（看上週）：七天都算', () => {
+    expect(missedMeals(WEEK, '2026-12-01', map({}))).toEqual({ n: 21, first: '2026-11-23' })
   })
 })

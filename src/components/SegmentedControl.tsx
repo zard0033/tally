@@ -14,19 +14,22 @@ export interface SegItem<K extends string> {
 interface SegmentedControlProps<K extends string> {
   label: string
   items: SegItem<K>[]
-  value: K
+  /** null＝一顆都不亮（每日目標的速度：存的舊值不在任何一格上，v2.166）。 */
+  value: K | null
   onPick: (key: K) => void
+  /** 整組停用（每日目標用自己填的目標時，速度不影響熱量）。 */
+  disabled?: boolean
   /** 容器的額外 class（版面用，例如佔滿整行）。 */
   className?: string
 }
 
-export default function SegmentedControl<K extends string>({ label, items, value, onPick, className }: SegmentedControlProps<K>) {
+export default function SegmentedControl<K extends string>({ label, items, value, onPick, className, disabled }: SegmentedControlProps<K>) {
   const thumbId = useId()
   const reduced = useReducedMotion()
   return (
     <div className={className ? `seg ${className}` : 'seg'} role="group" aria-label={label}>
       {items.map((it) => (
-        <button key={it.key} type="button" aria-pressed={it.key === value} onClick={() => onPick(it.key)}>
+        <button key={it.key} type="button" aria-pressed={it.key === value} disabled={disabled} onClick={() => onPick(it.key)}>
           {it.key === value && (
             <motion.span className="seg-thumb" layoutId={thumbId} layoutDependency={value} transition={reduced ? { duration: 0.01 } : SPRING_CARD} aria-hidden="true" />
           )}

@@ -188,6 +188,16 @@ export default function Today(props: TodayProps) {
   const nowDay = localDate()
   const nowHour = new Date().getHours()
 
+  /* 這週卡底下「這週 N 餐沒記」（v2.166）：最早那天不是正在看的就換過去；已經在那天就把第一個在問「沒吃」的那一列
+     捲到畫面中間、焦點放上去（不然點了什麼都沒發生）。 */
+  function showMissed(iso: string) {
+    if (iso !== currentDate) return onGoToDate(iso)
+    const row = document.querySelector<HTMLElement>('[data-screen="today"] .todo-ask')
+    if (!row) return
+    row.scrollIntoView({ block: 'center', behavior: reduceMotion() ? 'auto' : 'smooth' })
+    row.querySelector<HTMLElement>('.todo-row')?.focus({ preventScroll: true })
+  }
+
   /* 記完一餐的那句話（訓練分頁改版 D2-b，使用者 2026-11-23 選）：某一餐從「沒記」變成「記了」的那一下（只看剛加入的那幾筆，
      載入、換日期、編輯都不算），頂端浮出「晚餐記好了 · 還能吃 420 卡」約 2 秒；今天的早、午、晚三餐因此都記了（點心不算必要），
      改成「三餐都記了 · 這個月記了 N 天」。慶祝的是「有記」：超出時只說記好了，不講吃了多少；沒有綠色、不提連續天數（斷了會變壓力）。
@@ -240,8 +250,8 @@ export default function Today(props: TodayProps) {
       <div className="timeline" ref={edge.ref} onScroll={edge.sync}>
         {/* v2.122：日期元件與「還能吃」坐在插圖的天空上。插圖在最底層、絕對定位，跟著這一塊的高度走——
             月曆展開時天空往上長，山坡永遠貼在最下面。 */}
-        <div className="sky">
-          <TodayScene key={currentDate} date={currentDate} logged={rows && new Set(rows.map((r) => r.meal))} onPick={onOpenSheet} />
+        <div className="sky is-today">
+          <TodayScene key={currentDate} date={currentDate} />
           {/* v2.53：日期元件從 v2.4 的 `‹ 日期 ›` 膠囊換成週列＋月曆（src/components/DateStrip.tsx；
               決策與被推翻的舊決定見 DESIGN.md「日期切換」）。h1 在元件裡面。 */}
           <header className="topbar">
@@ -326,7 +336,7 @@ export default function Today(props: TodayProps) {
 
         {/* 這週（v2.165）：放在今天的三大營養素之後、時間軸之前——大數字與三大是「今天」，卡片是「這週」，
             不插進兩者中間（樣張沒有三大這一列）。 */}
-        <WeekCard data={week} today={nowDay} target={targets.kcal} bmr={weekBmr} onRetry={onWeekRetry} onGoToDate={onGoToDate} />
+        <WeekCard data={week} today={nowDay} target={targets.kcal} bmr={weekBmr} onRetry={onWeekRetry} onGoToDate={onGoToDate} onShowMissed={showMissed} />
 
         <div className="meals">
           {rows === null ? (
@@ -690,18 +700,25 @@ function MealNode({
   const addedOrder = items.filter((r) => h.justAddedIds.has(r.id)).map((r) => r.id)
   const suggestion = h.repeatByMeal[meal.key]
   const repeatKey = `${date}|${meal.key}`
+  /* 沒記的三餐問「沒吃」（v2.166 併進這一列）：這週還沒讀到就不問——還不知道伺服器上有沒有按過沒吃（review S2） */
+  const asking = !done && h.skipsReady && isMainMeal(meal.key) && askSkip(meal.key, date, h.today, h.hour)
+  const skipped = asking && h.skips.has(meal.key as MainMeal)
 
   return (
     /* v2.141：時間軸請回來（使用者 2026-11-15 選樣張 B）：左邊一條細線串四餐、每餐一個節點（記了＝實心打勾、沒記＝空心）。
        v2.122 曾把它拿掉、改由插圖的踏腳石說哪幾餐記了；使用者知道兩者重複，選它是為了四餐對齊同一條線、讀起來井然。
        節點是裝飾（aria-hidden）：記了的餐標題列有小計，讀屏靠有沒有數字分辨（同 v2.122 之前，不是這次新增的落差）。 */
-    <div className={`node${done ? ' is-done' : ''}`}>
+    <div className={`node${done ? ' is-done' : skipped ? ' is-skipped' : asking ? ' is-asking' : ''}`}>
       <span className={`node-dot${justDone ? ' just-done' : ''}`} aria-hidden="true" onAnimationEnd={() => setJustDone(false)}>
-        {done && (
+        {done ? (
           <svg viewBox="0 0 18 18">
             <path d="M5 9.2l2.6 2.6 5.4-5.6" />
           </svg>
-        )}
+        ) : skipped ? (
+          <svg viewBox="0 0 18 18">
+            <path d="M5.5 9h7" />
+          </svg>
+        ) : null}
       </span>
       <div className={`node-body${done ? '' : ' is-todo'}`}>
         {done ? (
@@ -765,18 +782,14 @@ function MealNode({
           </>
         ) : (
           <>
-            <button className="todo-row" type="button" onClick={() => h.onOpenSheet(meal.key)}>
-              <span className="lb">{meal.label}</span>
-              <span className="chev" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path d="M9 6l6 6-6 6" />
-                </svg>
-              </span>
-            </button>
-            {/* 這週還沒讀到就不問：還不知道伺服器上有沒有按過沒吃（review S2） */}
-            {h.skipsReady && isMainMeal(meal.key) && askSkip(meal.key, date, h.today, h.hour) && (
-              <SkipAsk meal={meal.key} label={meal.label} skipped={h.skips.has(meal.key)} onOpenSheet={() => h.onOpenSheet(meal.key)} onSetSkip={h.onSetSkip} />
-            )}
+            <TodoRow
+              meal={meal.key}
+              label={meal.label}
+              asking={asking}
+              skipped={skipped}
+              onOpenSheet={() => h.onOpenSheet(meal.key)}
+              onSetSkip={h.onSetSkip}
+            />
             {suggestion && (
               <SuggestRow
                 suggestion={suggestion}
@@ -795,59 +808,76 @@ function MealNode({
   )
 }
 
-/* 待記錄的三餐問一下「沒吃／補記」（v2.165，spec「熱量看這一週」）：這週卡把沒交代的餐補到目標（保守算），
-   按「沒吃」那餐照實算 0、不再問；按了之後同一行換成「沒吃了」＋「取消」。「補記」＝開這一餐的記一筆。
+/* 待記錄那一餐的標題列（整行可點＝開這一餐的記一筆）。v2.166 起「沒吃」併進這一列（樣張 today-goal-small.html 三 甲）：
+   過了時段還空著的三餐（asking），名字下一行小字講為什麼問、chevron 換成右邊一顆「沒吃」膠囊——膠囊是列按鈕的兄弟，
+   不包在裡面（button 裡不能再放 button）；這時列按鈕的讀屏名是「補記晚餐，…」。按了換成灰的「沒吃，這天照實算」＋「復原」（＝刪掉那筆）。
+   **兩種狀態是同一棵樹**：外層 div 與列按鈕一直在同一個位置，問不問只多／少裡面的小字與右邊那顆——
+   這週讀到（或過了 11 點／15 點）那一下列變成「問」時，正在列上的焦點不會因為換掉節點而掉到 body。
+   「沒吃」與「復原」也是同一顆鈕換字，焦點留在原地；結果另外用一句話唸出來（review N3）。
    寫入失敗在下面一行「存不進去：」（同餐建議），鎖住用 aria-disabled（焦點不掉）。 */
-function SkipAsk({
+function TodoRow({
   meal,
   label,
+  asking,
   skipped,
   onOpenSheet,
   onSetSkip,
 }: {
-  meal: MainMeal
+  meal: MealKey
   label: string
+  asking: boolean
   skipped: boolean
   onOpenSheet: () => void
   onSetSkip: (meal: MainMeal, on: boolean) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  // 按了之後這一行換掉、焦點所在的鈕也不見了：結果用一句話唸出來（review N3）
   const [said, setSaid] = useState('')
   const set = async (on: boolean) => {
-    if (busy) return
+    if (busy || !isMainMeal(meal)) return
     setBusy(true)
     setErr(null)
     try {
       await onSetSkip(meal, on)
-      setSaid(on ? `已記下${label}沒吃` : `已取消「${label}沒吃」`)
+      setSaid(on ? `已記下${label}沒吃` : `已復原，${label}還沒記`)
     } catch (e) {
       setErr(friendlyError(errMsg(e)))
     } finally {
       setBusy(false)
     }
   }
+  const why = skipped ? '沒吃，這天照實算' : '沒記的話，這天至少照目標算'
   return (
     <>
-      <div className="skip-ask" data-meal={meal}>
-        {skipped ? (
-          <>
-            <span className="lb">{label}沒吃</span>
-            <button type="button" aria-disabled={busy || undefined} aria-label={`取消「${label}沒吃」`} onClick={() => void set(false)}>
-              取消
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="lb">沒記到{label}？</span>
-            <button type="button" aria-disabled={busy || undefined} aria-label={`${label}沒吃`} onClick={() => void set(true)}>
-              沒吃
-            </button>
-            <button type="button" aria-label={`補記${label}`} onClick={onOpenSheet}>
-              補記
-            </button>
-          </>
+      <div className={`todo-wrap${asking ? ' todo-ask' : ''}${skipped ? ' is-skipped' : ''}`} data-meal={meal}>
+        <button
+          className="todo-row"
+          type="button"
+          aria-label={asking ? `補記${label}，${skipped ? '沒吃，這天照實算' : '沒記的話這天至少照目標算'}` : undefined}
+          onClick={onOpenSheet}
+        >
+          <span className="lb">
+            {label}
+            {asking && <small>{why}</small>}
+          </span>
+          {!asking && (
+            <span className="chev" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
+          )}
+        </button>
+        {asking && (
+          <button
+            className={skipped ? 'todo-undo' : 'row-pill'}
+            type="button"
+            aria-disabled={busy || undefined}
+            aria-label={skipped ? `復原「${label}沒吃」` : `${label}沒吃`}
+            onClick={() => void set(!skipped)}
+          >
+            {skipped ? '復原' : '沒吃'}
+          </button>
         )}
       </div>
       {err && (

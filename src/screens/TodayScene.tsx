@@ -1,21 +1,16 @@
 /* 今日頁頂端的插圖（v2.122，樣張 `_design-sample/storybook-merged.html` 今日頁 A）。
-   一個安靜的夏日午後：太陽的位置＝現在幾點（不是今天的那幾頁固定在下午三點），
-   山坡上四塊踏腳石＝四餐，記過的那一餐亮起來、現在該記的那一塊有一圈慢慢呼吸的光。
-   整幅 aria-hidden：它說的事情（幾點、哪餐記了）時間軸都用文字說過一次。
-   位置怎麼算在 src/lib/todayScene.ts；這裡只把比例擺上去。 */
+   一個安靜的夏日午後：太陽的位置＝現在幾點（不是今天的那幾頁固定在下午三點）。
+   v2.166 拿掉山坡上的四塊踏腳石（跟下面的時間軸講同一件事，使用者 2026-11-25）：今日頁的山坡帶只留到紙色地面的稜線，
+   天空矮一截；訓練頁的地面上還站著一支啞鈴，山坡帶照舊 48。
+   整幅 aria-hidden：它說的事情（幾點）不需要讀出來。位置怎麼算在 src/lib/todayScene.ts；這裡只把比例擺上去。 */
 import { useEffect, useId, useState, type CSSProperties } from 'react'
 import { localDate } from '@/lib/dates'
-import type { MealKey } from '@/lib/meals'
-import { FIXED_SCENE_MIN, minutesOf, nextMeal, NO_STONES, rememberStones, skyAt, stonesFor, type Sky } from '@/lib/todayScene'
+import { FIXED_SCENE_MIN, minutesOf, skyAt, type Sky } from '@/lib/todayScene'
 
-/* 踏腳石沿著小徑擺，座標在 393×76 的山坡帶裡。y 跟著小徑的起伏走（樣張原圖的 300 高場景下半段，縮成 76）。
-   畫面只露出下面 48（viewBox 從 y=28 起，v2.126；原本 60）：上緣以上是山頭，靠 overflow:visible 照樣畫出來、但不佔版面。 */
-const STONE_AT: [number, number][] = [
-  [36, 60],
-  [132, 59],
-  [232, 55],
-  [326, 63],
-]
+/* 山坡帶在 393×76 的插圖座標裡，畫面只露出下面一段：上緣 y=28 以上是山頭，靠 overflow:visible 照樣畫出來、但不佔版面。
+   訓練頁露到 y=76（48 高，v2.126）；今日頁 v2.166 只露到 y=48（20 高）——紙色地面的稜線最低在 y≈42，再往下全是紙，
+   原本那一截是給踏腳石站的。高度同步 app.css 的 --band（.sky.is-today）。 */
+const BAND_H = { today: 20, training: 48 } as const
 
 function sunStyle(sky: Sky): CSSProperties {
   if (sky.kind === 'moon') return {}
@@ -44,32 +39,11 @@ function useNow(): Date {
   return now
 }
 
-/** logged：這天哪幾餐有紀錄；null＝還在載入（DESIGN「載入態」：還沒讀到不能畫成讀到空）。
- *  onPick：點踏腳石＝開那一餐的記錄（v2.125；跟時間軸的餐別列同一個入口）。
- *  variant training（訓練分頁改版 A）：訓練頁用同一幅天空，兩頁頂端長一樣；沒有踏腳石與小徑，右邊地面上一支啞鈴。 */
-export default function TodayScene({
-  date,
-  logged,
-  onPick,
-  variant = 'today',
-}: {
-  date: string
-  logged: ReadonlySet<MealKey> | null
-  onPick: (meal: MealKey) => void
-  variant?: 'today' | 'training'
-}) {
+/** variant training（訓練分頁改版 A）：訓練頁用同一幅天空；右邊地面上一支啞鈴，山坡帶比今日頁高（見 BAND_H）。 */
+export default function TodayScene({ date, variant = 'today' }: { date: string; variant?: 'today' | 'training' }) {
   const now = useNow()
   const isToday = date === localDate(now)
   const sky = skyAt(isToday ? minutesOf(now) : FIXED_SCENE_MIN)
-  /* 載入中沿用最後一次讀到的那份（存檔後重撈那一下不閃回「都沒記」）；一次都還沒讀到就不畫石頭——
-     四塊空心是「讀到了、今天還沒記」，不是「還不知道」。只有「從沒亮變成亮」的那一塊跳一下，
-     第一次讀到時本來就亮的不跳（規則在 lib/todayScene.ts 的 rememberStones）。
-     換日期時 Today 用 key 讓整幅重掛，所以這裡只會看到同一天裡的變化。 */
-  const [mem, setMem] = useState(() => rememberStones(NO_STONES, logged))
-  const next = rememberStones(mem, logged)
-  if (next !== mem) setMem(next)
-  const { known, lit } = next
-  const stones = variant === 'today' && known ? stonesFor(known, isToday ? nextMeal(known, now) : null) : null
   const glowId = useId()
 
   return (
@@ -110,7 +84,7 @@ export default function TodayScene({
       )}
       {/* v2.126：左半邊壓成一片低谷、右半邊隆起。左邊是大數字與量尺，山頭不能爬到字後面——
           量尺的淡色數字（--ink-sky）在遠山上只剩 4.28:1，所以左半邊的山要低於山坡帶上緣（y 28）；右邊讓給太陽與樹 */}
-      <svg className="scene-hills" viewBox="0 28 393 48">
+      <svg className="scene-hills" viewBox={`0 28 393 ${BAND_H[variant]}`}>
         <path d="M0 31 C 90 30, 180 30, 240 28 S 326 -10, 393 -4 V76 H0Z" fill="var(--hill-far)" />
         <path d="M0 37 C 90 33, 180 33, 250 30 S 350 16, 393 22 V76 H0Z" fill="var(--hill-mid)" />
         <g transform="translate(286 20)">
@@ -129,58 +103,7 @@ export default function TodayScene({
             <rect x="20.8" y="-5" width="4.2" height="10" rx="2.1" fill="var(--ink)" />
           </g>
         )}
-        {variant === 'today' && <path
-          d="M36 60 C 90 52, 120 66, 168 58 S 230 53, 262 60 S 330 67, 358 59"
-          fill="none"
-          stroke="var(--ink-faint)"
-          strokeOpacity=".7"
-          strokeWidth="2"
-          strokeDasharray="1 7"
-          strokeLinecap="round"
-        />}
-        {stones?.map((s, i) => {
-          const [x, y] = STONE_AT[i]
-          return (
-            <g key={s.key} className={`stone is-${s.state}${lit.has(s.key) ? ' just-lit' : ''}`} transform={`translate(${x} ${y})`}>
-              {s.state === 'done' ? (
-                <g className="stone-mark">
-                  <circle r="9" fill="var(--accent)" />
-                  <path d="M-4.2.2l2.8 2.8 5.4-5.6" fill="none" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </g>
-              ) : s.state === 'next' ? (
-                <>
-                  {/* 墊一塊地面色的底：小徑的虛線穿過踏腳石會像線從圈裡串過去，石頭該壓在路上 */}
-                  <circle r="13" fill="var(--paper)" />
-                  <circle className="stone-pulse" r="13" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
-                  <circle r="8" fill="none" stroke="var(--accent)" strokeWidth="2.4" />
-                </>
-              ) : (
-                <circle r="6" fill="var(--paper)" stroke="var(--ink-faint)" strokeWidth="2" />
-              )}
-              <text x={s.state === 'next' ? 23 : 14} y="4.5" className="stone-label">
-                {s.label}
-              </text>
-            </g>
-          )
-        })}
       </svg>
-      {/* 踏腳石可以點（v2.125）：點了開那一餐的記錄，跟時間軸的餐別列同一個入口。它長得像按鈕，不能點就是假的操作暗示。
-          插圖整幅 aria-hidden，這幾顆是給手指的捷徑：tabIndex -1、不進讀屏——鍵盤與讀屏用時間軸的餐別列，不重複一份。
-          命中區蓋住石頭加餐名（插圖座標 64 寬），高 44px；位置跟山坡帶一樣用 cqw 算。 */}
-      {stones?.map((s, i) => {
-        const [x, y] = STONE_AT[i]
-        return (
-          <button
-            key={s.key}
-            type="button"
-            className="stone-hit"
-            tabIndex={-1}
-            data-meal={s.key}
-            style={{ '--x': x, '--y': y } as CSSProperties}
-            onClick={() => onPick(s.key)}
-          />
-        )
-      })}
     </div>
   )
 }

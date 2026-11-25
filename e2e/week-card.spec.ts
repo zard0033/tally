@@ -1,4 +1,6 @@
 /* 熱量看這一週（spec「熱量看這一週」，v2.165）：今日頁的「這週」卡與待記錄三餐的「沒吃／補記」。
+   v2.166（spec「三個小改動」）：「沒吃」併進那一餐的標題列（.todo-ask：列本身＝補記、右邊膠囊＝沒吃、按了換「復原」），
+   這週卡底下多一行「這週 N 餐沒記」。
    規則（沒記完補到目標、今天佔位、打平與 BMR 下限、紅色只看已經吃的）由 src/lib/weekBudget.test.ts 守；這裡驗畫面與寫入。
    日期釘住（openAppAt，早上 9 點）：週的切法跟星期幾有關。每日目標用自訂 1850（不受公式影響），BMR 仍照公式：
    男、1993 年生（2026 年 33 歲）、175 cm、這裡把體重設 65 kg、沒體脂 → Mifflin 10×65＋6.25×175−5×33＋5＝1583.75
@@ -96,24 +98,27 @@ test('晚餐空著沒回答：週二柱子沒記完、至少算到目標；點�
   expect(await currentIso(page)).toBe(TUE)
 })
 
-test('按「沒吃」：寫一筆、這餐照實算、不再沒記完；「取消」刪掉回到沒記完（AC 5、6）', async ({ page }) => {
+test('按「沒吃」：寫一筆、這餐照實算、不再沒記完；「復原」刪掉回到沒記完（AC 5、6）', async ({ page }) => {
   await openAppAt(page, WED, {}, tueFix())
   await gotoDate(page, TUE)
-  const dinner = page.locator('.skip-ask[data-meal="dinner"]')
+  const dinner = page.locator('.todo-ask[data-meal="dinner"]')
   await expect(dinner.getByRole('button', { name: '晚餐沒吃' })).toBeVisible()
-  await expect(dinner.getByRole('button', { name: '補記晚餐' })).toBeVisible()
+  await expect(dinner.locator('.todo-row')).toHaveText('晚餐沒記的話，這天至少照目標算')
+  // 讀屏名講它是補記（v2.165 是「補記晚餐」那顆鈕）
+  await expect(dinner.getByRole('button', { name: '補記晚餐，沒記的話這天至少照目標算' })).toHaveCount(1)
   // 點心不問
-  await expect(page.locator('.skip-ask[data-meal="snack"]')).toHaveCount(0)
+  await expect(page.locator('.todo-ask[data-meal="snack"]')).toHaveCount(0)
 
   await dinner.getByRole('button', { name: '晚餐沒吃' }).click()
-  await expect(dinner).toContainText('晚餐沒吃')
+  await expect(dinner.locator('.todo-row')).toHaveText('晚餐沒吃，這天照實算')
+  await expect(dinner.locator('.todo-row')).toHaveAccessibleName('補記晚餐，沒吃，這天照實算')
   const skips = () => page.evaluate(() => (window as unknown as { __mealSkips: () => unknown[] }).__mealSkips())
   expect(await skips()).toEqual([{ eaten_on: TUE, meal: 'dinner' }])
   // 週二照實 1000：週一 1850＋1000＋今天佔位 1850 − 5550 → 少吃 850
   await expect(col(page, TUE)).not.toHaveClass(/is-btn/)
   await expect(total(page)).toHaveText('少吃 850')
 
-  await dinner.getByRole('button', { name: '取消「晚餐沒吃」' }).click()
+  await dinner.getByRole('button', { name: '復原「晚餐沒吃」' }).click()
   await expect(dinner.getByRole('button', { name: '晚餐沒吃' })).toBeVisible()
   expect(await skips()).toEqual([])
   await expect(col(page, TUE)).toHaveClass(/is-btn/)
@@ -127,7 +132,7 @@ test('「沒吃」存不進去：那一餐底下說存不進去、照樣是沒�
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'meal_skip', method: 'POST' }
   })
   await page.getByRole('button', { name: '晚餐沒吃' }).click()
-  await expect(page.locator('.skip-ask + .sheet-error')).toContainText('存不進去')
+  await expect(page.locator('.todo-ask + .sheet-error')).toContainText('存不進去')
   await expect(page.getByRole('button', { name: '晚餐沒吃' })).toBeVisible()
   await expect(col(page, TUE)).toHaveClass(/is-btn/)
 })
@@ -136,29 +141,33 @@ test('之前按過的「沒吃」開 App 就讀得到；「補記」開那一餐
   await openAppAt(page, WED, {}, tueFix({ mealSkip: [{ eaten_on: TUE, meal: 'dinner' }] }))
   await expect(col(page, TUE)).not.toHaveClass(/is-btn/)
   await gotoDate(page, TUE)
-  await expect(page.locator('.skip-ask[data-meal="dinner"]')).toContainText('晚餐沒吃')
-  // 早餐、午餐有記，不問；補記：先取消再補記晚餐
-  await expect(page.locator('.skip-ask[data-meal="breakfast"], .skip-ask[data-meal="lunch"]')).toHaveCount(0)
-  await page.getByRole('button', { name: '取消「晚餐沒吃」' }).click()
-  await page.getByRole('button', { name: '補記晚餐' }).click()
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveClass(/is-skipped/)
+  // 早餐、午餐有記，不問；補記：先復原再點晚餐那一列
+  await expect(page.locator('.todo-ask[data-meal="breakfast"], .todo-ask[data-meal="lunch"]')).toHaveCount(0)
+  await page.getByRole('button', { name: '復原「晚餐沒吃」' }).click()
+  await page.locator('.todo-ask[data-meal="dinner"] .todo-row').click()
   await expect(page.locator('.chiprow .chip[aria-pressed="true"]')).toHaveText('晚餐')
 })
 
 test('今天：早餐過 11 點才問、晚餐當天不問；昨天的晚餐照問（AC 7）', async ({ page }) => {
   // 下午 3 點半開：今天早、午餐空著要問，晚餐當天不問
   await openAppAt(page, WED, {}, tueFix(), '15:30:00')
-  await expect(page.locator('.skip-ask[data-meal="breakfast"]')).toHaveCount(1)
-  await expect(page.locator('.skip-ask[data-meal="lunch"]')).toHaveCount(1)
-  await expect(page.locator('.skip-ask[data-meal="dinner"]')).toHaveCount(0)
-  await expect(page.locator('.skip-ask[data-meal="snack"]')).toHaveCount(0)
+  await expect(page.locator('.todo-ask[data-meal="breakfast"]')).toHaveCount(1)
+  await expect(page.locator('.todo-ask[data-meal="lunch"]')).toHaveCount(1)
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveCount(0)
+  await expect(page.locator('.todo-ask[data-meal="snack"]')).toHaveCount(0)
   await gotoDate(page, TUE)
-  await expect(page.locator('.skip-ask[data-meal="dinner"]')).toHaveCount(1)
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveCount(1)
 })
 
 test('早上 9 點：今天三餐都空著也不問（AC 7）', async ({ page }) => {
   await openAppAt(page, WED, {}, tueFix())
   await expect(page.locator('.timeline .todo-row')).toHaveCount(4)
-  await expect(page.locator('.skip-ask')).toHaveCount(0)
+  await expect(page.locator('.todo-ask')).toHaveCount(0)
+  // v2.166：不問的列沒有虛線節點、沒有沒吃膠囊，右邊照舊是箭頭
+  await expect(page.locator('.node.is-asking, .node.is-skipped')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /沒吃$/ })).toHaveCount(0)
+  await expect(page.locator('.timeline .todo-row .chev')).toHaveCount(4)
 })
 
 test('看上週：七根實心、沒有打平框；看下週（明天是下週一）：不出這張卡（AC 8）', async ({ page }) => {
@@ -200,24 +209,24 @@ test('這週還在讀：不問沒吃；讀到之後伺服器上按過的晚餐�
   }))
   await gotoDate(page, TUE)
   await expect(page.locator('.timeline .todo-row')).toHaveCount(3)
-  await expect(page.locator('.skip-ask')).toHaveCount(0)
+  await expect(page.locator('.todo-ask')).toHaveCount(0)
   await page.evaluate(() => (window as unknown as { __kcalRelease: () => void }).__kcalRelease())
-  await expect(page.locator('.skip-ask[data-meal="dinner"]')).toContainText('晚餐沒吃')
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveClass(/is-skipped/)
   await page.getByRole('button', { name: '早餐沒吃' }).click()
-  await expect(page.locator('.skip-ask[data-meal="breakfast"]')).toContainText('早餐沒吃')
-  await expect(page.locator('.skip-ask[data-meal="dinner"]')).toContainText('晚餐沒吃')
+  await expect(page.locator('.todo-ask[data-meal="breakfast"]')).toHaveClass(/is-skipped/)
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveClass(/is-skipped/)
   // 兩餐都交代了：週二照實 600，不是沒記完；週一 1850＋600＋今天佔位 1850 − 5550
   await expect(col(page, TUE)).not.toHaveClass(/is-btn/)
   await expect(total(page)).toHaveText('少吃 1250')
   // 讀屏唸結果（按下去那顆鈕已經換掉）
-  await expect(page.locator('.skip-ask[data-meal="breakfast"] ~ [role="status"]').first()).toHaveText('已記下早餐沒吃')
+  await expect(page.locator('.todo-ask[data-meal="breakfast"] ~ [role="status"]').first()).toHaveText('已記下早餐沒吃')
 })
 
 test('開著不動，到 11 點自己冒出早餐的「沒吃／補記」（review N4）', async ({ page }) => {
   await openAppAt(page, WED, {}, tueFix(), '10:59:56')
   await expect(page.locator('.timeline .todo-row')).toHaveCount(4)
-  await expect(page.locator('.skip-ask')).toHaveCount(0)
-  await expect(page.locator('.skip-ask[data-meal="breakfast"]')).toHaveCount(1, { timeout: 10_000 })
+  await expect(page.locator('.todo-ask')).toHaveCount(0)
+  await expect(page.locator('.todo-ask[data-meal="breakfast"]')).toHaveCount(1, { timeout: 10_000 })
 })
 
 /* 寫入落地（intakePersist）：當日清單與區間資料各自一份假資料，週二的早、午餐兩邊都放 */
@@ -275,4 +284,102 @@ test('今天記一筆：總帳當場跟著變；明天預先記錄：打平框�
   await expect(col(page, '2026-11-27').locator('.wkb-bar.is-plan')).toHaveCount(0)
   // 明天跟目標取大計入、打平剩兩天：12950 − (1650＋1780＋2650＋1905＋1850) = 3115 ÷ 2 = 1557.5 < 下限 1583.75 → 1580
   expect(await plans(page)).toEqual(['1580', '1580'])
+})
+
+/* ═══════════ v2.166（spec「三個小改動」）═══════════ */
+
+test('沒吃併進那一餐的標題列：沒有另一行；虛線圈＋小字＋膠囊在同一列，膠囊不包在列的按鈕裡；按了換灰的一橫＋復原', async ({ page }) => {
+  await openAppAt(page, WED, {}, tueFix())
+  await gotoDate(page, TUE)
+  const node = page.locator('.node', { has: page.locator('.todo-ask[data-meal="dinner"]') })
+  const row = node.locator('.todo-row')
+  const pill = node.getByRole('button', { name: '晚餐沒吃' })
+  // 一列：膠囊跟列的按鈕並排（垂直中線對齊）、列高不超過 44
+  const r = (await row.boundingBox())!
+  const b = (await pill.boundingBox())!
+  expect(r.height).toBeLessThanOrEqual(44.5)
+  expect(Math.abs(b.y + b.height / 2 - (r.y + r.height / 2))).toBeLessThan(2)
+  expect(b.x).toBeGreaterThanOrEqual(r.x + r.width)
+  expect(await pill.evaluate((el) => el.closest('.todo-row')), 'button 裡不能再放 button').toBeNull()
+  await expect(node.locator('.node-dot')).toHaveCSS('border-top-style', 'dashed')
+  await expect(node.locator('.chev'), '問的時候右邊換成膠囊，不再有箭頭').toHaveCount(0)
+
+  // 鍵盤按：「沒吃」與「復原」是同一顆鈕換字，焦點留在原地
+  await pill.focus()
+  await page.keyboard.press('Enter')
+  await expect(node).toHaveClass(/is-skipped/)
+  await expect(node.getByRole('button', { name: '復原「晚餐沒吃」' })).toBeFocused()
+  await expect(node.locator('.node-dot svg')).toHaveCount(1)
+  await expect(node.locator('.node-dot')).toHaveCSS('background-color', 'rgb(227, 231, 230)')
+  await expect(node.locator('.node-dot'), '灰底圓盤要有邊（--rule-field）').toHaveCSS('border-top-color', 'rgb(110, 123, 142)')
+  await expect(node.getByRole('button', { name: '復原「晚餐沒吃」' })).toHaveText('復原')
+  await expect(node.locator('[role="status"]')).toHaveText('已記下晚餐沒吃')
+  // 反方向：復原之後焦點也留在原地（換回「沒吃」）
+  await page.keyboard.press('Enter')
+  await expect(node).not.toHaveClass(/is-skipped/)
+  await expect(pill).toBeFocused()
+  await expect(node.locator('[role="status"]')).toHaveText('已復原，晚餐還沒記')
+
+  // 點心不問：同一天的點心沒有虛線節點、沒有膠囊
+  const snack = page.locator('.node', { has: page.locator('.todo-wrap[data-meal="snack"]') })
+  await expect(snack).not.toHaveClass(/is-asking/)
+  await expect(snack.getByRole('button', { name: '點心沒吃' })).toHaveCount(0)
+})
+
+test('這週讀到的那一下列變成「問」：焦點還在那一列上（不換節點）', async ({ page }) => {
+  await openAppAt(page, WED, { kcalHold: true }, tueFix())
+  await gotoDate(page, TUE)
+  const row = page.locator('.todo-wrap[data-meal="dinner"] .todo-row')
+  await expect(page.locator('.todo-ask')).toHaveCount(0)
+  await row.focus()
+  await expect(row).toBeFocused()
+  await page.evaluate(() => (window as unknown as { __kcalRelease: () => void }).__kcalRelease())
+  await expect(page.locator('.todo-ask[data-meal="dinner"]')).toHaveCount(1)
+  await expect(page.locator('.todo-ask[data-meal="dinner"] .todo-row')).toBeFocused()
+})
+
+test('這週卡底下「這週 N 餐沒記」：點了跳到最早那天；都交代了就不出', async ({ page }) => {
+  // 週一什麼都沒記（三餐）＋週二晚餐空著
+  await openAppAt(page, WED, {}, tueFix({ kcalWindow: [k(TUE, 'breakfast', 400), k(TUE, 'lunch', 600)] }))
+  const miss = page.locator('.wkb-miss')
+  await expect(miss).toHaveText('這週 4 餐沒記，至少照目標算從週一看')
+  await expect(miss).toHaveAccessibleName('這週 4 餐沒記，至少照目標算；從週一看')
+  // 跟柱子對得起來：沒記完的那兩天（週一、週二）是可點的虛線欄
+  await expect(page.locator('.wkb-col.is-btn')).toHaveCount(2)
+  await miss.click()
+  expect(await currentIso(page)).toBe('2026-11-23')
+})
+
+test('這週卡底下那一行：已經在最早那天，點了把那一餐的列捲進來、焦點放上去', async ({ page }) => {
+  await openAppAt(page, WED, {}, tueFix())
+  await gotoDate(page, TUE)
+  const miss = page.locator('.wkb-miss')
+  await expect(miss).toContainText('從週二看')
+  // 先把列捲出畫面（捲到最底再捲回頂端，列在卡片下面、第一屏外）
+  await page.locator('.timeline').evaluate((el) => { el.scrollTop = 0 })
+  await miss.click()
+  expect(await currentIso(page)).toBe(TUE)
+  const row = page.locator('.todo-ask[data-meal="dinner"] .todo-row')
+  await expect(row).toBeFocused()
+  await expect(row).toBeInViewport()
+})
+
+test('這週卡底下那一行：按了沒吃就少一餐，剩 0 餐就收掉', async ({ page }) => {
+  await openAppAt(page, WED, {}, tueFix())
+  const miss = page.locator('.wkb-miss')
+  await expect(miss).toContainText('這週 1 餐沒記，至少照目標算')
+  await expect(miss).toContainText('從週二看')
+  await miss.click()
+  expect(await currentIso(page)).toBe(TUE)
+  await page.getByRole('button', { name: '晚餐沒吃' }).click()
+  await expect(miss).toHaveCount(0)
+})
+
+test('這週都記滿：底下那一行不出（AC 1 的資料）', async ({ page }) => {
+  await openAppAt(page, THU, {}, fixWith({
+    intake: TODAY_1200,
+    kcalWindow: [...full('2026-11-23', 1650), ...full('2026-11-24', 1780), ...full('2026-11-25', 2650)],
+  }))
+  await expect(total(page)).toHaveText('多吃 530')
+  await expect(page.locator('.wkb-miss')).toHaveCount(0)
 })

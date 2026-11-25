@@ -68,6 +68,28 @@ export function unresolvedMeals(d: DayIntake): MainMeal[] {
   return MAIN_MEALS.filter((m) => !d.logged.has(m) && !d.skipped.has(m))
 }
 
+/**
+ * 這週卡底下那一行（v2.166）：已經算進總帳的日子（今天以前）裡，早、午、晚餐空著又沒按沒吃的總共幾餐，
+ * 和最早是哪天（點了跳過去，同點虛線那欄）。這些餐讓那天被補到每日目標（weekBudget 的「沒記完」）。
+ * 今天不算：今天本來就先照目標佔位，問不問都一樣。沒有就回 null（那一行不出）。
+ */
+export function missedMeals(
+  dates: readonly string[],
+  today: string,
+  byDate: ReadonlyMap<string, DayIntake>,
+): { n: number; first: string } | null {
+  let n = 0
+  let first: string | null = null
+  for (const date of dates) {
+    if (date >= today) continue
+    const k = unresolvedMeals(byDate.get(date) ?? ZERO).length
+    if (k === 0) continue
+    n += k
+    if (first === null) first = date
+  }
+  return first === null ? null : { n, first }
+}
+
 /** 打平值取整到 10（「1670」）：畫面上的建議值，不需要個位數的假精確。 */
 const round10 = (n: number) => Math.round(n / 10) * 10
 

@@ -1073,23 +1073,32 @@ test('飲食頁底部列浮起：霧化帶與空白不攔截，兩顆鈕點得�
    `padding-bottom` 不算進去——編輯區下緣會落在底部列底下，右側的刪除鈕剛好在 CTA 底下。
    修法是時間軸的 `scroll-padding-bottom`。不縮視窗：編輯區約 322px，393×745 的時間軸扣掉底部列還剩約 360px 放得下；
    視窗再矮，編輯區本身就大過可見範圍，量出來的是別的事。展開後內容才溢出，所以 scrollIntoView 會被觸發。 */
-test('踏腳石可以點：點哪一塊就開哪一餐的記錄（v2.125）', async ({ page }) => {
-  await openApp(page)
+/* v2.166：今日頁的踏腳石拿掉，「這天哪幾餐記過了」搬到記一筆的餐別膠囊——記過的前面一個小勾，讀屏名多「記過了」；預選照舊 */
+test('記一筆的餐別膠囊：這天記過的餐前面有勾、讀屏說記過了；預選照舊', async ({ page }) => {
+  await openAppAt(page, TODAY, {}, FIX, '19:00:00') // FIX 今天記了早、午餐；晚上 7 點預選晚餐
+  await expect(page.locator('.stone-hit, .scene .stone'), '踏腳石拿掉了').toHaveCount(0)
+  await page.click('button.cta')
   const sheet = page.locator('[data-screen="log-sheet"]')
-  // 點心那顆在山坡帶最低處，命中區最容易被切掉：44px 要完整留在插圖裡
-  const snack = (await page.locator('.stone-hit[data-meal="snack"]').boundingBox())!
-  const scene = (await page.locator('.scene').boundingBox())!
-  expect(snack.height).toBe(44)
-  expect(snack.y + snack.height).toBeLessThanOrEqual(scene.y + scene.height + 0.5)
-  for (const [key, label] of [['dinner', '晚餐'], ['breakfast', '早餐'], ['snack', '點心']] as const) {
-    // 用真的滑鼠點在石頭的中心：命中區被別的元素蓋住的話，點到的就不是它
-    const box = (await page.locator(`.stone-hit[data-meal="${key}"]`).boundingBox())!
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-    await expect(sheet).toBeVisible()
-    await expect(sheet.locator('.chiprow .chip[aria-pressed="true"]')).toHaveText(label)
-    await page.keyboard.press('Escape')
-    await expect(sheet).toHaveCount(0)
-  }
+  const chips = sheet.locator('.chiprow .chip')
+  await expect(sheet.locator('.chiprow .chip[aria-pressed="true"]')).toHaveText('晚餐')
+  await expect(sheet.getByRole('button', { name: '早餐，記過了' })).toHaveCount(1)
+  await expect(sheet.getByRole('button', { name: '午餐，記過了' })).toHaveCount(1)
+  await expect(chips.filter({ has: page.locator('.chip-done') })).toHaveText(['早餐', '午餐'])
+  await expect(sheet.getByRole('button', { name: '晚餐', exact: true })).toHaveCount(1)
+  // 勾是主藍描邊（.screen svg 的 1.6px 預設不能蓋過它）
+  const tick = chips.first().locator('.chip-done')
+  await expect(tick).toHaveCSS('stroke', 'rgb(46, 94, 147)')
+  await expect(tick).toHaveCSS('stroke-width', '2.5px')
+})
+
+/* v2.166 AC 4：今日頁的山坡帶只留到稜線（20），訓練頁有啞鈴照舊 48——393 寬時今日頁天空比訓練頁矮 28px（兩頁天空裡那一行同高，見 .tr-hero） */
+test('今日頁天空比訓練頁矮 28px（踏腳石那截拿掉）', async ({ page }) => {
+  await openApp(page)
+  const today = (await page.locator('[data-screen="today"] .sky').boundingBox())!.height
+  await page.locator('.tab[aria-label="訓練"]').click()
+  await page.waitForSelector('[data-screen="training"] .sky')
+  const training = (await page.locator('[data-screen="training"] .sky').boundingBox())!.height
+  expect(Math.abs(training - 28 - today), `今日 ${today}、訓練 ${training}`).toBeLessThanOrEqual(0.5)
 })
 
 /* 過場（v2.136）：今日頁從那幅畫換成內容時疊一層 .gate.is-exit 播完就卸掉。它不擋點擊（pointer-events: none），
@@ -1210,61 +1219,6 @@ test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會�
   await page.click('.pick-bar-btn')
   expect((await closeClickResult(page)).sheetStillThere, '前提：點擊落在收合中').toBe(true)
   await expect(page.locator('[data-screen="settings"]'), '收合中的點擊被 scrim 吃掉了').toBeVisible({ timeout: 1500 })
-})
-
-/* v2.122 review：插圖的踏腳石不能把「還沒讀到」畫成「四餐都沒記」（DESIGN「載入態」），資料一到也不能讓本來就記過的餐
-   一起彈。今天只留午餐、早上 9 點開（openAppAt）：記一筆預設進早餐，早餐是唯一「從沒記變成記了」的那塊。
-   兩次 GET 都用 __holdIntake 停住，載入態才量得到；彈跳用 MutationObserver 全程記，不是落定後取樣一次。 */
-test('踏腳石：載入中不畫成都沒記；資料第一次到時不彈，記一筆後只有新記的那餐彈', async ({ page }) => {
-  type W = { __holdIntake: Set<string>; __heldIntake: unknown[]; __releaseIntake: () => void; __lit: string[] }
-  const fix = { ...FIX, intake: FIX.intake.filter((r) => r.meal === 'lunch') }
-  // 開機時停住昨天的預取：昨天才不會在快取裡，換過去一定進載入態
-  await openAppAt(page, TODAY, { intakePersist: true, holdIntake: [YDAY] }, fix)
-  const stones = page.locator('.scene .stone')
-  const done = page.locator('.scene .stone.is-done')
-  const loading = page.locator('.timeline').getByText('載入中…')
-  await expect(stones).toHaveCount(4)
-  await expect(done).toHaveText(['午餐'])
-  await page.evaluate(() => {
-    const w = window as unknown as W
-    w.__lit = []
-    const grab = () =>
-      document.querySelectorAll('.scene .stone.just-lit').forEach((g) => {
-        if (!w.__lit.includes(g.textContent ?? '')) w.__lit.push(g.textContent ?? '')
-      })
-    new MutationObserver(grab).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
-  })
-  const lit = () => page.evaluate(() => (window as unknown as W).__lit)
-  const hold = (d: string) => page.evaluate((x) => (window as unknown as W).__holdIntake.add(x), d)
-  const release = () => page.evaluate(() => (window as unknown as W).__releaseIntake())
-
-  // 一、換到還沒讀到的昨天：插圖重掛、什麼都還不知道 → 不畫石頭；資料到了只記基準、不彈
-  await hold(YDAY)
-  await prevDay(page)
-  await expect(loading).toBeVisible()
-  await expect(stones, '還沒讀到不能畫成四塊空心（那是「讀到了、都沒記」）').toHaveCount(0)
-  await release()
-  await expect(done).toHaveText(['午餐'])
-  await expect(stones).toHaveCount(4)
-  expect(await lit(), '第一次讀到時本來就記過的不是剛亮').toEqual([])
-
-  // 二、回到今天（快取命中）記一筆早餐，存檔後的重撈停住：載入中沿用上一份，資料回來只彈早餐
-  await nextDay(page)
-  await expect(done).toHaveText(['午餐'])
-  await page.click('button.cta')
-  await page.waitForSelector('.food-row')
-  await page.locator('.food-row').first().click()
-  await page.waitForSelector('.pick-bar')
-  await hold(TODAY)
-  await page.click('.pick-bar-btn')
-  await expect.poll(() => page.evaluate(() => (window as unknown as W).__heldIntake.length), '存檔後的重撈要停住').toBe(1)
-  await expect(loading, '從 sheet 加入是原地重撈、不進載入態（v2.141）').toHaveCount(0)
-  await expect(done, '重撈中沿用上一份，不閃回都沒記').toHaveText(['午餐'])
-  await expect(stones).toHaveCount(4)
-  await release()
-  await expect(done).toHaveText(['早餐', '午餐'])
-  await expect(page.locator('.scene .stone.just-lit')).toHaveText(['早餐'])
-  expect(await lit(), '只有新記的早餐彈，本來就記過的午餐不彈').toEqual(['早餐'])
 })
 
 /* 全頁錯誤畫面不能變成死路（2026-11-02 整體盤點抓到）。失敗的那天不是正在看的那天時，

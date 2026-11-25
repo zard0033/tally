@@ -1,4 +1,4 @@
-/* 每日目標頁（v2.163，spec.md「每日目標改版：目標體重＋速度滑桿」，樣張 _design-sample/goal-v3.html D2）。
+/* 每日目標頁（v2.163，spec.md「每日目標改版：目標體重＋速度滑桿」，樣張 _design-sample/goal-v3.html D2；v2.166 滑桿換成五格按鈕）。
 
    這頁只做規劃：使用者能動的只有**目標體重**與**速度**，頂端結果卡回答「每天吃多少、幾月到」，結果只出現一次。
    速度是輸入、日期是結果（用日期設定的話，落後會逼每天吃得更少，見 spec）。減重／維持／增重不再是選項，
@@ -9,7 +9,6 @@
    差得不多時 App 每週自己往回推值移一半（v2.143，spec「每日目標省心」），每次變動都可以一按還原。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Popover } from '@base-ui/react/popover'
-import { Slider } from '@base-ui/react/slider'
 import {
   ACTIVITY_FACTOR_PRESETS,
   computeTargets,
@@ -34,6 +33,10 @@ import {
   GOAL_MIN_KG,
   GOAL_STEP_KG,
   monthlyOf,
+  paceEnds,
+  RATE_MATCH_KG_PER_MONTH,
+  RATE_WHERE_TEXT,
+  rateSpot,
   reached,
   snapGoal,
   weeklyRate,
@@ -55,20 +58,9 @@ const DIR_LABEL: Record<Goal, string> = { cut: '減重', maintain: '維持', bul
 
 /** 「已儲存」閃多久：只是回報，時間是假設值，夠看到就好。 */
 const SAVED_FLASH_MS = 1500
-/** kg/週 存進 numeric(3,2) 再換回 kg/月 會有誤差（0.5 → 0.12 → 0.52），這個範圍內算同一格；格距是 0.25。 */
-const RATE_MATCH_KG_PER_MONTH = 0.03
 const fmtKg = (kg: number) => (Math.round(kg * 10) / 10).toFixed(1)
-/** 手指在滑桿上垂直移動超過這麼多、而且比水平多，就當成捲頁面（假設值：一般觸控 slop 約 8–10px）。 */
-const SCROLL_SLOP_PX = 10
-/** 滑桿停在哪一格：DB 值對不上任何一格（舊值 2.17 kg/月）時停在最接近的那格，但標籤照寫真實值、不寫回去。 */
-function rateIndex(kgPerMonth: number | null): { index: number; exact: boolean } {
-  if (kgPerMonth === null || !Number.isFinite(kgPerMonth)) return { index: 0, exact: false }
-  let best = 0
-  RATE_PRESETS_KG_PER_MONTH.forEach((p, i) => {
-    if (Math.abs(p - kgPerMonth) < Math.abs(RATE_PRESETS_KG_PER_MONTH[best] - kgPerMonth)) best = i
-  })
-  return { index: best, exact: Math.abs(RATE_PRESETS_KG_PER_MONTH[best] - kgPerMonth) <= RATE_MATCH_KG_PER_MONTH }
-}
+/** 速度五格（SegmentedControl 的鍵要是字串：用格子的序號）。 */
+const RATE_ITEMS = RATE_PRESETS_KG_PER_MONTH.map((p, i) => ({ key: String(i), label: String(p) }))
 const finiteOrNull = (n: number | null | undefined) => (n !== null && n !== undefined && Number.isFinite(n) ? n : null)
 
 /** 空字串要是 NaN，不能是 Number('') 的 0：出生年 0 歲會讓年齡算成兩千多歲，變成閃一個離譜的熱量而不是 —。 */
@@ -169,16 +161,11 @@ export default function DailyGoal(props: DailyGoalProps) {
   const [dismissed, setDismissed] = useState(false)
   /** 使用者自己點了「紀錄回推」那一列（數字在範圍內、確認框沒自己跳出來時也能改用）。 */
   const [picked, setPicked] = useState(false)
-  /** 拖滑桿途中的那一格：結果卡跟著預覽，放開（onValueCommitted）才存、才清回 null。 */
-  const [dragIdx, setDragIdx] = useState<number | null>(null)
   /** 目標體重數字框打到一半的字；null＝沒在打，顯示存下的值。 */
   const [goalDraft, setGoalDraft] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
-  /** 給讀屏的一句話：滑桿放開、目標體重存下時才換（拖動中每一格都播會吵）。 */
+  /** 給讀屏的一句話：點了速度、目標體重存下時才換（日期行不是 live region）。 */
   const [said, setSaid] = useState('')
-  /** 這次觸控手勢：垂直移動比水平多（捲頁面）或被瀏覽器取消，就整次作廢——Base UI 的 Slider 不聽
-      pointercancel／touchcancel，touchstart 就把值設到手指位置、touchend 照樣 commit，不擋的話從滑桿上開始捲頁面會改到速度。 */
-  const gestureRef = useRef<{ x: number; y: number; cancelled: boolean } | null>(null)
   const today = useMemo(() => localDate(), [])
   /* 「現在」＝平均體重（同體重趨勢頁的大數字，2026-11-23 裁決）：差距、方向、幾月到都用它；目標熱量照舊用最新一筆。
      undefined＝清單還在撈；null＝撈不到或沒有（App 保證有最新一筆，這兩種情況退回用它，見 nowKg）。 */
@@ -288,8 +275,6 @@ export default function DailyGoal(props: DailyGoalProps) {
   const raw = computeTargets(
     {
       ...effective,
-      // 拖滑桿途中預覽那一格（還沒存）
-      ...(dragIdx !== null ? { rate_kg_per_week: weeklyRate(RATE_PRESETS_KG_PER_MONTH[dragIdx]) } : {}),
       use_custom_targets: false,
       birth_year: reqNum(basics.birthYear),
       height_cm: reqNum(basics.height),
@@ -449,26 +434,15 @@ export default function DailyGoal(props: DailyGoalProps) {
   }
 
   const storedMonthly = monthlyOf(rateWeekly)
-  const slider = rateIndex(storedMonthly)
-  /** 結果卡用的速度：拖動中用那一格，否則用存下的。 */
-  const shownMonthly = dragIdx !== null ? RATE_PRESETS_KG_PER_MONTH[dragIdx] : storedMonthly
-  /** 滑桿下的「每月 1 kg」：拖動中或對得上格子寫格子值，對不上（舊值）照寫真實值。 */
-  const paceText = shownMonthly === null ? '—'
-    : dragIdx !== null || slider.exact ? `${RATE_PRESETS_KG_PER_MONTH[dragIdx ?? slider.index]}` : `${Math.round(shownMonthly * 100) / 100}`
-  function commitRate(idx: number) {
-    const g = gestureRef.current
-    gestureRef.current = null
-    setDragIdx(null)
-    if (g?.cancelled) return // 這次是捲頁面（或被瀏覽器取消），不算
-    if (slider.exact && idx === slider.index) return // 沒換格不寫
+  /** 五格裡亮哪一格；舊值或還沒設時一格都不亮、下面一句說明（規則在 lib/goalPlan.ts 的 rateSpot）。 */
+  const spot = rateSpot(storedMonthly)
+  /* 點一格就存（v2.166，取代滑桿）：只能點、不能拖，捲頁面經過不會改。舊值時五格都不亮，點哪格（含最近那格）都寫。 */
+  function pickRate(idx: number) {
+    if (spot.kind === 'preset' && idx === spot.index) return // 沒換格不寫
     const p = RATE_PRESETS_KG_PER_MONTH[idx]
     save({ rate_kg_per_week: weeklyRate(p) })
     const at = goalKg !== null && goal !== 'maintain' ? arrivalText(today, goal, goalKg, nowKg, p) : null
     setSaid(`每月 ${p} kg${at ? `，${at}到` : ''}`)
-  }
-  function cancelGesture() {
-    if (gestureRef.current) gestureRef.current.cancelled = true
-    setDragIdx(null)
   }
 
   const rate = choices(RATE_PRESETS_KG_PER_MONTH, rateWeeklyToMonthly(rateWeekly ?? NaN), RATE_MATCH_KG_PER_MONTH)
@@ -482,7 +456,7 @@ export default function DailyGoal(props: DailyGoalProps) {
   else if (goal === 'maintain') whenLine = <>維持在 <b>{fmtKg(goalKg)}</b> kg</>
   else if (isReached) whenLine = <>到 <b>{fmtKg(goalKg)}</b> kg 了</>
   else {
-    const at = shownMonthly !== null ? arrivalText(today, goal, goalKg, nowKg, shownMonthly) : null
+    const at = storedMonthly !== null ? arrivalText(today, goal, goalKg, nowKg, storedMonthly) : null
     whenLine = at ? <><b>{at}</b>到 {fmtKg(goalKg)} kg</> : null
   }
 
@@ -524,7 +498,7 @@ export default function DailyGoal(props: DailyGoalProps) {
     <div className="main" data-screen="daily-goal">
       <SubPageTop title="每日目標" backLabel="返回設定" onBack={() => { commitTyped(); onBack() }} />
 
-      {/* 結果卡：固定在捲動區上面，拖滑桿、改目標體重時數字當場跟著變。結果只在這裡出現一次。 */}
+      {/* 結果卡：固定在捲動區上面，點速度、改目標體重時數字當場跟著變。結果只在這裡出現一次。 */}
       <div className="goal-hero">
         <div className="goal-hero-cap">每天吃</div>
         <div>
@@ -615,54 +589,23 @@ export default function DailyGoal(props: DailyGoalProps) {
 
           {goal !== 'maintain' && (
             <div className="goal-pace">
-              <div className="goal-plan-h"><span>要多快</span></div>
-              {/* 觸控手勢的判斷包在外面一層（Base UI 的 Control 自己的 pointer／touch 處理不動）：垂直多於水平＝捲頁面、作廢 */}
-              <div
-                className="goal-slider-wrap"
-                onTouchStartCapture={(e) => {
-                  const t = e.touches[0]
-                  gestureRef.current = t ? { x: t.clientX, y: t.clientY, cancelled: false } : null
-                }}
-                onTouchMoveCapture={(e) => {
-                  const g = gestureRef.current
-                  const t = e.touches[0]
-                  if (!g || !t || g.cancelled) return
-                  const dx = Math.abs(t.clientX - g.x)
-                  const dy = Math.abs(t.clientY - g.y)
-                  if (dy > SCROLL_SLOP_PX && dy > dx) cancelGesture()
-                }}
-                onTouchCancelCapture={cancelGesture}
-                onPointerCancelCapture={cancelGesture}
-                onBlurCapture={() => { if (dragIdx !== null) setDragIdx(null) }}
-              >
-              <Slider.Root
-                className="goal-slider"
-                min={0}
-                max={RATE_PRESETS_KG_PER_MONTH.length - 1}
-                step={1}
-                largeStep={1}
-                value={dragIdx ?? slider.index}
+              <div className="goal-plan-h"><span>要多快</span><span className="goal-pace-unit">每月{goal === 'bulk' ? '增' : '瘦'}幾 kg</span></div>
+              {/* 五格按鈕（v2.166，取代滑桿：手指一按就跳、橫向一晃就換格）。存的舊值不在格上時一格都不亮 */}
+              <SegmentedControl
+                label={`要多快，每月${goal === 'bulk' ? '增' : '瘦'}幾 kg`}
+                items={RATE_ITEMS}
+                value={spot.kind === 'preset' ? RATE_ITEMS[spot.index].key : null}
+                onPick={(k) => pickRate(Number(k))}
                 disabled={isCustom}
-                onValueChange={(v) => { if (!gestureRef.current?.cancelled) setDragIdx(v as number) }}
-                onValueCommitted={(v) => commitRate(v as number)}
-              >
-                <Slider.Control className="goal-slider-ctl">
-                  <Slider.Track className="goal-slider-track">
-                    <Slider.Indicator className="goal-slider-fill" />
-                    {RATE_PRESETS_KG_PER_MONTH.map((p, i) => (
-                      <span key={p} className="goal-slider-tick" aria-hidden="true" style={{ left: `${(i / (RATE_PRESETS_KG_PER_MONTH.length - 1)) * 100}%` }} />
-                    ))}
-                    <Slider.Thumb
-                      className="goal-slider-thumb"
-                      getAriaLabel={() => '要多快'}
-                      getAriaValueText={(_f, v) => `每月 ${v === (dragIdx ?? slider.index) ? paceText : RATE_PRESETS_KG_PER_MONTH[v]} kg`}
-                    />
-                  </Slider.Track>
-                </Slider.Control>
-              </Slider.Root>
-              </div>
-              <div className="goal-slider-ends" aria-hidden="true"><span>慢 · 吃多一點</span><span>快 · 吃少一點</span></div>
-              <p className="goal-pace-now">每月 <b>{paceText}</b> kg</p>
+                className="goal-rate"
+              />
+              <div className="goal-pace-ends" aria-hidden="true"><span>{paceEnds(goal)[0]}</span><span>{paceEnds(goal)[1]}</span></div>
+              {spot.kind === 'legacy' && (
+                <p className="goal-pace-legacy">
+                  現在是<b>每月 {spot.kgPerMonth} kg</b>（舊設定，{RATE_WHERE_TEXT[spot.where]}）。點一格就換成那個速度。
+                </p>
+              )}
+              {spot.kind === 'unset' && <p className="goal-pace-legacy">還沒設速度，點一格</p>}
               {isCustom && <p className="goal-pace-note">用自己填的目標時，速度不影響熱量</p>}
             </div>
           )}

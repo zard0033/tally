@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, arrivalLabel, arrivalText, directionOf, gapText, monthlyOf, monthsToGoal, reached, snapGoal, weeklyRate } from './goalPlan'
+import { addMonths, arrivalLabel, arrivalText, directionOf, gapText, monthlyOf, monthsToGoal, paceEnds, rateSpot, reached, snapGoal, weeklyRate } from './goalPlan'
 import { rateWeeklyToMonthly } from './formulas'
 
 describe('directionOf：由目標體重推方向（±0.5 kg）', () => {
@@ -89,5 +89,35 @@ describe('速度換算', () => {
 describe('snapGoal：起始值對齊 0.5、夾在 30–250', () => {
   it.each([[70.4, 70.5], [70.2, 70], [75.95, 76], [12, 30], [400, 250]])('%s → %s', (kg, out) => {
     expect(snapGoal(kg)).toBe(out)
+  })
+})
+
+describe('rateSpot：速度五格亮哪一格（v2.166）', () => {
+  it('五格存完重讀（kg/週 捨兩位）都認得回同一格', () => {
+    ;[0.5, 0.75, 1, 1.25, 1.5].forEach((p, i) => expect(rateSpot(monthlyOf(weeklyRate(p)))).toEqual({ kind: 'preset', index: i }))
+  })
+  it('還沒設（null、0）＝unset', () => {
+    expect(rateSpot(null)).toEqual({ kind: 'unset' })
+    expect(rateSpot(monthlyOf(0))).toEqual({ kind: 'unset' })
+    expect(rateSpot(0)).toEqual({ kind: 'unset' })
+  })
+  it('舊值：比最快還快、比最慢還慢、夾在兩格中間；照寫真實值（捨到兩位）', () => {
+    // 0.5 kg/週 × 52 ÷ 12 ＝ 2.1667
+    expect(rateSpot(monthlyOf(0.5))).toEqual({ kind: 'legacy', kgPerMonth: 2.17, where: 'faster' })
+    // 0.05 kg/週 → 0.2167
+    expect(rateSpot(monthlyOf(0.05))).toEqual({ kind: 'legacy', kgPerMonth: 0.22, where: 'slower' })
+    // 0.14 kg/週 → 0.6067：在 0.5 與 0.75 中間，離兩格都超過容差 0.03
+    expect(rateSpot(monthlyOf(0.14))).toEqual({ kind: 'legacy', kgPerMonth: 0.61, where: 'between' })
+  })
+  it('容差邊界：差 0.03 內算那一格', () => {
+    expect(rateSpot(1.02)).toEqual({ kind: 'preset', index: 2 })
+    expect(rateSpot(1.04)).toEqual({ kind: 'legacy', kgPerMonth: 1.04, where: 'between' })
+  })
+})
+
+describe('paceEnds：兩端的字跟著方向（v2.166 修增重寫反）', () => {
+  it('減重：快＝吃少；增重：快＝吃多', () => {
+    expect(paceEnds('cut')).toEqual(['慢 · 吃多一點', '快 · 吃少一點'])
+    expect(paceEnds('bulk')).toEqual(['慢 · 吃少一點', '快 · 吃多一點'])
   })
 })
