@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>記一筆第三版：兩個情境</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 48px 0 4px; }
+  .nt { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 14px; max-width: 1260px; line-height: 1.7; }
+  .nt b { color: var(--ink); }
+  .nt .bad { color: var(--over); font-weight: 700; }
+  .nt ol, .nt ul { margin: 4px 0 0; padding-left: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .gh { font-size: var(--t-base); font-weight: 800; margin-bottom: 4px; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 92px; margin-bottom: 10px; }
+  .gd b { color: var(--ink); }
+  .gd .bad { color: var(--over); font-weight: 700; }
+  .hl { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }
+  .badl { outline: 2px dashed var(--over); outline-offset: 1px; border-radius: 8px; }
+  .tagbad { display: inline-block; font-size: 11px; font-weight: 800; color: var(--over); margin-left: 4px; }
+
+  .ph { position: relative; background: var(--card); border-radius: 22px; box-shadow: var(--shadow-1); overflow: hidden; height: 745px; display: flex; flex-direction: column; }
+  .ph .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--rule-subtle); margin: 10px auto 6px; flex-shrink: 0; }
+  .fix { padding: 0 20px 10px; flex-shrink: 0; border-bottom: 1px solid var(--rule-subtle); }
+  .chips { display: flex; gap: 8px; align-items: center; }
+  .chips span { min-height: 40px; padding: 0 13px; border-radius: 999px; background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
+  .chips span.on { background: var(--ink); color: var(--card); }
+  .chips svg { width: 13px; height: 13px; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .chips .x { margin-left: auto; background: none; font-size: 20px; padding: 0 2px; }
+  .box { margin-top: 10px; min-height: 44px; border-radius: 12px; background: var(--fill); color: var(--ink-muted); display: flex; align-items: center; padding: 0 12px; font-size: var(--t-base); }
+  .box.focus { background: var(--card); color: var(--ink); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .pins { display: flex; gap: 6px; align-items: center; padding: 8px 20px; background: var(--raised); font-size: var(--t-xs); color: var(--ink-muted); white-space: nowrap; overflow: hidden; flex-shrink: 0; }
+  .pins b { min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: var(--t-sm); display: inline-grid; place-items: center; }
+  .scroll { flex: 1; min-height: 0; overflow: hidden; }
+  .sec { padding: 12px 20px 4px; font-size: var(--t-xs); font-weight: 800; color: var(--ink-muted); display: flex; justify-content: space-between; align-items: baseline; letter-spacing: .02em; }
+  .sec .act { color: var(--accent); }
+  .sec.big { font-size: var(--t-sm); color: var(--ink); }
+  .grp { padding: 10px 20px 2px; font-size: var(--t-xs); font-weight: 700; color: var(--ink-muted); }
+
+  /* 清單列：只負責勾 */
+  .li { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 20px; }
+  .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-muted); box-sizing: border-box; flex-shrink: 0; }
+  .ck.on { border: none; background: var(--accent); display: grid; place-items: center; }
+  .ck.on::after { content: ''; width: 9px; height: 5px; border-left: 2.5px solid var(--on-accent); border-bottom: 2.5px solid var(--on-accent); transform: rotate(-45deg) translate(1px, -1px); }
+  .nm { flex: 1; min-width: 0; font-size: var(--t-base); line-height: 1.3; }
+  .nm .shop { color: var(--ink-muted); font-size: var(--t-sm); }
+  .nm .sub { display: block; color: var(--ink-muted); font-size: var(--t-xs); }
+  .nm .sub em { font-style: normal; font-weight: 700; color: var(--accent-dark); }
+  .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted); }
+  .kc.ink { color: var(--ink); font-size: var(--t-base); font-weight: 700; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent-dark); background: var(--accent-soft); border-radius: 6px; padding: 0 5px; margin-right: 4px; vertical-align: 1px; }
+  .tag.ai { color: var(--ink); background: var(--sun-pale); }
+
+  /* 這一餐列：統一一種長相 */
+  .me { background: var(--accent-soft); }
+  .mr { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 20px; border-top: 1px solid var(--card); }
+  .mr .qty { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted); }
+  .mr .chev { color: var(--ink-muted); font-size: 18px; width: 14px; text-align: center; }
+  .mr.wait { background: var(--card); box-shadow: inset 0 0 0 2px var(--sun, var(--accent)); border-radius: 12px; margin: 6px 12px; padding: 0 8px 0 12px; }
+  .go { min-height: 36px; padding: 0 16px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: var(--t-sm); display: inline-grid; place-items: center; }
+  .lex { padding: 2px 20px 12px 20px; display: grid; gap: 10px; background: var(--accent-soft); }
+  .exr { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--t-sm); min-height: 40px; }
+  .exr .lb { color: var(--ink-muted); }
+  .stp { display: flex; align-items: center; background: var(--card); border-radius: 999px; height: 36px; }
+  .stp span { width: 36px; text-align: center; color: var(--accent); font-weight: 800; }
+  .stp b { width: 24px; text-align: center; font-family: var(--font-num); }
+  .kin { min-width: 70px; height: 36px; border-radius: 10px; background: var(--card); display: grid; place-items: center; font-family: var(--font-num); font-weight: 700; }
+  .fixin { flex: 1; min-height: 40px; border-radius: 10px; background: var(--card); color: var(--ink-muted); display: flex; align-items: center; padding: 0 10px; font-size: var(--t-sm); }
+  .note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
+  .note b { color: var(--ink); }
+  .near { font-size: var(--t-xs); background: var(--card); border-radius: 10px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; }
+  .txt { color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .txt.mute { color: var(--ink-muted); }
+  .pill { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--accent); color: var(--accent); font-weight: 700; font-size: var(--t-xs); display: inline-grid; place-items: center; background: var(--card); }
+
+  .lbar { flex-shrink: 0; border-top: 1px solid var(--rule-subtle); padding: 10px 20px 14px; display: grid; gap: 6px; background: var(--card); }
+  .lbar .l { display: flex; justify-content: space-between; font-size: var(--t-base); font-weight: 700; }
+  .lbar .l span:last-child { color: var(--ink-muted); font-weight: 400; }
+  .lbar .m { font-size: var(--t-xs); color: var(--ink-muted); display: flex; justify-content: space-between; }
+  .lbar .why { font-size: var(--t-sm); color: var(--ink); }
+  .lbar .b { min-height: 50px; border-radius: 14px; background: var(--accent); color: var(--on-accent); font-weight: 800; display: grid; place-items: center; }
+  .lbar .b.off { opacity: .45; }
+
+  /* 乙：托盤 */
+  .tray { flex-shrink: 0; border-top: 1px solid var(--rule-subtle); background: var(--card); box-shadow: 0 -6px 18px rgba(0,0,0,.06); border-radius: 18px 18px 0 0; }
+  .tray .hd { display: flex; align-items: center; gap: 10px; padding: 12px 20px; }
+  .tray .hd b { flex: 1; font-size: var(--t-base); }
+  .tray .hd small { color: var(--ink-muted); font-weight: 400; }
+  .tray .hd .b { min-height: 44px; padding: 0 22px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 800; display: grid; place-items: center; }
+  .dim { position: absolute; inset: 0; background: rgba(20, 30, 45, .28); }
+
+  /* 丙：常吃膠囊 */
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 20px 4px; }
+  .quick span { min-height: 36px; padding: 0 12px; border-radius: 999px; background: var(--fill); font-size: var(--t-sm); display: inline-flex; align-items: center; gap: 6px; }
+  .quick span i { font-style: normal; font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-xs); }
+  .quick span.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .lib { display: flex; align-items: center; justify-content: space-between; min-height: 52px; margin: 10px 20px 0; padding: 0 14px; border-radius: 12px; background: var(--raised); font-weight: 700; }
+  .lib span { color: var(--ink-muted); font-weight: 400; font-size: var(--t-sm); }
+  .subhd { display: flex; align-items: center; gap: 10px; padding: 4px 20px 10px; }
+  .subhd .bk { color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .subhd b { flex: 1; text-align: center; margin-right: 50px; }
+</style>
+<style>
+  .grid4 { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; row-gap: 36px; align-items: start; }
+  .rowsel { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; }
+  .add { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+  .add.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .add.on::before { content: '✓'; font-size: 14px; }
+  .match em { font-style: normal; color: var(--accent-dark); font-weight: 800; }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .opts span { min-height: 56px; border-radius: 10px; background: var(--card); display: grid; place-items: center; text-align: center; font-size: var(--t-xs); line-height: 1.3; }
+  .opts span b { display: block; font-size: var(--t-sm); }
+  .sub2 { font-size: var(--t-xs); font-weight: 800; color: var(--ink-muted); }
+  .seg2 { display: flex; gap: 2px; background: var(--card); border-radius: 10px; padding: 2px; }
+  .seg2 span { flex: 1; min-height: 34px; display: grid; place-items: center; border-radius: 8px; font-size: var(--t-xs); color: var(--ink-muted); font-weight: 700; }
+  .seg2 span.on { background: var(--accent); color: var(--on-accent); }
+  .seg2 span.ai { box-shadow: inset 0 0 0 1.5px var(--sun); }
+  .caps { display: flex; flex-wrap: wrap; gap: 6px; }
+  .caps span { min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--card); font-size: var(--t-xs); display: inline-grid; place-items: center; color: var(--ink-muted); font-weight: 700; }
+  .caps span.on { background: var(--accent); color: var(--on-accent); }
+  .hint { padding: 6px 20px 0; font-size: var(--t-xs); color: var(--ink-muted); }
+  .pg { color: var(--ink); font-weight: 700; }
+  .again { margin: 10px 16px 4px; border-radius: 14px; background: var(--raised); padding: 12px 14px; display: grid; gap: 8px; }
+  .again .t { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--t-sm); font-weight: 800; }
+  .again .t span { font-weight: 400; color: var(--ink-muted); font-size: var(--t-xs); }
+  .again .it { font-size: var(--t-sm); line-height: 1.5; }
+  .again .ft { display: flex; justify-content: space-between; align-items: center; font-size: var(--t-xs); color: var(--ink-muted); }
+  .plan { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin: 4px 16px 0; padding: 0 14px; border-radius: 12px; border: 1.5px dashed var(--accent); color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .plan span { color: var(--ink-muted); font-weight: 400; font-size: var(--t-xs); }
+  .low { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 20px; font-size: var(--t-xs); color: var(--accent); font-weight: 700; }
+  .aicta { margin: 12px 16px 0; border-radius: 14px; background: var(--sun-pale); padding: 12px 14px; display: grid; gap: 8px; }
+  .aicta p { margin: 0; font-size: var(--t-xs); color: var(--ink-muted); }
+  .aicta .b { min-height: 44px; border-radius: 12px; background: var(--ink); color: var(--card); font-weight: 800; font-size: var(--t-sm); display: grid; place-items: center; }
+  .learn { margin: 0 20px 8px; font-size: var(--t-xs); color: var(--accent-dark); display: flex; gap: 6px; align-items: baseline; }
+  .learn span:last-child { margin-left: auto; color: var(--ink-muted); }
+  .aiwhy { font-size: var(--t-xs); color: var(--ink); background: var(--sun-pale); border-radius: 8px; padding: 6px 8px; line-height: 1.5; }
+  .aiwhy b { font-weight: 800; }
+  .gap { margin: 8px 16px 4px; border-radius: 14px; background: var(--raised); padding: 12px 14px; font-size: var(--t-sm); line-height: 1.6; }
+  .gap b { font-family: var(--font-num); }
+  .combo { margin: 8px 16px 0; border-radius: 14px; border: 1px solid var(--rule-subtle); padding: 12px 14px; display: grid; gap: 6px; }
+  .combo .t { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--ink-muted); }
+  .combo .it { font-size: var(--t-sm); font-weight: 700; line-height: 1.5; }
+  .combo .ft { display: flex; justify-content: space-between; align-items: center; font-size: var(--t-xs); color: var(--ink-muted); }
+  .newfood { display: flex; align-items: center; min-height: 48px; padding: 0 20px; color: var(--accent); font-weight: 700; font-size: var(--t-sm); border-bottom: 1px solid var(--rule-subtle); }
+</style>
+</head>
+<body>
+<h1>記一筆：第三版（照使用者的兩個情境重排）</h1>
+<p class="nt">
+<b>情境一　知道吃了什麼</b>：常吃點一下，或打字找食品庫。框裡打的字只是搜尋，<b>不再用鍵盤的「完成」切段</b>。<br>
+　・食品庫有合適的 → 點 ＋ 加進這一餐；你打的字<b>記成那樣東西的別名</b>，下次打一樣的字直接找到。<br>
+　・食品庫沒有合適的 → 搜尋結果最下面一顆<b>「用 AI 估『…』」</b>，你決定才叫 AI。<br>
+　・AI 估完同時說它<b>當成什麼類型、假設了什麼</b>（大杯、全糖、一般飯量…），系統照類型出微調選項，<b>改選項由程式重算，不再叫 AI</b>。<br>
+<b>情境二　還沒想好吃什麼</b>：記一筆最上面一個入口「還沒想好吃什麼？」→ 子畫面照今天剩下的熱量與蛋白質，從你吃過的整餐挑幾組，選了就加進這一餐。<br>
+品名、熱量、蛋白質都是示意。虛線框＝這版的重點。
+</p>
+
+<h2>情境一　知道吃了什麼</h2>
+<div class="grid4">
+  <!-- 1 -->
+  <div>
+    <div class="gh">1-1　剛打開</div>
+    <div class="gd">「跟上次晚餐一樣」整組、常吃單品（蛋白質、上次份量）。最上面多一個情境二的入口。「只記熱量」收在常吃最下面一行小字。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box">找食物：打品名或店家</div></div>
+      <div class="scroll">
+        <div class="plan hl">還沒想好吃什麼？<span>照今天剩的挑 ›</span></div>
+        <div class="again">
+          <div class="t">跟上次晚餐一樣？<span>週二 11/24</span></div>
+          <div class="it">雞胸餐盒 · 減醣廚房、無糖豆漿 · 全家</div>
+          <div class="ft"><span><span class="pg">470</span> 卡 · 蛋白 <span class="pg">48</span>g</span><span class="go">整組加入</span></div>
+        </div>
+        <div class="sec">晚餐常吃</div>
+        <div class="rowsel"><span class="nm">雞胸餐盒 <span class="shop">減醣廚房</span><span class="sub">蛋白 40g · 上次 ×1</span></span><span class="kc">380</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">紅萱波波 <span class="shop">麻古</span><span class="sub">蛋白 0g · 上次 大杯・無糖</span></span><span class="kc">60</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">地瓜<span class="sub">蛋白 2g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">乳清（1匙）<span class="sub">蛋白 24g</span></span><span class="kc">120</span><span class="add">＋</span></div>
+        <div class="lib">從食品庫挑<span>依類型 · 共 115 樣 ›</span></div>
+        <div class="low">想不起來吃了什麼？只記熱量 ›</div>
+      </div>
+    </div>
+  </div>
+  <!-- 2 -->
+  <div>
+    <div class="gh">1-2　打字＝找食品庫</div>
+    <div class="gd">完全一樣的在前，其次名字有對到的（拆開來找）。<b>最下面永遠有「用 AI 估」</b>，寫清楚會估什麼；不靠鍵盤的完成鍵。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box focus">春陽 冬瓜</div></div>
+      <div class="scroll">
+        <div class="sec">名字有對到「冬瓜」的</div>
+        <div class="rowsel match"><span class="nm"><em>冬瓜</em>檸檬 <span class="shop">清心</span><span class="sub">蛋白 0g</span></span><span class="kc">170</span><span class="add">＋</span></div>
+        <div class="rowsel match"><span class="nm"><em>冬瓜</em>茶<span class="sub">蛋白 0g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+        <div class="aicta hl">
+          <p>食品庫沒有你吃的那個？</p>
+          <div class="b">用 AI 估「春陽 冬瓜」</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 3 -->
+  <div>
+    <div class="gh">1-3　勾了食品庫那筆：記住你的說法</div>
+    <div class="gd">點「冬瓜茶」的 ＋：加進這一餐、框清空可以打下一樣。那一列下面一行：<b>記住「春陽 冬瓜」＝冬瓜茶</b>，按「加入」時才存成別名；不要的話按「不用」。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box focus">找食物：打品名或店家</div></div>
+      <div class="scroll">
+        <div class="sec big">這一餐</div>
+        <div class="me">
+          <div class="mr"><span class="nm">冬瓜茶<span class="sub">食品庫 · 蛋白 0g</span></span><span class="qty">×1</span><span class="kc ink">130</span><span class="chev">›</span></div>
+          <div class="learn hl"><span>✓ 記住「春陽 冬瓜」就是冬瓜茶</span><span>不用</span></div>
+        </div>
+        <div class="sec">晚餐常吃</div>
+        <div class="rowsel"><span class="nm">雞胸餐盒 <span class="shop">減醣廚房</span><span class="sub">蛋白 40g · 上次 ×1</span></span><span class="kc">380</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">地瓜<span class="sub">蛋白 2g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+      </div>
+      <div class="lbar"><div class="l"><span>1 樣 · 130 卡</span><span>剩 1268</span></div><div class="b">加入</div></div>
+    </div>
+  </div>
+  <!-- 4 -->
+  <div>
+    <div class="gh">1-4　AI 估好（飲料）：照類型出微調</div>
+    <div class="gd">估好自動展開。一行黃底寫 <b>AI 當成什麼</b>，下面的選項已照它的假設選好（黃框＝AI 選的）。改成微糖、中杯，熱量<b>當場由程式重算</b>，不再叫 AI。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box">找食物：打品名或店家</div></div>
+      <div class="scroll">
+        <div class="sec big">這一餐</div>
+        <div class="me">
+          <div class="mr"><span class="nm">冬瓜檸檬 <span class="shop">春陽</span><span class="sub"><em>AI 估</em> · 飲料 · 蛋白 0g</span></span><span class="qty">×1</span><span class="kc ink">210</span><span class="chev">⌄</span></div>
+          <div class="lex hl" style="margin:0 4px 4px">
+            <div class="aiwhy">AI 當成：<b>飲料</b>、<b>大杯</b>、<b>全糖</b>，沒加料</div>
+            <div class="sub2">杯型</div>
+            <div class="seg2"><span>中杯</span><span class="on ai">大杯</span></div>
+            <div class="sub2">甜度</div>
+            <div class="seg2"><span>無糖</span><span>一分</span><span class="on">微糖</span><span>半糖</span><span>少糖</span><span class="ai">全糖</span></div>
+            <div class="sub2">加料</div>
+            <div class="caps"><span>珍珠</span><span>寒天</span><span>椰果</span><span>仙草</span><span>白玉</span><span>愛玉</span></div>
+            <div class="note">全糖 290 → 微糖 210（程式算，沒再問 AI）</div>
+            <div class="note">✓ 記進食品庫，下次打「春陽 冬瓜」直接用這個</div>
+            <div class="exr" style="min-height:32px"><span class="txt">不對？跟 AI 說</span><span class="txt mute">拿掉</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="lbar"><div class="l"><span>1 樣 · 210 卡</span><span>剩 1188</span></div><div class="b">加入</div></div>
+    </div>
+  </div>
+  <!-- 5 -->
+  <div>
+    <div class="gh">1-5　AI 估好（便當）：飯量、去皮</div>
+    <div class="gd">同一套：AI 當成便當、一般飯量、雞腿帶皮 → 出飯量與去皮。估不出類型、或類型沒有微調（例如臭豆腐）就只有份量和「不對？跟 AI 說」。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box">找食物：打品名或店家</div></div>
+      <div class="scroll">
+        <div class="sec big">這一餐</div>
+        <div class="me">
+          <div class="mr"><span class="nm">炸雞腿便當<span class="sub"><em>AI 估</em> · 便當 · 蛋白 38g</span></span><span class="qty">×1</span><span class="kc ink">720</span><span class="chev">⌄</span></div>
+          <div class="lex hl" style="margin:0 4px 4px">
+            <div class="aiwhy">AI 當成：<b>便當</b>、白飯<b>一般</b>、雞腿<b>帶皮</b>、三樣配菜</div>
+            <div class="sub2">飯量</div>
+            <div class="seg2"><span class="ai">一般</span><span>少飯</span><span class="on">半飯</span><span>不要飯</span></div>
+            <div class="sub2">雞皮</div>
+            <div class="seg2"><span class="on ai">帶皮</span><span>去皮</span></div>
+            <div class="exr"><span class="lb">份量</span><span class="stp"><span>−</span><b>1</b><span>＋</span></span></div>
+            <div class="note">一般飯 860 → 半飯 720（程式算）</div>
+            <div class="exr" style="min-height:32px"><span class="txt">不對？跟 AI 說</span><span class="txt mute">拿掉</span></div>
+          </div>
+          <div class="mr"><span class="nm">臭豆腐（一份）<span class="sub"><em>AI 估</em> · 蛋白 18g · 一份 8 塊、含泡菜</span></span><span class="qty">×1</span><span class="kc ink">480</span><span class="chev">›</span></div>
+        </div>
+      </div>
+      <div class="lbar"><div class="l"><span>2 樣 · 1200 卡</span><span>剩 198</span></div><div class="b">加入</div></div>
+    </div>
+  </div>
+  <!-- 6 -->
+  <div>
+    <div class="gh">1-6　從食品庫挑（第二層）</div>
+    <div class="gd">照舊：類型分組、＋ 加入；最上面「新增食物（自己填營養標示）」。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="subhd"><span class="bk">‹ 晚餐</span><b>從食品庫挑</b></div>
+      <div class="fix" style="padding-top:0"><div class="box" style="margin-top:0">找食品庫</div></div>
+      <div class="scroll">
+        <div class="newfood">＋ 新增食物（自己填營養標示）</div>
+        <div class="grp">健康餐盒</div>
+        <div class="rowsel"><span class="nm">雞胸餐盒 <span class="shop">減醣廚房</span><span class="sub">蛋白 40g</span></span><span class="kc">380</span><span class="add on"></span></div>
+        <div class="grp">飲料</div>
+        <div class="rowsel"><span class="nm">無糖豆漿 <span class="shop">全家</span><span class="sub">蛋白 8g</span></span><span class="kc">90</span><span class="add on"></span></div>
+        <div class="rowsel"><span class="nm">拿鐵 <span class="shop">全家</span><span class="sub">蛋白 8g</span></span><span class="kc">150</span><span class="add">＋</span></div>
+      </div>
+      <div class="lbar"><div class="b">加 2 樣，回到晚餐</div></div>
+    </div>
+  </div>
+</div>
+
+<h2>情境二　還沒想好吃什麼（提案）</h2>
+<p class="nt">依據：記錄資料顯示你幾乎都吃完才記，所以「建議」放在記一筆主畫面用不上；它該是你<b>主動點進去</b>才出現的工具。點了才算你今天剩多少、從<b>你吃過的整餐</b>裡挑合適的（現有的依缺口挑選），每組寫熱量與蛋白質，可以照類型縮小範圍。選了就加進這一餐，按加入＝先記起來，吃完要改再改。</p>
+<div class="grid4">
+  <div>
+    <div class="gh">2-1　晚餐吃什麼</div>
+    <div class="gd">頂端一句今天還剩多少；下面三組，第一組最剛好。「想吃」可以縮小範圍；「換一批」再挑三組。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="subhd"><span class="bk">‹ 晚餐</span><b>晚餐吃什麼</b></div>
+      <div class="scroll">
+        <div class="gap hl">晚餐還能吃 <b>700</b> 卡，蛋白質還差 <b>60</b>g</div>
+        <div class="fix" style="border:none;padding-top:4px"><div class="caps"><span class="on">不限</span><span>便當</span><span>健康餐盒</span><span>麵食</span><span>丼飯類</span></div></div>
+        <div class="combo hl">
+          <div class="t"><span>最剛好</span><span>上次 11/18（平日）</span></div>
+          <div class="it">雞胸餐盒 · 減醣廚房＋茶葉蛋</div>
+          <div class="ft"><span><span class="pg">460</span> 卡 · 蛋白 <span class="pg">52</span>g</span><span class="go">就吃這個</span></div>
+        </div>
+        <div class="combo">
+          <div class="t"><span></span><span>上次 11/12</span></div>
+          <div class="it">滷雞腿便當（去皮、半飯）</div>
+          <div class="ft"><span><span class="pg">620</span> 卡 · 蛋白 <span class="pg">45</span>g</span><span class="go" style="background:var(--card);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)">就吃這個</span></div>
+        </div>
+        <div class="combo">
+          <div class="t"><span></span><span>上次 11/05</span></div>
+          <div class="it">牛肉麵（麵少）＋燙青菜</div>
+          <div class="ft"><span><span class="pg">690</span> 卡 · 蛋白 <span class="pg">38</span>g</span><span class="go" style="background:var(--card);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)">就吃這個</span></div>
+        </div>
+        <div class="low" style="justify-content:center">換一批</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="gh">2-2　選了「就吃這個」</div>
+    <div class="gd">回到記一筆，這一餐多那一組；跟情境一一樣可以點開改份量、微調。按加入就先記起來。</div>
+    <div class="ph">
+      <div class="grab"></div>
+      <div class="fix"><div class="chips"><span><svg viewBox="0 0 14 14"><path d="M3 7.5l2.5 2.5L11 4.5"/></svg>早餐</span><span>午餐</span><span class="on">晚餐</span><span>點心</span><span class="x">✕</span></div><div class="box">找食物：打品名或店家</div></div>
+      <div class="scroll">
+        <div class="sec big">這一餐</div>
+        <div class="me hl" style="margin:0 4px">
+          <div class="mr"><span class="nm">雞胸餐盒 <span class="shop">減醣廚房</span><span class="sub">食品庫 · 蛋白 40g</span></span><span class="qty">×1</span><span class="kc ink">380</span><span class="chev">›</span></div>
+          <div class="mr"><span class="nm">茶葉蛋<span class="sub">食品庫 · 蛋白 7g</span></span><span class="qty">×1</span><span class="kc ink">80</span><span class="chev">›</span></div>
+        </div>
+        <div class="sec">晚餐常吃</div>
+        <div class="rowsel"><span class="nm">地瓜<span class="sub">蛋白 2g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+      </div>
+      <div class="lbar"><div class="l"><span>2 樣 · 460 卡</span><span>剩 938</span></div><div class="b">加入</div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

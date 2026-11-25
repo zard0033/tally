@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>系統學會的兩件事：三個小故事</title>
+<link rel="stylesheet" href="../src/app.css" />
+<style>
+  html, body { background: var(--raised); }
+  body { font-family: var(--font-body); color: var(--ink); padding: 32px; width: max-content; min-height: 0; height: auto; }
+  h1 { font-size: var(--t-lg); font-weight: 800; margin: 0 0 6px; }
+  h2 { font-size: var(--t-md); font-weight: 800; margin: 48px 0 4px; }
+  .nt { font-size: var(--t-sm); color: var(--ink-muted); margin: 0 0 14px; max-width: 1260px; line-height: 1.7; }
+  .nt b { color: var(--ink); }
+  .nt .bad { color: var(--over); font-weight: 700; }
+  .nt ol, .nt ul { margin: 4px 0 0; padding-left: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 393px); column-gap: 28px; align-items: start; }
+  .gh { font-size: var(--t-base); font-weight: 800; margin-bottom: 4px; }
+  .gd { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 92px; margin-bottom: 10px; }
+  .gd b { color: var(--ink); }
+  .gd .bad { color: var(--over); font-weight: 700; }
+  .hl { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }
+  .badl { outline: 2px dashed var(--over); outline-offset: 1px; border-radius: 8px; }
+  .tagbad { display: inline-block; font-size: 11px; font-weight: 800; color: var(--over); margin-left: 4px; }
+
+  .ph { position: relative; background: var(--card); border-radius: 22px; box-shadow: var(--shadow-1); overflow: hidden; height: 745px; display: flex; flex-direction: column; }
+  .ph .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--rule-subtle); margin: 10px auto 6px; flex-shrink: 0; }
+  .fix { padding: 0 20px 10px; flex-shrink: 0; border-bottom: 1px solid var(--rule-subtle); }
+  .chips { display: flex; gap: 8px; align-items: center; }
+  .chips span { min-height: 40px; padding: 0 13px; border-radius: 999px; background: var(--fill); color: var(--ink-muted); font-size: var(--t-sm); font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
+  .chips span.on { background: var(--ink); color: var(--card); }
+  .chips svg { width: 13px; height: 13px; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .chips .x { margin-left: auto; background: none; font-size: 20px; padding: 0 2px; }
+  .box { margin-top: 10px; min-height: 44px; border-radius: 12px; background: var(--fill); color: var(--ink-muted); display: flex; align-items: center; padding: 0 12px; font-size: var(--t-base); }
+  .box.focus { background: var(--card); color: var(--ink); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .pins { display: flex; gap: 6px; align-items: center; padding: 8px 20px; background: var(--raised); font-size: var(--t-xs); color: var(--ink-muted); white-space: nowrap; overflow: hidden; flex-shrink: 0; }
+  .pins b { min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-dark); font-size: var(--t-sm); display: inline-grid; place-items: center; }
+  .scroll { flex: 1; min-height: 0; overflow: hidden; }
+  .sec { padding: 12px 20px 4px; font-size: var(--t-xs); font-weight: 800; color: var(--ink-muted); display: flex; justify-content: space-between; align-items: baseline; letter-spacing: .02em; }
+  .sec .act { color: var(--accent); }
+  .sec.big { font-size: var(--t-sm); color: var(--ink); }
+  .grp { padding: 10px 20px 2px; font-size: var(--t-xs); font-weight: 700; color: var(--ink-muted); }
+
+  /* 清單列：只負責勾 */
+  .li { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 20px; }
+  .ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink-muted); box-sizing: border-box; flex-shrink: 0; }
+  .ck.on { border: none; background: var(--accent); display: grid; place-items: center; }
+  .ck.on::after { content: ''; width: 9px; height: 5px; border-left: 2.5px solid var(--on-accent); border-bottom: 2.5px solid var(--on-accent); transform: rotate(-45deg) translate(1px, -1px); }
+  .nm { flex: 1; min-width: 0; font-size: var(--t-base); line-height: 1.3; }
+  .nm .shop { color: var(--ink-muted); font-size: var(--t-sm); }
+  .nm .sub { display: block; color: var(--ink-muted); font-size: var(--t-xs); }
+  .nm .sub em { font-style: normal; font-weight: 700; color: var(--accent-dark); }
+  .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted); }
+  .kc.ink { color: var(--ink); font-size: var(--t-base); font-weight: 700; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent-dark); background: var(--accent-soft); border-radius: 6px; padding: 0 5px; margin-right: 4px; vertical-align: 1px; }
+  .tag.ai { color: var(--ink); background: var(--sun-pale); }
+
+  /* 這一餐列：統一一種長相 */
+  .me { background: var(--accent-soft); }
+  .mr { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 20px; border-top: 1px solid var(--card); }
+  .mr .qty { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted); }
+  .mr .chev { color: var(--ink-muted); font-size: 18px; width: 14px; text-align: center; }
+  .mr.wait { background: var(--card); box-shadow: inset 0 0 0 2px var(--sun, var(--accent)); border-radius: 12px; margin: 6px 12px; padding: 0 8px 0 12px; }
+  .go { min-height: 36px; padding: 0 16px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 800; font-size: var(--t-sm); display: inline-grid; place-items: center; }
+  .lex { padding: 2px 20px 12px 20px; display: grid; gap: 10px; background: var(--accent-soft); }
+  .exr { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--t-sm); min-height: 40px; }
+  .exr .lb { color: var(--ink-muted); }
+  .stp { display: flex; align-items: center; background: var(--card); border-radius: 999px; height: 36px; }
+  .stp span { width: 36px; text-align: center; color: var(--accent); font-weight: 800; }
+  .stp b { width: 24px; text-align: center; font-family: var(--font-num); }
+  .kin { min-width: 70px; height: 36px; border-radius: 10px; background: var(--card); display: grid; place-items: center; font-family: var(--font-num); font-weight: 700; }
+  .fixin { flex: 1; min-height: 40px; border-radius: 10px; background: var(--card); color: var(--ink-muted); display: flex; align-items: center; padding: 0 10px; font-size: var(--t-sm); }
+  .note { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.5; }
+  .note b { color: var(--ink); }
+  .near { font-size: var(--t-xs); background: var(--card); border-radius: 10px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; }
+  .txt { color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .txt.mute { color: var(--ink-muted); }
+  .pill { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--accent); color: var(--accent); font-weight: 700; font-size: var(--t-xs); display: inline-grid; place-items: center; background: var(--card); }
+
+  .lbar { flex-shrink: 0; border-top: 1px solid var(--rule-subtle); padding: 10px 20px 14px; display: grid; gap: 6px; background: var(--card); }
+  .lbar .l { display: flex; justify-content: space-between; font-size: var(--t-base); font-weight: 700; }
+  .lbar .l span:last-child { color: var(--ink-muted); font-weight: 400; }
+  .lbar .m { font-size: var(--t-xs); color: var(--ink-muted); display: flex; justify-content: space-between; }
+  .lbar .why { font-size: var(--t-sm); color: var(--ink); }
+  .lbar .b { min-height: 50px; border-radius: 14px; background: var(--accent); color: var(--on-accent); font-weight: 800; display: grid; place-items: center; }
+  .lbar .b.off { opacity: .45; }
+
+  /* 乙：托盤 */
+  .tray { flex-shrink: 0; border-top: 1px solid var(--rule-subtle); background: var(--card); box-shadow: 0 -6px 18px rgba(0,0,0,.06); border-radius: 18px 18px 0 0; }
+  .tray .hd { display: flex; align-items: center; gap: 10px; padding: 12px 20px; }
+  .tray .hd b { flex: 1; font-size: var(--t-base); }
+  .tray .hd small { color: var(--ink-muted); font-weight: 400; }
+  .tray .hd .b { min-height: 44px; padding: 0 22px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 800; display: grid; place-items: center; }
+  .dim { position: absolute; inset: 0; background: rgba(20, 30, 45, .28); }
+
+  /* 丙：常吃膠囊 */
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 20px 4px; }
+  .quick span { min-height: 36px; padding: 0 12px; border-radius: 999px; background: var(--fill); font-size: var(--t-sm); display: inline-flex; align-items: center; gap: 6px; }
+  .quick span i { font-style: normal; font-family: var(--font-num); color: var(--ink-muted); font-size: var(--t-xs); }
+  .quick span.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .lib { display: flex; align-items: center; justify-content: space-between; min-height: 52px; margin: 10px 20px 0; padding: 0 14px; border-radius: 12px; background: var(--raised); font-weight: 700; }
+  .lib span { color: var(--ink-muted); font-weight: 400; font-size: var(--t-sm); }
+  .subhd { display: flex; align-items: center; gap: 10px; padding: 4px 20px 10px; }
+  .subhd .bk { color: var(--accent); font-weight: 700; font-size: var(--t-sm); }
+  .subhd b { flex: 1; text-align: center; margin-right: 50px; }
+</style>
+<style>
+  .row4 { display: grid; grid-template-columns: repeat(3, 340px); column-gap: 24px; align-items: start; margin-bottom: 8px; }
+  .ph { height: 470px; }
+  .rowsel { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; }
+  .add { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+  .add.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .add.on::before { content: '✓'; font-size: 14px; }
+  .match em { font-style: normal; color: var(--accent-dark); font-weight: 800; }
+  .day { display: inline-block; font-size: var(--t-xs); font-weight: 800; color: var(--card); background: var(--ink); border-radius: 6px; padding: 1px 8px; margin-right: 6px; }
+  .mem { margin: 14px 16px 0; border-radius: 12px; background: var(--sun-pale); padding: 10px 12px; font-size: var(--t-sm); line-height: 1.6; }
+  .mem b { color: var(--ink); }
+  .his { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent-dark); background: var(--accent-soft); border-radius: 6px; padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
+  .story { font-size: var(--t-base); font-weight: 800; margin: 40px 0 4px; }
+  .story span { font-weight: 400; color: var(--ink-muted); font-size: var(--t-sm); }
+  .cap { font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.6; min-height: 48px; margin-bottom: 8px; }
+  .cap b { color: var(--ink); }
+</style>
+</head>
+<body>
+<h1>系統學會的兩件事：三個小故事</h1>
+<p class="nt">每個故事左到右是時間順序。黃底卡＝系統在背後記下的東西（畫面上不會出現，這裡畫出來給你看）。品名、數字都是示意。</p>
+
+<div class="story">故事一：你的叫法　<span>打「冬檸」→ 下次直接找到冬瓜檸檬</span></div>
+<div class="row4">
+  <div>
+    <div class="cap"><span class="day">週一</span>打「冬檸」。食品庫沒有叫冬檸的，但「冬瓜檸檬」的字照順序對得上，所以出現在結果裡。你勾它。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">冬檸</div></div>
+      <div class="scroll">
+        <div class="rowsel match"><span class="nm"><em>冬</em>瓜<em>檸</em>檬<span class="sub">蛋白 0g</span></span><span class="kc">170</span><span class="add on"></span></div>
+        <div class="rowsel match"><span class="nm"><em>冬</em>瓜茶<span class="sub">蛋白 0g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">按加入時</span>系統在背後記下一件事。</div>
+    <div class="ph" style="display:block">
+      <div class="mem">系統記住：<br>你說「<b>冬檸</b>」＝<b>冬瓜檸檬</b></div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">週三</span>再打「冬檸」→ 冬瓜檸檬<b>排第一個</b>、整個名字粗體（完全符合），點一下就好。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">冬檸</div></div>
+      <div class="scroll">
+        <div class="rowsel match"><span class="nm"><em>冬瓜檸檬</em><span class="sub">蛋白 0g</span></span><span class="kc">170</span><span class="add">＋</span></div>
+        <div class="rowsel match"><span class="nm"><em>冬</em>瓜茶<span class="sub">蛋白 0g</span></span><span class="kc">130</span><span class="add">＋</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="story">故事二：你在哪家買過什麼　<span>打「全家」→ 出現你在全家吃過的東西</span></div>
+<div class="row4">
+  <div>
+    <div class="cap"><span class="day">週一</span>打「全家 茶葉蛋」。系統認得「全家」是店名，拿「茶葉蛋」去找，找到食品庫的茶葉蛋。你勾它、加入。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">全家 茶葉蛋</div></div>
+      <div class="scroll">
+        <div class="rowsel match"><span class="nm"><em>茶葉蛋</em><span class="sub">蛋白 7g</span></span><span class="kc">70</span><span class="add on"></span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">按加入時</span>這筆紀錄記下在哪買。<b>食品庫的茶葉蛋沒有被改。</b></div>
+    <div class="ph" style="display:block">
+      <div class="mem">這筆紀錄：<br>週一晚餐　茶葉蛋　<b>在全家買</b>　70 卡</div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">週三</span>只打「全家」→ 系統翻你以前的紀錄，列出<b>你在全家吃過的東西</b>。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">全家</div></div>
+      <div class="scroll">
+        <div class="sec">你在全家吃過的</div>
+        <div class="rowsel"><span class="nm">茶葉蛋<span class="his">全家</span><span class="sub">上次 週一</span></span><span class="kc">70</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">無糖豆漿<span class="his">全家</span><span class="sub">上次 11/18</span></span><span class="kc">90</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">拿鐵<span class="his">全家</span><span class="sub">上次 11/12</span></span><span class="kc">150</span><span class="add">＋</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row4">
+  <div>
+    <div class="cap"><span class="day">下週</span>你改去 7-11 買茶葉蛋：打「7-11 茶葉蛋」勾<b>同一顆</b>茶葉蛋。這筆紀錄記「在 7-11 買」。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">7-11 茶葉蛋</div></div>
+      <div class="scroll">
+        <div class="rowsel match"><span class="nm"><em>茶葉蛋</em><span class="sub">蛋白 7g</span></span><span class="kc">70</span><span class="add on"></span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">再下次</span>打「711」（沒有「-」也行）→ 你在 7-11 吃過的，茶葉蛋在裡面。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">711</div></div>
+      <div class="scroll">
+        <div class="sec">你在 7-11 吃過的</div>
+        <div class="rowsel"><span class="nm">茶葉蛋<span class="his">7-11</span><span class="sub">上次 11/30</span></span><span class="kc">70</span><span class="add">＋</span></div>
+        <div class="rowsel"><span class="nm">厚乳拿鐵<span class="his">7-11</span><span class="sub">上次 11/20</span></span><span class="kc">180</span><span class="add">＋</span></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap">同一顆茶葉蛋，在全家、7-11 都買過，打哪家都找得到；食品庫裡一直只有<b>一筆</b>茶葉蛋。</div>
+  </div>
+</div>
+
+<div class="story">故事三：拿差不多的來代替　<span>食品庫沒有，挑一樣差不多的</span></div>
+<div class="row4">
+  <div>
+    <div class="cap"><span class="day">週一</span>在春陽喝冬瓜檸檬，食品庫沒有。打「春陽 冬瓜檸檬」→ 清單有名字對到的「冬瓜茶」，你覺得差不多，勾它來代替。覺得都不對就按最下面「用 AI 估」。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">春陽 冬瓜檸檬</div></div>
+      <div class="scroll">
+        <div class="rowsel match"><span class="nm"><em>冬瓜</em>茶<span class="sub">蛋白 0g</span></span><span class="kc">130</span><span class="add on"></span></div>
+        <div class="rowsel match"><span class="nm"><em>檸檬</em>綠茶 <span class="shop">清心</span><span class="sub">蛋白 0g</span></span><span class="kc">150</span><span class="add">＋</span></div>
+        <div style="margin:12px 16px 0;border-radius:14px;background:var(--sun-pale);padding:10px 12px;font-size:var(--t-xs);color:var(--ink-muted)">食品庫沒有你吃的那個？<div style="margin-top:6px;min-height:40px;border-radius:10px;background:var(--ink);color:var(--card);font-weight:800;display:grid;place-items:center;font-size:var(--t-sm)">用 AI 估「冬瓜檸檬」</div></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">按加入時</span>紀錄的名字用<b>你打的</b>「冬瓜檸檬」，熱量用冬瓜茶的。<b>不記別名</b>（冬瓜茶只是代替）。</div>
+    <div class="ph" style="display:block">
+      <div class="mem">這筆紀錄：<br>週一晚餐　<b>冬瓜檸檬</b>　在春陽買　130 卡（照冬瓜茶算）</div>
+    </div>
+  </div>
+  <div>
+    <div class="cap"><span class="day">週三</span>打「春陽」→ 出現「冬瓜檸檬」，點一下就是上次那樣記。</div>
+    <div class="ph"><div class="grab"></div>
+      <div class="fix"><div class="box focus">春陽</div></div>
+      <div class="scroll">
+        <div class="sec">你在春陽吃過的</div>
+        <div class="rowsel"><span class="nm">冬瓜檸檬<span class="his">春陽</span><span class="sub">上次 週一 · 照冬瓜茶算</span></span><span class="kc">130</span><span class="add">＋</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
