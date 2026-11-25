@@ -451,7 +451,8 @@ async function addTo(page: Page, meal: string, food: string) {
   const sheet = page.locator('[data-screen="log-sheet"]')
   await expect(sheet).toBeVisible()
   await sheet.locator('.chip', { hasText: meal }).click()
-  await sheet.locator('.food-row', { hasText: food }).first().click()
+  await sheet.getByLabel('找食物').fill(food)
+  await sheet.locator('.find-row', { hasText: food }).first().click()
   await sheet.locator('.pick-bar-btn').click()
   await expect(sheet).toHaveCount(0)
 }

@@ -10,15 +10,17 @@ test('逐筆超標預警與底部確認列——熱量脂肪推過線後，delta
   await openApp(page)
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
-  // 餐別釘午餐：預設餐別跟著時刻走，v2.127 起別餐吃過的類型會收進「其他餐的」，雞胸餐盒在午餐常吃才一定看得到
+  // 餐別釘午餐：雞胸餐盒在午餐常吃
   await page.locator('.chip', { hasText: '午餐' }).click()
 
   // 起點乾淨：還沒勾任何東西，不該有任何一筆被標超標
-  await expect(page.locator('.kc.over')).toHaveCount(0)
+  await expect(page.locator('.fr-kc.over')).toHaveCount(0)
   await expect(page.locator('.kc-delta')).toHaveCount(0)
 
-  const row = page.locator('.food-row', { hasText: '雞胸餐盒' }).first()
+  const row = page.locator('.find-row', { hasText: '雞胸餐盒' }).first()
   await row.click()
+  // v2.167：份量在「這一餐」那一列點開裡
+  await page.locator('.meal-rows .mr-head').first().click()
   const plus = page.locator('.qty-btn[aria-label*="增加"]').first()
   for (let i = 0; i < 4; i++) await plus.click()
   await page.waitForTimeout(150)
@@ -38,11 +40,12 @@ test('逐筆超標預警與底部確認列——熱量脂肪推過線後，delta
   await expect(macroLine).toHaveAttribute('aria-label', /脂肪 [\d.]+ 克，已超出，目標 \d+ 克/)
   await expect(macroLine.locator('span.over', { hasText: '脂' })).toBeVisible()
 
-  // 逐筆超標預警：全部食物已經被推到超標基準之上，未勾選列的 kc 應該變色，
-  // delta 小字只列脂肪／碳水——v2.11 拿掉熱量，不能再出現「卡」字（避免跟 kc 數字重複）
-  const unpickedKc = page.locator('.food-row[aria-pressed="false"] .kc.over').first()
+  // 逐筆超標預警：已經被推到超標基準之上，還沒加的列熱量應該變色，
+  // delta 小字只列脂肪／碳水——v2.11 拿掉熱量，不能再出現「卡」字（避免跟熱量數字重複）
+  await page.getByLabel('找食物').fill('溫泉蛋')
+  const unpickedKc = page.locator('.find-row[aria-pressed="false"] .fr-kc.over').first()
   await expect(unpickedKc).toBeVisible()
-  const unpickedDelta = page.locator('.food-row[aria-pressed="false"] .kc-delta').first()
+  const unpickedDelta = page.locator('.find-row[aria-pressed="false"] .kc-delta').first()
   await expect(unpickedDelta).toContainText('脂')
   await expect(unpickedDelta).not.toContainText('卡')
 })
@@ -83,62 +86,38 @@ async function openHeavyApp(page: Page) {
   await page.waitForSelector('.gauge-num', { timeout: 5000 })
 }
 
-test('軟性排序——全部食物：每個類型組內，符合今日剩餘額度的排前面，不符合的排後面且仍可點選加入', async ({ page }) => {
+/* v2.167：「全部食物」搬到食品庫頁，軟性排序留在搜尋結果——完全符合排前面之後，同一級裡吃得下的在前。
+   搜「全」：無糖豆漿、拿鐵都只靠店家「全家」對到（同一級）；照品名拿鐵在前，吃得下的無糖豆漿要被排到前面。 */
+test('軟性排序——搜尋結果：同一級裡符合今日剩餘額度的排前面，不符合的排後面、熱量轉紅、仍可加入', async ({ page }) => {
   await openHeavyApp(page)
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
   await page.locator('.chip', { hasText: '午餐' }).click()
-
-  // 「全部食物」（午餐常吃只有雞胸餐盒/健康盒 id11，其餘 7 筆都在這裡）：
-  // 目標（自訂目標釘死）kcal=1800／fat=50／carb=200，eaten=1705/100/30/150。
-  // 無糖豆漿（+90/+4/+5）、溫泉蛋（+80/+5/+1）兩項都還在額度內——在各自的組裡排前面。
-  // 其餘（雞胸餐盒·減醣廚房、乳清、地瓜、香蕉、拿鐵）熱量都會被推過線——排後面。
-  // v2.127 起依類型分組，軟性排序在組內生效；同一組有吃得下與吃不下的是「飲料」（無糖豆漿、拿鐵）。
-  // 午餐看：早餐吃過的「蛋白質補充」「飲料」收在最底的「其他餐的」，先點開（它出現也代表常吃那份歷史到了，組序不會再變）
-  const groups = page.locator('.food-groups')
-  await groups.locator('.grp-more').click()
-  await expect(groups.locator('.grp-more')).toHaveAttribute('aria-expanded', 'true')
-  const names = await groups.locator('.food-row .nm').allTextContents()
-  const fitNames = new Set(['無糖豆漿', '溫泉蛋'])
-  const overNames = new Set(['雞胸餐盒', '乳清（1匙）', '地瓜', '香蕉', '拿鐵'])
-  // 先確認兩組真的都有出現在畫面上——不然下面的組內順序斷言會在 fixture 漂移時空洞通過（precommit-review 抓到）。
-  expect(names.filter((n) => fitNames.has(n)), `符合額度的品項應該都出現在清單裡，實際：${names.join(', ')}`).toHaveLength(fitNames.size)
-  expect(names.filter((n) => overNames.has(n)), `不符合額度的品項應該都出現在清單裡，實際：${names.join(', ')}`).toHaveLength(overNames.size)
-  const drinks = await groups.locator('.grp', { has: page.locator('.gn', { hasText: '飲料' }) }).locator('.food-row .nm').allTextContents()
-  expect(drinks, '飲料組內吃得下的無糖豆漿要排在會超標的拿鐵前面').toEqual(['無糖豆漿', '拿鐵'])
-
-  // .over-quota 只是排序/測試用的語意標記，v2.17 起刻意不掛任何視覺樣式（見 DESIGN.md）
-  await expect(groups.locator('.food-item', { hasText: '拿鐵' })).toHaveClass(/over-quota/)
-  await expect(groups.locator('.food-item', { hasText: '溫泉蛋' })).not.toHaveClass(/over-quota/)
-
-  // 不符合額度不等於不能選：拿鐵一樣可以正常點選加入
-  await groups.locator('.food-row', { hasText: '拿鐵' }).click()
-  await expect(page.locator('.food-row[aria-pressed="true"]', { hasText: '拿鐵' })).toHaveCount(1)
+  await page.getByLabel('找食物').fill('全')
+  const names = page.locator('.find-row .fr-name')
+  await expect(names).toHaveText(['無糖豆漿', '拿鐵'])
+  await expect(page.locator('.find-row', { hasText: '拿鐵' }).locator('.fr-kc')).toHaveClass(/over/)
+  await expect(page.locator('.find-row', { hasText: '無糖豆漿' }).locator('.fr-kc')).not.toHaveClass(/over/)
+  // 不符合額度不等於不能選：拿鐵一樣可以加
+  await page.locator('.find-row', { hasText: '拿鐵' }).click()
+  await expect(page.locator('.find-row[aria-pressed="true"]', { hasText: '拿鐵' })).toHaveCount(1)
 })
 
-test('軟性排序——凍結：勾選一筆之後，清單順序不會跟著即時重新洗牌', async ({ page }) => {
+test('軟性排序——凍結：加一樣之後，清單順序不會跟著即時重新洗牌', async ({ page }) => {
   await openHeavyApp(page)
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
   await page.locator('.chip', { hasText: '午餐' }).click()
-
-  const restList = page.locator('.food-groups')
-  // 收合列出現＝常吃那份歷史到了；先等它，否則讀到的是歷史還沒到、組序還會變的那一版
-  await expect(restList.locator('.grp-more')).toBeVisible()
-  const before = await restList.locator('.food-row .nm').allTextContents()
-  expect(before.length).toBeGreaterThan(1)
-
-  // 勾第一筆（排序基準是 eaten，不含這次已勾選的，所以勾選不該讓清單重排）
-  const firstName = before[0]
-  await restList.locator('.food-row').first().click()
-  await expect(page.locator('.food-row[aria-pressed="true"]', { hasText: firstName })).toHaveCount(1)
-
-  const after = await restList.locator('.food-row .nm').allTextContents()
-  // v2.158 起勾了留在原位：整份清單（含剛勾的那一列）都跟勾選前一模一樣
-  expect(after, '勾選後清單順序應該跟勾選前一樣（凍結排序、勾的留在原位）').toEqual(before)
+  await page.getByLabel('找食物').fill('全')
+  const names = page.locator('.find-row .fr-name')
+  await expect(names).toHaveText(['無糖豆漿', '拿鐵'])
+  // 排序基準是 eaten，不含這一餐已經加的，所以加了不該讓清單重排
+  await page.locator('.find-row').first().click()
+  await expect(page.locator('.find-row').first()).toHaveAttribute('aria-pressed', 'true')
+  await expect(names, '加了之後清單順序應該跟之前一樣（凍結排序、加的留在原位）').toHaveText(['無糖豆漿', '拿鐵'])
 })
 
-test('軟性排序——常吃：只淡化不重排，維持原本的常吃順序', async ({ page }) => {
+test('軟性排序——常吃：不重排，維持原本的常吃順序；會超標的只是熱量轉紅', async ({ page }) => {
   await openHeavyApp(page)
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
@@ -147,15 +126,13 @@ test('軟性排序——常吃：只淡化不重排，維持原本的常吃順�
 
   // 早餐常吃＝乳清、無糖豆漿（fixture history 的既有順序）。
   // eaten=1705/100/30/150：加乳清（+120/+1.5/+2）會把 kcal 推過線（不符合）；
-  // 加無糖豆漿（+90/+4/+5）三項都還在額度內（符合）。順序仍應維持乳清在前——
-  // 排序基準只用在「全部食物」／「搜尋結果」，「常吃」語意是常吃順序，不能被額度打亂。
-  const recentList = page.locator('.sect-lb', { hasText: '早餐常吃' }).locator('xpath=following-sibling::ul[1]')
-  const items = recentList.locator('.food-item')
+  // 加無糖豆漿（+90/+4/+5）三項都還在額度內（符合）。順序仍應維持乳清在前——「常吃」語意是常吃順序，不能被額度打亂。
+  const items = page.locator('.find-list .find-row')
   await expect(items).toHaveCount(2)
-  await expect(items.nth(0).locator('.nm')).toHaveText('乳清（1匙）')
-  await expect(items.nth(1).locator('.nm')).toHaveText('無糖豆漿')
-  await expect(items.nth(0)).toHaveClass(/over-quota/)
-  await expect(items.nth(1)).not.toHaveClass(/over-quota/)
+  await expect(items.nth(0).locator('.fr-name')).toHaveText('乳清（1匙）')
+  await expect(items.nth(1).locator('.fr-name')).toHaveText('無糖豆漿')
+  await expect(items.nth(0).locator('.fr-kc')).toHaveClass(/over/)
+  await expect(items.nth(1).locator('.fr-kc')).not.toHaveClass(/over/)
 })
 
 /* 確認列蛋白/脂/碳每格後面接「這次加了多少」（DESIGN.md v2.100）：吃完後累計／目標是判斷依據，
@@ -165,14 +142,15 @@ test('確認列每格接「+這次」：蛋白/脂/碳各是勾選品項的加�
   await openApp(page)
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
-  // 餐別釘早餐：豆漿在早餐常吃、溫泉蛋哪一餐都沒吃過，兩樣都不會收進「其他餐的」（預設餐別跟著時刻走）
+  // 餐別釘早餐：豆漿在早餐常吃；溫泉蛋用搜尋找
   await page.locator('.chip', { hasText: '早餐' }).click()
 
-  await page.locator('.food-row', { hasText: '無糖豆漿' }).first().click()
-  await page.locator('.food-row', { hasText: '溫泉蛋' }).first().click()
+  await page.locator('.find-row', { hasText: '無糖豆漿' }).first().click()
+  await page.getByLabel('找食物').fill('溫泉蛋')
+  await page.locator('.find-row', { hasText: '溫泉蛋' }).first().click()
   await page.waitForTimeout(150)
-  const qtyOf = async (name: string) =>
-    Number(await page.locator('.food-item', { hasText: name }).locator('.qty-value').first().inputValue())
+  const mealRow = (name: string) => page.locator('.meal-rows > li', { hasText: name })
+  const qtyOf = async (name: string) => Number(((await mealRow(name).locator('.mr-qty').textContent()) ?? '').replace('×', ''))
   const adds = () => page.locator('.macro-line .add').allInnerTexts()
   const expected = async () => {
     const soy = await qtyOf('無糖豆漿')
@@ -182,7 +160,8 @@ test('確認列每格接「+這次」：蛋白/脂/碳各是勾選品項的加�
   expect(await adds()).toEqual(await expected())
 
   // 豆漿加一份：三格都重算
-  await page.locator('.food-item', { hasText: '無糖豆漿' }).locator('.qty-btn[aria-label*="增加"]').click()
+  await mealRow('無糖豆漿').locator('.mr-head').click()
+  await mealRow('無糖豆漿').locator('.qty-btn[aria-label*="增加"]').click()
   await page.waitForTimeout(150)
   expect(await adds()).toEqual(await expected())
   await expect(page.locator('.macro-line')).toHaveAttribute('aria-label', /這次加 .* 克/)

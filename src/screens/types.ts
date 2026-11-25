@@ -11,7 +11,7 @@ import type { Targets } from '@/lib/formulas'
 import type { MonthKey } from '@/lib/dates'
 import type { MealKey } from '@/lib/meals'
 import type { MacroRatio } from '@/lib/estimate'
-import type { RepeatByMeal, RepeatSuggestion, SeenByMeal } from '@/lib/mealSuggest'
+import type { RepeatByMeal, RepeatSuggestion } from '@/lib/mealSuggest'
 import type { RowOp } from '@/lib/training'
 import type { TrainingView } from '@/lib/trainingRuntime'
 import type { MaintenanceEstimate } from '@/useMaintenanceEstimate'
@@ -87,13 +87,9 @@ export interface LogSheetProps {
   foods: Food[]
   dayData: DayData
   targets: Targets
-  /** 跟今日頁同一份建議，建議段從這裡取。 */
-  repeatByMeal: RepeatByMeal
   /** 每一餐自己的三大營養素比例（近 28 天，餐建議那份回看算的；v2.142）。估一筆的檔位與自己打的熱量用它粗估三大；
    *  那一餐紀錄太少是 null，回看還沒載到時整份是空物件——都退回只估熱量。 */
   macroRatios: Partial<Record<MealKey, MacroRatio | null>>
-  /** 「全部食物」類型組標的吃過提示；只有午餐、晚餐有。 */
-  seenByMeal: SeenByMeal
   onClose: () => void
   /**
    * 送出「加入」——rows 已經是組好的完整 NewIntake（含 eaten_on／meal／營養快照)，
@@ -104,9 +100,9 @@ export interface LogSheetProps {
   onCreateIntake: (rows: NewIntake[]) => Promise<void>
   /** 新增食物到食品庫；成功回傳新列（含 id），LogSheet 自己決定要不要把它選起來。 */
   onCreateFood: (food: NewFood) => Promise<Food>
-  /** 「估一筆」的一列先建成 foods（keep＝false 就建立即封存），回傳新列給 LogSheet 記下 id 再寫 intake。 */
+  /** 估好的一列先建成 foods（AI 估的一律存；只記熱量的 keep＝false 建立即封存），回傳新列給 LogSheet 記下 id 再寫 intake。 */
   onCreateEstimateFood: (food: NewFood, keep: boolean) => Promise<Food>
-  /** 改食品庫那一筆（新店卡的「記住」把搜尋字加成別名，spec「記店家改版」甲3）；失敗 rejects，卡上自己接。 */
+  /** 改食品庫那一筆：加入成功後把學到的叫法加成別名（spec「記一筆重做」系統學兩件事，背景、不出現在畫面上）。 */
   onUpdateFood: (id: number, patch: Partial<NewFood>) => Promise<void>
 }
 

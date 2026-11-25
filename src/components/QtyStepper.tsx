@@ -9,6 +9,7 @@ export default function QtyStepper({
   onStep,
   onInput,
   onBlur,
+  disabled = false,
 }: {
   qty: number
   draft: string
@@ -17,13 +18,15 @@ export default function QtyStepper({
   onStep: (dir: 1 | -1) => void
   onInput: (raw: string) => void
   onBlur: (raw: string) => void
+  /** 整組鎖住（記一筆已經存好食品庫、等重試的那一列）：兩顆鈕停用、數字唯讀 */
+  disabled?: boolean
 }) {
   return (
     <div className="qty-stepper">
       <button
         className="qty-btn"
         type="button"
-        disabled={qty <= 1}
+        disabled={disabled || qty <= 1}
         aria-label={name ? `減少 ${name} 的份量` : '減少份量'}
         onClick={() => onStep(-1)}
       >
@@ -37,12 +40,14 @@ export default function QtyStepper({
         inputMode="decimal"
         aria-label={name ? `${name} 份量` : '份量'}
         value={draft}
+        readOnly={disabled}
         onChange={(e) => onInput(e.target.value)}
         onBlur={(e) => onBlur(e.target.value)}
       />
       <button
         className="qty-btn"
         type="button"
+        disabled={disabled}
         aria-label={name ? `增加 ${name} 的份量` : '增加份量'}
         onClick={() => onStep(1)}
       >

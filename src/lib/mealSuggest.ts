@@ -9,7 +9,6 @@ import { num, sumIntake, type Goal } from './formulas'
 import { MEALS, type MealKey } from './meals'
 import { suffixOf } from './portionMods'
 import { rowVendor } from './mealVendor'
-import { normalizeQty } from './quantity'
 
 /** 回看天數，含第 28 天（D-28 是同一個星期幾）。 */
 export const REPEAT_LOOKBACK_DAYS = 28
@@ -53,7 +52,7 @@ export interface RepeatItem {
   mods: string[]
   /** 顯示與排除同店家用：foods.vendor ?? 來源那筆記的店家（rowVendor）。 */
   vendor: string | null
-  /** 寫入用：來源那筆自己記的店家（intake.vendor），照搬；食物本身有店家時是 null。 */
+  /** 寫入用：來源那筆自己記的店家（intake.vendor），照搬；沒記是 null（v2.167 起食物本身有店家的紀錄也可能記了別家）。 */
   intakeVendor: string | null
   archived: boolean
   /** null＝還沒分類，不參與類型的重複判斷。 */
@@ -132,7 +131,7 @@ function combosOf(rows: RepeatSourceRow[], viewDate: string, meal: MealKey, same
         label: (r.name ?? r.foods.name) + suffixOf(r.mods ?? [], { name: r.foods.name, category: r.foods.category }),
         mods: r.mods ?? [],
         vendor: rowVendor(r),
-        intakeVendor: r.foods.vendor ? null : r.vendor?.trim() || null,
+        intakeVendor: r.vendor?.trim() || null,
         archived: r.foods.archived,
         category: categoryOf(r.foods.category),
       })
@@ -191,37 +190,6 @@ export function recentMeals(rows: RepeatSourceRow[], viewDate: string, dayRows: 
   const vendors = new Set(others.map(rowVendor).filter((v): v is string => v !== null))
   return { categories, items, vendors }
 }
-
-/** 記一筆 sheet 類型組標的「吃過」提示：檢視日其他哪一餐吃過（優先），否則前一天吃過。 */
-export type SeenMark = { when: 'today'; meal: MealKey } | { when: 'yesterday' }
-export type SeenByMeal = Partial<Record<MealKey, Map<FoodCategory, SeenMark>>>
-
-/** 範圍與 recentMeals 同一套（只有午餐、晚餐；只收餐點類型），提示和建議避開的才是同一件事。
- *  rows＝null（回看資料還沒到）就只看檢視日。只提示、不改組序。 */
-export function seenCategories(
-  rows: RepeatSourceRow[] | null,
-  viewDate: string,
-  dayRows: IntakeRow[] | null,
-  meal: MealKey,
-): Map<FoodCategory, SeenMark> {
-  const out = new Map<FoodCategory, SeenMark>()
-  if (!AVOID_REPEAT_MEALS.includes(meal)) return out
-  const mark = (raw: string | null | undefined, m: SeenMark) => {
-    const c = categoryOf(raw)
-    if (c && isMealType(c) && !out.has(c)) out.set(c, m)
-  }
-  // 照一天的順序，同一類取最早那餐（「中午吃過」比「點心吃過」好認）
-  const order = (k: MealKey) => MEALS.findIndex((x) => x.key === k)
-  const today = (dayRows ?? []).filter((r) => r.meal !== meal).sort((a, b) => order(a.meal) - order(b.meal))
-  for (const r of today) mark(r.foods?.category, { when: 'today', meal: r.meal })
-  const prev = shiftDate(viewDate, -1)
-  for (const r of rows ?? []) if (r.eaten_on === prev) mark(r.foods?.category, { when: 'yesterday' })
-  return out
-}
-
-const SEEN_TODAY: Record<MealKey, string> = { breakfast: '早上吃過', lunch: '中午吃過', dinner: '晚上吃過', snack: '今天吃過' }
-
-export const seenText = (m: SeenMark): string => (m.when === 'yesterday' ? '昨天吃過' : SEEN_TODAY[m.meal])
 
 const sameVendor = (c: DayCombo, recent: RecentMeals) =>
   c.items.some((i) => {
@@ -350,16 +318,4 @@ export function repeatToIntake(s: RepeatSuggestion, date: string): NewIntake[] {
 /** 「乳清（1匙） ×2・無糖豆漿」，份量不是 1 才加 ×N。 */
 export function suggestLabel(s: RepeatSuggestion): string {
   return s.items.map((i) => (i.qty === 1 ? i.label : `${i.label} ×${i.qty}`)).join('・')
-}
-
-/** sheet 的勾選以列為鍵（v2.162 起，listRows），同一列要合併：份量相加、其餘取第一列。keyOf 給列 key——
- *  同一筆通用食物的不同別名（麻古的紅萱波波、50嵐的四季春青茶）是不同列，各自留著品名、店家、份量、微調。 */
-export function mergeByKey<K>(items: RepeatItem[], keyOf: (i: RepeatItem) => K): RepeatItem[] {
-  const merged = new Map<K, RepeatItem>()
-  for (const item of items) {
-    const k = keyOf(item)
-    const first = merged.get(k)
-    merged.set(k, first ? { ...first, qty: normalizeQty(first.qty + item.qty) } : item)
-  }
-  return [...merged.values()]
 }

@@ -38,7 +38,7 @@ import { DUR, EASE, sec } from '@/lib/durations'
 import { computeTargets, formulaBmr, num, numOrNull, type Targets } from '@/lib/formulas'
 import { isPlannable, localDate, maxPlanDate, shiftDate } from '@/lib/dates'
 import { errMsg, friendlyError } from '@/lib/errors'
-import { AVOID_REPEAT_MEALS, repeatToIntake, seenCategories, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion, type SeenByMeal } from '@/lib/mealSuggest'
+import { repeatToIntake, suggestMeals, type GapContext, type RepeatByMeal, type RepeatSuggestion } from '@/lib/mealSuggest'
 import { defaultMeal, MEALS, type MealKey } from '@/lib/meals'
 import { mealMacroRatio } from '@/lib/estimate'
 import { parseStoredSession } from '@/lib/session'
@@ -496,13 +496,6 @@ export default function App() {
     () => (repeatHistory ? Object.fromEntries(MEALS.map((m) => [m.key, mealMacroRatio(repeatHistory, m.key)])) : {}),
     [repeatHistory],
   )
-  /* sheet 類型組標的「吃過」提示：跟避開重複看同一份（蓋過類型的）資料，提示的才是建議避開的那些。 */
-  const sheetSeen = useMemo(() => {
-    const history = repeatHistory && withCategories(repeatHistory, categoryOverrides)
-    const out: SeenByMeal = {}
-    for (const meal of AVOID_REPEAT_MEALS) out[meal] = seenCategories(history, currentDate, rowsWithCategories, meal)
-    return out
-  }, [repeatHistory, categoryOverrides, currentDate, rowsWithCategories])
   /* 「換一個」換到第幾名只記在畫面上：換了日期、當天紀錄有變（新增、刪除、改份量）、或目標變了，就回第一名。
      用簽章比對，不用 rows 的 identity——重撈回來同一份資料不該把使用者換到的那一組洗掉。
      簽章一不同就整個丟掉、不是只比對：否則切走再切回、或復原把紀錄還原成舊樣子，會回到換過的那一名。 */
@@ -530,16 +523,6 @@ export default function App() {
     },
     [currentDate, daySig, swapIdx],
   )
-  /* sheet 那份拿掉正在加入的那餐：今日頁的卡片要留著顯示「加入中…」，這時從 sheet 再選一次就是同餐第二份。 */
-  const sheetRepeatByMeal = useMemo(() => {
-    // 復原在途：DELETE 可能失敗，這時從 sheet 再加一次，同餐會變兩份
-    if (repeatBusyKey === REPEAT_UNDO_KEY) return {}
-    const [busyDate, busyMeal] = repeatBusyKey?.split('|') ?? []
-    if (busyDate !== currentDate) return repeatByMeal
-    const next = { ...repeatByMeal }
-    delete next[busyMeal as MealKey]
-    return next
-  }, [repeatByMeal, repeatBusyKey, currentDate])
   /* 該餐有列了（例如改從 sheet 加入成功），之前的失敗就過期了：不清的話刪掉那筆、卡片回來時還掛著舊錯誤。 */
   if (repeatErr && rows?.some((r) => `${currentDate}|${r.meal}` === repeatErr.key)) setRepeatErr(null)
 
@@ -1348,9 +1331,7 @@ export default function App() {
           foods={foods}
           dayData={{ date: currentDate, rows }}
           targets={targets}
-          repeatByMeal={sheetRepeatByMeal}
           macroRatios={macroRatios}
-          seenByMeal={sheetSeen}
           onClose={closeSheet}
           onCreateIntake={handleCreateIntake}
           onCreateFood={handleCreateFoodAndClassify}

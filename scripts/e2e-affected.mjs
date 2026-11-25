@@ -23,7 +23,7 @@ const ANALYSIS = ['analysis', 'recovery-foreground']
 const FOOD = [
   'tally', 'interaction', 'quota-warning', 'food-library', 'vendor-autocomplete',
   'inline-edit', 'intake-detail', 'meal-exit-animation', 'form-macros-align', 'meal-suggest', 'portion-mods',
-  'picked-inplace', 'estimate',
+  'log-sheet', 'estimate', 'meal-vendor',
 ]
 const SETTINGS = ['settings-nav', 'daily-goal', 'weight-trend', 'weekly-compare']
 const SHEETS = ['spring-sheet', 'sync-sheet']
@@ -40,6 +40,8 @@ const SCREENS = {
   // 記一筆 sheet 也被 spring-sheet、sync-sheet 開來測（push 前 review 查到：漏列會讓改了 LogSheet 卻沒跑那六條）
   Today: [...FOOD, ...SHEETS, 'training-home'], // 記完一餐的頂端提示在 training-home 守
   ItemEditor: [...FOOD, ...SHEETS], LogSheet: [...FOOD, ...SHEETS], FoodLibrary: [...FOOD, 'settings-nav'],
+  // 記一筆的三個子元件（v2.167）：這一餐的列、找東西的列、食品庫頁
+  MealSection: [...FOOD, ...SHEETS], FindRow: [...FOOD, ...SHEETS], LogLibrary: [...FOOD, ...SHEETS],
   // 動作庫、食品庫都從設定頁進（training.spec、food-library.spec 的 openSettingsTab）
   Settings: [...SETTINGS, 'training', 'food-library', 'tally', 'interaction', 'form-macros-align'], DailyGoal: SETTINGS, MaintenanceCard: SETTINGS, WeightTrend: SETTINGS, WeeklyCompare: SETTINGS,
   Login: ['interaction'],
@@ -66,6 +68,9 @@ const FILES = {
   'src/lib/baseline.ts': SETTINGS,
   'src/useMaintenanceEstimate.ts': SETTINGS,
   'src/lib/mealSuggest.ts': FOOD,
+  // 記一筆的找與這一餐（v2.167）
+  'src/lib/logFind.ts': FOOD,
+  'src/lib/logMeal.ts': FOOD,
   'src/useRepeatHistory.ts': FOOD,
   // 份量微調：記一筆已選與今日頁就地編輯共用（v2.156）
   'src/lib/portionMods.ts': FOOD,

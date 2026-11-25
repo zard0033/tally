@@ -244,8 +244,8 @@ const persistFix = () => {
 }
 const addBanana = async (page: Page) => {
   const sheet = page.locator('[data-screen="log-sheet"]')
-  await sheet.getByLabel('吃了什麼').fill('香蕉')
-  await sheet.locator('.food-row', { hasText: '香蕉' }).click()
+  await sheet.getByLabel('找食物').fill('香蕉')
+  await sheet.locator('.find-row', { hasText: '香蕉' }).click()
   await sheet.locator('.pick-bar-btn').click()
   await expect(sheet).toHaveCount(0)
 }

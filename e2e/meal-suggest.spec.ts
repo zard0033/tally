@@ -446,13 +446,14 @@ test('加入窗內切分頁：復原條收起、回到今日頁不再出現，�
   expect(await serverIds(page, MON)).toHaveLength(2)
 })
 
-/* ── sheet 的建議段 ── */
+/* ── 從記一筆 sheet 記（v2.167 起 sheet 沒有建議段：依缺口的建議第二段搬到「幫我想」） ── */
 
 const sheetOf = (page: Page) => page.locator('[data-screen="log-sheet"]')
-const sectNames = (page: Page, sect: string) => sheetOf(page).locator(`${sect} + .food-list .nm`)
-const suggestNames = (page: Page) => sectNames(page, '.sect-suggest')
-/** 勾了哪些：v2.158 起列留在原位，總覽是搜尋框下的膠囊列 */
-const pickedNames = (page: Page) => sheetOf(page).locator('.pick-pin .pick-chip')
+/** 在 sheet 搜一樣、加進這一餐 */
+const pickFood = async (page: Page, name: string) => {
+  await sheetOf(page).getByLabel('找食物').fill(name)
+  await sheetOf(page).locator('.find-row:not([data-key="combo"])', { hasText: name }).first().click()
+}
 
 const openMealSheet = async (page: Page, label: string) => {
   await nodeOf(page, label).locator('.todo-row').click()
@@ -543,7 +544,7 @@ test('前一筆 DELETE 還在路上又結清另一筆：任一筆失敗都不 PO
   expect(await intakeWrites(page, 'POST')).toEqual([])
 })
 
-test('加入中打開該餐 sheet：今日頁卡片留著顯示加入中、sheet 沒有建議段，失敗後建議回來', async ({ page }) => {
+test('加入中：今日頁卡片留著顯示加入中，失敗後建議回來', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await page.evaluate(() => {
     ;(window as unknown as StubWindow).__failNext = { table: 'intake', method: 'POST' }
@@ -553,12 +554,8 @@ test('加入中打開該餐 sheet：今日頁卡片留著顯示加入中、sheet
   await expect(addOf(page, '早餐')).toHaveText('加入中…')
   await expect(addOf(page, '早餐'), '進行中讀屏只念狀態').toHaveAttribute('aria-label', '正在加入…')
 
-  await openMealSheet(page, '早餐')
-  await expect(sheetOf(page).locator('.sect-lb').first(), '等 sheet 內容畫出來').toBeVisible()
-  await expect(addOf(page, '早餐'), '開 sheet 時 POST 應該還在路上，否則這段沒驗到').toHaveText('加入中…')
-  await expect(sheetOf(page).locator('.sect-suggest')).toHaveCount(0)
-
-  await expect(suggestNames(page), 'POST 失敗後這餐還是空的，建議要回來').toHaveText(['乳清（1匙）', '無糖豆漿'], { timeout: 8000 })
+  await expect(addOf(page, '早餐'), 'POST 失敗後這餐還是空的，建議回來（鈕變重試）').toHaveText('重試', { timeout: 8000 })
+  await expect(cardOf(page, '早餐').locator('.sg-items')).toHaveText(WEEKDAY_LABEL)
   expect(await intakeWrites(page, 'POST')).toHaveLength(1)
 })
 
@@ -572,7 +569,7 @@ test('舊 GET 在 POST 之後才落地：丟棄，品項不消失、卡片不復
   // 這段時間從 sheet 記一筆午餐：它的重撈就是那支舊 GET，快照裡沒有早餐（v2.141 起是原地重撈，不進載入態）
   await page.evaluate((d) => (window as unknown as StubWindow).__holdIntake.add(d), MON)
   await openMealSheet(page, '午餐')
-  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).click()
+  await pickFood(page, '地瓜')
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect.poll(() => page.evaluate(() => (window as unknown as StubWindow).__heldIntake.length), '舊 GET 要停住').toBe(1)
   await expect(page.locator('.timeline'), '舊 GET 停住時沿用上一份，不換成載入中').not.toContainText('載入中…')
@@ -631,7 +628,7 @@ test('重撈的 GET 停在路上時從 sheet 記另一餐：落地後重抓，�
   await addWithRefreshHeld(page, '早餐', MON)
 
   await openMealSheet(page, '午餐')
-  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).click()
+  await pickFood(page, '地瓜')
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect(nodeOf(page, '午餐').locator('.item .nm')).toHaveText(['地瓜'], { timeout: 8000 })
   await expect(page.locator('.gauge-side .cur')).toHaveText(String(330 + 130))
@@ -830,22 +827,6 @@ test('復原在途：卡片回來但鎖著，按了也不會寫，完成後可�
   expect(await intakeWrites(page, 'POST')).toHaveLength(2)
 })
 
-test('復原在途：sheet 也看不到建議段，完成後才回來', async ({ page }) => {
-  await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
-  await addOf(page, '早餐').click()
-  await expect(items(page)).toHaveCount(2)
-
-  await setWriteDelay(page, 2500)
-  await undoBtn(page).click()
-  await expect(cardOf(page, '早餐')).toBeVisible()
-  await openMealSheet(page, '早餐')
-  await expect(sheetOf(page).locator('.sect-suggest')).toHaveCount(0)
-  expect(await serverIds(page, MON), '這時 DELETE 應該還沒落地，否則這段沒驗到').toHaveLength(2)
-
-  await expect.poll(() => serverIds(page, MON), { timeout: 8000 }).toEqual([])
-  await expect(sheetOf(page).locator('.sect-suggest')).toHaveCount(1)
-})
-
 test('加入途中到設定頁存體重：舊 GET 不蓋回，回今日頁品項還在、卡片不復活', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await setWriteDelay(page, 3000)
@@ -882,7 +863,7 @@ test('改從 sheet 加入成功後舊錯誤清掉：刪掉、卡片回來時按�
   await expect(addOf(page, '早餐')).toHaveText('重試')
 
   await openMealSheet(page, '早餐')
-  await sheetOf(page).locator('.sect-act').click()
+  await pickFood(page, '乳清')
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect(sheetOf(page)).toHaveCount(0)
   await expect(items(page)).toHaveCount(1)
@@ -957,87 +938,11 @@ test('加入窗內切到背景：復原條收起，列留著、不打 DELETE', a
   expect(await intakeWrites(page, 'DELETE')).toEqual([])
 })
 
-test('sheet：不預設選中，點一項就地勾起來（留在建議段）、份量取建議量、取消後膠囊與確認列收掉', async ({ page }) => {
-  await openAppAt(page, MON, {}, fixWith(WEEKDAY_SRC))
-  await openMealSheet(page, '早餐')
-  const sheet = sheetOf(page)
-
-  await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sheet.locator('.sect-suggest .sect-act')).toHaveText('全選')
-  await expect(pickedNames(page), '只是列出來，不能幫他勾').toHaveCount(0)
-  await expect(sheet.locator('.pick-bar')).toHaveCount(0)
-
-  await sheet.locator('.sect-suggest + .food-list .food-row', { hasText: '乳清' }).click()
-  await expect(pickedNames(page)).toHaveText(['乳清（1匙）'])
-  await expect(sheet.locator('.qty-value'), '常吃紀錄的份量是 1，這裡要取建議量').toHaveValue('2')
-  await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 240 卡')
-  await expect(suggestNames(page), '勾了留在建議段原位').toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sheet.locator('.sect-suggest + .food-list .food-row[aria-pressed="true"]')).toHaveText(/乳清/)
-  await expect(sheet.locator('.sect-act'), '還有一樣沒勾，全選留著').toHaveAttribute('aria-label', '全選建議的 1 樣')
-
-  await sheet.locator('.food-row[aria-pressed="true"]').click()
-  await expect(pickedNames(page)).toHaveCount(0)
-  await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sheet.locator('.sect-suggest + .food-list .food-row[aria-pressed="true"]')).toHaveCount(0)
-  await expect(sheet.locator('.pick-bar')).toHaveCount(0)
-})
-
-test('sheet：超標預告用建議量試算，跟勾下去的份量同源', async ({ page }) => {
-  // 脂肪目標 2：乳清單份 1.5 不超，建議量 ×2 是 3，超 1
-  const fix = {
-    ...fixWith(WEEKDAY_SRC),
-    profile: [{ ...FIX.profile[0], use_custom_targets: true, custom_kcal: 2000, custom_protein_g: 100, custom_fat_g: 2, custom_carb_g: 263 }],
-  } as unknown as typeof FIX
-  await openAppAt(page, MON, {}, fix)
-  await openMealSheet(page, '早餐')
-  const row = sheetOf(page).locator('.sect-suggest + .food-list .food-row', { hasText: '乳清' })
-  await expect(row.locator('.kc-delta')).toHaveText('+1g脂')
-  await row.click()
-  await expect(sheetOf(page).locator('.macro-line .over')).toContainText('脂 3/2')
-})
-
-test('sheet 全選：全部就地勾起來、全選鈕收起、(+N) 正確、焦點接到建議段第一列、按加入才寫入一次', async ({ page }) => {
-  await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
-  await openMealSheet(page, '早餐')
-  const sheet = sheetOf(page)
-
-  await expect(sheet.locator('.sect-act')).toHaveAttribute('aria-label', '全選建議的 2 樣')
-  await sheet.locator('.sect-act').click()
-  await expect(pickedNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sheet.locator('.qty-value').nth(0)).toHaveValue('2')
-  await expect(sheet.locator('.qty-value').nth(1)).toHaveValue('1')
-  await expect(suggestNames(page), '段留著，兩列都在原位').toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sheet.locator('.sect-act'), '都勾了，全選收起來').toHaveCount(0)
-  await expect(sheet.locator('.pick-line .sub')).toHaveText('2 樣 · 330 卡')
-  // 蛋白 24×2＋8、脂 1.5×2＋4、碳 2×2＋5
-  await expect(sheet.locator('.macro-line .add')).toHaveText(['(+56)', '(+7)', '(+9)'])
-  await expect(sheet.locator('.sect-suggest + .food-list .food-row').first(), '全選鈕消失了，焦點要接到建議段第一列').toBeFocused()
-  expect(await intakeWrites(page, 'POST'), '全選只是勾起來').toEqual([])
-
-  await sheet.locator('.pick-bar-btn').click()
-  await expect(sheet).toHaveCount(0)
-  await expect(nodeOf(page, '早餐').locator('.item .nm')).toHaveText(['乳清（1匙）', '無糖豆漿'])
-  expect((await intakeWrites(page, 'POST')).map((w) => w.body)).toEqual([WEEKDAY_POST_BODY])
-})
-
-test('sheet 的段落順序：建議→常吃→全部；勾了不多出「已選」段，膠囊列在捲動區外', async ({ page }) => {
-  const history = [11, 12, 13].map((food_id) => ({ meal: 'breakfast', food_id, qty: 1 }))
-  await openAppAt(page, MON, {}, { ...fixWith(WEEKDAY_SRC), history } as unknown as typeof FIX)
-  await openMealSheet(page, '早餐')
-  const sheet = sheetOf(page)
-  await expect(sheet.locator('.sect-lb')).toHaveText([/^建議/, '早餐常吃', '全部食物'])
-
-  await sheet.locator('.sect-suggest + .food-list .food-row', { hasText: '無糖豆漿' }).click()
-  await expect(pickedNames(page)).toHaveText(['無糖豆漿'])
-  await expect(sheet.locator('.sect-lb')).toHaveText([/^建議/, '早餐常吃', '全部食物'])
-  await expect(sheet.locator('.food-scroll .pick-pin'), '膠囊列不能跟著捲走').toHaveCount(0)
-})
-
 test('sheet「加入」連按只寫入一次', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await openMealSheet(page, '早餐')
-  await sheetOf(page).locator('.sect-act').click()
-  await expect(pickedNames(page)).toHaveCount(2)
+  await pickFood(page, '乳清')
+  await expect(sheetOf(page).locator('.meal-rows > li')).toHaveCount(1)
   await setWriteDelay(page, 800)
   /* 兩下之間隔一個 task，跟真的連點一樣（React 在兩次事件之間會 render，busy 與 disabled 才生效）。
      同一個 task 連發兩次 click 真人做不到，那種情況 busy 還是舊值，會寫兩次。 */
@@ -1047,9 +952,9 @@ test('sheet「加入」連按只寫入一次', async ({ page }) => {
     btn.click()
   })
   await expect(sheetOf(page)).toHaveCount(0, { timeout: 8000 })
-  await expect(items(page)).toHaveCount(2)
+  await expect(items(page)).toHaveCount(1)
   expect(await intakeWrites(page, 'POST')).toHaveLength(1)
-  expect(await serverIds(page, MON)).toHaveLength(2)
+  expect(await serverIds(page, MON)).toHaveLength(1)
 })
 
 /** 看 pointerEvents 不看 toBeVisible：收合要 0.8 秒，開始收了也還看得見。 */
@@ -1067,7 +972,7 @@ const pressEscapeInSheet = async (page: Page) => {
 test('sheet 寫入中關不掉：Escape、點 scrim、關閉鈕都不行，寫入完成才收合', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await openMealSheet(page, '早餐')
-  await sheetOf(page).locator('.sect-act').click()
+  await pickFood(page, '乳清')
   await setWriteDelay(page, 3000)
   await sheetOf(page).locator('.pick-bar-btn').click()
   await waitWriteSent(page, 'POST')
@@ -1080,14 +985,14 @@ test('sheet 寫入中關不掉：Escape、點 scrim、關閉鈕都不行，寫�
   expect(await serverIds(page, MON), '這時 POST 應該還在路上，否則這段沒驗到').toHaveLength(0)
 
   await expect(sheetOf(page)).toHaveCount(0, { timeout: 8000 })
-  await expect(items(page)).toHaveCount(2)
+  await expect(items(page)).toHaveCount(1)
   expect(await intakeWrites(page, 'POST')).toHaveLength(1)
 })
 
 test('sheet 寫入失敗：寫入中關不掉，失敗後 sheet、已選、錯誤都在，關閉鈕解鎖', async ({ page }) => {
   await openAppAt(page, MON, { intakePersist: true }, fixWith(WEEKDAY_SRC))
   await openMealSheet(page, '早餐')
-  await sheetOf(page).locator('.sect-act').click()
+  await pickFood(page, '乳清')
   await page.evaluate(() => {
     ;(window as unknown as StubWindow).__failNext = { table: 'intake', method: 'POST' }
   })
@@ -1099,7 +1004,7 @@ test('sheet 寫入失敗：寫入中關不掉，失敗後 sheet、已選、錯�
 
   await expect(sheetOf(page).getByRole('alert')).toHaveText('存不進去：模擬的寫入失敗', { timeout: 8000 })
   await sheetStaysOpen(page, '失敗後 sheet 自己關了')
-  await expect(pickedNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
+  await expect(sheetOf(page).locator('.meal-rows .mr-nm')).toHaveText(['乳清（1匙）'])
   await expect(sheetOf(page).locator('.pick-bar-btn')).toHaveText('重試')
 
   const close = sheetOf(page).locator('.icon-btn[aria-label="關閉"]')
@@ -1108,35 +1013,7 @@ test('sheet 寫入失敗：寫入中關不掉，失敗後 sheet、已選、錯�
   await expect(sheetOf(page)).toHaveCount(0, { timeout: 2000 })
 })
 
-test('「全選」命中區 ≥44×44：鈕的四邊都點得到它，第一列中心點到的還是第一列', async ({ page }) => {
-  await openAppAt(page, MON, {}, fixWith(WEEKDAY_SRC))
-  await openMealSheet(page, '早餐')
-  // 等 spring 到位：飛行途中鈕可能還在視窗外，elementFromPoint 量不到東西
-  await expect
-    .poll(() => sheetOf(page).evaluate((n) => Math.abs(new DOMMatrix(getComputedStyle(n).transform).m42) < 0.5))
-    .toBe(true)
-  const hit = await sheetOf(page).locator('.sect-act').evaluate((btn) => {
-    const r = btn.getBoundingClientRect()
-    const isBtn = (x: number, y: number) => document.elementFromPoint(x, y) === btn
-    const midX = r.left + r.width / 2
-    const midY = r.top + r.height / 2
-    const row = btn.closest('.sect-suggest')!.nextElementSibling!.querySelector('.food-row')!
-    const rr = row.getBoundingClientRect()
-    return {
-      w: r.width,
-      h: r.height,
-      edges: [isBtn(midX, r.top + 1), isBtn(midX, r.bottom - 1), isBtn(r.left + 1, midY), isBtn(r.right - 1, midY)],
-      rowCenter: document.elementFromPoint(rr.left + rr.width / 2, rr.top + rr.height / 2)?.closest('.food-row') === row,
-    }
-  })
-  // 量的是畫面上的盒子，sheet 的位移會留浮點尾數（實測 43.99998）；0.01px 的容差不放寬 44 這條線
-  expect(hit.w).toBeGreaterThanOrEqual(44 - 0.01)
-  expect(hit.h).toBeGreaterThanOrEqual(44 - 0.01)
-  expect(hit.edges).toEqual([true, true, true, true])
-  expect(hit.rowCenter).toBe(true)
-})
-
-test('封存食物：一鍵照搬；sheet 可選、確認列計入、切餐別不消失，寫入用來源快照', async ({ page }) => {
+test('封存食物：一鍵照搬，寫入用來源快照', async ({ page }) => {
   // 封存的不放 fix.foods（foods 查詢只回使用中的）。品名快照跟食品庫現名不同，驗顯示與寫入都取快照
   const archived = (id: number, meal: string, qty: number) => ({
     id,
@@ -1162,45 +1039,8 @@ test('封存食物：一鍵照搬；sheet 可選、確認列計入、切餐別�
   await expect(nodeOf(page, '早餐').locator('.item .nm')).toHaveText(['舊款便當'])
   expect((await intakeWrites(page, 'POST'))[0].body).toEqual([{ ...snapshot, meal: 'breakfast', qty: 1 }])
 
-  await openMealSheet(page, '點心')
-  const sheet = sheetOf(page)
-  await expect(suggestNames(page)).toHaveText(['舊款便當'])
-  await sheet.locator('.sect-suggest + .food-list .food-row').click()
-  await expect(pickedNames(page)).toHaveText(['舊款便當'])
-  await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 600 卡')
-
-  await sheet.locator('.chip', { hasText: '晚餐' }).click()
-  await expect(sheet.locator('.chip', { hasText: '晚餐' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(pickedNames(page), '切餐別後建議段換了，已選不能跟著消失').toHaveText(['舊款便當'])
-  // 哪一段都沒有它（封存、建議段換了）：收在上面「別的餐勾的」，列還看得到、能改份量；封存的沒有食品庫基準，不出微調
-  await expect(sectNames(page, '.sect-lb:has-text("別的餐勾的")')).toHaveText(['舊款便當'])
-  await expect(sheet.locator('.food-item.selected .pmods')).toHaveCount(0)
-  await expect(sheet.locator('.pick-line .sub')).toHaveText('1 樣 · 600 卡')
-
-  await sheet.locator('.pick-bar-btn').click()
-  await expect(sheet).toHaveCount(0)
-  // 有店家的列在品名下補一行店家（v2.161 T-A，取代「同名兩筆才補」）
-  await expect(nodeOf(page, '晚餐').locator('.item .nm')).toHaveText(['舊款便當'])
-  await expect(nodeOf(page, '晚餐').locator('.item .vendor')).toHaveText(['停賣店'])
-  expect((await intakeWrites(page, 'POST'))[1].body).toEqual([{ ...snapshot, meal: 'dinner', qty: 2 }])
-})
-
-test('同一食物不同時出現在建議段與常吃段；常吃先濾再取五筆；搜尋時收起建議段', async ({ page }) => {
-  const history = [13, 15, 11, 12, 14, 16, 17].map((food_id) => ({ meal: 'breakfast', food_id, qty: 1 }))
-  await openAppAt(page, MON, {}, { ...fixWith(WEEKDAY_SRC), history } as unknown as typeof FIX)
-  await openMealSheet(page, '早餐')
-  const sheet = sheetOf(page)
-
-  await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
-  await expect(sectNames(page, '.sect-lb:has-text("早餐常吃")')).toHaveText(['雞胸餐盒', '雞胸餐盒', '地瓜', '溫泉蛋', '香蕉'])
-  await expect(sheet.locator('.food-groups .nm')).toHaveText(['拿鐵'])
-
-  await sheet.getByLabel('吃了什麼').fill('乳清')
-  await expect(sheet.locator('.sect-suggest')).toHaveCount(0)
-  await expect(sectNames(page, '.sect-lb:has-text("搜尋結果")')).toHaveText(['乳清（1匙）'])
-
-  await sheet.getByLabel('吃了什麼').fill('')
-  await expect(suggestNames(page)).toHaveText(['乳清（1匙）', '無糖豆漿'])
+  // 有店家的列在品名下補一行店家（v2.161 T-A）
+  await expect(nodeOf(page, '早餐').locator('.item .vendor')).toHaveText(['停賣店'])
 })
 
 test('從 sheet 加入今天的餐後切明天：來源是今天', async ({ page }) => {
@@ -1216,7 +1056,7 @@ test('從 sheet 加入今天的餐後切明天：來源是今天', async ({ page
   await expect(cardOf(page, '早餐')).toHaveCount(1)
 
   await openMealSheet(page, '早餐')
-  await sheetOf(page).locator('.sect-act').click()
+  await pickFood(page, '乳清')
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect(sheetOf(page)).toHaveCount(0)
   await expect(items(page)).toHaveCount(1)
@@ -1352,9 +1192,8 @@ test('第二版：換一個輪流換、最後回第一名，sheet 與加入跟�
   await swapOf(page, '晚餐').click()
   await expect(card.locator('.sg-items')).toHaveText('拿鐵')
 
-  // sheet 的建議段跟著今日頁目前那組
+  // 開關 sheet 不會洗掉換到的那組
   await openMealSheet(page, '晚餐')
-  await expect(suggestNames(page)).toHaveText(['拿鐵'])
   await page.keyboard.press('Escape')
   await expect(sheetOf(page)).toHaveCount(0)
   await expect(card.locator('.sg-items'), '開關 sheet 不會洗掉換到的那組').toHaveText('拿鐵')
@@ -1522,74 +1361,6 @@ test('第三版：依缺口挑時，中午燒臘 ⇒ 晚餐先出雞腿便當、
   await expect(card.locator('.sg-items')).toHaveText('燒臘便當')
 })
 
-/* ── 第三版：記一筆 sheet「全部食物」依類型分組（spec.md C 節第三版 AC 6）──
-   食品庫多兩樣麵食（牛肉麵吃過、陽春麵沒吃過）。晚餐吃過：牛肉麵 3 次、雞胸餐盒·健康盒 1 次；早餐吃過乳清、豆漿。
-   今天中午吃雞胸餐盒·健康盒（健康餐盒），昨天晚餐吃牛肉麵（麵食）。手算：
-   - 晚餐常吃＝[牛肉麵, 雞胸餐盒·健康盒]，不進「全部食物」；建議＝上週五的雞腿便當（昨天週日不算平日的來源）
-   - 組序：麵食 3 次 → 健康餐盒 1 次 → 沒吃過的照固定清單：配菜、主食、點心
-   - 收起來：只在早餐吃過的飲料、蛋白質補充 */
-test('第三版：sheet 全部食物依類型分組、組序看這一餐吃過幾次、吃過蓋徽章、其他餐的收在最底；搜尋不分組、早餐不提示', async ({ page }) => {
-  const BOX = { food_id: 11, name: '雞胸餐盒', vendor: '健康盒', category: '健康餐盒', kcal: 420, protein: 45, fat: 12, carb: 30 }
-  const PLAIN = { id: 507, name: '陽春麵', vendor: '麵店', kcal: 400, protein: 12, fat: 8, carb: 70, category: '麵食', category_manual: false }
-  const BEEF_LIB = { id: T.beef.food_id, name: T.beef.name, vendor: T.beef.vendor, kcal: T.beef.kcal, protein: T.beef.protein, fat: T.beef.fat, carb: T.beef.carb, category: '麵食', category_manual: false }
-  const history = [
-    ...[506, 506, 506, 11].map((food_id) => ({ meal: 'dinner', food_id, qty: 1 })),
-    { meal: 'breakfast', food_id: 13, qty: 1 },
-    { meal: 'breakfast', food_id: 15, qty: 1 },
-  ]
-  const fix = {
-    // 昨天是週日，平日的建議不拿它當來源；建議來自上週五的雞腿便當（便當，不在食品庫，只用來源快照）
-    ...fixWith([typedRow(701, '2026-11-01', 'dinner', T.beef), typedRow(702, '2026-10-30', 'dinner', T.chicken)], [typedRow(101, MON, 'lunch', BOX)]),
-    foods: [...FIX.foods, BEEF_LIB, PLAIN],
-    history,
-  } as unknown as typeof FIX
-  await openAppAt(page, MON, {}, fix)
-  await openMealSheet(page, '晚餐')
-  const sheet = sheetOf(page)
-  const groups = sheet.locator('.food-groups')
-  const more = groups.locator('.grp-more')
-
-  // 收合列出現＝常吃那份歷史到了，組序之後不會再變
-  await expect(more).toHaveText('其他餐的（飲料、蛋白質補充）')
-  await expect(more).toHaveAttribute('aria-expanded', 'false')
-  await expect(groups.locator('.grp .gn')).toHaveText(['麵食', '健康餐盒', '配菜', '主食', '點心'])
-  const grp = (name: string) => groups.locator('.grp', { has: page.locator('.gn', { hasText: new RegExp(`^${name}$`) }) })
-  await expect(grp('麵食').locator('.nm')).toHaveText(['陽春麵'])
-  await expect(grp('麵食').locator('.seen')).toHaveText('昨天吃過')
-  await expect(grp('麵食').locator('.ci-badge')).toHaveAttribute('data-badge', 'yesterday')
-  await expect(grp('健康餐盒').locator('.seen')).toHaveText('中午吃過')
-  await expect(grp('健康餐盒').locator('.ci-badge')).toHaveAttribute('data-badge', 'today')
-  await expect(grp('健康餐盒').locator('.nm')).toHaveText(['雞胸餐盒'])
-  await expect(grp('健康餐盒').locator('.sub')).toHaveText(['減醣廚房'])
-  // 沒吃過提示的組不蓋徽章；這一餐沒吃過的不寫次數
-  await expect(grp('配菜').locator('.ci-badge')).toHaveCount(0)
-  await expect(grp('配菜').locator('.cnt')).toHaveCount(0)
-  // 建議列帶 24px 類型圖示；一般品項列不帶
-  await expect(sheet.locator('.sect-suggest + .food-list .food-row .ci')).toHaveAttribute('data-category', '便當')
-  await expect(groups.locator('.food-row .ci')).toHaveCount(0)
-
-  // 可見文字就是名稱（Label in Name：語音控制說「其他餐的」要點得到）
-  await expect(sheet.getByRole('button', { name: '其他餐的（飲料、蛋白質補充）' })).toBeVisible()
-  await more.click()
-  await expect(more).toHaveAttribute('aria-expanded', 'true')
-  await expect(groups.locator('.grp .gn')).toHaveText(['麵食', '健康餐盒', '配菜', '主食', '點心', '飲料', '蛋白質補充'])
-  await expect(grp('飲料').locator('.nm')).toHaveCount(2)
-
-  // 搜尋時是平的結果，不分組
-  await sheet.getByLabel('吃了什麼').fill('陽春')
-  await expect(groups).toHaveCount(0)
-  await expect(sheet.locator('.grp')).toHaveCount(0)
-  await expect(sectNames(page, '.sect-lb:has-text("搜尋結果")')).toHaveText(['陽春麵'])
-  await sheet.getByLabel('吃了什麼').fill('')
-
-  // 早餐不套用避開重複，也就不提示吃過
-  await sheet.locator('.chip', { hasText: '早餐' }).click()
-  await expect(groups.locator('.grp').first()).toBeVisible()
-  await expect(more, '換餐別收的是另一批類型，展開狀態要收回').toHaveAttribute('aria-expanded', 'false')
-  await expect(sheet.locator('.grp .ci-badge')).toHaveCount(0)
-  await expect(sheet.locator('.grp .seen')).toHaveCount(0)
-})
-
 /* v2.128 全站讀取一次失敗就拋（冷啟動不等退避）；但寫入成功後的那次重撈照舊重試——資料已經存了，
    一次網路抖動就整頁「讀不到這天的紀錄」看起來像沒存到，會被再加一次。兩個寫入入口（卡片、sheet）各驗一次。 */
 test('寫入成功後重撈碰到一次斷線：照舊重試撐過去，不亮「讀不到這天的紀錄」、新的那幾筆在畫面上', async ({ page }) => {
@@ -1606,7 +1377,7 @@ test('寫入成功後重撈碰到一次斷線：照舊重試撐過去，不亮�
 
   // sheet 加入（loadDay 路徑）
   await openMealSheet(page, '午餐')
-  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).first().click()
+  await pickFood(page, '地瓜')
   await drop()
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect.poll(dropped, '注入的斷線要真的被那次重撈吃到').toBe(true)
@@ -1655,7 +1426,7 @@ test('加進來（從記一筆 sheet 加入）：一樣三個都有，時間軸�
   await page.click('button.cta')
   await expect(sheetOf(page)).toBeVisible()
   await sheetOf(page).locator('.chip', { hasText: '晚餐' }).click()
-  await sheetOf(page).locator('.food-row', { hasText: '地瓜' }).click()
+  await pickFood(page, '地瓜')
   await watchArrival(page)
   await sheetOf(page).locator('.pick-bar-btn').click()
   await expect(nodeOf(page, '晚餐').locator('.node-kcal')).toHaveText('130')
@@ -1663,28 +1434,4 @@ test('加進來（從記一筆 sheet 加入）：一樣三個都有，時間軸�
   expect(a.pop, '節點沒有彈').toBe(true)
   expect(a.fadeIn, '剛加入的品項沒有從透明開始').toBe(true)
   expect(a.kcal.some((t) => Number(t) > 0 && Number(t) < 130), `小計沒有滾，直接跳到：${a.kcal.join(',')}`).toBe(true)
-})
-
-
-/* v2.162 review #1：sheet 的建議段以列為鍵合併。同一筆通用食物在兩家買的（麻古的紅萱波波、50嵐的四季春青茶）是兩列，
-   各自留著品名、店家、份量、微調；以前照 food_id 合併會併成一列、份量相加、店家只剩第一家。 */
-test('sheet 建議段：同一筆通用食物的兩個別名各自一列，各寫各的品名店家份量（v2.162）', async ({ page }) => {
-  const TEA = { id: 40, name: '手搖飲（無糖純茶＋珍珠，大杯）', vendor: null, kcal: 165, protein: 0, fat: 0, carb: 41, category: '飲料', category_manual: false, verified: true, aliases: ['麻古 紅萱波波', '50嵐 四季春青茶（珍珠）'] }
-  const teaRow = (id: number, name: string, vendor: string, qty: number, mods: string[] = []) => ({
-    id, eaten_on: '2026-10-30', meal: 'breakfast', food_id: 40, qty, kcal: 165, protein: 0, fat: 0, carb: 41, name, vendor, mods,
-    created_at: '2026-10-30T01:00:00.000Z', foods: { name: TEA.name, vendor: null, archived: false, category: '飲料' },
-  })
-  const fix = { ...fixWith([teaRow(311, '紅萱波波', '麻古', 1, ['sweet:slight']), teaRow(312, '四季春青茶（珍珠）', '50嵐', 2)]), foods: [...FIX.foods, TEA] } as unknown as typeof FIX
-  await openAppAt(page, MON, {}, fix)
-  await openMealSheet(page, '早餐')
-  await expect(suggestNames(page)).toHaveText([/^紅萱波波/, /^四季春青茶（珍珠）/])
-  await sheetOf(page).locator('.sect-suggest .sect-act').click()
-  await expect(pickedNames(page)).toHaveCount(2)
-  await sheetOf(page).locator('.pick-bar .pick-bar-btn').click()
-  await expect.poll(async () => (await intakeWrites(page, 'POST')).length).toBe(1)
-  const body = (await intakeWrites(page, 'POST'))[0].body as Record<string, unknown>[]
-  expect(body.map((r) => [r.food_id, r.name, r.vendor, r.qty, r.mods ?? []])).toEqual([
-    [40, '紅萱波波', '麻古', 1, ['sweet:slight']],
-    [40, '四季春青茶（珍珠）', '50嵐', 2, []],
-  ])
 })

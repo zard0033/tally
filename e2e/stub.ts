@@ -544,9 +544,10 @@ export async function seedFetchStub(
             if (w.__kcalHold) await w.__kcalHold
             return json(kcalWindow.slice(offset, offset + limit))
           }
-          /* 餐建議的回看查詢：select 含 meal、且是區間條件。沒有這條會落到最下面回 fix.history，列沒有
-             eaten_on，App 算建議時會崩。不記 __intakeCalls：那是給「當日清單打了幾次」計次用的。 */
-          if (selectCols.includes('meal') && path.includes('eaten_on=gte.')) {
+          /* 餐建議的回看查詢：select 含 meal 與 created_at、且是區間條件。沒有這條會落到最下面回 fix.history，列沒有
+             eaten_on，App 算建議時會崩。不記 __intakeCalls：那是給「當日清單打了幾次」計次用的。
+             記一筆的近 60 天紀錄（listRecentIntake，v2.167）也是區間條件、也有 meal，但沒有 created_at——它落到最下面回 fix.history。 */
+          if (selectCols.includes('meal') && selectCols.includes('created_at') && path.includes('eaten_on=gte.')) {
             w.__repeatServed++
             if (w.__repeatFail) return json({ message: '模擬的讀取失敗' }, 500)
             const range = new URL(u).searchParams.getAll('eaten_on')
@@ -555,7 +556,7 @@ export async function seedFetchStub(
             const source = intakePersist ? intakeStore : fix.repeatWindow
             return json(source.filter((r) => (r.eaten_on as string) >= from && (r.eaten_on as string) <= to))
           }
-          // 有 eaten_on 參數＝當日清單查詢；比對日期。沒有＝listRecentIntake 的常吃排序查詢
+          // 有 eaten_on=eq＝當日清單查詢；比對日期。其餘＝listRecentIntake（記一筆的近 60 天紀錄），回 fix.history（stub 不看 filter）
           const m = /eaten_on=eq\.([\d-]+)/.exec(path)
           if (m) {
             w.__intakeCalls.push(m[1])
@@ -572,6 +573,11 @@ export async function seedFetchStub(
             if (m[1] === today) return json(fix.intake)
             if (m[1] === yday) return json(fix.intakeYday)
             return json([])
+          }
+          /* intakePersist：記一筆讀得到這次測試裡剛寫進去的紀錄（「打全家出現上次在全家記的」要它），由新到舊 */
+          if (intakePersist) {
+            const by = (r: Record<string, unknown>) => `${String(r.eaten_on ?? '')}#${String(r.id ?? 0).padStart(9, '0')}`
+            return json([...intakeStore].sort((a, b) => (by(a) < by(b) ? 1 : by(a) > by(b) ? -1 : 0)))
           }
           return json(fix.history)
         }

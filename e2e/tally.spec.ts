@@ -107,13 +107,13 @@ test('Tally UI 回歸', async ({ page }) => {
     for (const [sel, label] of [
       ['.chip-bar', 'chip 列'],
       ['.chiprow .chip', '餐別 chip'],
-      ['input[aria-label="吃了什麼"]', '搜尋框'],
+      ['input[aria-label="找食物"]', '搜尋框'],
+      ['.log-tools', '工具列（v2.167）'],
       ['.food-scroll', '清單捲動區'],
       ['button[aria-label="關閉"]', '關閉鈕'],
     ] as const) {
       await must(page, sel, label)
     }
-    await page.waitForSelector('.food-row', { timeout: 3000 })
     // 清單屏不該有 .sheet-title（對齊 legacy v1.10 拿掉標題的決策；precommit review 抓到的
     // TypeError 就是某次改動把它加回去、chip 分支假設反轉造成的——這裡繼續守著這條契約）
     check(
@@ -146,7 +146,7 @@ test('Tally UI 回歸', async ({ page }) => {
   })
 
   await step('搜尋框逐鍵輸入 — 焦點與值不被重繪吃掉', async () => {
-    const q = page.locator('input[aria-label="吃了什麼"]')
+    const q = page.locator('input[aria-label="找食物"]')
     await q.click()
     await q.pressSequentially('雞胸', { delay: 60 })
     await page.waitForTimeout(200)
@@ -155,22 +155,24 @@ test('Tally UI 回歸', async ({ page }) => {
       await q.evaluate((el) => el === document.activeElement),
       '打完字後搜尋框失去焦點',
     )
-    const rowCount = await page.locator('.food-row').count()
+    const rowCount = await page.locator('.find-row').count()
     check(rowCount >= 2, `搜尋「雞胸」預期至少 2 筆結果，實際 ${rowCount}`)
-    await must(page, '.add-food-row', '新增食物入口（有輸入就該常駐清單末尾）')
+    await must(page, '.ai-card-btn', '「用 AI 估」（有輸入就該常駐搜尋結果最下面，v2.167）')
   })
 
   await step('選食物 — 確認列長出來、數字對', async () => {
-    await page.locator('.food-row').first().click()
+    await page.locator('.find-row').first().click()
     await page.waitForSelector('.pick-bar', { timeout: 2000 })
     await must(page, '.pick-bar .sub', '確認列小計')
     await must(page, '.pick-bar .remain', '確認列剩餘')
     await must(page, '.pick-bar-btn', '加入鈕')
     await mustText(page, '.pick-bar .sub', '1 樣', '小計樣數')
-    check((await page.locator('.food-item.selected').count()) === 1, '選中的品項沒有 .selected')
+    check((await page.locator('.meal-rows > li').count()) === 1, '選的那一樣沒出現在「這一餐」')
   })
 
   await step('加減鈕 — 減到 1 停用、確認列跟著動', async () => {
+    // v2.167：份量在「這一餐」那一列點開裡
+    await page.locator('.meal-rows .mr-head').first().click()
     const minus = page.locator('.qty-btn').nth(0)
     const plus = page.locator('.qty-btn').nth(1)
     check(await minus.isDisabled(), '份量 1 時減號應停用（不留「按了沒事」的死路）')

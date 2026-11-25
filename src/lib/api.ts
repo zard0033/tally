@@ -207,7 +207,7 @@ export interface IntakeRow {
   name: string | null
   /** 份量微調代碼（spec「份量微調」）；kcal 等快照已是調整後的值。沒調是空陣列。 */
   mods: string[]
-  /** 這一餐在哪買（spec「每一餐記店家」）：只有食物本身沒有店家時才寫；顯示與餐建議用 rowVendor 合併 foods.vendor。 */
+  /** 這一餐在哪買（spec「每一餐記店家」；v2.167 起框裡打的店名照記，就算食物本身有店家）；沒記是 null。顯示與餐建議用 rowVendor（這一筆記的優先，沒有才看 foods.vendor）。 */
   vendor: string | null
   /** 餐建議避開重複用（同一天同店家、同品項）。 */
   food_id: number
@@ -312,6 +312,8 @@ export async function listIntakeForRepeat(from: string, to: string): Promise<Rep
 }
 
 export interface RecentIntakeRow {
+  /** 記一筆的整組（上一個同類日）、「上次 幾號」、搭配卡（同一餐一起出現）要日期。 */
+  eaten_on: string
   meal: MealKey
   food_id: number
   qty: number
@@ -322,11 +324,14 @@ export interface RecentIntakeRow {
   vendor: string | null
 }
 
-/** 常吃排序與「照上次」用：按 eaten_on 由新到舊撈最近 limit 筆。 */
-export async function listRecentIntake(limit = 120): Promise<RecentIntakeRow[]> {
+/** 記一筆用（spec「記一筆重做」，v2.167）：from～to（檢視日往前 60 天到檢視日）的紀錄、由新到舊——常吃、整組、你在那家記過的、搭配卡都看這份。
+ *  to 要擋：先記的明天、後天不能變成「上次」。limit 只是保險（一天十幾筆，60 天也遠不到）。 */
+export async function listRecentIntake(from: string, to: string, limit = 1500): Promise<RecentIntakeRow[]> {
   return unwrap(await supabase
     .from('intake')
-    .select<'meal,food_id,qty,mods,name,vendor', RecentIntakeRow>('meal,food_id,qty,mods,name,vendor')
+    .select<'eaten_on,meal,food_id,qty,mods,name,vendor', RecentIntakeRow>('eaten_on,meal,food_id,qty,mods,name,vendor')
+    .gte('eaten_on', from)
+    .lte('eaten_on', to)
     .order('eaten_on', { ascending: false })
     .order('id', { ascending: false }) // 同日多筆時「最近一次」才有定義（review 抓的）
     .limit(limit)
@@ -346,7 +351,7 @@ export interface NewIntake {
   name: string | null
   /** 份量微調代碼；不帶＝沒調（DB 預設空陣列）。 */
   mods?: string[]
-  /** 這一餐在哪買；不帶＝沒記（食物本身有店家時一律不帶，見 mealVendor.intakeVendor）。 */
+  /** 這一餐在哪買；不帶＝沒記（顯示退回食物本身的店家）。v2.167 起框裡打的店名照記，就算食物本身有店家。 */
   vendor?: string
 }
 

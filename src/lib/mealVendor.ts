@@ -1,13 +1,14 @@
-/* 每一餐記店家（spec「每一餐記店家＋別名收一次」）：通用食物（店家欄留空）在這一筆紀錄上記「在哪買」，
-   食品庫不動。別名可寫「店家 品名」，第一個空白前是店家。純邏輯，不沾 DOM。
-   v2.162 起記一筆不再另外問店家：勾「店家 品名」別名那一列就連店家一起記（listRows，spec「記店家改版」）。 */
-import { normalizeKey, splitAlias } from './foodMatch'
+/* 每一餐記店家（spec「每一餐記店家＋別名收一次」）：在這一筆紀錄上記「在哪買」，食品庫不動。
+   別名可寫「店家 品名」，第一個空白前是店家。純邏輯，不沾 DOM。
+   v2.167 起記一筆框裡打的店名照記在紀錄上，就算食物本身有店家（spec「記一筆重做」，改 v2.161）。 */
+import { splitAlias } from './foodMatch'
 
 export { splitAlias }
 
-/** 一筆紀錄的店家：食物本身有店家就用它（intake.vendor 不會寫），沒有才看這一筆記的。空字串當沒有。 */
+/** 一筆紀錄的店家：這一筆記的優先（v2.167 起框裡打的店名照記，就算食物本身有店家——同一顆茶葉蛋在全家、7-11 都買），
+ *  沒記才用食物本身的。空字串當沒有。 */
 export function rowVendor(r: { vendor?: string | null; foods: { vendor: string | null } | null }): string | null {
-  return r.foods?.vendor?.trim() || r.vendor?.trim() || null
+  return r.vendor?.trim() || r.foods?.vendor?.trim() || null
 }
 
 /** 別名裡寫到的店家（去重）。 */
@@ -18,24 +19,6 @@ export function aliasVendors(foods: readonly { aliases?: readonly string[] }[]):
     if (v) out.add(v)
   }
   return [...out]
-}
-
-/** 估一筆：句子裡出現的已知店家，取最長的（「麻古茶坊」先於「麻古」）；一個字的店家不認，誤中比對中多。 */
-export function vendorInSentence(sentence: string, known: readonly string[]): string | null {
-  const s = normalizeKey(sentence)
-  let best: string | null = null
-  for (const v of known) {
-    const k = normalizeKey(v)
-    if ([...k].length < 2 || !s.includes(k)) continue
-    if (!best || [...k].length > [...normalizeKey(best)].length) best = v
-  }
-  return best
-}
-
-/** 寫進 intake.vendor 的值：食物本身有店家就不寫（null），空白當沒有。 */
-export function intakeVendor(food: { vendor: string | null }, picked: string | null | undefined): string | null {
-  if (food.vendor) return null
-  return clampVendor(picked ?? '') || null
 }
 
 /** 去頭尾空白、截到 40 個字（照字算，不切斷 emoji 這類兩個 UTF-16 單位的字）。 */

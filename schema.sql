@@ -70,8 +70,9 @@ create table intake (
   -- 既有資料庫補這欄：alter table intake add column mods text[] not null default '{}' check (cardinality(mods) <= 12);
   -- 回滾：alter table intake drop column mods;
   mods       text[] not null default '{}' check (cardinality(mods) <= 12),
-  -- 這一餐在哪買（2026-11-23，spec「每一餐記店家」）：只有食物本身沒店家（通用食物）時才寫；顯示與餐建議用 foods.vendor ?? intake.vendor。
-  -- 刻意不回填：有店家的食物不寫這欄，食品庫改店家名照舊連動到過去的紀錄。
+  -- 這一餐在哪買（2026-11-23，spec「每一餐記店家」）：當初只有食物本身沒店家（通用食物）時才寫；v2.167（spec「記一筆重做」）起
+  -- 記一筆框裡打的店名照記，就算食物本身有店家（同一顆茶葉蛋在全家、7-11 都買）。顯示與餐建議用 intake.vendor ?? foods.vendor（rowVendor）。
+  -- 刻意不回填：沒打店名的紀錄不寫這欄，食品庫改店家名照舊連動到那些紀錄。
   -- 既有資料庫補這欄（2026-11-23 已執行）：alter table intake add column vendor text check (vendor is null or char_length(vendor) between 1 and 40);
   -- 回滾：alter table intake drop column vendor;
   vendor     text check (vendor is null or char_length(vendor) between 1 and 40),

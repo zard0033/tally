@@ -375,9 +375,9 @@ test('記錄食物存檔斷網失敗：訊息是白話，不是 TypeError 原文
   await page.click('button.cta')
   const sheet = page.locator('[data-screen="log-sheet"]')
   await expect(sheet).toBeVisible()
-  // 釘午餐：預設餐別跟著時刻走，別餐吃過的類型會收進「其他餐的」（v2.127）；雞胸餐盒在午餐常吃
+  // 釘午餐：雞胸餐盒在午餐常吃（v2.167 起框空著只列這一餐的常吃）
   await sheet.locator('.chip', { hasText: '午餐' }).click()
-  await sheet.locator('.food-row', { hasText: '雞胸餐盒' }).first().click()
+  await sheet.locator('.find-row', { hasText: '雞胸餐盒' }).first().click()
   await setDown(page, true)
   await sheet.locator('.pick-bar .pick-bar-btn').click()
   const err = sheet.locator('.sheet-error')
@@ -391,9 +391,9 @@ test('記錄食物存檔伺服器回業務訊息：維持原文', async ({ page 
   await openApp(page)
   await page.click('button.cta')
   const sheet = page.locator('[data-screen="log-sheet"]')
-  // 釘午餐：預設餐別跟著時刻走，別餐吃過的類型會收進「其他餐的」（v2.127）；雞胸餐盒在午餐常吃
+  // 釘午餐：雞胸餐盒在午餐常吃（v2.167 起框空著只列這一餐的常吃）
   await sheet.locator('.chip', { hasText: '午餐' }).click()
-  await sheet.locator('.food-row', { hasText: '雞胸餐盒' }).first().click()
+  await sheet.locator('.find-row', { hasText: '雞胸餐盒' }).first().click()
   await page.evaluate(() => {
     ;(window as unknown as { __failNext: { table: string; method: string } }).__failNext = { table: 'intake', method: 'POST' }
   })
@@ -405,8 +405,10 @@ test('記錄食物裡新增食物斷網失敗：訊息是白話', async ({ page 
   await openApp(page)
   await page.click('button.cta')
   const sheet = page.locator('[data-screen="log-sheet"]')
-  await sheet.getByLabel('吃了什麼').fill('測試用新食物')
-  await sheet.locator('.add-food-row').click()
+  // v2.167：新增食物在食品庫頁最上面
+  await sheet.locator('.log-tool', { hasText: '食品庫' }).click()
+  await sheet.getByLabel('找食品庫').fill('測試用新食物')
+  await sheet.getByRole('button', { name: '新增食物（自己填營養標示）' }).click()
   await sheet.locator('#f-kcal').fill('200')
   await setDown(page, true)
   await sheet.locator('.confirm-wrap .pick-bar-btn').click()

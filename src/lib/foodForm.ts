@@ -176,14 +176,6 @@ export function groupByVendor<F extends { name: string; vendor: string | null }>
 
 /* 同時比對品名、店家與別名——五筆「雞胸餐盒」其中三筆完全同名，只靠店家區分；
    別名讓「中薯」找得到「麥當勞薯條（中）」（spec「食品庫改版」）。 */
-/** 搜尋只靠別名對上時（品名、店家都不含搜尋字），回對上的那個別名；記一筆的副標寫「對到：…」，
- *  通用食物（手搖飲（無糖純茶＋寒天，大杯））才認得出是你點的「麻古 紅萱波波」（使用者 2026-11-23）。 */
-export function aliasHit(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): string | null {
-  const s = q.trim().toLowerCase()
-  if (!s || f.name.toLowerCase().includes(s) || (f.vendor ?? '').toLowerCase().includes(s)) return null
-  return (f.aliases ?? []).find((a) => aliasIncludes(a, q)) ?? null
-}
-
 export function foodMatches(f: { name: string; vendor: string | null; aliases?: readonly string[] }, q: string): boolean {
   const s = q.trim().toLowerCase()
   if (!s) return true

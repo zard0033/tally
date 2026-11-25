@@ -450,8 +450,9 @@ test('v2.47 ③ 在明天記一筆會記到明天，今天的數字不受影響'
   await nextDay(page)
   await page.waitForTimeout(500)
   await page.click('button.cta')
-  await page.waitForSelector('.food-row', { timeout: 3000 })
-  await page.locator('.food-row').first().click()
+  // v2.167：框空著只列這一餐的常吃（跟著時刻可能是空的），用搜尋找一樣
+  await page.getByLabel('找食物').fill('地瓜')
+  await page.locator('.find-row').first().click()
   await page.waitForSelector('.pick-bar', { timeout: 2000 })
   /* deep review 抓到的真缺陷：`pickBarRight` 的分支原本問「是不是今天」，明天會走進
      「歷史日」那條回傳「共 N」——而**「看會不會超過」正是這個功能存在的全部理由**，
@@ -1222,9 +1223,9 @@ test('飲食頁展開最後一列：編輯區捲到浮起的底部列之上，�
 test('記一筆送出後，sheet 還在收的時候點分頁鈕：點擊不會被 scrim 吃掉', async ({ page }) => {
   await openApp(page)
   await page.click('button.cta')
-  await page.waitForSelector('.food-row')
+  await page.getByLabel('找食物').fill('地瓜')
   await page.waitForTimeout(800)
-  await page.locator('.food-row').first().click()
+  await page.locator('.find-row').first().click()
   await page.waitForSelector('.pick-bar')
   await armClickDuringClose(page, 'log-sheet', await centerOf(page.locator('.tab[aria-label="設定"]')), SHEET_CLOSE_GUARD_MS + 60)
   await page.click('.pick-bar-btn')

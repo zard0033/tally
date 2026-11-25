@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, addAliases, aliasHit, byFoodName, foodMatches, foodToForm, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
+import { BLANK_FOOD_FORM, MACRO_MAX, NO_VENDOR, addAliases, byFoodName, foodMatches, foodToForm, groupByVendor, readingToForm, validateFoodForm, type LabelReading } from './foodForm'
 
 /** 校準階段那張伯朗奶茶隨身包的真實讀數（spec.md「接縫」節）。 */
 const BROWN: LabelReading = {
@@ -90,18 +90,6 @@ describe('foodToForm', () => {
     const f = { name: 'x', vendor: null, kcal: 1, protein: 2, fat: 3, carb: 4, verified: false, aliases: ['y'] }
     expect(foodToForm(f)).toMatchObject({ verified: false, aliases: ['y'] })
     expect(foodToForm({ ...f, verified: true }).verified).toBe(true)
-  })
-})
-
-describe('aliasHit', () => {
-  const tea = { name: '手搖飲（無糖純茶＋寒天，大杯）', vendor: null, aliases: ['紅萱波波', '麻古 紅萱波波'] }
-  it('只靠別名對上才回別名；品名或店家對上就不回', () => {
-    expect(aliasHit(tea, '麻古')).toBe('麻古 紅萱波波')
-    expect(aliasHit(tea, '紅萱')).toBe('紅萱波波')
-    expect(aliasHit(tea, '寒天')).toBe(null)
-    expect(aliasHit({ ...tea, vendor: '麻古' }, '麻古')).toBe(null)
-    expect(aliasHit(tea, ' ')).toBe(null)
-    expect(aliasHit(tea, '珍珠')).toBe(null)
   })
 })
 

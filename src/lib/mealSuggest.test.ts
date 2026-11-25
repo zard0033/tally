@@ -1,20 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { rowKeyOfIntake } from './listRows'
 import type { IntakeRow } from './api'
 import { isWeekend } from './dates'
 import { macroGap } from './formulas'
 import {
-  mergeByKey,
   recentMeals,
   repeatToIntake,
-  seenCategories,
-  seenText,
   suggestByGap,
   suggestLabel,
   suggestMeals,
   suggestRepeat,
   type GapContext,
-  type RepeatItem,
   type RepeatSourceRow,
   type RepeatSuggestion,
 } from './mealSuggest'
@@ -318,51 +313,6 @@ describe('repeatToIntake', () => {
   })
 })
 
-describe('mergeByKey', () => {
-  const item = (over: Partial<RepeatItem>): RepeatItem => ({
-    food_id: 13,
-    qty: 1,
-    kcal: 120,
-    protein: 24,
-    fat: 1.5,
-    carb: 2,
-    name: null,
-    label: '乳清（1匙）',
-    mods: [],
-    vendor: null,
-    intakeVendor: null,
-    archived: false,
-    category: null,
-    ...over,
-  })
-
-  it('同食物份量相加，單份值與快照取第一列，順序照第一次出現', () => {
-    const merged = mergeByKey([
-      item({ qty: 1, kcal: 120, name: '第一列' }),
-      item({ food_id: 15, label: '無糖豆漿' }),
-      item({ qty: 2, kcal: 999, name: '第二列' }),
-    ], (i) => i.food_id)
-    expect(merged.map((i) => i.food_id)).toEqual([13, 15])
-    expect(merged[0]).toMatchObject({ qty: 3, kcal: 120, name: '第一列' })
-  })
-
-  it('小數份量相加不留浮點尾巴', () => {
-    expect(mergeByKey([item({ qty: 0.1 }), item({ qty: 0.2 })], (i) => i.food_id)[0].qty).toBe(0.3)
-  })
-
-  it('同一筆通用食物的不同別名是不同列：各自留著品名、店家、份量、微調；同一個別名才合併（v2.162）', () => {
-    const tea = { vendor: null, aliases: ['麻古 紅萱波波', '50嵐 四季春青茶（珍珠）'] }
-    const key = (i: RepeatItem) => rowKeyOfIntake({ food_id: i.food_id, name: i.name, vendor: i.intakeVendor }, tea)
-    const a = item({ food_id: 40, name: '紅萱波波', intakeVendor: '麻古', mods: ['sweet:light'] })
-    const b = item({ food_id: 40, name: '四季春青茶（珍珠）', intakeVendor: '50嵐', qty: 2 })
-    const merged = mergeByKey([a, b, { ...a, qty: 2 }], key)
-    expect(merged.map((i) => [i.name, i.intakeVendor, i.qty, i.mods])).toEqual([
-      ['紅萱波波', '麻古', 3, ['sweet:light']],
-      ['四季春青茶（珍珠）', '50嵐', 2, []],
-    ])
-  })
-})
-
 describe('suggestLabel', () => {
   it('單項份量 1 不加 ×N', () => {
     const s: RepeatSuggestion = suggestRepeat([row('2026-11-03')], '2026-11-04', 'breakfast')!
@@ -513,35 +463,13 @@ describe('第三版：避開重複', () => {
       expect(repeatToIntake(s, VIEW)[0].vendor).toBe('楓之味')
     })
 
-    it('食物本身有店家：intakeVendor 是 null，寫回不帶店家', () => {
-      const s = suggestMeals(ate('2026-10-30', 'dinner', [CHICKEN]).map((r) => ({ ...r, vendor: '亂填' })), VIEW, [], null).dinner![0]
-      expect(s.items[0]).toMatchObject({ vendor: '便當店', intakeVendor: null })
-      expect(repeatToIntake(s, VIEW)[0]).not.toHaveProperty('vendor')
-    })
-  })
-
-  describe('seenCategories：sheet 類型組標的吃過提示（AC 6）', () => {
-    it('檢視日其他餐優先於前一天；只收餐點類型；提示文字照實際那一餐', () => {
-      const dayRows = [today('breakfast', OMELET), today('lunch', ROAST_A), today('lunch', TEA)]
-      const rows = [...ate('2026-11-03', 'dinner', [BEEF, EGG]), ...ate('2026-11-03', 'lunch', [ROAST_B]), ...ate('2026-11-02', 'dinner', [CHICKEN])]
-      const m = seenCategories(rows, VIEW, dayRows, 'dinner')
-      // 燒臘今天中午、昨天中午都吃過 → 取今天；飲料、配菜是搭配類不收；便當是前天，不在範圍
-      expect([...m.keys()].sort()).toEqual(['早餐店', '丼飯類', '麵食'].sort())
-      expect(seenText(m.get('丼飯類')!)).toBe('中午吃過')
-      expect(seenText(m.get('早餐店')!)).toBe('早上吃過')
-      expect(seenText(m.get('麵食')!)).toBe('昨天吃過')
-    })
-
-    it('不含這一餐本身；早餐與點心不提示；回看資料還沒到就只看檢視日', () => {
-      const dayRows = [today('lunch', ROAST_A), today('dinner', BEEF)]
-      expect([...seenCategories(null, VIEW, dayRows, 'lunch').keys()]).toEqual(['麵食'])
-      expect(seenCategories(ate('2026-11-03', 'lunch', [BEEF]), VIEW, dayRows, 'breakfast').size).toBe(0)
-      expect(seenCategories(ate('2026-11-03', 'lunch', [BEEF]), VIEW, dayRows, 'snack').size).toBe(0)
-    })
-
-    it('同一類今天兩餐都吃過，取一天裡較早那餐（與紀錄先後無關）', () => {
-      const dayRows = [today('snack', ROAST_B), today('breakfast', ROAST_A)]
-      expect(seenText(seenCategories(null, VIEW, dayRows, 'dinner').get('丼飯類')!)).toBe('早上吃過')
+    it('食物本身有店家、紀錄記了別家（v2.167：打「全家 茶葉蛋」）：顯示與寫回都照紀錄的；沒記就不帶', () => {
+      const s = suggestMeals(ate('2026-10-30', 'dinner', [CHICKEN]).map((r) => ({ ...r, vendor: '全家' })), VIEW, [], null).dinner![0]
+      expect(s.items[0]).toMatchObject({ vendor: '全家', intakeVendor: '全家' })
+      expect(repeatToIntake(s, VIEW)[0].vendor).toBe('全家')
+      const plain = suggestMeals(ate('2026-10-30', 'dinner', [CHICKEN]), VIEW, [], null).dinner![0]
+      expect(plain.items[0]).toMatchObject({ vendor: '便當店', intakeVendor: null })
+      expect(repeatToIntake(plain, VIEW)[0]).not.toHaveProperty('vendor')
     })
   })
 

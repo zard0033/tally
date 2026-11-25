@@ -1515,14 +1515,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 
 .sect-lb { padding: var(--s-4) var(--s-5) var(--s-1); font-size: var(--t-xs);
   color: var(--ink-muted); letter-spacing: var(--track-xs); flex-shrink: 0; }
-/* 記一筆 sheet 的建議段：列就是平常的食物列，只有段標換 accent 色、右邊多「全選」。鈕的負邊距把 44px 命中區的高度大多收掉（段標實測高 40px） */
-.sect-suggest { display: flex; align-items: center; justify-content: space-between; color: var(--accent); font-weight: 600; }
-.sect-suggest .sect-act { position: relative; z-index: 1; min-width: 44px; min-height: 44px; margin: calc(var(--s-3) * -1) calc(var(--s-2) * -1) calc(var(--s-3) * -1) 0; padding: 0 var(--s-2); border: none; background: none;
-  font-family: inherit; font-size: var(--t-sm); font-weight: 600; color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
-.sect-suggest .sect-act:active { opacity: .6; }
-.sect-suggest .sect-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-2); }
 
-/* 搜尋框是模式切換器：一有輸入，搜尋結果取代整段清單，同時只存在一段 */
+/* 搜尋框是模式切換器：框空著是{餐別}常吃，一有輸入，搜尋結果取代它 */
 .search-wrap { padding: var(--s-3) var(--s-5); flex-shrink: 0; }
 .search-box { display: flex; align-items: center; gap: var(--s-2); min-height: 48px;
   padding: 0 var(--s-3); }
@@ -1536,111 +1530,154 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .food-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none;
   overscroll-behavior: contain; }
 .food-scroll::-webkit-scrollbar { display: none; }
-.food-list { margin: 0; padding: 0 var(--s-5); list-style: none; }
-.food-list li { border-bottom: 1px solid var(--rule-subtle); }
-.food-list li:last-child { border-bottom: none; }
-.food-scroll .muted { color: var(--ink-muted); padding: var(--s-4) var(--s-5); margin: 0; }
 
-/* ── 「全部食物」依類型分組（v2.127，樣張 storybook-merged.html 第 2 節）──
-   組標＝32px 類型圖示（吃過的蓋徽章）＋組名＋右邊小字（吃過提示，沒有就是這一餐吃過幾次）。
-   一般品項列不放圖示：組標已經說了，每列都放會吵；建議列各自不同類，才放 24px。 */
-.sheet { --ci-ring: var(--card); }
-.grp-head { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; margin: 0;
-  padding: var(--s-2) var(--s-5) 0; font-size: var(--t-base); font-weight: 400; }
-.grp-head .gn { font-weight: 700; color: var(--ink); }
-.grp-head .seen { font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); }
-.grp-head .cnt { font-size: var(--t-xs); color: var(--ink-muted); }
-.grp-head .cnt .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
-/* 收合列：三個小圖示疊一排＋「其他餐的（…）」＋往下的 chevron；展開後 chevron 翻上 */
-.grp-more { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 48px;
-  margin-top: var(--s-2); padding: 0 var(--s-5); border: none; border-top: 1px solid var(--rule);
-  background: none; text-align: left; font-family: inherit; font-size: var(--t-base); font-weight: 600; color: var(--accent);
+/* ═══ 記一筆重做（v2.167，spec「記一筆重做：兩個情境」，樣張 logsheet-c3/c4/c5、learn-stories）═══
+   整張只有兩種列：「這一餐的列」（.meal-row，點了原地展開）與「找東西的列」（.find-row，右邊一顆 ＋／✓）。 */
+
+/* 框裡的清除鈕：44px 命中區、圖示 16px */
+.search-clear { display: grid; place-items: center; width: 44px; height: 44px; margin-right: calc(var(--s-3) * -1); border: none; background: none;
+  color: var(--ink-muted); cursor: pointer; -webkit-appearance: none; appearance: none; flex-shrink: 0; }
+.search-clear:active { opacity: .6; }
+.search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-tab); }
+.search-clear svg { width: 16px; height: 16px; }
+
+/* 框下的店名小膠囊（v2.167 review）：框裡第一段被當成店名時看得到、按得掉；✕ 的命中區 44px（負外距不撐高這一行） */
+.store-chip { display: inline-flex; align-items: center; gap: var(--s-1); margin-top: var(--s-2); padding-left: var(--s-3); border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--accent); font-size: var(--t-sm); font-weight: 700; }
+.store-chip button { display: grid; place-items: center; width: 44px; height: 44px; margin: -10px -6px -10px -10px; border: none; background: none;
+  color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.store-chip button svg { width: 14px; height: 14px; }
+.store-chip button:active { opacity: .6; }
+.store-chip button:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: var(--r-pill); }
+
+/* 工具列（樣張第四版甲）：等寬格、圖示＋名字；原地展開的那格（只記熱量）開著時描主藍框 */
+.log-tools { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--s-2); padding: 0 var(--s-5) var(--s-3); flex-shrink: 0;
+  border-bottom: 1px solid var(--rule-subtle); }
+.log-tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: var(--s-1) var(--s-2);
+  border: none; border-radius: var(--r-tab); background: var(--fill); color: var(--ink); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
   cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
-.grp-more:active { opacity: .6; }
-.grp-more:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.grp-more .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.grp-more > svg { width: 16px; height: 16px; flex-shrink: 0; transition: transform var(--dur-base) var(--ease); }
-.grp-more[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.log-tool svg { width: 18px; height: 18px; color: var(--accent); }
+.log-tool:active { opacity: .6; }
+.log-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.log-tool[aria-expanded="true"] { background: var(--card); box-shadow: inset 0 0 0 2px var(--accent); }
 
-.food-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 44px;
-  padding: var(--s-2) 0; border: none; background: none; text-align: left;
-  font-family: inherit; color: inherit; cursor: pointer;
-  -webkit-appearance: none; appearance: none; }
-.food-row { transition: opacity var(--dur-base) var(--ease); }
-.food-row:active { opacity: .6; }
-.food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
-  border-radius: var(--s-1); }
-/* 未勾選的圈是「這份清單可以多選」唯一的視覺訊號，圖形元素要 3:1。
-   用 --ink-muted 不用 --ink-faint（裝飾色）：舊色票時 --ink-faint 只有 2.99:1 沒過；v2.122 對 sheet 的 --card
-   是 3.59:1 剛擦過，但這是唯一的訊號，不回退——DESIGN.md 逼 chevron 改色的同一條理由 */
-.food-row .chk { width: 20px; height: 20px; flex-shrink: 0; color: var(--ink-muted); }
-.food-row[aria-pressed="true"] .chk { color: var(--accent); }
-.food-row .nm-wrap { min-width: 0; flex: 1; }
-/* 店家那一行不可截斷或省略——它是區分同名品項的唯一資訊 */
-.food-row .nm { font-size: var(--t-base); display: block;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.food-row .sub { font-size: var(--t-xs); color: var(--ink-muted); display: block; }
-/* 搜尋只靠別名對上：「對到：麻古 紅萱波波」，對上的字標主色（v2.156） */
-.food-row .alias-hit mark { background: none; color: var(--accent); font-weight: 700; }
-.food-row .kc { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-muted);
-  flex-shrink: 0; font-variant-numeric: tabular-nums; }
-/* 逐筆超標預警（DESIGN.md v2.10）：kc-wrap 讓 kc 數字與下面的 delta 小字垂直堆疊、
-   靠右對齊——delta 只在真的觸發時才出現，沒觸發時 kc-wrap 跟原本的 .kc 視覺一致 */
-.kc-wrap { flex-shrink: 0; text-align: right; }
-.kc-wrap .kc { display: block; }
-.kc-wrap .kc.over { color: var(--over); font-weight: 700; }
+/* 只記熱量：工具列下面原地展開（樣張第五版一） */
+.kcal-panel { margin: var(--s-3) var(--s-5) 0; padding: var(--s-3); border-radius: var(--r-btn); background: var(--accent-soft); }
+.kcal-panel-lb { margin: 0; font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); color: var(--ink-muted); }
+.kcal-panel .est-tiers { padding: var(--s-2) 0 0; }
+.kcal-panel .est-tier i { word-break: keep-all; }
+.kcal-panel .est-own { padding: var(--s-2) 0 0; color: var(--ink); }
+.kcal-panel .est-own input { background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--card); }
+
+/* 段標：h3 要歸零預設外距；「這一餐」比其他段標重一級（它是要按加入的那一份） */
+h3.sect-lb { margin: 0; font-weight: 700; }
+.sect-strong { color: var(--ink); font-size: var(--t-sm); }
+
+/* ── 這一餐的列 ── 淡藍底（已經在這一餐的意思）；名字＋店家灰字／小字「來源 · 蛋白 Ng」／份數＋熱量＋ › */
+.meal-rows { margin: 0; padding: 0; list-style: none; }
+.meal-row { background: color-mix(in srgb, var(--accent-soft) 60%, var(--card)); border-bottom: 1px solid var(--card); }
+.meal-row.fresh { animation: est-rise var(--dur-sheet) var(--ease-sheet) both; }
+.mr-head { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 56px; padding: var(--s-2) var(--s-3) var(--s-2) var(--s-5);
+  border: none; background: none; color: var(--ink); font-family: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.mr-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mr-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mr-nm { font-size: var(--t-base); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.mr-vd { margin-left: var(--s-1); font-weight: 400; font-size: var(--t-sm); color: var(--ink-muted); }
+.mr-sub { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.mr-sub .num { font-variant-numeric: tabular-nums; }
+.mr-err { color: var(--over); }
+.mr-qty { flex-shrink: 0; font-size: var(--t-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.mr-kc { flex-shrink: 0; min-width: 3ch; text-align: right; font-size: var(--t-md); font-weight: 700; font-variant-numeric: tabular-nums; }
+.mr-chev { width: 16px; height: 16px; flex-shrink: 0; color: var(--ink-muted); transition: transform var(--dur-base) var(--ease); }
+.mr-head[aria-expanded="true"] .mr-chev { transform: rotate(90deg); }
+.mr-body { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-5) var(--s-3); }
+.mr-body .pmods-panel { border-left-color: var(--card); }
+.mr-line { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.mr-lb { font-size: var(--t-sm); color: var(--ink-muted); }
+.mr-kcin { display: flex; align-items: center; gap: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); }
+.mr-kcin input { width: 88px; min-height: 44px; padding: 0 var(--s-3); border: none; border-radius: var(--r-tab); text-align: right;
+  font-family: var(--font-num); font-size: var(--t-md); color: var(--ink); font-variant-numeric: tabular-nums;
+  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - 2 * var(--s-3)) 2px, var(--card); }
+.mr-kcin input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.mr-body .est-why, .mr-body .est-fixed, .mr-body .est-fix-err { margin: 0; }
+.mr-body .est-fixed { align-self: flex-start; }
+.mr-body .est-fix { padding: 0; }
+.mr-acts { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); min-height: 44px; }
+.meal-row .mr-near { margin: 0 var(--s-5) var(--s-2); }
+/* 還在估的列：太陽色光暈（AI 的身分）繞一圈，寫在等什麼；估不出來寫原因＋重試 */
+.meal-row.est { padding: var(--s-2) var(--s-5); background: none; }
+.meal-row.est .ai-ring { margin: 0; }
+.mr-est { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; padding: var(--s-2) var(--s-3); }
+.mr-est-acts { display: flex; align-items: center; gap: var(--s-3); flex-shrink: 0; }
+
+/* 搭配卡（樣張第四版三）：標題寫還剩多少，選項是膠囊（名字＋卡數＋＋） */
+.pair-card { margin: var(--s-3) var(--s-5) 0; padding: var(--s-3); border-radius: var(--r-btn); background: var(--raised); }
+.pair-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); margin: 0; font-size: var(--t-sm); font-weight: 700; }
+.pair-room { flex-shrink: 0; font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.pair-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
+.pair-chip { position: relative; display: inline-flex; align-items: center; gap: var(--s-1); min-height: 36px; padding: 0 var(--s-2) 0 var(--s-3); border: none;
+  border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-1); color: var(--ink); font: inherit; font-size: var(--t-sm);
+  cursor: pointer; -webkit-appearance: none; appearance: none; }
+.pair-chip::before { content: ""; position: absolute; inset: -4px -2px; }
+.pair-chip .num { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.pair-chip svg { width: 16px; height: 16px; color: var(--accent); }
+.pair-chip:active { opacity: .6; }
+.pair-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 找東西的列 ── 整列一顆鈕；名字（對到的字深藍粗體）＋店家灰字或店名小標；小字；熱量；右邊 ＋／✓ */
+.find-list { margin: 0; padding: 0 var(--s-5); list-style: none; }
+.find-list li + li { border-top: 1px solid var(--rule-subtle); }
+.find-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-2) 0; border: none; background: none;
+  color: var(--ink); font-family: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.find-row:active { opacity: .6; }
+.find-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tab); }
+.fr-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fr-nm { font-size: var(--t-base); line-height: 1.35; overflow-wrap: anywhere; }
+.fr-nm .hl { color: var(--accent); font-weight: 700; }
+.fr-vd { margin-left: var(--s-1); font-size: var(--t-sm); color: var(--ink-muted); }
+.fr-tag, .fr-lead { display: inline-block; padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent);
+  font-size: var(--t-xs); font-weight: 700; vertical-align: 1px; }
+.fr-tag { margin-left: var(--s-1); }
+.fr-lead { margin-right: var(--s-1); }
+.fr-sub { font-size: var(--t-xs); color: var(--ink-muted); letter-spacing: var(--track-xs); }
+.fr-kc-wrap { flex-shrink: 0; text-align: right; }
+.fr-kc { display: block; font-size: var(--t-sm); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.fr-kc.over { color: var(--over); font-weight: 700; }
+.fr-add { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: var(--r-pill); color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent); }
+.fr-add svg { width: 18px; height: 18px; stroke-width: 2; }
+.find-row[aria-pressed="true"] .fr-add { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.find-empty { margin: 0; padding: var(--s-3) var(--s-5); font-size: var(--t-sm); color: var(--ink-muted); line-height: 1.5; }
+
+/* 用 AI 估：搜尋結果最下面永遠一張（太陽色＝AI 的身分；鈕墨藍實心，跟底部「加入」的主藍分開） */
+.ai-card { margin: var(--s-3) var(--s-5) var(--s-4); padding: var(--s-3); border-radius: var(--r-btn); background: var(--sun-pale); }
+.ai-card p { margin: 0 0 var(--s-2); font-size: var(--t-sm); color: var(--ink); }
+.ai-card-btn { width: 100%; min-height: 48px; padding: 0 var(--s-4); border: none; border-radius: var(--r-tab); background: var(--ink); color: var(--card);
+  font-family: inherit; font-size: var(--t-base); font-weight: 700; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
+.ai-card-btn:active { opacity: .7; }
+.ai-card-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ai-card-btn:disabled { opacity: .5; cursor: default; }
+
+/* 食品庫頁：頂欄（‹ 餐別／食品庫／✕）、新增食物、底部「加 N 樣，回到{餐別}」 */
+.libp-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: var(--s-2) var(--s-2) 0 var(--s-3); flex-shrink: 0; }
+.libp-head .back-btn { justify-self: start; }
+.libp-head .icon-btn { justify-self: end; }
+.libp-new { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 52px; padding: 0 var(--s-5); border: none;
+  border-bottom: 1px solid var(--rule-subtle); background: none; color: var(--accent); font-family: inherit; font-size: var(--t-base); font-weight: 700;
+  text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.libp-new svg { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 2; }
+.libp-new:active { opacity: .6; }
+.libp-new:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* sheet 裡的類型圖示：徽章外圈的底色環跟著 sheet 的白卡 */
+.sheet { --ci-ring: var(--card); }
+
 .kc-delta { display: block; font-size: var(--t-xs); color: var(--over); white-space: nowrap; }
 
-/* 軟性排序（DESIGN.md v2.17）：`.over-quota` class 只是排序/測試用的語意標記，
-   **刻意不掛任何視覺樣式**。v2.15 先試 opacity 降權，為了讓「店家」子行過 WCAG AA
-   被迫推到 .90、淡化到肉眼看不出來；v2.16 改試背景色調，opacity 的對比度問題是
-   解決了，但使用者真機看過後認為背景色塊跟這個 app「不鋪底色、靠明度分層」的
-   極簡風格（見下面「選取態不鋪底色」那條同樣的顧慮）不搭。兩次視覺降權都被
-   否決後，v2.17 定案**完全不做額外視覺處理**：不符合的品項就是排在後面、
-   靠既有的 `.kc.over` 紅字與 `.kc-delta` 超出量文字（逐筆超標預警機制既有的
-   視覺語言）自然被看出來，不新增任何顏色或色塊。
-   **這個 class 唯一的消費者是 e2e 測試的排序/分組斷言（`quota-warning.spec.ts`）**——
-   下一輪清理看到這裡沒有對應規則，不要當成殘留死碼刪掉。 */
-
-/* 選取態（v2.158 起勾了留在原位，樣張 picked-inplace.html C）：勾選圖示變實心＋右側長出加減鈕＋整列鋪 --accent-soft。
-   以前列會搬到頂端「已選」段、連排三列鋪底會成一大片色塊所以不鋪；現在勾的列散在清單各處，捲過去時要一眼認得出來。
-   底色用負邊距撐滿整列寬（清單左右各有 --s-5 內距）。
-   input 巢在 button 裡不可聚焦，所以份量組與 .food-row 並排在 .food-line 這個 flex 容器 */
-.food-item { position: relative; isolation: isolate; }
-.food-item.selected { margin: 0 calc(var(--s-5) * -1); padding: 0 var(--s-5); background: var(--accent-soft); }
-.food-line { display: flex; align-items: center; gap: var(--s-2); min-height: 44px;
-  padding: var(--s-1) 0; }
-.food-item.selected .food-row { flex: 1; min-width: 0; padding: 0; }
-/* 點已選膠囊捲過來那一列閃一下：疊一層 --accent 只動透明度（減少動態照播，見 DESIGN「減少動態」：純透明度不暈）。
-   z-index -1 落在列底色之上、字之下（.food-item 是 isolation: isolate） */
-.row-flash { position: absolute; inset: 0; z-index: -1; background: var(--accent); opacity: 0; pointer-events: none;
-  animation: row-flash 700ms var(--ease) forwards; }
-@keyframes row-flash { 0% { opacity: 0; } 15% { opacity: .22; } 100% { opacity: 0; } }
-
-/* 已選膠囊列（v2.158）：釘在搜尋框下、不跟著捲，有勾才出現。一行放不下就橫向捲。
-   膠囊 28px 高、上下各 --s-2 內距撐到 44px，命中區用 ::before 撐滿這 44px（再往外會被橫向捲動裁掉）。 */
-.pick-pin { display: flex; align-items: center; gap: var(--s-1); flex-shrink: 0; padding: 0 var(--s-5);
-  background: var(--raised); border-bottom: 1px solid var(--rule-subtle); }
-.pick-pin-lb { flex-shrink: 0; font-size: var(--t-xs); font-weight: 700; letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.pick-chips { position: relative; display: flex; gap: var(--s-2); flex: 1; min-width: 0; overflow-x: auto;
-  padding: var(--s-2) var(--s-1); scrollbar-width: none; overscroll-behavior-x: contain; }
-.pick-chips::-webkit-scrollbar { display: none; }
-.pick-chip { position: relative; flex-shrink: 0; min-height: 28px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill);
-  background: var(--accent-soft); color: var(--accent-dark); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
-  white-space: nowrap; cursor: pointer; -webkit-appearance: none; appearance: none;
-  transition: box-shadow var(--dur-base) var(--ease), opacity var(--dur-base) var(--ease); }
-/* 長名截斷放在內層：膠囊本身 overflow: hidden 會把 ::before 撐出的命中區裁回 28px */
-.pick-chip-tx { display: block; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
-.pick-chip::before { content: ""; position: absolute; inset: calc(var(--s-2) * -1) -2px; }
-/* 最近勾的那顆描 2px 主色，到下一次勾為止 */
-.pick-chip.is-new { box-shadow: 0 0 0 2px var(--accent); }
-.pick-chip:active { opacity: .6; }
-.pick-chip:disabled { cursor: default; opacity: .6; }
-.pick-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* 份量微調（spec「份量微調」，樣張 portion-mods.html B）：已選那一列下面一行主色字寫現在的狀態，點了展開。
-   左緣對齊品名（勾 20px＋間距）。記一筆與今日頁就地編輯共用；就地編輯裡沒有勾，左緣歸零、上下交給容器的 gap。 */
-.pmods { margin: calc(var(--s-1) * -1) 0 var(--s-2) calc(20px + var(--s-3)); }
+/* 份量微調（spec「份量微調」，樣張 portion-mods.html B）：一行主色字寫現在的狀態，點了展開。
+   記一筆「這一餐」點開的列與今日頁就地編輯共用；左緣與上下間距都交給容器。 */
+.pmods { margin: 0; }
 .pmods-sum { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 36px; padding: 0; border: none; background: none;
   font: inherit; font-size: var(--t-sm); font-weight: 700; color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; position: relative; }
 .pmods-sum::before { content: ""; position: absolute; inset: -4px -6px; }
@@ -1652,12 +1689,10 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .pmods-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-tab); }
 .pmods-last { font-weight: 400; color: var(--ink-muted); }
 .pmods-panel { border-left: 2px solid var(--accent-soft); padding: var(--s-1) 0 var(--s-1) var(--s-3); margin-top: var(--s-1); }
-.food-item.selected .pmods-panel { border-left-color: var(--card); } /* v2.158：勾起來的列鋪了 --accent-soft 底，同色直線會看不見 */
 .pmods-grp + .pmods-grp { margin-top: var(--s-2); }
 .pmods-lbl { margin: 0 0 var(--s-1); font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
 .pmods-panel .seg { flex: none; }
 .pmods-panel .seg button { min-height: 44px; font-size: var(--t-sm); }
-.item-editor .pmods { margin: 0; }
 .pmods-chips { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
 /* 配料可複選：描邊小膠囊（同 .row-pill 的形狀），按下＝主色實心 */
 .pmods-chip { position: relative; min-height: 32px; padding: 0 var(--s-3); border: none; border-radius: var(--r-pill); background: var(--card);
@@ -1689,40 +1724,6 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
   -webkit-appearance: none; appearance: none; }
 .qty-value:focus { outline: none; background: var(--card); box-shadow: inset 0 -2px 0 var(--accent); }
 
-/* 新增食物入口：只要搜尋框有輸入就常駐清單末尾，不是只在零結果時出現 */
-.search-empty-msg { padding: var(--s-4) var(--s-5) var(--s-1); text-align: center;
-  color: var(--ink-muted); font-size: var(--t-sm); margin: 0; }
-.add-food-row { display: flex; align-items: center; justify-content: center; gap: var(--s-2);
-  width: 100%; min-height: 44px; padding: var(--s-2) 0; border: none; background: none;
-  color: var(--accent); font-family: inherit; font-size: var(--t-sm); font-weight: 700;
-  cursor: pointer; -webkit-appearance: none; appearance: none; }
-.add-food-row svg { width: 16px; height: 16px; flex-shrink: 0; }
-.add-food-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.add-food-row { transition: opacity var(--dur-base) var(--ease); }
-.add-food-row:active { opacity: .6; }
-.add-food-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-/* 新店第一次（v2.162，spec「記店家改版」甲3，樣張 vendor-directions.html 甲3）：搜不到時一張主色淡底卡，
-   列出差不多的通用食物（白底選項，選中＝主色描邊）、記住勾選、主按鈕寫「記成『品名 · 店家』」。 */
-.shop-card { margin: var(--s-2) var(--s-5) 0; padding: var(--s-3); border-radius: var(--r-btn); background: var(--accent-soft);
-  display: flex; flex-direction: column; gap: var(--s-2); }
-.shop-card-t { margin: 0; font-size: var(--t-sm); font-weight: 800; color: var(--ink); }
-.shop-opt { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 44px; padding: 0 var(--s-3); border: none;
-  border-radius: var(--r-tab); background: var(--card); color: var(--ink); font: inherit; font-size: var(--t-sm); text-align: left;
-  cursor: pointer; -webkit-appearance: none; appearance: none; }
-.shop-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 700; }
-.shop-opt-nm { flex: 1; min-width: 0; }
-.shop-opt-kc { color: var(--ink-muted); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.shop-opt-est { color: var(--ink-muted); }
-.shop-opt:active, .shop-more:active { opacity: .6; }
-.shop-opt:focus-visible, .shop-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.shop-more { align-self: flex-start; min-height: 36px; padding: 0; border: none; background: none; color: var(--accent);
-  font: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer; -webkit-appearance: none; appearance: none; }
-.shop-keep { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink); }
-.shop-keep input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
-.shop-note { margin: 0; font-size: var(--t-xs); letter-spacing: var(--track-xs); color: var(--ink-muted); }
-.shop-card .pick-bar-btn { margin: 0; }
-
 /* ═══ 估一筆（spec.md A 節 2026-11-13；DESIGN v2.134。樣張 estimate-entry.html B、ai-flair.html 光暈 A）═══
    太陽色（--sun／--sun-pale／--sun-deep）在這裡是「這是 AI」的身分，不是狀態色，所以可以跟主藍、破表紅同框。
    字不用 --sun-deep：它對白卡只有約 3.9:1，小字過不了 4.5；太陽色只給邊框、光暈、圖示與按鈕底。 */
@@ -1743,77 +1744,18 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .est-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .est-go:disabled { background: var(--fill); color: var(--ink-muted); box-shadow: none; cursor: default; }
 
-/* ═══ 「這一餐」段（v2.164，spec「一個框記一餐」，樣張 one-box.html 甲）：框裡打完的每一段一列，照打的順序。
-   勾好的食品庫列用清單勾起來的樣子（.food-item.selected）；草稿列鋪同一個 --accent-soft（勾著的意思）；
-   待估列是太陽色光暈（AI 的身分）：估的時候光繞一圈，寫在等什麼。 */
-.sect-meal { display: flex; align-items: center; justify-content: space-between; }
-.sect-meal .sect-act { position: relative; z-index: 1; min-width: 44px; min-height: 44px; margin: calc(var(--s-3) * -1) calc(var(--s-2) * -1) calc(var(--s-3) * -1) 0;
-  padding: 0 var(--s-2); border: none; background: none; color: var(--accent); font: inherit; font-size: var(--t-sm); font-weight: 700; cursor: pointer; }
-.sect-meal .sect-act:active { opacity: .6; }
-.sect-meal .sect-act:disabled { color: var(--ink-faint); cursor: default; }
-.sect-meal .sect-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--s-2); }
 .meal-rows > li:focus { outline: none; }
 .meal-rows > li:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* 草稿列撐滿整列寬（同勾好的列），右邊留 --s-2：✕ 的 44px 命中區本身有留白，右緣跟勾好列的步進器差不多齊 */
-.meal-rows .est-draft { margin: 0 calc(var(--s-5) * -1); padding: var(--s-2) var(--s-2) 0 var(--s-5); border-top: none; background: var(--accent-soft); }
-.meal-rows .est-draft.est-lib { background: color-mix(in srgb, var(--accent-soft) 45%, var(--card)); }
-.meal-pend { padding: var(--s-2) 0; }
-.meal-pend .ai-ring { margin: 0; }
-.mp-in { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-1) 0 var(--s-1) var(--s-3); }
-.mp-tx { min-width: 0; font-size: var(--t-md); font-weight: 600; color: var(--ink); line-height: 1.35; overflow-wrap: anywhere; }
-.mp-go { min-height: 40px; padding: 0 var(--s-4); font-size: var(--t-sm); }
-.mp-go[aria-disabled="true"] { background: var(--fill); color: var(--ink-muted); box-shadow: none; cursor: default; }
-.mp-wait { grid-column: 1 / -1; display: flex; gap: var(--s-2); margin: 0; padding: 0 var(--s-3) var(--s-1) 0; font-size: var(--t-xs); color: var(--ink); }
-.mp-wait .num { color: var(--ink-muted); }
-.mp-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding-right: var(--s-3); }
-.mp-err { flex: 1; min-width: 0; font-size: var(--t-xs); color: var(--over); line-height: 1.4; }
-.mp-only { margin-left: auto; }
-.mp-in .est-near { margin: 0 var(--s-3) var(--s-2) 0; }
-.mp-tiers { grid-column: 1 / -1; padding: 0 var(--s-3) var(--s-2) 0; }
-.mp-tiers-lb { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--ink-muted); }
-.mp-tiers .est-tiers { padding: var(--s-2) 0 0; }
-/* 待估列裡比原本的子畫面窄：例子只在頓號斷行，不把「蛋餅」拆成兩行 */
-.mp-tiers .est-tier i { word-break: keep-all; }
-.mp-tiers .est-own { padding: var(--s-2) 0 0; }
+
 .pick-hint { margin: 0; font-size: var(--t-sm); color: var(--ink); }
 
-/* 草稿列：AI 回來的那一批逐列浮上來（每列晚 90ms），熱量從 0 滾到估算值（MealSection 的 KcalField）、落定時亮一圈太陽色 */
-.est-draft { display: grid; grid-template-columns: 1fr auto 44px; align-items: center; column-gap: var(--s-2); padding: var(--s-2) 0 0 var(--s-4);
-  border-top: 1px solid var(--rule-subtle); }
-.est-draft:first-child { border-top: none; }
-.est-draft.fresh { animation: est-rise var(--dur-sheet) var(--ease-sheet) both; }
 @keyframes est-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-/* 品名框：平常看起來像字（透明底、無底線），聚焦才出現欄位樣式——一列一個框會讓草稿卡像一張表單 */
-.est-name { min-width: 0; width: 100%; min-height: 44px; padding: 0 var(--s-2); margin-left: calc(-1 * var(--s-2)); border: none; border-radius: var(--r-tab);
-  background: transparent; font-family: inherit; font-size: var(--t-md); font-weight: 600; color: var(--ink); }
-.est-name::placeholder { color: var(--ink); opacity: 1; }
-.est-name:focus { background: linear-gradient(var(--accent), var(--accent)) no-repeat center bottom / calc(100% - var(--s-3)) 2px, var(--fill); outline: none; }
-.est-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+
 .est-only { display: inline-block; margin-right: var(--s-2); padding: 0 var(--s-2); border-radius: var(--r-pill); background: var(--raised); color: var(--ink-muted);
   font-size: var(--t-xs); font-weight: 600; vertical-align: 1px; }
-.est-kc { position: relative; display: flex; align-items: baseline; gap: 3px; justify-self: end; }
-/* 落定時亮一圈：光圈是固定的 box-shadow，只動 opacity（DESIGN：動效只動 transform／opacity） */
-.est-kc::after { content: ""; position: absolute; left: 0; top: 50%; width: 64px; height: 44px; margin-top: -22px; border-radius: var(--r-tab);
-  box-shadow: 0 0 0 4px var(--ai-glow-strong); opacity: 0; pointer-events: none; }
-.est-kc input { width: 64px; min-height: 44px; padding: 0 var(--s-2); border: none; border-radius: var(--r-tab); text-align: right;
-  font-family: var(--font-num); font-size: var(--t-md); font-weight: 700; color: var(--ink);
-  background: linear-gradient(var(--rule-field), var(--rule-field)) no-repeat center bottom / calc(100% - var(--s-3)) 2px, var(--fill); }
-.est-kc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
-.est-draft.fresh .est-kc::after { animation: est-land var(--dur-sheet) var(--ease-sheet) both; animation-delay: 600ms; }
-@keyframes est-land { 0%, 100% { opacity: 0; } 60% { opacity: 1; } }
-.est-kc span { font-size: var(--t-xs); color: var(--ink-muted); }
-.est-del { width: 44px; height: 44px; border: none; background: none; color: var(--ink-faint); display: grid; place-items: center; cursor: pointer;
-  -webkit-appearance: none; appearance: none; transition: opacity var(--dur-base) var(--ease); }
-.est-del:active { opacity: .5; }
-.est-del:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
-.est-del svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.est-why { grid-column: 1 / 3; font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; }
+
+.est-why { font-size: var(--t-xs); color: var(--ink-muted); line-height: 1.45; }
 .est-why .rng { color: var(--ink); font-weight: 600; margin-right: var(--s-2); }
-.est-keep { grid-column: 1 / 2; display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer; }
-.est-keep input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-/* 修正（v2.151，spec A2 階段 1，樣張 estimate-correct.html B）：「存進食品庫」同一行右邊一顆「✎ 修正」，點了在那一列裡展開單行框＋重估 */
-/* v2.154 起外觀走 .row-pill（DESIGN「文字鈕與列內動作」：同一列有兩個以上動作就用描邊膠囊），這裡只管位置 */
-.est-fix-btn { grid-column: 2 / 4; justify-self: end; margin-right: var(--s-3); }
 
 /* 列內動作：描邊小膠囊（v2.154，使用者 2026-11-22 選，樣張 estimate-library.html）。視覺 32px 高，::before 把命中區撐到 44px。
    .solid＝相近提示裡那顆「改用」：放在淡藍提示框裡，用實心才看得出是主要動作 */
@@ -1828,31 +1770,18 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .row-pill.solid { background: var(--accent); box-shadow: none; color: var(--on-accent); }
 .row-pill.solid:disabled { background: var(--fill); color: var(--ink-faint); }
 
-/* 估一筆先查食品庫（v2.154，spec「食品庫改版」第二步，樣張 estimate-library.html A）：
-   食品庫的列淡藍底、右邊是份數不是熱量框；藍＝食品庫、太陽色＝AI 估的 */
-.est-lib-tag svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; }
-.est-draft.est-lib { grid-template-columns: 1fr auto auto 44px; background: color-mix(in srgb, var(--accent-soft) 45%, var(--card)); }
-.est-draft.est-lib.busy { opacity: .6; }
-.est-lib-name { min-width: 0; font-size: var(--t-md); font-weight: 600; color: var(--ink); line-height: 1.3; overflow-wrap: anywhere; }
-.est-lib-name .vd { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-muted); }
-.est-lib-kc { justify-self: end; font-family: var(--font-num); font-size: var(--t-md); font-weight: 700; color: var(--ink); white-space: nowrap; }
-.est-lib-kc small { margin-left: 3px; font-family: var(--font-body); font-size: var(--t-xs); font-weight: 400; color: var(--ink-muted); }
-.est-row-foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 44px; padding-right: var(--s-3); }
-.est-lib-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px var(--s-2); border-radius: var(--r-pill); background: var(--accent-soft);
-  color: var(--accent-dark); font-size: var(--t-xs); font-weight: 600; }
-.est-lib-tag b { font-weight: 800; }
 /* 相近提示與「已有同名」提示：同一種淡藍框，按鈕在右邊 */
-.est-near { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--s-2); margin: var(--s-2) var(--s-3) 0 0; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+.est-near { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-2) var(--s-3) 0 0; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
   border-radius: var(--r-tab); background: var(--accent-soft); }
 .est-near p { flex: 1; min-width: 0; margin: 0; font-size: var(--t-sm); line-height: 1.45; color: var(--ink); }
 .est-near p b { font-weight: 800; }
-.est-dup { margin-bottom: var(--s-2); }
+
 .dup-note { margin: 0 0 var(--s-2); font-size: var(--t-xs); line-height: 1.5; color: var(--ink-muted); }
-.est-dup-note { grid-column: 1 / -1; padding-right: var(--s-3); }
+
 /* 新增食物表單：同名同店家擋下、給「改用那筆」 */
 .dup-block { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-bottom: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
   border-radius: var(--r-tab); background: var(--accent-soft); font-size: var(--t-sm); color: var(--ink); }
-.est-fix { grid-column: 1 / 4; display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0 0; }
+.est-fix { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0 0; }
 .est-fix .ai-ring { flex: 1; min-width: 0; margin: 0; }
 /* 16px：iOS 對小於 16px 的輸入框聚焦會自動放大整頁 */
 .est-fix-in { display: block; width: 100%; min-height: 44px; padding: 0 var(--s-3); border: none; border-radius: var(--r-tab); background: var(--card);
@@ -1860,11 +1789,9 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 .est-fix-in::placeholder { color: var(--ink-muted); }
 .est-fix-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .est-fix-go { padding: 0 var(--s-4); }
-.est-fix-err { grid-column: 1 / 4; margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--over); }
-.est-fixed { grid-column: 1 / 3; justify-self: start; margin-top: 2px; padding: 1px var(--s-2); border-radius: var(--r-pill);
+.est-fix-err { margin: var(--s-1) 0 0; font-size: var(--t-xs); color: var(--over); }
+.est-fixed { margin-top: 2px; padding: 1px var(--s-2); border-radius: var(--r-pill);
   background: var(--sun-pale); color: var(--sun-deep); font-size: var(--t-xs); font-weight: 700; }
-/* 修正完熱量落定時亮一圈（同 AI 剛回來的 .fresh） */
-.est-kc.landed::after { animation: est-land var(--dur-sheet) var(--ease-sheet) both; animation-delay: 600ms; }
 
 .est-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; }
 .est-tier { min-height: 92px; padding: var(--s-2); border: none; border-radius: var(--r-btn); background: var(--card); box-shadow: var(--shadow-1);
@@ -1887,8 +1814,7 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 /* 減少動態：無限循環（繞光、鉛筆、太陽、熱氣、白紙）全停成畫好的靜態圖；逐列浮現改 120ms 淡入、不位移 */
 @media (prefers-reduced-motion: reduce) {
   .ai-ring.busy::before { animation: none; transform: rotate(300deg); }
-  .est-draft.fresh { animation: est-fade 120ms linear both; animation-delay: 0s !important; }
-  .est-draft.fresh .est-kc::after, .est-kc.landed::after { animation: none; }
+  .meal-row.fresh { animation: est-fade 120ms linear both; animation-delay: 0s !important; }
 }
 @keyframes est-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -2134,8 +2060,8 @@ button.goal-est:focus-visible { outline: 2px solid var(--accent); outline-offset
 @media (prefers-reduced-motion: reduce) {
   .cta, .action-btn, .todo-row, .node-head, .tab, .settings .signout,
   .chip, .icon-btn, .datectl-title svg, .date-today-btn, .pick-bar-btn,
-  .food-row, .add-food-row, .back-btn, .item-content, .item-delete::before,
-  .qty-btn, .ed-del, .seg button, .grp-more, .grp-more > svg { transition-duration: .01ms; }
+  .find-row, .log-tool, .ai-card-btn, .libp-new, .mr-chev, .back-btn, .item-content, .item-delete::before,
+  .qty-btn, .ed-del, .seg button { transition-duration: .01ms; }
   /* 上面幾條需要跟 .item-row.is-open／.is-armed 的巢狀規則比 specificity，
      單獨的 class 選擇器贏不過，要原樣列出來才壓得過。
      .item-slide 的位移是 motion 在 JS 端驅動的，降速在 Today.tsx 走 reduceMotion() */

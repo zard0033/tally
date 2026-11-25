@@ -10,15 +10,17 @@ interface Write {
   body: unknown
 }
 
-/* 兩條測試共用的前置動作：開 sheet → 搜尋一個食品庫沒有的品名 → 點「新增到食品庫」
+/* 兩條測試共用的前置動作：開 sheet → 進食品庫頁搜尋一個食品庫沒有的品名 → 點「新增食物」
    進到新增食物表單，並把必填的熱量欄位填好，讓後面只需要專心操作店家欄位。 */
 async function openFoodForm(page: import('@playwright/test').Page, name: string) {
   await page.click('button.cta')
   await page.waitForSelector('.sheet', { timeout: 3000 })
-  const q = page.locator('input[aria-label="吃了什麼"]')
+  // v2.167：新增食物在食品庫頁最上面，品名帶食品庫頁的搜尋字
+  await page.locator('.log-tool', { hasText: '食品庫' }).click()
+  const q = page.locator('input[aria-label="找食品庫"]')
   await q.click()
   await q.pressSequentially(name, { delay: 40 })
-  await page.locator('.add-food-row').click()
+  await page.getByRole('button', { name: '新增食物（自己填營養標示）' }).click()
   await page.waitForSelector('#f-kcal', { timeout: 3000 })
   await page.locator('#f-kcal').click()
   await page.locator('#f-kcal').pressSequentially('100', { delay: 40 })

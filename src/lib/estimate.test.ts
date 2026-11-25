@@ -11,8 +11,6 @@ import {
   draftName,
   draftToFood,
   draftsFromItems,
-  draftsToIntake,
-  estimateTotals,
   parseEstimateResponse,
   parseKcal,
   settleKcal,
@@ -26,10 +24,10 @@ const item = (over: Partial<EstimateItem> = {}): EstimateItem => ({
 })
 
 describe('draftsFromItems', () => {
-  it('一樣一列、品名就是 AI 給的（不加「（估算）」）、範圍與假設帶過來、預設不存進食品庫', () => {
+  it('一樣一列、品名就是 AI 給的（不加「（估算）」）、範圍與假設帶過來', () => {
     const [d] = draftsFromItems([item()])
     expect(draftName(d, 'dinner')).toBe('螺獅粉')
-    expect(d).toMatchObject({ kcal: 620, kcalDraft: '620', low: 520, high: 760, assumption: '米粉一碗約 250 克', kcalOnly: false, keep: false, foodId: null })
+    expect(d).toMatchObject({ kcal: 620, kcalDraft: '620', low: 520, high: 760, assumption: '米粉一碗約 250 克', kcalOnly: false })
   })
   it('品名讀不到時用餐別頂替，空白假設當 null', () => {
     const [d] = draftsFromItems([item({ name: '  ', assumption: ' ' })])
@@ -100,28 +98,9 @@ describe('withKcalInput：改熱量，營養素照比例縮放', () => {
   })
 })
 
-describe('合計與寫入', () => {
-  it('estimateTotals 加總熱量與營養素', () => {
-    const ds = [...draftsFromItems([item(), item({ kcal: 150, kcal_low: 110, kcal_high: 190, protein_g: 0, fat_g: 0, carb_g: 38 })]), draftFromTier('light')]
-    expect(estimateTotals(ds)).toEqual({ n: 3, kcal: 1170, protein: 22, fat: 25, carb: 118 })
-  })
-  it('draftToFood：品名、店家空、來源一律 AI 粗估', () => {
+describe('建 foods', () => {
+  it('draftToFood：品名、店家空、來源一律粗估', () => {
     expect(draftToFood(draftsFromItems([item()])[0], 'dinner')).toEqual({ name: '螺獅粉', vendor: null, kcal: 620, protein: 22, fat: 25, carb: 80, verified: false })
-  })
-  it('draftsToIntake：份量 1、營養快照＝草稿、餐別與日期照傳入', () => {
-    const d = { ...draftsFromItems([item()])[0], foodId: 42 }
-    expect(draftsToIntake([d], 'dinner', '2026-11-13')).toEqual([
-      { eaten_on: '2026-11-13', meal: 'dinner', food_id: 42, qty: 1, kcal: 620, protein: 22, fat: 25, carb: 80, name: null },
-    ])
-  })
-  it('draftsToIntake：句子提到已知店家就寫進 vendor，沒提到不帶（spec「每一餐記店家」AC 7）', () => {
-    const [a, b] = draftsFromItems([item(), item({ name: '蛋餅' })], '在麻古買了紅萱波波和蛋餅').map((d, i) => ({ ...d, foodId: 42 + i }))
-    expect(draftsToIntake([a, b], 'lunch', '2026-11-23', ['麻古', '青山']).map((r) => r.vendor)).toEqual(['麻古', '麻古'])
-    const [c] = draftsFromItems([item()], '夜市臭豆腐').map((d) => ({ ...d, foodId: 44 }))
-    expect(draftsToIntake([c], 'lunch', '2026-11-23', ['麻古'])[0]).not.toHaveProperty('vendor')
-  })
-  it('還沒建好 food 的列不能寫 intake', () => {
-    expect(() => draftsToIntake(draftsFromItems([item()]), 'dinner', '2026-11-13')).toThrow()
   })
 })
 
@@ -192,7 +171,6 @@ describe('修正（spec A2 階段 1，v2.151）', () => {
     expect(canFix(d)).toBe(true)
     expect(canFix(draftFromTier('normal'))).toBe(false)
     expect(canFix(draftFromKcal(500))).toBe(false)
-    expect(canFix({ ...d, foodId: 9 }), '已建好食物的列鎖住').toBe(false)
     expect(canFix({ ...d, sentence: null })).toBe(false)
     // 手改到函式收不下的數字（熱量 > 3000、營養素 > 300 克）：送去會 400，不給修正
     expect(canFix({ ...d, kcal: 3001 })).toBe(false)
@@ -209,9 +187,9 @@ describe('修正（spec A2 階段 1，v2.151）', () => {
   })
 
   it('套用：數字、範圍、假設換新，換算基準重設；key、勾選不變；記下修正字與次數', () => {
-    const d = { ...ai(), keep: true }
+    const d = ai()
     const n = applyFix(d, fixed, '  5 塊 ')
-    expect(n).toMatchObject({ key: d.key, keep: true, kcal: 400, kcalDraft: '400', low: 320, high: 500, assumption: '炸臭豆腐 5 塊', fixedBy: '5 塊', fixCount: 1, sentence: '夜市臭豆腐、珍奶' })
+    expect(n).toMatchObject({ key: d.key, kcal: 400, kcalDraft: '400', low: 320, high: 500, assumption: '炸臭豆腐 5 塊', fixedBy: '5 塊', fixCount: 1, sentence: '夜市臭豆腐、珍奶' })
     expect(n.origin).toEqual({ kcal: 400, protein: 18, fat: 25, carb: 23 })
     // 再修正一次：次數累加，換算基準照新的那組
     expect(applyFix(n, { ...fixed, kcal: 320, kcal_low: 260, kcal_high: 400 }, '4 塊').fixCount).toBe(2)
